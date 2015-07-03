@@ -5,12 +5,12 @@ package engine
 import scala.reflect.macros.blackbox.Context
 import scala.reflect.macros.TypecheckException
 
-object Util {
-  def apply[C <: Context](c: C): Util[c.type] =
-    new Util[c.type](c)
+object Typer {
+  def apply[C <: Context](c: C): Typer[c.type] =
+    new Typer[c.type](c)
 }
 
-class Util[C <: Context](val c: C) {
+class Typer[C <: Context](val c: C) {
   import c.universe._
   import Flag._
 
