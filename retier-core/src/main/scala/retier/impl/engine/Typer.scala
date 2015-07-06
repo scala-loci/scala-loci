@@ -24,9 +24,17 @@ class Typer[C <: Context](val c: C) {
   /**
    * Type-checks the given tree. If type-checking fails, aborts the macro
    * expansion issuing the type-checking error.
+   *
+   * The type-checking process distorts certain ASTs (such as representations of
+   * extractors, lazy values or case classes) in a way that they cannot be
+   * type-checked again. The issue is described in
+   * [[https://issues.scala-lang.org/browse/SI-5464 SI-5465]].
+   *
+   * This method tries to restore the AST to its original form, which can be
+   * type-checked again.
    */
   def typecheck(tree: Tree): Tree = {
-    try c typecheck tree
+    try fixTypecheck(c typecheck tree, false)
     catch {
       case TypecheckException(pos, msg) =>
         c.abort(pos.asInstanceOf[Position], msg)
@@ -44,11 +52,21 @@ class Typer[C <: Context](val c: C) {
    * This method tries to restore the AST to its original form, which can be
    * type-checked again, or abort the macro expansion if this is not possible.
    */
-  def untypecheck(tree: Tree): Tree = {
-    val possibleFlags = Seq(
-      OVERRIDE, ABSTRACT, FINAL, SEALED, IMPLICIT, LAZY, PRIVATE, PROTECTED)
+  def untypecheck(tree: Tree): Tree =
+    c untypecheck fixTypecheck(tree, true)
 
-    object untypecheckFixer extends Transformer {
+  private def fixTypecheck(tree: Tree, abortWhenUnfixable: Boolean): Tree = {
+    val possibleFlags = Seq(
+      ABSTRACT, FINAL, IMPLICIT, LAZY, LOCAL,
+      OVERRIDE, PRIVATE, PROTECTED, SEALED)
+
+    val rhss = (tree collect {
+      case valDef @ ValDef(_, _, _, _) if valDef.symbol.isTerm =>
+        val term = valDef.symbol.asTerm
+        List(term.getter -> valDef, term.setter -> valDef)
+    }).flatten.toMap - NoSymbol
+
+    object typecheckFixer extends Transformer {
       override def transform(tree: Tree) = tree match {
         // fix extractors
         case UnApply(
@@ -57,42 +75,75 @@ class Typer[C <: Context](val c: C) {
             case Select(fun, TermName("unapply" | "unapplySeq")) => fun
           } match {
             case fun :: _ =>
-              super.transform(Apply(fun, args))
+              val apply = Apply(fun, args)
+              internal setType (apply, fun.tpe)
+              internal setPos (apply, fun.pos)
+              super.transform(apply)
             case _ =>
               super.transform(tree)
           }
 
-        // fix lazy vals
+        // fix vars, vals and lazy vals
         case ValDef(_, _, _, _)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
-              term.isLazy && term.getter != NoSymbol
+              term.getter != NoSymbol &&
+                (term.isLazy || (rhss contains term.getter))
             } =>
           EmptyTree
+
+        // fix vars and vals
+        case DefDef(_, _, _, _, _, _)
+            if tree.symbol.isTerm && {
+              val term = tree.symbol.asTerm
+              term.isSetter && (rhss contains term)
+            } =>
+          EmptyTree
+        case defDef @ DefDef(mods, name, _, _, tpt, _)
+            if tree.symbol.isTerm && {
+              val term = tree.symbol.asTerm
+              !term.isLazy && term.isGetter && (rhss contains term)
+            } =>
+          val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
+            if (mods hasFlag flag) flags | flag else flags
+          }
+          val valDef = rhss(tree.symbol)
+          val newValDef = ValDef(
+            Modifiers(
+              flags, mods.privateWithin, mods.annotations),
+              name, super.transform(valDef.tpt), super.transform(valDef.rhs))
+          internal setType (newValDef, valDef.tpe)
+          internal setPos (newValDef, valDef.pos)
+
+        // fix lazy vals
         case DefDef(mods, name, _, _, tpt, rhs)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
               term.isLazy && term.isGetter
             } =>
-          rhs collect {
+          val assignment = rhs collect {
             case Assign(_, rhs) => rhs
           } match {
-            case rhs :: _ =>
-              val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
-                if (mods hasFlag flag) flags | flag else flags
-              }
-              ValDef(
-                Modifiers(
-                  flags, mods.privateWithin, mods.annotations),
-                  name, super.transform(tpt), super.transform(rhs))
-            case _ =>
-              c.abort(tree.pos, "unexpected typed tree for lazy val")
-              EmptyTree
+            case rhs :: _ => rhs
+            case _ => rhs
           }
+          val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
+            if (mods hasFlag flag) flags | flag else flags
+          }
+          val valDef = rhss get tree.symbol
+          val typeTree = valDef map { _.tpt } getOrElse tpt
+          val newValDef = ValDef(
+            Modifiers(
+              flags, mods.privateWithin, mods.annotations),
+              name, super.transform(typeTree), super.transform(assignment))
+          valDef map { valDef =>
+            internal setType (newValDef, valDef.tpe)
+            internal setPos (newValDef, valDef.pos)
+          } getOrElse newValDef
 
         // abort on case class
         case ClassDef(mods, _, _, _)
-            if mods hasFlag CASE =>
+            if (mods hasFlag CASE) && abortWhenUnfixable =>
           c.abort(tree.pos, "case class not allowed inside macro application")
           EmptyTree
 
@@ -101,6 +152,6 @@ class Typer[C <: Context](val c: C) {
       }
     }
 
-    c untypecheck (untypecheckFixer transform tree)
+    typecheckFixer transform tree
   }
 }

@@ -48,32 +48,32 @@ object multitier {
 
     /*
      * Process classes, traits and modules by extracting the statements in the
-     * body and wrapping the code into a `CodeState` object.
+     * body and wrapping the code into a `CodeWrapper` object.
      */
     val result = annottee match {
       // class or trait definition
       case ClassDef(_, realName, _, _) =>
         val dummyName = TypeName(realName.toString + "$$dummy$$")
         val ClassDef(mods, name, tparams, Template(parents, self, body)) =
-          (typer typecheck renameAnnottee(annottee, dummyName))
+          typer typecheck renameAnnottee(annottee, dummyName)
 
-        class ClassState(
+        class ClassWrapper(
             val context: c.type,
             val tree: c.Tree,
             val body: List[c.Tree],
-            val bases: List[c.Tree]) extends CodeState[c.type] {
+            val bases: List[c.Tree]) extends CodeWrapper[c.type] {
 
           def replaceBody(body: List[context.Tree]) = {
             val tree = ClassDef(mods, name, tparams, Template(parents, self, body))
-            new ClassState(
+            new ClassWrapper(
               context,
-              (typer retypecheck (retierTyper dropRetierImplicitArguments tree)),
+              typer retypecheck (retierTyper dropRetierImplicitArguments tree),
               body,
               bases)
           }
         }
 
-        val state = new ClassState(c, annottee, body, parents)
+        val state = new ClassWrapper(c, annottee, body, parents)
         val result = state
 
         renameAnnottee(
@@ -84,25 +84,25 @@ object multitier {
       case ModuleDef(_, realName, _) =>
         val dummyName = TypeName(realName.toString + "$$dummy$$")
         val ModuleDef(mods, name, Template(parents, self, body)) =
-          (typer typecheck renameAnnottee(annottee, dummyName))
+          typer typecheck renameAnnottee(annottee, dummyName)
 
-        class ClassState(
+        class ModuleWrapper(
             val context: c.type,
             val tree: c.Tree,
             val body: List[c.Tree],
-            val bases: List[c.Tree]) extends CodeState[c.type] {
+            val bases: List[c.Tree]) extends CodeWrapper[c.type] {
 
           def replaceBody(body: List[context.Tree]) = {
             val tree = ModuleDef(mods, name, Template(parents, self, body))
-            new ClassState(
+            new ModuleWrapper(
               context,
-              (typer retypecheck (retierTyper dropRetierImplicitArguments tree)),
+              typer retypecheck (retierTyper dropRetierImplicitArguments tree),
               body,
               bases)
           }
         }
 
-        val state = new ClassState(c, annottee, body, parents)
+        val state = new ModuleWrapper(c, annottee, body, parents)
         val result = state
 
         renameAnnottee(
