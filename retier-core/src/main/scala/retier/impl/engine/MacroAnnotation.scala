@@ -8,9 +8,13 @@ object multitier {
   def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
 
+    val echo = Echo(c)
     val typer = Typer(c)
     val retierTyper = RetierTyper(c)
+    val processor = CodeProcessor(c)
     val annottee :: _ = annottees map { _.tree }
+
+    echo(verbose = false, "Expanding `multitier` environment")
 
     /*
      * The language requires class definitions inside the annottee `A`.
@@ -24,24 +28,21 @@ object multitier {
       val newTypeName = newName.toTypeName
       val newTermName = newName.toTermName
 
-      class ThisFixer(val originalTypeName: TypeName) extends Transformer {
-        override def transform(tree: Tree) = tree match {
-          case This(`originalTypeName`) => This(newTypeName)
-          case _ => super.transform(tree)
-        }
-      }
-
-      object ThisFixer {
-        def apply(originalName: Name) = new ThisFixer(originalName.toTypeName)
-      }
-
       tree match {
         case ClassDef(mods, name, tparams, impl) =>
-          ThisFixer(name) transform ClassDef(mods, newTypeName, tparams, impl)
+          typer changeSelfReferences
+            (ClassDef(mods, newTypeName, tparams, impl),
+             name.toTypeName,
+             newTypeName)
         case ModuleDef(mods, name, impl) =>
-          ThisFixer(name) transform ModuleDef(mods, newTermName, impl)
+          typer changeSelfReferences
+            (ModuleDef(mods, newTermName, impl),
+             name.toTypeName,
+             newTypeName)
         case _ =>
-          c.abort(tree.pos, "class, trait or module definition expected")
+          c.abort(
+            tree.pos,
+            "implementation (class, trait or module) definition expected")
           EmptyTree
       }
     }
@@ -74,7 +75,7 @@ object multitier {
         }
 
         val state = new ClassWrapper(c, annottee, body, parents)
-        val result = state
+        val result = processor process state
 
         renameAnnottee(
           typer untypecheck (retierTyper dropRetierImplicitArguments result.tree),
@@ -103,7 +104,7 @@ object multitier {
         }
 
         val state = new ModuleWrapper(c, annottee, body, parents)
-        val result = state
+        val result = processor process state
 
         renameAnnottee(
           typer untypecheck (retierTyper dropRetierImplicitArguments result.tree),

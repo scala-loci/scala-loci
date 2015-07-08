@@ -15,6 +15,23 @@ class Typer[C <: Context](val c: C) {
   import Flag._
 
   /**
+   * Returns a tree in which every self reference `A.this` is replaced with a
+   * self reference to the given type.
+   */
+  def changeSelfReferences
+      (tree: Tree, prevName: TypeName, newName: TypeName) = {
+    object selfReferenceChanger extends Transformer {
+      override def transform(tree: Tree) = tree match {
+        case ClassDef(_, `prevName`, _, _) => tree
+        case This(`prevName`) => This(newName)
+        case _ => super.transform(tree)
+      }
+    }
+
+    selfReferenceChanger transform tree
+  }
+
+  /**
    * Re-type-checks the given tree, i.e., first un-type-checks it and then
    * type-checks it again using [[untypecheck]] and [[typecheck]], respectively.
    */
