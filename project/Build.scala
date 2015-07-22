@@ -8,7 +8,8 @@ object RetierBuild extends Build {
 
   val macroparadise = Seq(
     libraryDependencies ++= Seq(
-      "org.scala-lang" % "scala-reflect" % scalaVersion.value
+      "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+      "org.scalamacros" %% "resetallattrs" % "1.0.0-M1"
     ),
     addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
   )

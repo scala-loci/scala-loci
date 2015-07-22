@@ -10,7 +10,6 @@ object multitier {
 
     val echo = Echo(c)
     val typer = Typer(c)
-    val retierTyper = RetierTyper(c)
     val processor = CodeProcessor(c)
     val annottee :: _ = annottees map { _.tree }
 
@@ -28,21 +27,27 @@ object multitier {
       val newTypeName = newName.toTypeName
       val newTermName = newName.toTermName
 
+      class SelfReferenceChanger(val originalName: Name) extends Transformer {
+        val originalEncodedName = originalName.encodedName
+
+        override def transform(tree: Tree) = tree match {
+          case ClassDef(_, name, _, _)
+            if name.encodedName == originalEncodedName => tree
+          case This(name)
+            if name.encodedName == originalEncodedName => This(newTypeName)
+          case _ => super.transform(tree)
+        }
+      }
+
       tree match {
         case ClassDef(mods, name, tparams, impl) =>
-          typer changeSelfReferences
-            (ClassDef(mods, newTypeName, tparams, impl),
-             name.toTypeName,
-             newTypeName)
+          new SelfReferenceChanger(name) transform
+            ClassDef(mods, newTypeName, tparams, impl)
         case ModuleDef(mods, name, impl) =>
-          typer changeSelfReferences
-            (ModuleDef(mods, newTermName, impl),
-             name.toTypeName,
-             newTypeName)
+          new SelfReferenceChanger(name) transform
+            ModuleDef(mods, newTermName, impl)
         case _ =>
-          c.abort(
-            tree.pos,
-            "implementation (class, trait or module) definition expected")
+          c.abort(tree.pos, "class, trait or module definition expected")
           EmptyTree
       }
     }
@@ -65,21 +70,16 @@ object multitier {
             val bases: List[c.Tree]) extends CodeWrapper[c.type] {
 
           def replaceBody(body: List[context.Tree]) = {
-            val tree = ClassDef(mods, name, tparams, Template(parents, self, body))
-            new ClassWrapper(
-              context,
-              typer retypecheck (retierTyper dropRetierImplicitArguments tree),
-              body,
-              bases)
+            val tree =
+              ClassDef(mods, name, tparams, Template(parents, self, body))
+            new ClassWrapper(context, typer retypecheckAll tree, body, bases)
           }
         }
 
         val state = new ClassWrapper(c, annottee, body, parents)
         val result = processor process state
 
-        renameAnnottee(
-          typer untypecheck (retierTyper dropRetierImplicitArguments result.tree),
-          realName)
+        renameAnnottee(typer untypecheckAll result.tree, realName)
 
       // module definition
       case ModuleDef(_, realName, _) =>
@@ -94,21 +94,16 @@ object multitier {
             val bases: List[c.Tree]) extends CodeWrapper[c.type] {
 
           def replaceBody(body: List[context.Tree]) = {
-            val tree = ModuleDef(mods, name, Template(parents, self, body))
-            new ModuleWrapper(
-              context,
-              typer retypecheck (retierTyper dropRetierImplicitArguments tree),
-              body,
-              bases)
+            val tree =
+              ModuleDef(mods, name, Template(parents, self, body))
+            new ModuleWrapper(context, typer retypecheckAll tree, body, bases)
           }
         }
 
         val state = new ModuleWrapper(c, annottee, body, parents)
         val result = processor process state
 
-        renameAnnottee(
-          typer untypecheck (retierTyper dropRetierImplicitArguments result.tree),
-          realName)
+        renameAnnottee(typer untypecheckAll result.tree, realName)
 
       case _ =>
         c.abort(
