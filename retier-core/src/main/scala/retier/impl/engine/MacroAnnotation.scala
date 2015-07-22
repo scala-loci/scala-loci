@@ -28,13 +28,13 @@ object multitier {
       val newTermName = newName.toTermName
 
       class SelfReferenceChanger(val originalName: Name) extends Transformer {
-        val originalEncodedName = originalName.encodedName
+        val original = originalName.encodedName.toString
 
         override def transform(tree: Tree) = tree match {
           case ClassDef(_, name, _, _)
-            if name.encodedName == originalEncodedName => tree
+            if name.encodedName.toString == original => tree
           case This(name)
-            if name.encodedName == originalEncodedName => This(newTypeName)
+            if name.encodedName.toString == original => This(newTypeName)
           case _ => super.transform(tree)
         }
       }
@@ -52,6 +52,18 @@ object multitier {
       }
     }
 
+    def extractConstructors(tree: List[c.Tree]): List[c.Tree] =
+      tree filter {
+        case DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) => true
+        case _ => false
+      }
+
+    def extractNonConstructors(tree: List[c.Tree]): List[c.Tree] =
+      tree filterNot {
+        case DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) => true
+        case _ => false
+      }
+
     /*
      * Process classes, traits and modules by extracting the statements in the
      * body and wrapping the code into a `CodeWrapper` object.
@@ -61,22 +73,22 @@ object multitier {
       case ClassDef(_, realName, _, _) =>
         val dummyName = TypeName(realName.toString + "$$dummy$$")
         val ClassDef(mods, name, tparams, Template(parents, self, body)) =
-          typer typecheck renameAnnottee(annottee, dummyName)
+          renameAnnottee(annottee, dummyName)
+        val constructors = extractConstructors(body)
 
-        class ClassWrapper(
-            val context: c.type,
-            val tree: c.Tree,
-            val body: List[c.Tree],
-            val bases: List[c.Tree]) extends CodeWrapper[c.type] {
+        class ClassWrapper(stats: List[c.Tree]) extends CodeWrapper[c.type] {
+          val context: c.type = c
+          val bases = parents
+          val tree =
+            typer retypecheckAll
+              ClassDef(mods, name, tparams, Template(
+                parents, self, constructors ++ extractNonConstructors(stats)))
+          val body = tree.asInstanceOf[ClassDef].impl.body
 
-          def replaceBody(body: List[context.Tree]) = {
-            val tree =
-              ClassDef(mods, name, tparams, Template(parents, self, body))
-            new ClassWrapper(context, typer retypecheckAll tree, body, bases)
-          }
+          def replaceBody(body: List[context.Tree]) = new ClassWrapper(body)
         }
 
-        val state = new ClassWrapper(c, annottee, body, parents)
+        val state = new ClassWrapper(body)
         val result = processor process state
 
         renameAnnottee(typer untypecheckAll result.tree, realName)
@@ -85,22 +97,22 @@ object multitier {
       case ModuleDef(_, realName, _) =>
         val dummyName = TypeName(realName.toString + "$$dummy$$")
         val ModuleDef(mods, name, Template(parents, self, body)) =
-          typer typecheck renameAnnottee(annottee, dummyName)
+          renameAnnottee(annottee, dummyName)
+        val constructors = extractConstructors(body)
 
-        class ModuleWrapper(
-            val context: c.type,
-            val tree: c.Tree,
-            val body: List[c.Tree],
-            val bases: List[c.Tree]) extends CodeWrapper[c.type] {
+        class ModuleWrapper(stats: List[c.Tree]) extends CodeWrapper[c.type] {
+          val context: c.type = c
+          val bases = parents
+          val tree =
+            typer retypecheckAll
+              ModuleDef(mods, name, Template(
+                parents, self, constructors ++ extractNonConstructors(stats)))
+          val body = tree.asInstanceOf[ModuleDef].impl.body
 
-          def replaceBody(body: List[context.Tree]) = {
-            val tree =
-              ModuleDef(mods, name, Template(parents, self, body))
-            new ModuleWrapper(context, typer retypecheckAll tree, body, bases)
-          }
+          def replaceBody(body: List[context.Tree]) = new ModuleWrapper(body)
         }
 
-        val state = new ModuleWrapper(c, annottee, body, parents)
+        val state = new ModuleWrapper(body)
         val result = processor process state
 
         renameAnnottee(typer untypecheckAll result.tree, realName)
