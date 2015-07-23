@@ -9,8 +9,7 @@ trait PlacedExpressionsEraser { this: Generation =>
   val c: Context
   import c.universe._
 
-  val erasePlacedExpressions = AugmentedAggregation[
-    PlacedStatement, PlacedStatement] {
+  val erasePlacedExpressions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
     def processOverridingExpression
@@ -18,7 +17,7 @@ trait PlacedExpressionsEraser { this: Generation =>
       expr match {
         case expr if expr.symbol == symbols.placedOverriding =>
           val q"$exprBase.$_[..$_].$_[..$_](...$exprss)" = expr
-          val identifier = exprss(0)(0)
+          val identifier = exprss.head.head
 
           if (stat.decl.isEmpty)
             c.abort(identifier.pos, "overriding must be part of a declaration")
@@ -56,7 +55,7 @@ trait PlacedExpressionsEraser { this: Generation =>
               (exprBase, exprss)
           }
 
-          val q"(..$_) => $exprPlaced" = exprss(0)(0)
+          val q"(..$_) => $exprPlaced" = exprss.head.head
 
           if (expr.symbol == symbols.placedIssuedApply) {
 

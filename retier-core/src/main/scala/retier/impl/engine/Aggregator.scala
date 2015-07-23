@@ -12,10 +12,10 @@ final class Aggregator[+T] private (private val list: List[(Type, Any)]) {
 
   def replace[U: TypeTag](elems: TraversableOnce[U]): Aggregator[T with U] =
     new Aggregator(
-      (list filterNot { _._1 <:< tpeOf[U] }) ++ (elems map { (tpeOf[U], _) }))
+      (list filterNot { _._1 =:= tpeOf[U] }) ++ (elems map { (tpeOf[U], _) }))
 
   def all[U: TypeTag](implicit ev: T <:< U): List[U] =
-    list filter { _._1 <:< tpeOf[U] } map { _._2.asInstanceOf[U] }
+    list filter { _._1 =:= tpeOf[U] } map { _._2.asInstanceOf[U] }
 
   def aggregate[In >: T, Out <: In]
       (f: Aggregator[In] => Aggregator[Out]): Aggregator[T with Out] =

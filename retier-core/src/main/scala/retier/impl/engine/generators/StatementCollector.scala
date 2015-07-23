@@ -27,7 +27,7 @@ trait StatementCollector { this: Generation =>
       (peerType, exprType)
     }
 
-    val placedStats = aggregator.all[InputStatement] map { _.stat } collect {
+    val stats = aggregator.all[InputStatement] map { _.stat } collect {
       case stat @ ValDef(mods, name, tpt, rhs)
           if tpt.tpe <:< types.localOn =>
         val (peerType, exprType) = extractAndValidateType(stat, tpt.tpe)
@@ -47,14 +47,15 @@ trait StatementCollector { this: Generation =>
              (symbols.placed contains stat.symbol) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpe)
         PlacedStatement(stat, peerType, exprType, None, None, stat)
-    }
 
-    val nonPlacedStats = aggregator.all[InputStatement] map { _.stat } collect {
       case stat
           if !stat.symbol.isClass ||
              !(stat.symbol.asClass.toType <:< types.peer) =>
         NonPlacedStatement(stat)
     }
+
+    val placedStats = stats collect { case stat: PlacedStatement => stat }
+    val nonPlacedStats = stats collect { case stat: NonPlacedStatement => stat }
 
     echo(
       verbose = true,
