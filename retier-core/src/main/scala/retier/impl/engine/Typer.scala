@@ -124,7 +124,7 @@ class Typer[C <: Context](val c: C) {
               term.isSetter && (rhss contains term)
             } =>
           EmptyTree
-        case DefDef(mods, name, _, _, tpt, _)
+        case defDef @ DefDef(mods, name, _, _, tpt, _)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
               !term.isLazy && term.isGetter && (rhss contains term)
@@ -133,15 +133,20 @@ class Typer[C <: Context](val c: C) {
           val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
             if (mods hasFlag flag) flags | flag else flags
           } | (if (valDef.symbol.asTerm.isVar) MUTABLE else NoFlags)
+          val privateWithin =
+            if (defDef.symbol.asTerm.privateWithin != NoSymbol)
+              defDef.symbol.asTerm.privateWithin.name
+            else
+              mods.privateWithin
           val newValDef = ValDef(
             Modifiers(
-              flags, mods.privateWithin, mods.annotations),
+              flags, privateWithin, mods.annotations),
               name, super.transform(valDef.tpt), super.transform(valDef.rhs))
           internal setType (newValDef, valDef.tpe)
           internal setPos (newValDef, valDef.pos)
 
         // fix lazy vals
-        case DefDef(mods, name, _, _, tpt, rhs)
+        case defDef @ DefDef(mods, name, _, _, tpt, rhs)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
               term.isLazy && term.isGetter
@@ -155,11 +160,16 @@ class Typer[C <: Context](val c: C) {
           val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
             if (mods hasFlag flag) flags | flag else flags
           }
+          val privateWithin =
+            if (defDef.symbol.asTerm.privateWithin != NoSymbol)
+              defDef.symbol.asTerm.privateWithin.name
+            else
+              mods.privateWithin
           val valDef = rhss get tree.symbol
           val typeTree = valDef map { _.tpt } getOrElse tpt
           val newValDef = ValDef(
             Modifiers(
-              flags, mods.privateWithin, mods.annotations),
+              flags, privateWithin, mods.annotations),
               name, super.transform(typeTree), super.transform(assignment))
           valDef map { valDef =>
             internal setType (newValDef, valDef.tpe)
