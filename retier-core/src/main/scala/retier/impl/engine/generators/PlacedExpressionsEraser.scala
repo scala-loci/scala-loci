@@ -19,7 +19,7 @@ trait PlacedExpressionsEraser { this: Generation =>
           val q"$exprBase.$_[..$_].$_[..$_](...$exprss)" = expr
           val identifier = exprss.head.head
 
-          if (stat.decl.isEmpty)
+          if (stat.declTypeTree.isEmpty)
             c.abort(identifier.pos, "overriding must be part of a declaration")
 
           identifier match {
@@ -46,7 +46,8 @@ trait PlacedExpressionsEraser { this: Generation =>
     def processPlacedExpression
         (stat: PlacedStatement): PlacedStatement =
       stat match {
-        case stat @ PlacedStatement(tree, peerType, exprType, decl, _, expr)
+        case stat @ PlacedStatement(
+              tree, peerType, exprType, declTypeTree, _, expr)
             if symbols.placed contains expr.symbol =>
           val (exprBase, exprss) = expr match {
             case q"$exprBase.$_[..$_].$_[..$_](...$exprss)" =>
@@ -57,22 +58,50 @@ trait PlacedExpressionsEraser { this: Generation =>
 
           val q"(..$_) => $exprPlaced" = exprss.head.head
 
-          if (expr.symbol == symbols.placedIssuedApply) {
+          val (isIssued, placedAndIssuedExpr) =
+            if (exprType <:< types.issuedControlled &&
+                !(exprType <:< types.issued) &&
+                exprPlaced.tpe <:< typeOf[_ => _]) {
+              (true, q"""_root_.retier.impl.ControlledIssuedValue.create[
+                         ..${exprType.typeArgs}]($exprPlaced)""")
+            }
+            else if (exprType <:< types.issuedControlled &&
+                     !(exprPlaced.tpe <:< types.issuedControlled)) {
+              (true, q"""_root_.retier.impl.IssuedValue.create[
+                         ..${exprType.typeArgs}]($exprPlaced)""")
+            }
+            else
+              (false, exprPlaced)
 
-            // TODO: ensure issuing
+          if (isIssued && stat.declTypeTree.isEmpty)
+            c.abort(tree.pos, "issuing must be part of a declaration")
 
-            PlacedStatement(tree, peerType, exprType, decl,
-              processOverridingExpression(exprBase, stat), exprPlaced)
-          }
-          else
-            PlacedStatement(tree, peerType, exprType, decl,
-              processOverridingExpression(exprBase, stat), exprPlaced)
+          PlacedStatement(tree, peerType, exprType, declTypeTree,
+            processOverridingExpression(exprBase, stat), placedAndIssuedExpr)
 
         case _ =>
           stat
       }
 
-    val stats = aggregator.all[PlacedStatement] map processPlacedExpression
+    def processGlobalCasts
+        (stat: PlacedStatement): PlacedStatement =
+      stat match {
+        case stat @ PlacedStatement(
+              tree, peerType, exprType, declTypeTree, overridingDecl, expr)
+            if symbols.globalCasts contains expr.symbol =>
+          val q"$_(...$exprss)" = expr
+
+          PlacedStatement(tree, peerType, exprType, declTypeTree,
+            overridingDecl, exprss.head.head)
+
+        case _ =>
+          stat
+      }
+
+    val stats = 
+      aggregator.all[PlacedStatement] map
+      processGlobalCasts map
+      processPlacedExpression
 
     echo(
       verbose = true,

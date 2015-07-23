@@ -27,30 +27,36 @@ trait StatementCollector { this: Generation =>
       (peerType, exprType)
     }
 
+    def extractTypeTree(tree: Tree) = {
+      val args = tree match {
+        case tree: TypeTree if tree.original != EmptyTree =>
+          tree.original match {
+            case AppliedTypeTree(_, args) => args
+            case _ => List(EmptyTree)
+          }
+        case AppliedTypeTree(_, args) => args
+        case _ => List(EmptyTree)
+      }
+
+      args.head match {
+        case tree: TypeTree if tree.original != EmptyTree => tree.original
+        case tree => tree
+      }
+    }
+
     val stats = aggregator.all[InputStatement] map { _.stat } collect {
-      case stat @ ValDef(mods, name, tpt, rhs)
-          if tpt.tpe <:< types.localOn =>
-        val (peerType, exprType) = extractAndValidateType(stat, tpt.tpe)
-        val decl = ValDef(mods, name, EmptyTree, EmptyTree)
-        internal setPos (decl, stat.pos)
-        PlacedStatement(stat, peerType, exprType, Some(decl), None, rhs)
+      case stat: ValOrDefDef if stat.tpt.tpe <:< types.localOn =>
+        val (peerType, exprType) = extractAndValidateType(stat, stat.tpt.tpe)
+        val declTypeTree = extractTypeTree(stat.tpt) orElse stat.tpt
+        PlacedStatement(
+          stat, peerType, exprType, Some(declTypeTree), None, stat.rhs)
 
-      case stat @ DefDef(mods, name, tparams, vparamss, tpt, rhs)
-          if tpt.tpe <:< types.localOn =>
-        val (peerType, exprType) = extractAndValidateType(stat, tpt.tpe)
-        val decl = DefDef(mods, name, tparams, vparamss, EmptyTree, EmptyTree)
-        internal setPos (decl, stat.pos)
-        PlacedStatement(stat, peerType, exprType, Some(decl), None, rhs)
-
-      case stat
-          if stat.tpe <:< types.localOn &&
-             (symbols.placed contains stat.symbol) =>
+      case stat if stat.tpe <:< types.localOn =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpe)
-        PlacedStatement(stat, peerType, exprType, None, None, stat)
+        PlacedStatement(
+          stat, peerType, exprType, None, None, stat)
 
-      case stat
-          if !stat.symbol.isClass ||
-             !(stat.symbol.asClass.toType <:< types.peer) =>
+      case stat =>
         NonPlacedStatement(stat)
     }
 
