@@ -12,9 +12,9 @@ trait PlacedExpressionsEraser { this: Generation =>
   val erasePlacedExpressions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
-    def processOverridingExpression
-        (expr: Tree, stat: PlacedStatement): Option[TermName] =
-      expr match {
+    def processOverridingDeclaration
+        (overridingExpr: Tree, stat: PlacedStatement): Option[TermName] =
+      overridingExpr match {
         case expr if expr.symbol == symbols.placedOverriding =>
           val q"$exprBase.$_[..$_].$_[..$_](...$exprss)" = expr
           val identifier = exprss.head.head
@@ -26,10 +26,10 @@ trait PlacedExpressionsEraser { this: Generation =>
             case q"$_.this.$tname" =>
               val Seq(declType, peerType) = identifier.tpe.typeArgs
 
-              if (!(stat.exprType <:< declType))
+              if (stat.exprType <:!< declType)
                 c.abort(identifier.pos, "overriding value of incompatible type")
 
-              if (!(stat.peerType <:< peerType) || stat.peerType =:= peerType)
+              if (stat.peerType <:!< peerType || stat.peerType =:= peerType)
                 c.abort(identifier.pos, "overriding value of non-base type")
 
               Some(tname)
@@ -44,11 +44,13 @@ trait PlacedExpressionsEraser { this: Generation =>
       }
 
     def processPlacedExpression
-        (stat: PlacedStatement): PlacedStatement =
-      stat match {
-        case stat @ PlacedStatement(
-              tree, peerType, exprType, declTypeTree, _, expr)
-            if symbols.placed contains expr.symbol =>
+        (stat: PlacedStatement): PlacedStatement = {
+      val PlacedStatement(
+        tree, peerType, exprType, declTypeTree, overridingDecl, expr) = stat
+
+      // process overriding declaration and extract placed expression
+      val (processedOverridingDecl, placedExpr) =
+        if (symbols.placed contains expr.symbol) {
           val (exprBase, exprss) = expr match {
             case q"$exprBase.$_[..$_].$_[..$_](...$exprss)" =>
               (exprBase, exprss)
@@ -58,49 +60,46 @@ trait PlacedExpressionsEraser { this: Generation =>
 
           val q"(..$_) => $exprPlaced" = exprss.head.head
 
-          val (isIssued, placedAndIssuedExpr) =
-            if (exprType <:< types.issuedControlled &&
-                !(exprType <:< types.issued) &&
-                exprPlaced.tpe <:< typeOf[_ => _]) {
-              (true, q"""_root_.retier.impl.ControlledIssuedValue.create[
-                         ..${exprType.typeArgs}]($exprPlaced)""")
-            }
-            else if (exprType <:< types.issuedControlled &&
-                     !(exprPlaced.tpe <:< types.issuedControlled)) {
-              (true, q"""_root_.retier.impl.IssuedValue.create[
-                         ..${exprType.typeArgs}]($exprPlaced)""")
-            }
-            else
-              (false, exprPlaced)
+          (processOverridingDeclaration(exprBase, stat), exprPlaced)
+        }
+        else
+          (overridingDecl, expr)
 
-          if (isIssued && stat.declTypeTree.isEmpty)
-            c.abort(tree.pos, "issuing must be part of a declaration")
+        // handle issued types
+        val processedPlacedExpr =
+          if (exprType <:< types.issuedControlled &&
+              exprType <:!< types.issued &&
+              (types.functionPlacing exists { placedExpr.tpe <:< _ }))
+            q"""_root_.retier.impl.ControlledIssuedValue.create[
+                ..${exprType.typeArgs}]($placedExpr)"""
+          else if (exprType <:< types.issuedControlled &&
+                   (types.issuedPlacing forall { placedExpr.tpe <:!< _ }))
+            q"""_root_.retier.impl.IssuedValue.create[
+                ..${exprType.typeArgs}]($placedExpr)"""
+          else
+            placedExpr
 
-          PlacedStatement(tree, peerType, exprType, declTypeTree,
-            processOverridingExpression(exprBase, stat), placedAndIssuedExpr)
+        if (expr.symbol == symbols.placedIssuedApply && declTypeTree.isEmpty)
+          c.abort(tree.pos, "issuing must be part of a declaration")
 
-        case _ =>
-          stat
-      }
+        // construct new placed statement
+        // with the actual placed expression syntactic construct removed
+        PlacedStatement(tree, peerType, exprType, declTypeTree,
+          processedOverridingDecl, processedPlacedExpr)
+    }
 
-    def processGlobalCasts
+    def dropPrecedingGlobalCasts
         (stat: PlacedStatement): PlacedStatement =
-      stat match {
-        case stat @ PlacedStatement(
-              tree, peerType, exprType, declTypeTree, overridingDecl, expr)
-            if symbols.globalCasts contains expr.symbol =>
-          val q"$_(...$exprss)" = expr
-
-          PlacedStatement(tree, peerType, exprType, declTypeTree,
-            overridingDecl, exprss.head.head)
-
-        case _ =>
-          stat
+      if (symbols.globalCasts contains stat.expr.symbol) {
+        val q"$_(...$exprss)" = stat.expr
+        stat.copy(expr = exprss.head.head)
       }
+      else
+        stat
 
-    val stats = 
+    val stats =
       aggregator.all[PlacedStatement] map
-      processGlobalCasts map
+      dropPrecedingGlobalCasts map
       processPlacedExpression
 
     echo(

@@ -9,21 +9,20 @@ trait Generation {
   val c: Context
   import c.universe._
 
-
-  val echo = Echo(c)
-
-
   object types {
     val retier = typeOf[_root_.retier.`package`.type]
     val peer = typeOf[Peer]
 
-    val localOn = typeOf[`local on`[_, _]]
-    val issued = typeOf[<->[_, _]]
-    val issuedControlled = typeOf[<=>[_, _]]
+    val localOn = typeOf[_ `local on` _]
+    val issued = typeOf[_ <-> _]
+    val issuedControlled = typeOf[_ <=> _]
 
     val placing = typeOf[PlacingExpression[_]]
     val issuing = typeOf[IssuingExpression[_, _]]
     val overriding = typeOf[OverridingExpression[_]]
+
+    val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) `local on` _])
+    val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) `local on` _])
   }
 
   object symbols {
@@ -52,6 +51,9 @@ trait Generation {
 
     val globalCasts = Seq(discardValue, issueValue, issueValueControlled,
       liftValueGlobally, downcastValueGlobally)
+    val localCasts = Seq(reduceCapture, liftCapture, liftValueLocally,
+      downcastValueLocally)
+    val casts = globalCasts ++ localCasts
   }
 
 
@@ -63,4 +65,13 @@ trait Generation {
       declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)
 
   case class NonPlacedStatement(tree: Tree)
+
+
+  val echo = Echo(c)
+
+
+  implicit class TypeOps(tpe: Type) {
+    def =:!=(that: Type): Boolean = !(tpe =:= that)
+    def <:!<(that: Type): Boolean = !(tpe <:< that)
+  }
 }
