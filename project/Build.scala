@@ -7,11 +7,18 @@ object RetierBuild extends Build {
   )
 
   val macroparadise = Seq(
+    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
+  )
+
+  val macrodeclaration = Seq(
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
       "org.scalamacros" %% "resetallattrs" % "1.0.0-M1"
-    ),
-    addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0-M5" cross CrossVersion.full)
+    )
+  )
+
+  val upickle = Seq(
+    libraryDependencies += "com.lihaoyi" %% "upickle" % "0.3.4"
   )
 
   val nopublish = Seq(
@@ -22,11 +29,17 @@ object RetierBuild extends Build {
     id = "retier",
     base = file("."),
     settings = defaultSettings ++ nopublish
-  ) aggregate (retierCore)
+  ) aggregate (retierCore, retierMarshallableUpickle)
 
   lazy val retierCore = Project(
     id = "retier-core",
     base = file("retier-core"),
-    settings = defaultSettings ++ SourceGenerator.usingExpressions ++ macroparadise
+    settings = defaultSettings ++ SourceGenerator.usingExpressions ++ macroparadise ++ macrodeclaration
   )
+
+  lazy val retierMarshallableUpickle = Project(
+    id = "retier-marshallable-upickle",
+    base = file("retier-marshallable-upickle"),
+    settings = defaultSettings ++ upickle
+  ) dependsOn (retierCore)
 }
