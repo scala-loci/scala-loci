@@ -44,7 +44,10 @@ class Typer[C <: Context](val c: C) {
    * type-checked again.
    */
   def typecheck(tree: Tree): Tree = {
-    try fixTypecheck(c typecheck tree, abortWhenUnfixable = false)
+    try
+      fixTypecheck(
+        c typecheck (persistentTypeFixer transform tree),
+        abortWhenUnfixable = false)
     catch {
       case TypecheckException(pos, msg) =>
         c.abort(pos.asInstanceOf[Position], msg)
@@ -79,6 +82,34 @@ class Typer[C <: Context](val c: C) {
    */
   def untypecheckAll(tree: Tree): Tree =
     c resetAllAttrs fixTypecheck(tree, abortWhenUnfixable = true)
+
+  /**
+   * Creates a type tree which survives re-type-checking using [[retypecheck]]
+   * or [[retypecheckAll]], i.e., the type is recovered when type-checking the
+   * tree using [[typecheck]], even if the tree has been un-type-checked before.
+   *
+   * Such a type tree can be useful because it is not easily possible to create
+   * an AST for a given type and synthetic type trees are created during
+   * type-checking.
+   */
+  def createTypeTree(tpe: Type): TypeTree =
+    internal updateAttachment (TypeTree(tpe), PersistentType(tpe))
+
+  private case class PersistentType(tpe: Type)
+
+  private object persistentTypeFixer extends Transformer {
+    override def transform(tree: Tree) = tree match {
+      case tree: TypeTree =>
+        (internal attachments tree).get[PersistentType] foreach { persistent =>
+          internal setType (tree, persistent.tpe)
+          internal removeAttachment[PersistentType] tree
+        }
+        super.transform(tree)
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
 
   private def fixTypecheck(tree: Tree, abortWhenUnfixable: Boolean): Tree = {
     val possibleFlags = Seq(
