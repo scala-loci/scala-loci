@@ -69,9 +69,17 @@ trait Generation {
 
   val echo = Echo(c)
 
+  val typer = Typer(c)
+
+
+  def retierTermName(name: String) = TermName(s"$$$$retier$$$name")
+
+  def retierTypeName(name: String) = TypeName(s"$$$$retier$$$name")
+
 
   implicit class TypeOps(tpe: Type) {
     def =:!=(that: Type): Boolean = !(tpe =:= that)
     def <:!<(that: Type): Boolean = !(tpe <:< that)
+    def isGeneric: Boolean = tpe exists { _.typeSymbol.isParameter }
   }
 }
