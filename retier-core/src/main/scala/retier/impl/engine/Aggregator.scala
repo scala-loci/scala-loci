@@ -29,13 +29,14 @@ object Aggregator {
   def create[U: TypeTag](elems: TraversableOnce[U]): Aggregator[Any with U] =
     new Aggregator((elems map { (tpeOf[U], _) }).toList)
 
-  private def tpeOf[U: TypeTag] = {
-    // translate to a more general type (without self references)
-    // if the type takes no type arguments.
-    // It does not seem easily possible for types with arguments.
-    val tpe = typeOf[U]
-    val symbol = tpe.typeSymbol
-    val symbolTpe = symbol.asType.toType
-    if (!symbolTpe.takesTypeArgs) symbolTpe else tpe
-  }
+  private def tpeOf[U: TypeTag] =
+    // use self reference to defining enclosing type for inherited nested type
+    typeOf[U] map { tpe =>
+      (tpe.dealias, tpe.dealias.typeSymbol.asType.toType) match {
+        case (TypeRef(_, _, args), TypeRef(pre, sym, _)) =>
+          internal.typeRef(pre, sym, args)
+        case (tpe, _) =>
+          tpe
+      }
+    }
 }
