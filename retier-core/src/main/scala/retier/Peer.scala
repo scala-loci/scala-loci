@@ -21,32 +21,32 @@ trait Peer {
 
 
   sealed trait ConnectionSetupSpec
-  sealed trait Request[P] extends ConnectionSetupSpec
-  sealed trait Listen[P] extends ConnectionSetupSpec
+  sealed trait Request[+P] extends ConnectionSetupSpec
+  sealed trait Listen[+P] extends ConnectionSetupSpec
 
   sealed trait ConnectionSetup[+T] {
     def listeners(peerType: PeerType): List[ConnectionListener]
     def requestors(peerType: PeerType): List[ConnectionRequestor]
   }
 
-  private[this] object ConnectionSetup {
-    final implicit def listenerToSetup[P: PeerTypeTag]
-        (listener: ConnectionListener): ConnectionSetup[Listen[P]] =
-      new ConnectionSetup[Listen[P]] {
+  protected[this] object ConnectionSetup {
+    final implicit def listenerToSetup
+        (listener: ConnectionListener): ConnectionSetup[Listen[Nothing]] =
+      new ConnectionSetup[Listen[Nothing]] {
         def listeners(peerType: PeerType) = List(listener)
         def requestors(peerType: PeerType) = List.empty
       }
 
-    final implicit def requestorToSetup[P: PeerTypeTag]
-        (requestor: ConnectionRequestor): ConnectionSetup[Request[P]] =
-      new ConnectionSetup[Request[P]] {
+    final implicit def requestorToSetup
+        (requestor: ConnectionRequestor): ConnectionSetup[Request[Nothing]] =
+      new ConnectionSetup[Request[Nothing]] {
         def listeners(peerType: PeerType) = List.empty
         def requestors(peerType: PeerType) = List(requestor)
       }
 
-    implicit class Composition[T](setup: ConnectionSetup[T]) {
+    implicit class Composition[T](self: ConnectionSetup[T]) {
       def and[U](setup: ConnectionSetup[U]): ConnectionSetup[T with U] =
-        new ConnectionSetup[T with U] { self =>
+        new ConnectionSetup[T with U] {
           def listeners(peerType: PeerType) =
             (self listeners peerType) ++ (setup listeners peerType)
           def requestors(peerType: PeerType) =
