@@ -20,6 +20,9 @@ package object retier extends
     RemoteExpression[P, on] with RemoteSelectionExpression = `#macro`
 
 
+  def peerTypeOf[P](implicit tag: PeerTypeTag[P]): PeerType = tag.peerType
+
+
   final implicit class FromExpression[L <: Peer, R <: Peer, T]
       (v: T `shared on` R)
       (implicit ev: LocalPeer[L]) {
