@@ -8,7 +8,7 @@ package object retier extends
   type RemoteProperty[+T, P <: Peer] = T on P
 
 
-  type on[+T, P <: Peer] = T `shared on` P
+  type on[+T, P <: Peer] = T sharedOn P
 
 
   def `abstract`[P <: Peer, T](implicit ev: NoLocalPeer[_]): T on P = `#macro`
@@ -17,21 +17,21 @@ package object retier extends
     PlacingExpression[P] with OverridingExpression[P] = `#macro`
 
   def remote[P <: Peer]:
-    RemoteExpression[P, on] with RemoteSelectionExpression = `#macro`
+    RemoteExpression[P, on] with RemoteSelectionExpression[P] = `#macro`
 
 
   def peerTypeOf[P](implicit tag: PeerTypeTag[P]): PeerType = tag.peerType
 
 
   final implicit class FromExpression[L <: Peer, R <: Peer, T]
-      (v: T `shared on` R)
+      (v: T sharedOn R)
       (implicit ev: LocalPeer[L]) {
     def from[P <: Peer]
       (implicit ev: P <:< R): T on P = `#macro`
     def from[P <: Peer](peer: Remote[P])
-      (implicit ev: P <:< R): T `from single` P = `#macro`
+      (implicit ev: P <:< R): T fromSingle P = `#macro`
     def from[P <: Peer](peers: Remote[P]*)
-      (implicit ev: P <:< R): T `from multiple` P = `#macro`
+      (implicit ev: P <:< R): T fromMultiple P = `#macro`
   }
 
   def `#macro`: Nothing =

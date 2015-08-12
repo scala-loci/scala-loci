@@ -7,14 +7,14 @@ import scala.annotation.implicitNotFound
 // possible that other subtypes of S are part of the connection spec compound.
 // Therefore, when inferring a super type of `T`, `Multiple` must be inferred.
 sealed trait ConnectionSpec
-trait Single[T] extends Optional[T]
-trait Optional[T] extends Multiple[T]
-trait Multiple[+T] extends ConnectionSpec
+sealed trait Single[T] extends Multiple[T]
+sealed trait Optional[T] extends Multiple[T]
+sealed trait Multiple[+T] extends ConnectionSpec
 
-sealed class ConnectionMultiplicity
-final class SingleConnection extends ConnectionMultiplicity
-final class OptionalConnection extends ConnectionMultiplicity
-final class MultipleConnection extends ConnectionMultiplicity
+sealed trait ConnectionMultiplicity
+sealed trait SingleConnection extends ConnectionMultiplicity
+sealed trait OptionalConnection extends ConnectionMultiplicity
+sealed trait MultipleConnection extends ConnectionMultiplicity
 
 @implicitNotFound("No connection to ${P}.")
 private final abstract class PeerConnection

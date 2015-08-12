@@ -3,7 +3,7 @@ package retier
 import dslparadise._
 
 protected final abstract class OverridingExpression[P <: Peer] {
-  def overriding[P0 <: Peer, T]
+  def overriding[P0 >: P <: Peer, T]
     (declaration: LocalDeclaration[T, P0]): PlacingExpression[P] = `#macro`
 }
 
@@ -19,7 +19,7 @@ protected final abstract class PlacingExpression[P <: Peer] {
   def local[T, U](f: CurrentLocalPeer[P] `implicit =>` T)
     (implicit
         ev0: NoLocalPeer[_],
-        ev1: PlacingTypes[P, T, U]): U `local on` P = `#macro`
+        ev1: PlacingTypes[P, T, U]): U localOn P = `#macro`
   def issued[R <: Peer]: IssuingExpression[P, R] = `#macro`
 }
 

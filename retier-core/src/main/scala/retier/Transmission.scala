@@ -9,7 +9,7 @@ object Transmission {
   implicit def transmission
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
-        transmittable: V <:< (T `shared on` R),
+        transmittable: V <:< (T sharedOn R),
         value: T <:!< (_ <=> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
@@ -18,7 +18,7 @@ object Transmission {
   implicit def transmissionFromSingle
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
-        transmittable: V <:< (T `from single` R),
+        transmittable: V <:< (T fromSingle R),
         value: T <:!< (_ <=> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
@@ -27,7 +27,7 @@ object Transmission {
   implicit def transmissionFromMultiple
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
-        transmittable: V <:< (T `from multiple` R),
+        transmittable: V <:< (T fromMultiple R),
         value: T <:!< (_ <=> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
@@ -36,7 +36,7 @@ object Transmission {
   implicit def issuedTransmission
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
-        transmittable: V <:< (Remote[P] <=> T `shared on` R),
+        transmittable: V <:< (Remote[P] <=> T sharedOn R),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
@@ -45,7 +45,7 @@ object Transmission {
   implicit def issuedTransmissionFromSingle
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
-        transmittable: V <:< (Remote[P] <=> T `from single` R),
+        transmittable: V <:< (Remote[P] <=> T fromSingle R),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
@@ -54,7 +54,7 @@ object Transmission {
   implicit def issuedTransmissionFromMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
-        transmittable: V <:< (Remote[P] <=> T `from multiple` R),
+        transmittable: V <:< (Remote[P] <=> T fromMultiple R),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):

@@ -3,11 +3,11 @@ package retier
 import dslparadise._
 import scala.language.higherKinds
 
-protected final abstract class RemoteSelectionExpression {
-  def apply[P <: Peer](peer: Remote[P]):
-    RemoteExpression[P, `from single`] = `#macro`
-  def apply[P <: Peer](peers: Remote[P]*):
-    RemoteExpression[P, `from multiple`] = `#macro`
+protected final abstract class RemoteSelectionExpression[P <: Peer] {
+  def on[P0 <: P](peer: Remote[P0]):
+    RemoteExpression[P, fromSingle] = `#macro`
+  def on[P0 <: P](peers: Remote[P0]*):
+    RemoteExpression[P, fromMultiple] = `#macro`
 }
 
 protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
@@ -25,15 +25,15 @@ protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
         ev0: LocalPeer[L],
         ev1: PlacingTypes[P, T, U],
         ev2: PeerConnection[L#Connection, P, _]): U placed P = `#macro`
-  def execute[T, L <: Peer](f: Unit => T)
+  def exec[T, L <: Peer](f: () => T)
     (implicit
         ev0: LocalPeer[L],
         ev2: PeerConnection[L#Connection, P, _]): T placed P = `#macro`
-  def call[T, L <: Peer](method: RemoteMethod[T, P])
+  def call[T, L <: Peer, P0 >: P <: Peer](method: RemoteMethod[T, P0])
     (implicit
         ev0: LocalPeer[L],
         ev1: PeerConnection[L#Connection, P, _]): T placed P = `#macro`
-  def set[T, L <: Peer](property: RemoteProperty[T, P])
+  def set[T, L <: Peer, P0 >: P <: Peer](property: RemoteProperty[T, P0])
     (implicit
         ev0: LocalPeer[L],
         ev1: PeerConnection[L#Connection, P, _]): RemoteSettingExpression[T, P, L] = `#macro`
@@ -41,7 +41,7 @@ protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
 }
 
 protected final abstract class RemoteSettingExpression[T, P <: Peer, L <: Peer] {
-  def to(v: T `local on` L): Unit on P = `#macro`
+  def :=(v: T localOn L): Unit on P = `#macro`
 }
 
 protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <: Peer]]
@@ -63,14 +63,4 @@ protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <:
         ev2: IssuingTypes[L, I, U],
         ev3: PeerConnection[L#Connection, P, _],
         ev4: PeerConnection[P#Connection, L, _]): U placed P = `#macro`
-  def execute[T, U, L <: Peer](f: Unit => T)
-    (implicit
-        ev0: LocalPeer[L],
-        ev1: IssuingTypes[L, T, U],
-        ev2: PeerConnection[L#Connection, P, _]): U placed P = `#macro`
-  def call[T, U, L <: Peer](method: RemoteMethod[T, P])
-    (implicit
-        ev0: LocalPeer[L],
-        ev1: IssuingTypes[L, T, U],
-        ev2: PeerConnection[L#Connection, P, _]): U placed P = `#macro`
 }

@@ -8,7 +8,7 @@ protected[retier] trait ImplicitConversions {
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   final implicit def valuePlacedNonIssued
     [P <: Peer, T]
-    (v: T `local on` P)
+    (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[P],
@@ -17,7 +17,7 @@ protected[retier] trait ImplicitConversions {
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   final implicit def valuePlacedControlledIssued
     [P <: Peer, R <: Remote[Peer], T, U]
-    (v: T `local on` P)
+    (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[P],
@@ -27,7 +27,7 @@ protected[retier] trait ImplicitConversions {
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   final implicit def valuePlacedIssued
     [P <: Peer, T, U]
-    (v: T `local on` P)
+    (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[P],

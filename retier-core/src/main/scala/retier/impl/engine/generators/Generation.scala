@@ -13,7 +13,7 @@ trait Generation {
     val retier = typeOf[_root_.retier.`package`.type]
     val peer = typeOf[Peer]
 
-    val localOn = typeOf[_ `local on` _]
+    val localOn = typeOf[_ localOn _]
     val issued = typeOf[_ <-> _]
     val issuedControlled = typeOf[_ <=> _]
 
@@ -21,8 +21,8 @@ trait Generation {
     val issuing = typeOf[IssuingExpression[_, _]]
     val overriding = typeOf[OverridingExpression[_]]
 
-    val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) `local on` _])
-    val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) `local on` _])
+    val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
+    val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
   }
 
   object symbols {
