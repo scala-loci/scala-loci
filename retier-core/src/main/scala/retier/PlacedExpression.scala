@@ -3,8 +3,7 @@ package retier
 import dslparadise._
 
 protected final abstract class OverridingExpression[P <: Peer] {
-  def overriding[P0 >: P <: Peer, T]
-    (declaration: LocalDeclaration[T, P0]): PlacingExpression[P] = `#macro`
+  def overriding(declaration: LocalDeclaration): PlacingExpression[P] = `#macro`
 }
 
 protected final abstract class PlacingExpression[P <: Peer] {

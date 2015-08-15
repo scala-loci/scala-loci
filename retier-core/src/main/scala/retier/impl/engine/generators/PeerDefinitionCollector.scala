@@ -21,7 +21,7 @@ trait PeerDefinitionCollector { this: Generation =>
                ..$stats
              }""" if peer.symbol.asClass.toType <:< types.peer =>
           (earlydefns, paramss.flatten, parents, stats,
-           PeerDefinition(peer, peer.symbol.asClass.toType))
+           PeerDefinition(peer, peer.symbol.asClass.toType, parents))
 
         case peer @ q"""
              $mods trait $tpname[..$tparams]
@@ -29,7 +29,7 @@ trait PeerDefinitionCollector { this: Generation =>
                ..$stats
              }""" if peer.symbol.asClass.toType <:< types.peer =>
           (earlydefns, List.empty, parents, stats,
-           PeerDefinition(peer, peer.symbol.asClass.toType))
+           PeerDefinition(peer, peer.symbol.asClass.toType, parents))
       }
     }
 

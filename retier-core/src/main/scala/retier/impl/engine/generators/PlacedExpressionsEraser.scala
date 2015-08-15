@@ -12,26 +12,35 @@ trait PlacedExpressionsEraser { this: Generation =>
   val erasePlacedExpressions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
+    def reduceEtaExpansion(expr: Tree): Tree = {
+      def reduceEtaExpansion(expr: Tree): Tree = {
+        expr match {
+          case q"{ (..$_) => $expr }" => reduceEtaExpansion(expr)
+          case _ => expr
+        }
+      }
+
+      expr match {
+        case q"{ (..$_) => $expr }" => reduceEtaExpansion(expr) match {
+          case q"$expr[..$_](...$_)" => expr
+          case _ => expr
+        }
+        case _ => expr
+      }
+    }
+
     def processOverridingDeclaration
         (overridingExpr: Tree, stat: PlacedStatement): Option[TermName] =
       overridingExpr match {
         case expr if expr.symbol == symbols.placedOverriding =>
           val q"$exprBase.$_[..$_].$_[..$_](...$exprss)" = expr
-          val identifier = exprss.head.head
+          val identifier = reduceEtaExpansion(exprss.head.head)
 
           if (stat.declTypeTree.isEmpty)
             c.abort(identifier.pos, "overriding must be part of a declaration")
 
           identifier match {
             case q"$_.this.$tname" =>
-              val Seq(declType, peerType) = identifier.tpe.typeArgs
-
-              if (stat.exprType <:!< declType)
-                c.abort(identifier.pos, "overriding value of incompatible type")
-
-              if (stat.peerType <:!< peerType || stat.peerType =:= peerType)
-                c.abort(identifier.pos, "overriding value of non-base type")
-
               Some(tname)
 
             case _ =>

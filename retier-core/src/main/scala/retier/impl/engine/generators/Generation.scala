@@ -59,7 +59,7 @@ trait Generation {
 
   case class InputStatement(stat: Tree)
 
-  case class PeerDefinition(tree: Tree, peer: Type)
+  case class PeerDefinition(tree: Tree, peer: Type, parents: List[Tree])
 
   case class PlacedStatement(tree: Tree, peerType: Type, exprType: Type,
       declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)

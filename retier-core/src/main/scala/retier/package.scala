@@ -1,7 +1,7 @@
 package object retier extends
     ImplicitTransmissions with
     ImplicitConversions with ide.intellij.ImplicitConversions {
-  type LocalDeclaration[+T, P <: Peer] = T on P
+  type LocalDeclaration = Any
 
   type RemoteMethod[+T, P <: Peer] = T on P
 
