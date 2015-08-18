@@ -15,7 +15,8 @@ class CodeProcessor[C <: Context](val c: C) extends
     StatementCollector with
     PeerDefinitionCollector with
     PlacedExpressionsEraser with
-    ProxyGenerator {
+    ProxyGenerator with
+    OverrideBridgeGenerator {
   import c.universe._
 
   def process(state: CodeWrapper[c.type]): CodeWrapper[c.type] = {
@@ -24,7 +25,8 @@ class CodeProcessor[C <: Context](val c: C) extends
       collectPeerDefinitions aggregate
       collectStatements aggregate
       erasePlacedExpressions aggregate
-      generateProxies
+      generateProxies aggregate
+      generateOverrideBridge
 
 
     // TODO: erase conversions on placed values before erasing placed expressions
