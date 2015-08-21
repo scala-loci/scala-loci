@@ -46,7 +46,10 @@ class Typer[C <: Context](val c: C) {
   def typecheck(tree: Tree): Tree = {
     try
       fixTypecheck(
-        c typecheck (persistentTypeFixer transform tree),
+        (syntheticParamListMarker transform
+          (c typecheck
+            (nonSyntheticParamListMarker transform
+              (persistentTypeFixer transform tree)))),
         abortWhenUnfixable = false)
     catch {
       case TypecheckException(pos, msg) =>
@@ -66,7 +69,9 @@ class Typer[C <: Context](val c: C) {
    * type-checked again, or abort the macro expansion if this is not possible.
    */
   def untypecheck(tree: Tree): Tree =
-    c untypecheck fixTypecheck(tree, abortWhenUnfixable = true)
+    c untypecheck
+      (syntheticParamListCleaner transform
+        fixTypecheck(tree, abortWhenUnfixable = true))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -81,7 +86,9 @@ class Typer[C <: Context](val c: C) {
    * type-checked again, or abort the macro expansion if this is not possible.
    */
   def untypecheckAll(tree: Tree): Tree =
-    c resetAllAttrs fixTypecheck(tree, abortWhenUnfixable = true)
+    c resetAllAttrs
+      (syntheticParamListCleaner transform
+        fixTypecheck(tree, abortWhenUnfixable = true))
 
   /**
    * Creates a type tree which survives re-type-checking using [[retypecheck]]
@@ -94,6 +101,7 @@ class Typer[C <: Context](val c: C) {
    */
   def createTypeTree(tpe: Type): TypeTree =
     internal updateAttachment (TypeTree(tpe), PersistentType(tpe))
+
 
   private case class PersistentType(tpe: Type)
 
@@ -110,6 +118,61 @@ class Typer[C <: Context](val c: C) {
         super.transform(tree)
     }
   }
+
+
+  private case object NonSyntheticParamList
+
+  private case object SyntheticParamList
+
+  private object nonSyntheticParamListMarker extends Transformer {
+    override def transform(tree: Tree) = tree match {
+      case tree @ Apply(_, _) =>
+        internal updateAttachment (tree, NonSyntheticParamList)
+        super.transform(tree)
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+  private object syntheticParamListMarker extends Transformer {
+    override def transform(tree: Tree) = tree match {
+      case tree @ Apply(_, _) =>
+        val hasImplicitParamList =
+          tree.symbol != null &&
+          tree.symbol.isMethod &&
+          (tree.symbol.asMethod.paramLists.lastOption flatMap {
+            _.headOption map { _.isImplicit }
+          } getOrElse false)
+
+        val isNonSyntheticParamList =
+          (internal attachments tree).get[NonSyntheticParamList.type].nonEmpty
+
+        internal removeAttachment[NonSyntheticParamList.type] tree
+
+        if (hasImplicitParamList && !isNonSyntheticParamList)
+          internal updateAttachment (tree, SyntheticParamList)
+
+        super.transform(tree)
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+  private object syntheticParamListCleaner extends Transformer {
+    override def transform(tree: Tree) = tree match {
+      case tree @ Apply(fun, _) =>
+        if ((internal attachments tree).get[SyntheticParamList.type].nonEmpty)
+          super.transform(fun)
+        else
+          super.transform(tree)
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
 
   private def fixTypecheck(tree: Tree, abortWhenUnfixable: Boolean): Tree = {
     val possibleFlags = Seq(
