@@ -3,12 +3,11 @@ package transmission
 
 import scala.util.Try
 
-trait Marshallable[T] {
+sealed trait Marshallable[T] {
   def marshall(unmarshalled: T, abstraction: AbstractionRef): String
   def unmarshall(marshalled: String, abstraction: AbstractionRef): Try[T]
 }
 
-trait DelegatingMarshallable[T, U] {
-  def marshall(composed: T, abstraction: AbstractionRef): U
-  def unmarshall(decomposed: U, abstraction: AbstractionRef): T
-}
+trait PushBasedMarshallable[T] extends Marshallable[T]
+
+trait PullBasedMarshallable[T] extends Marshallable[T]

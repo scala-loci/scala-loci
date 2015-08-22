@@ -1,60 +1,52 @@
 package retier
 package marshallable
 
-import retier.transmission.AbstractionRef
-import retier.transmission.DelegatingMarshallable
-import retier.transmission.Marshallable
-import scala.util.DynamicVariable
+import transmission.Transmittable
+import transmission.PullBasedTransmittable
+import transmission.PushBasedTransmittable
+import transmission.TransmittableMarshalling._
 import scala.util.Try
 
-object upickle extends _root_.upickle.AttributeTagged {
+trait LowPriorityUpickleImplicits { this: upickle.type =>
+  implicit def upickleBasedDefaultPullBasedMarshallable[T]
+      (implicit reader: Reader[T], writer: Writer[T]) =
+    defaultTransmittable createMarshallable (writer.marshall, reader.unmarshall)
+}
+
+object upickle
+    extends LowPriorityUpickleImplicits
+    with _root_.upickle.AttributeTagged {
   def tagName = "$type"
 
-  private val currentAbstraction =
-    new DynamicVariable(Option.empty[(AbstractionRef, Int)])
-
-  implicit def upickleBasedMarshallable[T: Reader: Writer] =
-    new Marshallable[T] {
-      def marshall(unmarshalled: T, abstraction: AbstractionRef) =
-        currentAbstraction.withValue(Some((abstraction, 0))) {
-          write(unmarshalled)
-        }
-      def unmarshall(marshalled: String, abstraction: AbstractionRef) = Try {
-        currentAbstraction.withValue(Some((abstraction, 0))) {
-          read[T](marshalled)
-        }
-      }
-    }
-
-  implicit def delegatingMarshallableBasedReader[T, U]
+  implicit def upickleBasedPullBasedMarshallable[T, U]
     (implicit
-        marshallable: DelegatingMarshallable[T, U], reader: Reader[U]) =
-    Reader[T] { expr =>
-      currentAbstraction.value match {
-        case Some((abstraction, index)) =>
-          val derived = abstraction derive index.toString
-          currentAbstraction.value = Some((abstraction, index + 1))
-          marshallable unmarshall (reader read expr, derived)
-        case _ =>
-          throw new InvalidDynamicScope
-      }
-    }
+        transmittable: PullBasedTransmittable[T, U],
+        reader: Reader[U], writer: Writer[U]) =
+    transmittable createMarshallable (writer.marshall, reader.unmarshall)
 
-  implicit def delegatingMarshallableBasedWriter[T, U]
+  implicit def upickleBasedPushBasedMarshallable[T, U]
     (implicit
-        marshallable: DelegatingMarshallable[T, U], writer: Writer[U]) =
-    Writer[T] { expr =>
-      currentAbstraction.value match {
-        case Some((abstraction, index)) =>
-          val derived = abstraction derive index.toString
-          currentAbstraction.value = Some((abstraction, index + 1))
-          writer write (marshallable marshall (expr, derived))
-        case _ =>
-          throw new InvalidDynamicScope
-      }
+        transmittable: PushBasedTransmittable[T, U],
+        reader: Reader[U], writer: Writer[U]) =
+    transmittable createMarshallable (writer.marshall, reader.unmarshall)
+
+  implicit def transmittableBasedReader[T, U]
+      (implicit transmittable: Transmittable[T, U], reader: Reader[U]) =
+    Reader[T] { case expr =>
+      transmittable receive (reader read expr, reader.unmarshall)
     }
 
-  class InvalidDynamicScope extends RuntimeException(
-    "Reader or writer for virtual composite marshallable object invoked " +
-    "outside of a related marshallable object dynamic scope")
+  implicit def transmittableBasedWriter[T, U]
+      (implicit transmittable: Transmittable[T, U], writer: Writer[U]) =
+    Writer[T] { case expr =>
+      writer write (transmittable send (expr, writer.marshall))
+    }
+
+  protected implicit class WriterMarshalling[T](writer: Writer[T]) {
+    def marshall = { v: T => write(v)(writer) }
+  }
+
+  protected implicit class ReaderMarshalling[T](reader: Reader[T]) {
+    def unmarshall = { v: String => Try { read(v)(reader) } }
+  }
 }
