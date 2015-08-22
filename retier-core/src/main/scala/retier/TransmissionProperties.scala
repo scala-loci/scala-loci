@@ -2,10 +2,10 @@ package retier
 
 import typeconstraints._
 
-final abstract class Transmission
+final abstract class TransmissionProperties
   [V, T, R <: Peer, L <: Peer, M <: ConnectionMultiplicity]
 
-object Transmission {
+object TransmissionProperties {
   implicit def transmission
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
@@ -13,7 +13,7 @@ object Transmission {
         value: T <:!< (_ <=> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
-    Transmission[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] = `#macro`
 
   implicit def transmissionFromSingle
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -22,7 +22,7 @@ object Transmission {
         value: T <:!< (_ <=> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
-    Transmission[V, T, R, L, OptionalConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
 
   implicit def transmissionFromMultiple
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -31,7 +31,7 @@ object Transmission {
         value: T <:!< (_ <=> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
-    Transmission[V, T, R, L, MultipleConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, MultipleConnection] = `#macro`
 
   implicit def issuedTransmission
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -40,7 +40,7 @@ object Transmission {
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
-    Transmission[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] = `#macro`
 
   implicit def issuedTransmissionFromSingle
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -49,7 +49,7 @@ object Transmission {
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
-    Transmission[V, T, R, L, OptionalConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
 
   implicit def issuedTransmissionFromMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -58,5 +58,5 @@ object Transmission {
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
-    Transmission[V, T, R, L, MultipleConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, MultipleConnection] = `#macro`
 }
