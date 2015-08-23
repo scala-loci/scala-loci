@@ -4,7 +4,7 @@ package marshallable
 import transmission.Transmittable
 import transmission.PullBasedTransmittable
 import transmission.PushBasedTransmittable
-import transmission.TransmittableMarshalling._
+import transmission.transmittableMarshalling._
 import scala.util.Try
 
 trait LowPriorityUpickleImplicits { this: upickle.type =>

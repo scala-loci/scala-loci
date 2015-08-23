@@ -29,13 +29,15 @@ trait Notification[T] {
 }
 
 class Notifier[T] {
-  protected class Notification extends util.Notification[T] {
+  protected class NotifierNotification extends Notification[T] {
     override protected[Notifier] def notify(v: T) = super.notify(v)
   }
 
-  val notification = new Notification
+  protected val notifierNotification = new NotifierNotification
 
-  def apply(v: T): Unit = notification notify v
+  val notification: Notification[T] = notifierNotification
+
+  def apply(v: T): Unit = notifierNotification notify v
 }
 
 object Notifier {

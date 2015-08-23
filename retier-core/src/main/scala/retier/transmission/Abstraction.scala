@@ -4,6 +4,6 @@ package transmission
 trait AbstractionId
 
 trait AbstractionRef {
-  def openChannel: Channel
+  def channel: Channel
   def derive(name: String): AbstractionRef
 }

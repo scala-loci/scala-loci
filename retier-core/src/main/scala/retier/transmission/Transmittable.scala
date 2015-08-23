@@ -9,6 +9,6 @@ trait PullBasedTransmittable[T, U] extends Transmittable[T, U] {
 }
 
 trait PushBasedTransmittable[T, U] extends Transmittable[T, U] {
-  def send(value: T, update: () => U, close: () => Unit): U
-  def receive(value: U, updated: U => Unit, closed: () => Unit): T
+  def send(value: T, sending: Sending[U]): U
+  def receive(value: U, receiving: Receiving[U]): T
 }
