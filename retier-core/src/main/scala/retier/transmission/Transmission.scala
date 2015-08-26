@@ -1,17 +1,41 @@
 package retier
 package transmission
 
-sealed trait Transmission[T, R <: Peer, L <: Peer, M <: ConnectionMultiplicity]
+import scala.concurrent.Future
+import util.Notification
 
+sealed trait Transmission
+    [T, R <: Peer, L <: Peer, M <: ConnectionMultiplicity] {
+  val remoteJoined: Notification[Remote[R]]
+  val remoteLeft: Notification[Remote[R]]
+  def remotes: Seq[Remote[R]]
+  def retrieveMappedRemoteValues: Map[Remote[R], Future[T]]
+  def retrieveRemoteValues: Seq[Future[T]]
+}
 
 sealed trait MultipleTransmission[T, R <: Peer, L <: Peer]
-  extends Transmission[T, R, L, MultipleConnection]
+    extends Transmission[T, R, L, MultipleConnection] {
+  def remotes: Seq[Remote[R]]
+  def retrieveMappedRemoteValues: Map[Remote[R], Future[T]]
+  def retrieveRemoteValues: Seq[Future[T]] =
+    retrieveMappedRemoteValues.values.toSeq
+}
 
 sealed trait OptionalTransmission[T, R <: Peer, L <: Peer]
-  extends Transmission[T, R, L, OptionalConnection]
+    extends Transmission[T, R, L, OptionalConnection] {
+  def remote: Option[Remote[R]]
+  def retrieveMappedRemoteValue: Option[(Remote[R], Future[T])]
+  def retrieveRemoteValue: Option[Future[T]] =
+    retrieveMappedRemoteValue map { _._2 }
+}
 
 sealed trait SingleTransmission[T, R <: Peer, L <: Peer]
-  extends Transmission[T, R, L, SingleConnection]
+    extends Transmission[T, R, L, SingleConnection] {
+  def remote: Remote[R]
+  def retrieveMappedRemoteValue: (Remote[R], Future[T])
+  def retrieveRemoteValue: Future[T] =
+    retrieveMappedRemoteValue._2
+}
 
 
 private trait MultipleTransmissionImplBase[T, R <: Peer, L <: Peer]
