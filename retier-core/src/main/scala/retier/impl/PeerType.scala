@@ -29,14 +29,6 @@ private final case class PeerTypeTagImpl[P](peerType: PeerTypeImpl)
   override def hashCode: Int = peerType.hashCode
 }
 
-object PeerType {
-  def create(name: String): PeerType =
-    PeerTypeImpl(name)
-
-  def create[P <: Peer: ClassTag](peer: P): PeerType =
-    create(NameTransformer decode peer.getClass.getSimpleName)
-}
-
 object PeerTypeTag {
   def create[P](name: String): PeerTypeTag[P] =
     PeerTypeTagImpl(PeerTypeImpl(name))
@@ -45,7 +37,12 @@ object PeerTypeTag {
       (c: Context)(ev: c.Expr[ClassTag[P]]): c.Expr[PeerTypeTag[P]] = {
     import c.universe._
 
-    val tpe = weakTypeOf[P]
+    val tpes = ev.tree collect { case Literal(Constant(tpe: Type)) => tpe }
+
+    if (tpes.size != 1)
+      c.abort(c.enclosingPosition, "could not extract peer type from class tag")
+
+    val tpe = tpes.head
 
     if (!(tpe <:< typeOf[Peer]))
       c.abort(c.enclosingPosition, s"$tpe is not a peer type")
@@ -53,6 +50,6 @@ object PeerTypeTag {
     val name = tpe.typeSymbol.name.decodedName.toString
 
     c.Expr[PeerTypeTag[P]](
-      q"_root_.retier.impl.PeerTypeTag.create[$tpe]($name)")
+      q"_root_.retier.impl.PeerTypeTag.create[${weakTypeOf[P]}]($name)")
   }
 }

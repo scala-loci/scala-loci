@@ -11,8 +11,6 @@ import scala.language.implicitConversions
 trait Peer {
   type Connection <: ConnectionSpec
 
-  final def peerType: PeerType = PeerType(this)
-
   def connect: ConnectionSetup[ConnectionSetupSpec]
 
   def context: ExecutionContext = implicitly[ExecutionContext]
@@ -94,8 +92,10 @@ trait Peer {
   protected[this] final def load[T]
       (factory: ConnectionFactory)
       (configfile: String)
-      (implicit parser: ConfigurationParser): ConnectionSetup[T] = {
-    val config = parser load (configfile, peerType)
+      (implicit
+        parser: ConfigurationParser,
+        peerTypeTag: PeerTypeTag[this.type]): ConnectionSetup[T] = {
+    val config = parser load (configfile, peerTypeTag.peerType)
 
     val peerListeners =
       config.listeners map { case (peerType, config, attrs) =>

@@ -10,11 +10,6 @@ sealed trait PeerType {
 
 private trait PeerTypeImplBase extends PeerType
 
-object PeerType {
-  def apply[P <: Peer: ClassTag](peer: P): PeerType =
-    impl.PeerType.create(peer)
-}
-
 
 @implicitNotFound("No peer type information available for ${P}")
 sealed trait PeerTypeTag[P] {
