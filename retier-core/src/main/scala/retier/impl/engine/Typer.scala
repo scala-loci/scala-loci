@@ -48,8 +48,7 @@ class Typer[C <: Context](val c: C) {
       fixTypecheck(
         (syntheticParamListMarker transform
           (c typecheck
-            (nonSyntheticParamListMarker transform
-              (persistentTypeFixer transform tree)))),
+            (nonSyntheticParamListMarker transform tree))),
         abortWhenUnfixable = false)
     catch {
       case TypecheckException(pos, msg) =>
@@ -91,32 +90,48 @@ class Typer[C <: Context](val c: C) {
         fixTypecheck(tree, abortWhenUnfixable = true))
 
   /**
-   * Creates a type tree which survives re-type-checking using [[retypecheck]]
-   * or [[retypecheckAll]], i.e., the type is recovered when type-checking the
-   * tree using [[typecheck]], even if the tree has been un-type-checked before.
+   * Creates an AST representing the given type.
    *
-   * Such a type tree can be useful because it is not easily possible to create
-   * an AST for a given type and synthetic type trees are created during
-   * type-checking.
+   * The type-checking process creates synthetic type trees and it is possible
+   * to insert trees with type information, but it is not easily possible to
+   * create an AST for a given type.
+   *
+   * This method attempts to create such an AST, which is persistent across
+   * type-checking and un-type-checking.
    */
-  def createTypeTree(tpe: Type): TypeTree =
-    internal updateAttachment (TypeTree(tpe), PersistentType(tpe))
+  def createTypeTree(tpe: Type): Tree = {
+    def expandSymbol(symbol: Symbol): Tree = {
+      if (symbol.owner != NoSymbol)
+        Select(expandSymbol(symbol.owner), symbol.name.toTermName)
+      else
+        Ident(termNames.ROOTPKG)
+    }
 
-
-  private case class PersistentType(tpe: Type)
-
-  private object persistentTypeFixer extends Transformer {
-    override def transform(tree: Tree) = tree match {
-      case tree: TypeTree =>
-        (internal attachments tree).get[PersistentType] foreach { persistent =>
-          internal setType (tree, persistent.tpe)
-          internal removeAttachment[PersistentType] tree
+    def expandType(tpe: Type): Tree = tpe match {
+      case tpe @ TypeRef(pre, sym, args) =>
+        val tpt = pre match {
+          case ThisType(pre) if pre.isModule || pre.isPackage =>
+            Some(Select(expandSymbol(pre), sym.asType.name))
+          case ThisType(pre) if pre.isClass =>
+            Some(Select(This(pre.asType.name), sym.asType.name))
+          case _ =>
+            None
         }
-        super.transform(tree)
+
+        tpt match {
+          case Some(tpt) if args.isEmpty =>
+            tpt
+          case Some(tpt) =>
+            AppliedTypeTree(tpt, args map expandType)
+          case _ =>
+            TypeTree(tpe)
+        }
 
       case _ =>
-        super.transform(tree)
+        TypeTree(tpe)
     }
+
+    expandType(tpe)
   }
 
 
