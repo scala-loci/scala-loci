@@ -12,9 +12,10 @@ object CodeProcessor {
 
 class CodeProcessor[C <: Context](val c: C) extends
     Generation with
-    StatementCollector with
     PeerDefinitionCollector with
+    StatementCollector with
     PlacedExpressionsEraser with
+    TransmissionGenerator with
     ProxyGenerator with
     OverrideBridgeGenerator {
   import c.universe._
@@ -25,6 +26,7 @@ class CodeProcessor[C <: Context](val c: C) extends
       collectPeerDefinitions aggregate
       collectStatements aggregate
       erasePlacedExpressions aggregate
+      generateTransmissions aggregate
       generateProxies aggregate
       generateOverrideBridge
 

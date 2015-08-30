@@ -23,6 +23,8 @@ trait Generation {
 
     val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
     val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+
+    val transmissionProvider = typeOf[transmission.TransmissionProvider]
   }
 
   object symbols {
@@ -36,6 +38,12 @@ trait Generation {
     val placedOverriding = types.overriding member TermName("overriding")
 
     val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
+
+    val transmitMultiple = types.retier member TermName("transmitMultiple")
+    val transmitOptional = types.retier member TermName("transmitOptional")
+    val transmitSingle = types.retier member TermName("transmitSingle")
+
+    val transmit = Seq(transmitMultiple, transmitOptional, transmitSingle)
 
     val discardValue = types.retier member TermName("discardValue")
     val issueValue = types.retier member TermName("issueValue")
@@ -54,6 +62,24 @@ trait Generation {
     val localCasts = Seq(reduceCapture, liftCapture, liftValueLocally,
       downcastValueLocally)
     val casts = globalCasts ++ localCasts
+  }
+
+  object trees {
+    val Unit = tq"_root_.scala.Unit"
+    val Option = tq"_root_.scala.Option"
+    val OptionEmpty = q"_root_.scala.Option.empty"
+    val Some = q"_root_.scala.Some"
+    val None = q"_root_.scala.None"
+    val Try = tq"_root_.scala.util.Try"
+    val Success = q"_root_.scala.util.Success"
+    val Failure = q"_root_.scala.util.Failure"
+    val implicitly = q"_root_.scala.Predef.implicitly"
+    val AbstractionId = tq"_root_.retier.transmission.AbstractionId"
+    val AbstractionIdCreate = q"_root_.retier.impl.AbstractionId.create"
+    val Marshallable = tq"_root_.retier.transmission.Marshallable"
+    val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
+    val TransmissionProperties = tq"_root_.retier.impl.TransmissionProperties"
+    val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
   }
 
 
