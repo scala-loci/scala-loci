@@ -14,12 +14,12 @@ trait StatementCollector { this: Generation =>
     PlacedStatement with NonPlacedStatement] {
       aggregator =>
 
-    val peers = (aggregator.all[PeerDefinition] map { _.peer }).toSet
+    val peersTypes = (aggregator.all[PeerDefinition] map { _.peerType }).toSet
 
     def extractAndValidateType(tree: Tree, tpe: Type) = {
       val Seq(exprType, peerType) = tpe.typeArgs
 
-      if (!(peers contains peerType))
+      if (!(peersTypes contains peerType))
         c.abort(tree.pos,
           "Placed abstractions must be placed on a peer " +
           "that is defined in the same scope")
@@ -29,7 +29,7 @@ trait StatementCollector { this: Generation =>
 
     def extractTypeTree(tree: Tree) = {
       val args = tree match {
-        case tree: TypeTree if tree.original != EmptyTree =>
+        case tree: TypeTree if tree.original != null =>
           tree.original match {
             case AppliedTypeTree(_, args) => args
             case _ => List(EmptyTree)
@@ -39,24 +39,32 @@ trait StatementCollector { this: Generation =>
       }
 
       args.head match {
-        case tree: TypeTree if tree.original != EmptyTree => tree.original
+        case tree: TypeTree if tree.original != null => tree.original
         case tree => tree
       }
     }
 
+    def isPlacedType(tpe: Type) =
+      tpe <:< types.localOn && tpe =:!= types.nothing
+
+    def isPeerDefinition(symbol: Symbol) =
+      symbol != null && symbol.isClass && symbol.asClass.toType <:< types.peer
+
     val stats = aggregator.all[InputStatement] map { _.stat } collect {
-      case stat: ValOrDefDef if stat.tpt.tpe <:< types.localOn =>
+      case stat: ValOrDefDef if isPlacedType(stat.tpt.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpt.tpe)
-        val declTypeTree = extractTypeTree(stat.tpt) orElse stat.tpt
+        val declTypeTree = extractTypeTree(stat.tpt) orElse TypeTree(exprType)
         PlacedStatement(
           stat, peerType, exprType, Some(declTypeTree), None, stat.rhs)
 
-      case stat if stat.tpe <:< types.localOn =>
+      case stat if isPlacedType(stat.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpe)
         PlacedStatement(
           stat, peerType, exprType, None, None, stat)
 
-      case stat =>
+      case stat
+          if !isPeerDefinition(stat.symbol) &&
+             !isPeerDefinition(stat.symbol.companion) =>
         NonPlacedStatement(stat)
     }
 

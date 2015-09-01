@@ -202,7 +202,7 @@ trait ProxyGenerator { this: Generation =>
     val peerIds = aggregator.all[PeerDefinition] map { peerDef =>
       import trees._
 
-      val peerTypeName = peerDef.peer.typeSymbol.asType.name
+      val peerTypeName = peerDef.peerType.typeSymbol.asType.name
       val peerTagTermName = retierTermName(s"peer$$$peerTypeName")
       NonPlacedStatement(
         q"private[this] val $peerTagTermName = $implicitly[$PeerTypeTag[$peerTypeName]]")
@@ -216,7 +216,7 @@ trait ProxyGenerator { this: Generation =>
       )
     })
 
-    val peerTypes = (aggregator.all[PeerDefinition] map { _.peer }).toSet
+    val peerTypes = (aggregator.all[PeerDefinition] map { _.peerType }).toSet
 
     val placedStats = proxies groupBy { _.peerType } flatMap {
       case (peerType, proxies) =>

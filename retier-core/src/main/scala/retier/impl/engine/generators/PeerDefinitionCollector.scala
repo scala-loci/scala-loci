@@ -14,33 +14,39 @@ trait PeerDefinitionCollector { this: Generation =>
       aggregator =>
 
     val peerDefs = aggregator.all[InputStatement] collect {
-      _.stat match {
-        case peer @ q"""
-             $mods class $tpname[..$tparams] $ctorMods(...$paramss)
-               extends { ..$earlydefns } with ..$parents { $self =>
-               ..$stats
-             }""" if peer.symbol.asClass.toType <:< types.peer =>
-          (earlydefns, paramss.flatten, parents, stats,
-           PeerDefinition(peer, peer.symbol.asClass.toType, parents))
+      case InputStatement(peer @ q"""
+           $mods class $tpname[..$tparams] $ctorMods(...$paramss)
+             extends { ..$earlydefns } with ..$parents { $self =>
+             ..$stats
+           }""") if peer.symbol.asClass.toType <:< types.peer =>
+        val sym = peer.symbol.asClass
+        (earlydefns, paramss, parents, stats,
+         PeerDefinition(
+          peer, sym.name, sym.toType, tparams, paramss, parents,
+          typer cleanModifiers mods, stats, isClass = true, None))
 
-        case peer @ q"""
-             $mods trait $tpname[..$tparams]
-               extends { ..$earlydefns } with ..$parents { $self =>
-               ..$stats
-             }""" if peer.symbol.asClass.toType <:< types.peer =>
-          (earlydefns, List.empty, parents, stats,
-           PeerDefinition(peer, peer.symbol.asClass.toType, parents))
-      }
+      case InputStatement(peer @ q"""
+           $mods trait $tpname[..$tparams]
+             extends { ..$earlydefns } with ..$parents { $self =>
+             ..$stats
+           }""") if peer.symbol.asClass.toType <:< types.peer =>
+        val sym = peer.symbol.asClass
+        (earlydefns, List.empty, parents, stats,
+         PeerDefinition(
+          peer, sym.name, sym.toType, tparams, List.empty, parents,
+          typer cleanModifiers mods, stats, isClass = false, None))
     }
 
     peerDefs foreach { case (earlydefns, params, parents, stats, _) =>
       if (earlydefns.nonEmpty)
-        c.abort(earlydefns(0).pos,
+        c.abort(earlydefns.head.pos,
           "early definitions are not allowed for peer types")
 
-      if (params.nonEmpty)
-        c.abort(params(0).pos,
-          "primary constructors of peer types are not allowed to take arguments")
+      if (params.nonEmpty && params.head.nonEmpty &&
+          !(params.head.head.mods hasFlag Flag.IMPLICIT))
+        c.abort(params.head.head.pos,
+          "primary constructors of peer types are not allowed " +
+          "to take explicit arguments")
 
       stats foreach {
         case DefDef(_, _, _, _, _, _) |
@@ -52,8 +58,13 @@ trait PeerDefinitionCollector { this: Generation =>
       }
 
       parents foreach { parent =>
-        parent.symbol.asClass.toType.members foreach { member =>
-          if (!member.isType && !member.isMethod)
+        parent.tpe.members foreach { member =>
+          val symbol = member.typeSignature.typeSymbol map { _.owner }
+          val tpe = if (symbol.isType) symbol.asType.toType else NoType
+
+          if (tpe =:!= types.peer && !member.isType && !member.isMethod &&
+              (!member.isTerm || !member.asTerm.isParamAccessor ||
+               !member.isImplicit))
             c.abort(parent.pos,
               "only method and type definitions allowed in peer type parents")
         }
@@ -63,7 +74,25 @@ trait PeerDefinitionCollector { this: Generation =>
       //       - multiple empty constructor argument lists possible
     }
 
-    val peers = peerDefs map { case (_, _, _, _, decl) => decl }
+    val decls = peerDefs map { case (_, _, _, _, decl) => decl }
+
+    val names = (decls.zipWithIndex map { case (decl, index) =>
+      decl.peerName.toTermName -> index
+    }).toMap
+
+    val peers = aggregator.all[InputStatement].foldLeft(decls) {
+      case (decls, InputStatement(companion @ q"""
+          $mods object $tname
+            extends { ..$earlydefns } with ..$parents { $self =>
+            ..$body
+          }""")) if names contains tname =>
+        val index = names(tname)
+        val decl = decls(index)
+        decls updated (index, decl copy (companion = Some(companion)))
+
+      case (decls, _) =>
+        decls
+    }
 
     echo(
       verbose = true,

@@ -10,6 +10,8 @@ trait Generation {
   import c.universe._
 
   object types {
+    val nothing = typeOf[Nothing]
+
     val retier = typeOf[_root_.retier.`package`.type]
     val peer = typeOf[Peer]
 
@@ -85,10 +87,13 @@ trait Generation {
 
   case class InputStatement(stat: Tree)
 
-  case class PeerDefinition(tree: Tree, peer: Type, parents: List[Tree])
+  case class PeerDefinition(tree: Tree, peerName: TypeName, peerType: Type,
+    typeArgs: List[Tree], args: List[List[Tree]], parents: List[Tree],
+    mods: Modifiers, stats: List[Tree], isClass: Boolean,
+    companion: Option[Tree])
 
   case class PlacedStatement(tree: Tree, peerType: Type, exprType: Type,
-      declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)
+    declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)
 
   case class NonPlacedStatement(tree: Tree)
 
@@ -101,6 +106,12 @@ trait Generation {
   def retierTermName(name: String) = TermName(s"$$$$retier$$$name")
 
   def retierTypeName(name: String) = TypeName(s"$$$$retier$$$name")
+
+  def retierName(name: TermName) = TermName(s"$$$$retier$$${name.toString}")
+
+  def retierName(name: TypeName) = TypeName(s"$$$$retier$$${name.toString}")
+
+  def isRetierName(name: Name) = name.toString startsWith "$$retier$"
 
 
   implicit class TypeOps(tpe: Type) {
