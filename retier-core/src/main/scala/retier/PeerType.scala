@@ -6,6 +6,7 @@ import scala.language.experimental.macros
 
 sealed trait PeerType {
   def name: String
+  def bases: List[PeerType]
 }
 
 private trait PeerTypeImplBase extends PeerType

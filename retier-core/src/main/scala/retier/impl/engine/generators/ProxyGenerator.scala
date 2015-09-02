@@ -75,7 +75,7 @@ trait ProxyGenerator { this: Generation =>
 
     case class Proxy(peerType: Type, abstractionId: Tree,
       localResponseMarshallable: Tree, localResponse: CaseDef,
-      remoteRequestMarshallable: Tree, remoteRequest: List[Tree])
+      remoteRequestMarshallable: Tree, remoteRequest: Seq[Tree])
 
 
     val decls = aggregator.all[PlacedStatement] collect {
@@ -151,7 +151,7 @@ trait ProxyGenerator { this: Generation =>
         val request =
           if (isMutable) {
             val setter = TermName(s"${declTermName}_=")
-            List(
+            Seq(
               q"""def $declTermName =
                     $TransmissionPropertiesCreate(
                       $abstractionIdTermName,
@@ -186,7 +186,7 @@ trait ProxyGenerator { this: Generation =>
                       $OptionEmpty[$Marshallable[$Unit]],
                       $request)"""
 
-            List(q"def $declTermName(...$args) = $marshalledReceiving")
+            Seq(q"def $declTermName(...$args) = $marshalledReceiving")
           }
 
 

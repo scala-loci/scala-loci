@@ -5,15 +5,15 @@ import scala.annotation.compileTimeOnly
 import scala.reflect.ClassTag
 import scala.reflect.macros.whitebox.Context
 
-private final case class PeerTypeImpl(name: String)
+private final case class PeerTypeImpl(name: String, bases: List[PeerType])
     extends PeerTypeImplBase
 
 private final case class PeerTypeTagImpl[P](peerType: PeerTypeImpl)
     extends PeerTypeTagImplBase[P]
 
 object PeerTypeTag {
-  def create[P](name: String): PeerTypeTag[P] =
-    PeerTypeTagImpl(PeerTypeImpl(name))
+  def create[P](name: String, bases: List[PeerType]): PeerTypeTag[P] =
+    PeerTypeTagImpl(PeerTypeImpl(name, bases))
 
   @annotation.compileTimeOnly(
     "peer type tag should have been eliminated " +

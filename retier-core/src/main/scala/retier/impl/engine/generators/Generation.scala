@@ -66,6 +66,10 @@ trait Generation {
     val casts = globalCasts ++ localCasts
   }
 
+  object names {
+    val peerTypeTag = "peerTypeTag"
+  }
+
   object trees {
     val Unit = tq"_root_.scala.Unit"
     val Option = tq"_root_.scala.Option"
@@ -73,13 +77,16 @@ trait Generation {
     val Some = q"_root_.scala.Some"
     val None = q"_root_.scala.None"
     val Try = tq"_root_.scala.util.Try"
+    val implicitly = q"_root_.scala.Predef.implicitly"
     val Success = q"_root_.scala.util.Success"
     val Failure = q"_root_.scala.util.Failure"
-    val implicitly = q"_root_.scala.Predef.implicitly"
+    val List = q"_root_.scala.collection.immutable.List"
     val AbstractionId = tq"_root_.retier.transmission.AbstractionId"
     val AbstractionIdCreate = q"_root_.retier.impl.AbstractionId.create"
     val Marshallable = tq"_root_.retier.transmission.Marshallable"
     val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
+    val PeerTypeTagCreate = q"_root_.retier.impl.PeerTypeTag.create"
+    val PeerType = q"_root_.retier.impl.PeerImpl.peerTypeTag.peerType"
     val TransmissionProperties = tq"_root_.retier.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
   }

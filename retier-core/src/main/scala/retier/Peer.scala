@@ -11,6 +11,8 @@ import scala.language.implicitConversions
 trait Peer {
   type Connection <: ConnectionSpec
 
+  def peerTypeTag: PeerTypeTag[this.type]
+
   def connect: ConnectionSetup[ConnectionSetupSpec]
 
   def context: ExecutionContext = implicitly[ExecutionContext]

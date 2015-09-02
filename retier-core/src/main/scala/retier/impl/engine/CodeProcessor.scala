@@ -14,6 +14,7 @@ class CodeProcessor[C <: Context](val c: C) extends
     Generation with
     PeerDefinitionCollector with
     StatementCollector with
+    PeerDefinitionProcessor with
     PlacedExpressionsEraser with
     TransmissionGenerator with
     ProxyGenerator with
@@ -25,6 +26,7 @@ class CodeProcessor[C <: Context](val c: C) extends
       Aggregator.create(state.body map InputStatement) aggregate
       collectPeerDefinitions aggregate
       collectStatements aggregate
+      processPeerDefinitions aggregate
       erasePlacedExpressions aggregate
       generateTransmissions aggregate
       generateProxies aggregate
