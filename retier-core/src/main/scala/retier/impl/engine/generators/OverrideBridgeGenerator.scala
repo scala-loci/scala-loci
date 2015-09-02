@@ -19,7 +19,7 @@ trait OverrideBridgeGenerator { this: Generation =>
         val expr = q"$name"
         val overridingDefinition = ValDef(
           Modifiers(
-            mods.flags | Flag.OVERRIDE | Flag.ARTIFACT,
+            mods.flags | Flag.OVERRIDE | Flag.SYNTHETIC | Flag.ARTIFACT,
             mods.privateWithin,
             mods.annotations),
           overridingDecl, tpt, expr)
@@ -35,7 +35,7 @@ trait OverrideBridgeGenerator { this: Generation =>
         val expr = q"$name(...${vparamss map { _ map { _.name } } })"
         val overridingDefinition = DefDef(
           Modifiers(
-            mods.flags | Flag.OVERRIDE | Flag.ARTIFACT,
+            mods.flags | Flag.OVERRIDE | Flag.SYNTHETIC | Flag.ARTIFACT,
             mods.privateWithin,
             mods.annotations),
           overridingDecl, tparams, vparamss, tpt, expr)

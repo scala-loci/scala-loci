@@ -10,7 +10,7 @@ trait Generation {
   import c.universe._
 
   object types {
-    val nothing = typeOf[Nothing]
+    val bottom = Seq(typeOf[Nothing], typeOf[Null])
 
     val retier = typeOf[_root_.retier.`package`.type]
     val peer = typeOf[Peer]

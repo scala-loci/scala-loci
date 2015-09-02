@@ -8,12 +8,13 @@ import scala.reflect.macros.blackbox.Context
 trait TransmissionGenerator { this: Generation =>
   val c: Context
   import c.universe._
+  import trees._
 
   val generateTransmissions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
     val stats = aggregator.all[PlacedStatement] map { stat =>
-      stat.copy(expr = transmissionGenerator transform stat.expr)
+      stat.copy(expr = new TransmissionGenerator(stat) transform stat.expr)
     }
 
     echo(
@@ -24,25 +25,29 @@ trait TransmissionGenerator { this: Generation =>
     aggregator replace stats
   }
 
-  private object transmissionGenerator extends Transformer {
+  private class TransmissionGenerator(stat: PlacedStatement)
+      extends Transformer {
     override def transform(tree: Tree) = tree match {
       case tree @ q"$_[..$tpts](...$exprss)"
           if symbols.transmit contains tree.symbol =>
-        val List(List(value), List(_, transmissionProvider)) = exprss
+        val Seq(Seq(value), Seq(_, transmissionProvider)) = exprss
 
-        val List(_, remoteName, localName) =
+        val Seq(_, remoteName, localName) =
           transmissionProvider.tpe.typeArgs.head.typeArgs map {
-            _.typeSymbol.asType.name
+            _.typeSymbol.name.toTermName
           }
 
-        val abstraction = value match {
-          case q"$tpname.this.$tname[..$tpts](...$exprss)" =>
-            val abstractionName = retierTermName(tname.encodedName.toString)
-            q"$tpname.this.$abstractionName[..$tpts](...$exprss)"
+        val peerName = retierName(stat.peerType.typeSymbol.asType.name)
 
-          case _ => c.abort(value.pos,
-            "identifier of same scope, selected remote value, " +
-            "or remote expression expected")
+        val (enclosingName, abstraction) = value match {
+          case q"$tpname.this.$tname[..$tpts](...$exprss)" =>
+            val abstractionName = retierName(tname)
+            (tpname, q"$peerName.this.$abstractionName[..$tpts](...$exprss)")
+
+          case _ =>
+            c.abort(value.pos,
+              "identifier of same scope, selected remote value, " +
+              "or remote expression expected")
         }
 
         val createTransmission = TermName(tree.symbol match {
@@ -51,8 +56,8 @@ trait TransmissionGenerator { this: Generation =>
           case symbols.transmitSingle => "createSingleTransmission"
         })
 
-        val remote = retierTermName(s"peer$$$remoteName")
-        val local = retierTermName(s"peer$$$localName")
+        val remote = q"$enclosingName.this.$remoteName.peerTypeTag"
+        val local = q"$enclosingName.this.$localName.peerTypeTag"
         val system = retierTermName("system")
 
         q"$system.$createTransmission($abstraction)($remote, $local)"

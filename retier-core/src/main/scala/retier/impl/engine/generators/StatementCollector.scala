@@ -45,7 +45,7 @@ trait StatementCollector { this: Generation =>
     }
 
     def isPlacedType(tpe: Type) =
-      tpe <:< types.localOn && tpe =:!= types.nothing
+      tpe <:< types.localOn && (types.bottom forall { tpe <:!< _ })
 
     def isPeerDefinition(symbol: Symbol) =
       symbol != null && symbol.isClass && symbol.asClass.toType <:< types.peer
