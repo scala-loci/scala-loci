@@ -14,6 +14,8 @@ trait StatementCollector { this: Generation =>
     PlacedStatement with NonPlacedStatement] {
       aggregator =>
 
+    echo(verbose = true, " Collected placed and non-placed statements")
+
     val peersTypes = (aggregator.all[PeerDefinition] map { _.peerType }).toSet
 
     def extractAndValidateType(tree: Tree, tpe: Type) = {
@@ -71,15 +73,10 @@ trait StatementCollector { this: Generation =>
     val placedStats = stats collect { case stat: PlacedStatement => stat }
     val nonPlacedStats = stats collect { case stat: NonPlacedStatement => stat }
 
-    echo(
-      verbose = true,
-      s"Collected placed statements " +
-      s"(${placedStats.size} placed statements added)")
-
-    echo(
-      verbose = true,
-      s"Collected non-placed statements " +
-      s"(${nonPlacedStats.size} non-placed statements added)")
+    echo(verbose = true,
+      s"  [${placedStats.size} placed statements added]")
+    echo(verbose = true,
+      s"  [${nonPlacedStats.size} non-placed statements added]")
 
     aggregator add placedStats add nonPlacedStats
   }

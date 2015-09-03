@@ -13,14 +13,14 @@ trait TransmissionGenerator { this: Generation =>
   val generateTransmissions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
+    echo(verbose = true, s" Generating transmissions for placed expressions")
+
     val stats = aggregator.all[PlacedStatement] map { stat =>
       stat.copy(expr = new TransmissionGenerator(stat) transform stat.expr)
     }
 
-    echo(
-      verbose = true,
-      s"Generated transmissions for placed expressions " +
-      s"(${stats.size} placed statements generated, existing replaced)")
+    echo(verbose = true,
+      s"  [${stats.size} placed statements generated, existing replaced]")
 
     aggregator replace stats
   }

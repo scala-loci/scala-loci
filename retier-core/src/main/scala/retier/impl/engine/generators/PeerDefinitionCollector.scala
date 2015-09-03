@@ -13,6 +13,8 @@ trait PeerDefinitionCollector { this: Generation =>
     InputStatement, PeerDefinition] {
       aggregator =>
 
+    echo(verbose = true, " Collecting peer type definitions")
+
     val peerDefs = aggregator.all[InputStatement] collect {
       case InputStatement(peer @ q"""
            $mods class $tpname[..$tparams] $ctorMods(...$paramss)
@@ -94,10 +96,7 @@ trait PeerDefinitionCollector { this: Generation =>
         decls
     }
 
-    echo(
-      verbose = true,
-      s"Collected peer type definitions " +
-      s"(${peers.size} peer type definitions added)")
+    echo(verbose = true, s"  [${peers.size} peer type definitions added]")
 
     aggregator add peers
   }

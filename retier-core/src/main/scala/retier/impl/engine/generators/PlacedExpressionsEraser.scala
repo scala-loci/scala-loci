@@ -12,6 +12,8 @@ trait PlacedExpressionsEraser { this: Generation =>
   val erasePlacedExpressions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
+    echo(verbose = true, " Erasing placed expressions")
+
     def reduceEtaExpansion(expr: Tree): Tree = {
       def reduceEtaExpansion(expr: Tree): Tree = {
         expr match {
@@ -111,10 +113,8 @@ trait PlacedExpressionsEraser { this: Generation =>
       dropPrecedingGlobalCasts map
       processPlacedExpression
 
-    echo(
-      verbose = true,
-      s"Erased placed expressions " +
-      s"(${stats.size} placed statements generated, existing replaced)")
+    echo(verbose = true,
+      s"  [${stats.size} placed statements generated, existing replaced]")
 
     aggregator replace stats
   }

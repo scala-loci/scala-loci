@@ -13,8 +13,6 @@ object multitier {
     val processor = CodeProcessor(c)
     val annottee :: _ = annottees map { _.tree }
 
-    echo(verbose = false, "Expanding `multitier` environment")
-
     /*
      * The language requires class definitions inside the annottee `A`.
      * References to a nested class `C` in `A` are of type `A.this.C`.
@@ -23,18 +21,15 @@ object multitier {
      * To work around this issue, we temporarily rename the annottee
      * while processing.
      */
-    def renameAnnottee(tree: Tree, newName: Name): Tree = {
-      val newTypeName = newName.toTypeName
-      val newTermName = newName.toTermName
+    def renameAnnottee(tree: Tree, name: Name): Tree = {
+      val typeName = name.toTypeName
+      val termName = name.toTermName
 
       class SelfReferenceChanger(val originalName: Name) extends Transformer {
-        val original = originalName.encodedName.toString
-
+        val original = originalName.toTypeName
         override def transform(tree: Tree) = tree match {
-          case ClassDef(_, name, _, _)
-            if name.encodedName.toString == original => tree
-          case This(name)
-            if name.encodedName.toString == original => This(newTypeName)
+          case ClassDef(_, `original`, _, _) => tree
+          case This(`original`) => This(typeName)
           case _ => super.transform(tree)
         }
       }
@@ -42,13 +37,12 @@ object multitier {
       tree match {
         case ClassDef(mods, name, tparams, impl) =>
           new SelfReferenceChanger(name) transform
-            ClassDef(mods, newTypeName, tparams, impl)
+            ClassDef(mods, typeName, tparams, impl)
         case ModuleDef(mods, name, impl) =>
           new SelfReferenceChanger(name) transform
-            ModuleDef(mods, newTermName, impl)
+            ModuleDef(mods, termName, impl)
         case _ =>
           c.abort(tree.pos, "class, trait or module definition expected")
-          EmptyTree
       }
     }
 
@@ -71,8 +65,8 @@ object multitier {
     val result = annottee match {
       // class or trait definition
       case ClassDef(_, realName, _, _) =>
-        val dummyName = TypeName(realName.toString + "$$dummy$$")
-        val ClassDef(mods, name, tparams, Template(parents, self, body)) =
+        val dummyName = TypeName(s"${realName.toString} ")
+        val ClassDef(mods, tpname, tparams, Template(parents, self, body)) =
           renameAnnottee(annottee, dummyName)
         val constructors = extractConstructors(body)
 
@@ -81,22 +75,27 @@ object multitier {
           val bases = parents
           val tree =
             typer retypecheckAll
-              ClassDef(mods, name, tparams, Template(
+              ClassDef(mods, tpname, tparams, Template(
                 parents, self, constructors ++ extractNonConstructors(stats)))
-          val body = tree.asInstanceOf[ClassDef].impl.body
+          val name = dummyName
+          val  ClassDef(_, _, _, Template(_, _, body)) = tree
 
           def replaceBody(body: List[context.Tree]) = new ClassWrapper(body)
         }
 
         val state = new ClassWrapper(body)
+
+        val name = state.tree.symbol.fullName
+        echo(verbose = false, s"Expanding `multitier` environment for $name...")
+
         val result = processor process state
 
         renameAnnottee(typer untypecheckAll result.tree, realName)
 
       // module definition
       case ModuleDef(_, realName, _) =>
-        val dummyName = TypeName(realName.toString + "$$dummy$$")
-        val ModuleDef(mods, name, Template(parents, self, body)) =
+        val dummyName = TypeName(s"${realName.toString} ")
+        val ModuleDef(mods, tname, Template(parents, self, body)) =
           renameAnnottee(annottee, dummyName)
         val constructors = extractConstructors(body)
 
@@ -105,14 +104,19 @@ object multitier {
           val bases = parents
           val tree =
             typer retypecheckAll
-              ModuleDef(mods, name, Template(
+              ModuleDef(mods, tname, Template(
                 parents, self, constructors ++ extractNonConstructors(stats)))
-          val body = tree.asInstanceOf[ModuleDef].impl.body
+          val name = dummyName
+          val ModuleDef(_, _, Template(_, _, body)) = tree
 
           def replaceBody(body: List[context.Tree]) = new ModuleWrapper(body)
         }
 
         val state = new ModuleWrapper(body)
+
+        val name = state.tree.symbol.fullName
+        echo(verbose = false, s"Expanding `multitier` environment for $name...")
+
         val result = processor process state
 
         renameAnnottee(typer untypecheckAll result.tree, realName)

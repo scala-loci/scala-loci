@@ -12,6 +12,8 @@ trait OverrideBridgeGenerator { this: Generation =>
   val generateOverrideBridge = UniformAggregation[PlacedStatement] {
       aggregator =>
 
+    echo(verbose = true, " Generating override bridge methods")
+
     val stats = aggregator.all[PlacedStatement] collect {
       case stat @ PlacedStatement(
           definition @ ValDef(mods, name, tpt, _), _, _,
@@ -46,10 +48,7 @@ trait OverrideBridgeGenerator { this: Generation =>
           expr = expr)
     }
 
-    echo(
-      verbose = true,
-      s"Generated override bridge methods " +
-      s"(${stats.size} placed statements added)")
+    echo(verbose = true, s"  [${stats.size} placed statements added]")
 
     aggregator add stats
   }

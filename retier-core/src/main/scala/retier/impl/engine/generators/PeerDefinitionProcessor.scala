@@ -13,6 +13,8 @@ trait PeerDefinitionProcessor { this: Generation =>
     PeerDefinition, NonPlacedStatement] {
       aggregator =>
 
+    echo(verbose = true, " Processing peer definitions")
+
     val synthetic = Flag.SYNTHETIC
     val peerTypeTag = TermName(names.peerTypeTag)
 
@@ -92,7 +94,7 @@ trait PeerDefinitionProcessor { this: Generation =>
           }"""
 
         case _ =>
-          q"object $companionName { $implicitPeerTypeTag }"
+          q"$synthetic object $companionName { $implicitPeerTypeTag }"
       }
     }
 
@@ -124,10 +126,7 @@ trait PeerDefinitionProcessor { this: Generation =>
         processPeerCompanion(peerDefinition))
     }
 
-    echo(
-      verbose = true,
-      s"Processed peer definitions " +
-      s"(${definitions.size} non-placed statements added)")
+    echo(verbose = true, s"  [${definitions.size} non-placed statements added]")
 
     aggregator add (definitions map NonPlacedStatement)
   }
