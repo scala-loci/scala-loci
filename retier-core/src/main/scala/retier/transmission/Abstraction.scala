@@ -1,7 +1,7 @@
 package retier
 package transmission
 
-trait AbstractionId
+trait AbstractionId extends Equals
 
 trait AbstractionRef {
   def channel: Channel

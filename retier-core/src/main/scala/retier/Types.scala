@@ -19,7 +19,7 @@ sealed trait Captured[+T] extends Any with ValueProxy
 
 // remote reference type
 
-sealed trait Remote[+P <: Peer] extends Any
+sealed trait Remote[+P <: Peer] extends Any with Equals
 
 private trait RemoteImplBase[+P <: Peer] extends Remote[P]
 
