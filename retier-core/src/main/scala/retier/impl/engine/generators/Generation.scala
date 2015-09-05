@@ -27,6 +27,8 @@ trait Generation {
     val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
 
     val transmissionProvider = typeOf[transmission.TransmissionProvider]
+
+    val peerTypeTag = typeOf[PeerTypeTag[_]]
   }
 
   object symbols {
@@ -91,6 +93,8 @@ trait Generation {
     val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
   }
 
+
+  case class EnclosingContext(name: TypeName, bases: List[Tree])
 
   case class InputStatement(stat: Tree)
 

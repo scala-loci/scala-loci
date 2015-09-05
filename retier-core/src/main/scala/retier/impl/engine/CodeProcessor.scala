@@ -14,6 +14,7 @@ class CodeProcessor[C <: Context](val c: C) extends
     Generation with
     PeerDefinitionCollector with
     StatementCollector with
+    NamesValidator with
     PeerDefinitionProcessor with
     PlacedExpressionsEraser with
     TransmissionGenerator with
@@ -23,9 +24,11 @@ class CodeProcessor[C <: Context](val c: C) extends
 
   def process(state: CodeWrapper[c.type]): CodeWrapper[c.type] = {
     val aggregator =
-      Aggregator.create(state.body map InputStatement) aggregate
+      Aggregator.create(state.body map InputStatement) add
+      List(EnclosingContext(state.name, state.bases)) aggregate
       collectPeerDefinitions aggregate
       collectStatements aggregate
+      validateNames aggregate
       processPeerDefinitions aggregate
       erasePlacedExpressions aggregate
       generateTransmissions aggregate

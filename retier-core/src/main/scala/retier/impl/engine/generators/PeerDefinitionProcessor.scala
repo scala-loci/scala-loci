@@ -17,6 +17,7 @@ trait PeerDefinitionProcessor { this: Generation =>
 
     val synthetic = Flag.SYNTHETIC
     val peerTypeTag = TermName(names.peerTypeTag)
+    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
 
     def wildcardedTypeTree(expr: Tree, typeArgsCount: Int) =
       if (typeArgsCount == 0)
@@ -49,6 +50,19 @@ trait PeerDefinitionProcessor { this: Generation =>
 
         case parent @ tq"$tpname.this.$tpnamePeer[..$_]"
             if parent.tpe <:< types.peer =>
+          if (!(peerTypes exists { parent.tpe <:< _ })) {
+            val symbol = parent.tpe.companion member peerTypeTag
+            val tpe = symbol.typeSignature.resultType
+
+            if (!symbol.isImplicit ||
+                tpe <:!< types.peerTypeTag ||
+                tpe.typeArgs.head.typeSymbol != parent.tpe.typeSymbol)
+              c.abort(parent.pos,
+                s"No peer type information available for $tpnamePeer " +
+                s"(maybe peer definition was not placed " +
+                s"inside `multitier` environment)")
+          }
+
           val name = tpnamePeer.toTermName
           q"$tpname.this.$name.$peerTypeTag.peerType"
 
