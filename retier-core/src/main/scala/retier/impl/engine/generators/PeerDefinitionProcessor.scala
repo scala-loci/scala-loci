@@ -9,14 +9,12 @@ trait PeerDefinitionProcessor { this: Generation =>
   val c: Context
   import c.universe._
 
-  val processPeerDefinitions = AugmentedAggregation[
-    PeerDefinition, NonPlacedStatement] {
+  val processPeerDefinitions = UniformAggregation[PeerDefinition] {
       aggregator =>
 
     echo(verbose = true, " Processing peer definitions")
 
     val synthetic = Flag.SYNTHETIC
-    val peerTypeTag = TermName(names.peerTypeTag)
     val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
 
     def wildcardedTypeTree(expr: Tree, typeArgsCount: Int) =
@@ -37,6 +35,7 @@ trait PeerDefinitionProcessor { this: Generation =>
 
     def createImplicitPeerTypeTag(peerDefinition: PeerDefinition) = {
       import trees._
+      import names._
 
       val PeerDefinition(_, peerName, _, typeArgs, _, parents, _, _, _, _) =
         peerDefinition
@@ -48,7 +47,7 @@ trait PeerDefinitionProcessor { this: Generation =>
         case parent if parent.tpe =:= types.peer =>
           q"$PeerType"
 
-        case parent @ tq"$tpname.this.$tpnamePeer[..$_]"
+        case parent @ tq"$expr.$tpnamePeer[..$_]"
             if parent.tpe <:< types.peer =>
           if (!(peerTypes exists { parent.tpe <:< _ })) {
             val symbol = parent.tpe.companion member peerTypeTag
@@ -64,10 +63,10 @@ trait PeerDefinitionProcessor { this: Generation =>
           }
 
           val name = tpnamePeer.toTermName
-          q"$tpname.this.$name.$peerTypeTag.peerType"
+          q"$expr.$name.$peerTypeTag.peerType"
 
         case parent if parent.tpe <:< types.peer =>
-          c.abort(parent.pos, "peer type of same scope expected")
+          c.abort(parent.pos, "identifier expected")
       }
 
       q"""$synthetic implicit val $peerTypeTag =
@@ -75,13 +74,15 @@ trait PeerDefinitionProcessor { this: Generation =>
     }
 
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
+      import names._
+
       val PeerDefinition(_, peerName, _, _, _, _, _, _, _, companion) =
         peerDefinition
 
       val companionName = peerName.toTermName
       val implicitPeerTypeTag = createImplicitPeerTypeTag(peerDefinition)
 
-      companion match {
+      val generatedCompanion = companion match {
         case Some(q"""$mods object $tname
                     extends { ..$earlydefns } with ..$parents { $self =>
                     ..$stats
@@ -89,16 +90,16 @@ trait PeerDefinitionProcessor { this: Generation =>
           stats foreach {
             case stat: DefTree if stat.name == peerTypeTag =>
               c.abort(stat.pos,
-                "member of name `peerTypeTag` not allowed " +
-                "in peer type companion objects")
+                s"member of name `$peerTypeTag` not allowed " +
+                s"in peer type companion objects")
             case _ =>
           }
 
           parents foreach { parent =>
             if ((parent.tpe member peerTypeTag) != NoSymbol)
               c.abort(parent.pos,
-                "member of name `peerTypeTag` not allowed " +
-                "in peer type companion object parents")
+                s"member of name `$peerTypeTag` not allowed " +
+                s"in peer type companion object parents")
           }
 
           q"""$mods object $tname
@@ -110,10 +111,13 @@ trait PeerDefinitionProcessor { this: Generation =>
         case _ =>
           q"$synthetic object $companionName { $implicitPeerTypeTag }"
       }
+
+      peerDefinition.copy(companion = Some(generatedCompanion))
     }
 
     def processPeerDefinition(peerDefinition: PeerDefinition) = {
       import trees._
+      import names._
 
       val PeerDefinition(_, peerName, _, typeArgs, args, parents, mods, stats,
         isClass, _) = peerDefinition
@@ -122,26 +126,23 @@ trait PeerDefinitionProcessor { this: Generation =>
       val implicitPeerTypeTag = q"""$synthetic implicit val $peerTypeTag =
         $companionName.$peerTypeTag.asInstanceOf[$PeerTypeTag[this.type]]"""
 
-      if (isClass)
-        q"""$mods class $peerName[..$typeArgs](...$args) extends ..$parents {
-          $implicitPeerTypeTag
-          ..$stats
-        }"""
-      else
-        q"""$mods trait $peerName[..$typeArgs] extends ..$parents {
-          $implicitPeerTypeTag
-          ..$stats
-        }"""
+      val generatedStats = implicitPeerTypeTag :: stats
+      val generatedTree =
+        if (isClass)
+          q"""$mods class $peerName[..$typeArgs](...$args) extends ..$parents {
+            ..$generatedStats
+          }"""
+        else
+          q"""$mods trait $peerName[..$typeArgs] extends ..$parents {
+            ..$generatedStats
+          }"""
+
+      peerDefinition.copy(tree = generatedTree, stats = generatedStats)
     }
 
-    val definitions = aggregator.all[PeerDefinition] flatMap { peerDefinition =>
-      Seq(
-        processPeerDefinition(peerDefinition),
-        processPeerCompanion(peerDefinition))
-    }
+    val definitions = aggregator.all[PeerDefinition] map
+      (processPeerCompanion _ compose processPeerDefinition _)
 
-    echo(verbose = true, s"  [${definitions.size} non-placed statements added]")
-
-    aggregator add (definitions map NonPlacedStatement)
+    aggregator replace definitions
   }
 }

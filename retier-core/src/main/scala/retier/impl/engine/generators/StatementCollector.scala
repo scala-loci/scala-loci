@@ -16,12 +16,12 @@ trait StatementCollector { this: Generation =>
 
     echo(verbose = true, " Collected placed and non-placed statements")
 
-    val peersTypes = (aggregator.all[PeerDefinition] map { _.peerType }).toSet
+    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
 
     def extractAndValidateType(tree: Tree, tpe: Type) = {
       val Seq(exprType, peerType) = tpe.typeArgs
 
-      if (!(peersTypes contains peerType))
+      if (!(peerTypes exists { peerType <:< _ }))
         c.abort(tree.pos,
           "Placed abstractions must be placed on a peer " +
           "that is defined in the same scope")

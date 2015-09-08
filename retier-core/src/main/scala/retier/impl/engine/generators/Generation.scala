@@ -69,7 +69,11 @@ trait Generation {
   }
 
   object names {
-    val peerTypeTag = "peerTypeTag"
+    val peerTypeTag = TermName("peerTypeTag")
+    val peerType = TermName("peerType")
+    val system = retierTermName("system")
+    val interface = retierTermName("interface")
+    val implementation = retierTermName("implementation")
   }
 
   object trees {
@@ -88,7 +92,7 @@ trait Generation {
     val Marshallable = tq"_root_.retier.transmission.Marshallable"
     val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
     val PeerTypeTagCreate = q"_root_.retier.impl.PeerTypeTag.create"
-    val PeerType = q"_root_.retier.impl.PeerImpl.peerTypeTag.peerType"
+    val PeerType = q"_root_.retier.Peer.peerTypeTag.peerType"
     val TransmissionProperties = tq"_root_.retier.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
   }

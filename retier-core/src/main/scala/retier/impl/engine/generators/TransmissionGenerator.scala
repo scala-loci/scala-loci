@@ -9,14 +9,22 @@ trait TransmissionGenerator { this: Generation =>
   val c: Context
   import c.universe._
   import trees._
+  import names._
 
-  val generateTransmissions = UniformAggregation[PlacedStatement] {
+  val generateTransmissions = UniformAggregation[
+    PlacedStatement with PeerDefinition with EnclosingContext] {
       aggregator =>
 
     echo(verbose = true, s" Generating transmissions for placed expressions")
 
+    val enclosingName = aggregator.all[EnclosingContext].head.name
+
+    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
+
     val stats = aggregator.all[PlacedStatement] map { stat =>
-      stat.copy(expr = new TransmissionGenerator(stat) transform stat.expr)
+      stat.copy(expr =
+        new TransmissionGenerator(stat, enclosingName, peerTypes)
+          transform stat.expr)
     }
 
     echo(verbose = true,
@@ -25,29 +33,51 @@ trait TransmissionGenerator { this: Generation =>
     aggregator replace stats
   }
 
-  private class TransmissionGenerator(stat: PlacedStatement)
+  private class TransmissionGenerator(stat: PlacedStatement,
+    enclosingName: TypeName, peerTypes: List[Type])
       extends Transformer {
     override def transform(tree: Tree) = tree match {
-      case tree @ q"$_[..$tpts](...$exprss)"
+      case tree @ q"$_[..$_](...$exprss)"
           if symbols.transmit contains tree.symbol =>
         val Seq(Seq(value), Seq(_, transmissionProvider)) = exprss
 
-        val Seq(_, remoteName, localName) =
-          transmissionProvider.tpe.typeArgs.head.typeArgs map {
-            _.typeSymbol.name.toTermName
+        val Seq(_, (remoteType, remoteName), (_, localName)) =
+          transmissionProvider.tpe.typeArgs.head.typeArgs map { tpe =>
+            (tpe, tpe.typeSymbol.name.toTermName)
           }
 
-        val peerName = retierName(stat.peerType.typeSymbol.asType.name)
+        if (!(peerTypes contains remoteType)) {
+          val companionSymbol = remoteType.typeSymbol.companion
+          val companionType =
+            if (companionSymbol.isModule)
+              companionSymbol.asModule.moduleClass.asType.toType
+            else
+              NoType
 
-        val (enclosingName, abstraction) = value match {
-          case q"$tpname.this.$tname[..$tpts](...$exprss)" =>
-            val abstractionName = retierName(tname)
-            (tpname, q"$peerName.this.$abstractionName[..$tpts](...$exprss)")
+          if ((companionType member names.interface) == NoSymbol)
+            c.abort(value.pos,
+              "cannot access peer type interface " +
+              "(maybe peer definition was not placed " +
+              "inside `multitier` environment)")
+        }
 
+        val localCompanion = q"$enclosingName.this.$localName"
+
+        val remoteCompanion = value match {
+          case q"$tpname.this.$_[..$_](...$_)" => q"$tpname.this.$remoteName"
+          case q"$expr.$_[..$_](...$_)" => q"$expr.$remoteName"
+        }
+
+        val remote = q"$remoteCompanion.$peerTypeTag"
+
+        val local = q"$localCompanion.$peerTypeTag"
+
+        val transmissionProperties = value match {
+          case q"$_.$tname[..$tpts](...$exprss)" =>
+            q"$remoteCompanion.$interface.$tname[..$tpts](...$exprss)"
           case _ =>
             c.abort(value.pos,
-              "identifier of same scope, selected remote value, " +
-              "or remote expression expected")
+              "identifier, selected remote value or remote expression expected")
         }
 
         val createTransmission = TermName(tree.symbol match {
@@ -56,11 +86,8 @@ trait TransmissionGenerator { this: Generation =>
           case symbols.transmitSingle => "createSingleTransmission"
         })
 
-        val remote = q"$enclosingName.this.$remoteName.peerTypeTag"
-        val local = q"$enclosingName.this.$localName.peerTypeTag"
-        val system = retierTermName("system")
 
-        q"$system.$createTransmission($abstraction)($remote, $local)"
+        q"$system.$createTransmission($transmissionProperties)($remote, $local)"
 
       case _ if tree.tpe <:< types.transmissionProvider =>
         c.abort(tree.pos, "unexpected value of type TransmissionProvider")

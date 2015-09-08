@@ -42,12 +42,10 @@ trait PlacedExpressionsEraser { this: Generation =>
             c.abort(identifier.pos, "overriding must be part of a declaration")
 
           identifier match {
-            case q"$_.this.$tname" =>
+            case q"$_.$tname" =>
               Some(tname)
-
             case _ =>
-              c.abort(identifier.pos, "identifier of same scope expected")
-              None
+              c.abort(identifier.pos, "identifier expected")
           }
 
         case _ =>
