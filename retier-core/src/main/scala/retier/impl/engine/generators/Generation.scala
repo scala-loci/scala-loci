@@ -16,6 +16,7 @@ trait Generation {
     val peer = typeOf[Peer]
 
     val localOn = typeOf[_ localOn _]
+    val sharedOn = typeOf[_ sharedOn _]
     val issued = typeOf[_ <-> _]
     val issuedControlled = typeOf[_ <=> _]
 
@@ -71,6 +72,7 @@ trait Generation {
   object names {
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")
+    val peer = retierTypeName("peer")
     val system = retierTermName("system")
     val interface = retierTermName("interface")
     val implementation = retierTermName("implementation")
@@ -111,6 +113,9 @@ trait Generation {
     declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)
 
   case class NonPlacedStatement(tree: Tree)
+
+  case class PlacedAbstraction(peerType: Type, interfaceDefinitions: List[Tree],
+    dispatchClause: CaseDef)
 
 
   val echo = Echo(c)

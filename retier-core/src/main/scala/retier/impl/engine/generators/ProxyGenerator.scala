@@ -10,8 +10,12 @@ trait ProxyGenerator { this: Generation =>
   import c.universe._
 
   val generateProxies = AugmentedAggregation[
-    PeerDefinition with PlacedStatement, NonPlacedStatement] {
+    PlacedStatement, PlacedAbstraction] {
       aggregator =>
+
+    echo(verbose = true, " Generating shared abstraction proxies")
+
+    val synthetic = Flag.SYNTHETIC
 
     def generateAbstractionId(tree: Tree, name: TermName,
         argTypes: List[List[Type]], resultType: Type) = {
@@ -72,36 +76,47 @@ trait ProxyGenerator { this: Generation =>
       q"$implicitly[$Marshallable[$typeTree]]"
     }
 
-
-    case class Proxy(peerType: Type, abstractionId: Tree,
-      localResponseMarshallable: Tree, localResponse: CaseDef,
-      remoteRequestMarshallable: Tree, remoteRequest: Seq[Tree])
-
+    def abstractionIdCreate(name: String, isStable: Boolean) = {
+      import trees._
+      q"$AbstractionIdCreate($name, $isStable)"
+    }
 
     val decls = aggregator.all[PlacedStatement] collect {
       case stat @
-          PlacedStatement(_: ValOrDefDef, _, _, Some(declTypeTree), _, _) =>
+            PlacedStatement(decl: ValOrDefDef, _, _, Some(declTypeTree), _, _)
+          if decl.tpt.tpe <:< types.sharedOn =>
         stat
     }
 
-    val proxies = decls.zipWithIndex map {
-      case (PlacedStatement(decl: ValOrDefDef, peerType, exprType, Some(declTypeTree), _, _),
-            index) =>
+    val peerDecls = decls groupBy { _.peerType.typeSymbol.asType.name }
+
+    val abstractions = peerDecls flatMap { case (peerName, stats) =>
+      stats.zipWithIndex map {
+        case (PlacedStatement(decl: ValOrDefDef, peerType, exprType,
+                              Some(declTypeTree), _, _),
+              index) =>
         val args = extractArguments(decl)
         val argTypes = extractArgumentTypes(args)
         val argNames = extractArgumentNames(args)
 
         val isMutable = decl.mods hasFlag Flag.MUTABLE
+        val isStable = decl match {
+          case ValDef(_, _, _, _) => !isMutable
+          case DefDef(_, _, _, _, _, _) => false
+        }
+        val isNullary = (argTypes.headOption flatMap { _.headOption }).isEmpty
         val hasReturnValue = exprType =:!= typeOf[Unit]
-        val isNullary =
-          argTypes.isEmpty || (argTypes.size == 1 && argTypes.head.isEmpty)
-        
-        val abstractionId = generateAbstractionId(decl, decl.name, argTypes, exprType)
-        val abstractionIdTermName = retierTermName(s"abstraction$$$index")
-        val localResponseTermName = retierTermName(s"marshallable$$res$$$index")
-        val remoteRequestTermName = retierTermName(s"marshallable$$req$$$index")
 
-        val declTermName = retierTermName(decl.name.toString)
+        val abstractionId = generateAbstractionId(decl, decl.name, argTypes, exprType)
+        val abstractionIdTermName = retierTermName(s"abs$$$index")
+        val localResponseTermName = retierTermName(s"mar$$$index$$res")
+        val remoteRequestTermName = retierTermName(s"mar$$$index$$req")
+        val declTermName = decl.name
+
+        val abstractionIdTerm = q"${names.interface}.$abstractionIdTermName"
+        val localResponseTerm = q"${names.interface}.$localResponseTermName"
+        val remoteRequestTerm = q"${names.interface}.$remoteRequestTermName"
+        val declTerm = q"${names.peer}.this.$declTermName"
 
         val localResponseTypeTree = returnTypeAsTypeTree(exprType)
 
@@ -111,59 +126,66 @@ trait ProxyGenerator { this: Generation =>
           else
             argumentTypesAsTupleTypeTree(argTypes)
 
+        val response = {
+          import trees._
 
-        import trees._
-
-        val response =
           if (isMutable) {
             q"""if (request.isEmpty)
-                  $Success {
-                    $localResponseTermName marshall (${decl.name}, ref)
-                  }
+                  $Success($localResponseTerm marshall ($declTerm, ref))
                 else
-                  $remoteRequestTermName unmarshall (request, ref) map { arg =>
-                    ${decl.name} = arg; ""
+                  $remoteRequestTerm unmarshall (request, ref) map { arg =>
+                    $declTerm = arg; ""
                   }
              """
           }
           else {
-            val methodCall =
-              if (isNullary)
-                q"""${decl.name}"""
-              else
-                q"""${decl.name}(...${applyTupleAsArguments(q"args", argTypes)})"""
+            val arguments = applyTupleAsArguments(q"args", argTypes)
 
-            val methodCallResponding =
-              if (hasReturnValue)
-                q"""$localResponseTermName marshall ($methodCall, ref)"""
+            val response =
+              if (isNullary)
+                q"""$declTerm"""
               else
-                q"""$methodCall; """""
+                q"""$declTerm(...$arguments)"""
+
+            val marshalled =
+              if (hasReturnValue)
+                q"""$localResponseTerm marshall ($response, ref)"""
+              else
+                q"""$response; """""
 
             if (isNullary)
-              q"""$Success($methodCallResponding)"""
+              q"""$Success($marshalled)"""
             else
-              q"""$remoteRequestTermName unmarshall (request, ref) map { args =>
-                    $methodCallResponding
+              q"""$remoteRequestTerm unmarshall (request, ref) map { args =>
+                    $marshalled
                   }
                """
           }
+        }
 
-        val request =
+        val request = {
+          import trees._
+
+          def setter(name: TermName) =
+            TermName(s"${declTermName}_=")
+
+          def transmissionPropertiesCreate(marshallable: Tree, request: Tree) =
+            q"""$TransmissionPropertiesCreate(
+                  $abstractionIdTerm, $marshallable, $request)"""
+
           if (isMutable) {
-            val setter = TermName(s"${declTermName}_=")
+            val getterTransmissionProperties = transmissionPropertiesCreate(
+              q"""$Some($localResponseTerm)""",
+              q"""$OptionEmpty[($Marshallable[$Unit], $Unit)]""")
+
+            val setterTransmissionProperties = transmissionPropertiesCreate(
+              q"""$OptionEmpty[$Marshallable[$Unit]]""",
+              q"""$Some(($remoteRequestTerm, v))""")
+
             Seq(
-              q"""def $declTermName =
-                    $TransmissionPropertiesCreate(
-                      $abstractionIdTermName,
-                      $Some($localResponseTermName),
-                      $OptionEmpty[($Marshallable[$Unit], $Unit)])
-               """,
-              q"""def $setter(v: $localResponseTypeTree) =
-                    $TransmissionPropertiesCreate(
-                      $abstractionIdTermName,
-                      $OptionEmpty[$Marshallable[$Unit]],
-                      $Some($remoteRequestTermName, v))
-               """)
+              q"""def $declTermName = $getterTransmissionProperties""",
+              q"""def ${setter(declTermName)}(v: $localResponseTypeTree) =
+                    $setterTransmissionProperties""")
           }
           else {
             val request =
@@ -171,86 +193,50 @@ trait ProxyGenerator { this: Generation =>
                 q"""$OptionEmpty[($Marshallable[$Unit], $Unit)]"""
               else
                 q"""$Some(
-                      $remoteRequestTermName,
-                      ${argumentNamesAsTuple(argNames)})"""
+                      ($remoteRequestTerm,
+                       ${argumentNamesAsTuple(argNames)}))"""
 
-            val marshalledReceiving =
+            val marshallable =
               if (hasReturnValue)
-                q"""$TransmissionPropertiesCreate(
-                      $abstractionIdTermName,
-                      $Some($localResponseTermName),
-                      $request)"""
+                q"$Some($localResponseTerm)"
               else
-                q"""$TransmissionPropertiesCreate(
-                      $abstractionIdTermName,
-                      $OptionEmpty[$Marshallable[$Unit]],
-                      $request)"""
+                q"$OptionEmpty[$Marshallable[$Unit]]"
 
-            Seq(q"def $declTermName(...$args) = $marshalledReceiving")
+            val transmissionProperties =
+              transmissionPropertiesCreate(marshallable, request)
+
+            Seq(q"def $declTermName(...$args) = $transmissionProperties")
           }
-
-
-        Proxy(
-          peerType,
-          q"private[this] val $abstractionIdTermName = $AbstractionIdCreate($abstractionId)",
-          q"private[this] val $localResponseTermName = ${implicitMarshallableLookup(localResponseTypeTree)}",
-          cq"`$abstractionIdTermName` => $response",
-          q"private[this] val $remoteRequestTermName = ${implicitMarshallableLookup(remoteRequestTypeTree)}",
-          request)
-    }
-
-    val peerIds = aggregator.all[PeerDefinition] map { peerDef =>
-      import trees._
-
-      val peerTypeName = peerDef.peerType.typeSymbol.asType.name
-      val peerTagTermName = retierTermName(s"peer$$$peerTypeName")
-      NonPlacedStatement(
-        q"private[this] val $peerTagTermName = $implicitly[$PeerTypeTag[$peerTypeName]]")
-    }
-
-    val nonPlacedStats = peerIds ++ (proxies flatMap { proxy =>
-      Seq(
-        NonPlacedStatement(proxy.abstractionId),
-        NonPlacedStatement(proxy.localResponseMarshallable),
-        NonPlacedStatement(proxy.remoteRequestMarshallable)
-      )
-    })
-
-    val peerTypes = (aggregator.all[PeerDefinition] map { _.peerType }).toSet
-
-    val placedStats = proxies groupBy { _.peerType } flatMap {
-      case (peerType, proxies) =>
-        val cases = proxies map { _.localResponse }
-        val respond =
-          q"""override def $$$$retier$$respond(
-                  request: String,
-                  id: _root_.retier.transmission.AbstractionId,
-                  ref: _root_.retier.transmission.AbstractionRef)
-                  : _root_.scala.util.Try[_root_.scala.Predef.String] =
-                id match {
-                  case ..$cases
-                  case _ => super.$$$$retier$$respond(request, id, ref)
-                }
-           """
-
-        val response = {
-          val DefDef(_, _, _, _, _, rhs) = respond
-          PlacedStatement(respond, peerType, NoType, Some(TypeTree()), None, rhs)
         }
 
-        val requests =
-          (proxies flatMap {
-            _.remoteRequest flatMap { request =>
-              val DefDef(_, _, _, _, _, rhs) = request
-              (peerTypes - peerType) map { peerType =>
-                PlacedStatement(request, peerType, NoType, Some(TypeTree()), None, rhs)
-              }
-            }
-          })
+        val abstractionIdDef =
+          q"""$synthetic private[$peerName] val $abstractionIdTermName =
+                ${abstractionIdCreate(abstractionId, isStable)}"""
 
-        response +: requests
+        val localResponseDef =
+          if (isMutable || hasReturnValue)
+            Some(q"""$synthetic private[$peerName] val $localResponseTermName =
+                       ${implicitMarshallableLookup(localResponseTypeTree)}""")
+          else
+            None
+
+        val remoteRequestDef =
+          if (isMutable || !isNullary)
+            Some(q"""$synthetic private[$peerName] val $remoteRequestTermName =
+                       ${implicitMarshallableLookup(remoteRequestTypeTree)}""")
+          else
+            None
+
+        PlacedAbstraction(
+          peerType,
+          List(abstractionIdDef) ++
+            localResponseDef.toList ++ remoteRequestDef.toList ++ request,
+          cq"$abstractionIdTerm => $response")
+      }
     }
 
-    aggregator add nonPlacedStats add placedStats
+    echo(verbose = true, s"  [${abstractions.size} placed abstractions added]")
+
+    aggregator add abstractions
   }
 }
