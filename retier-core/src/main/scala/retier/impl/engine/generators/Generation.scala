@@ -79,11 +79,6 @@ trait Generation {
   }
 
   object trees {
-    val Unit = tq"_root_.scala.Unit"
-    val Option = tq"_root_.scala.Option"
-    val OptionEmpty = q"_root_.scala.Option.empty"
-    val Some = q"_root_.scala.Some"
-    val None = q"_root_.scala.None"
     val Try = tq"_root_.scala.util.Try"
     val implicitly = q"_root_.scala.Predef.implicitly"
     val Success = q"_root_.scala.util.Success"
@@ -92,11 +87,14 @@ trait Generation {
     val AbstractionId = tq"_root_.retier.transmission.AbstractionId"
     val AbstractionIdCreate = q"_root_.retier.impl.AbstractionId.create"
     val Marshallable = tq"_root_.retier.transmission.Marshallable"
+    val UnitMarshallable = q"_root_.retier.impl.UnitMarshallable"
     val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
     val PeerTypeTagCreate = q"_root_.retier.impl.PeerTypeTag.create"
     val PeerType = q"_root_.retier.Peer.peerTypeTag.peerType"
     val TransmissionProperties = tq"_root_.retier.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
+    val IssuedValueCreate = q"root_.retier.impl.IssuedValue.create"
+    val ControlledIssuedValueCreate = q"_root_.retier.impl.ControlledIssuedValue.create"
   }
 
 
@@ -131,7 +129,35 @@ trait Generation {
 
   def retierName(name: TypeName) = TypeName(s"$$$$retier$$${name.toString}")
 
-  def isRetierName(name: Name) = name.toString startsWith "$$retier$"
+  implicit class NameOps(val name: Name) {
+    def isRetierName = name.toString startsWith "$$retier$"
+  }
+
+
+  private case object RetierSynthetic
+
+  def markRetierSynthetic(tree: Tree, pos: Position = NoPosition): tree.type = {
+    tree foreach { tree =>
+      if (tree.pos == NoPosition)
+        internal setPos (tree, pos)
+    }
+    markRetierSynthetic(tree)
+  }
+
+  def markRetierSynthetic(tree: Tree): tree.type = {
+    tree foreach { internal updateAttachment (_, RetierSynthetic) }
+    tree
+  }
+
+  def unmarkRetierSynthetic(tree: Tree): tree.type = {
+    tree foreach { internal removeAttachment[RetierSynthetic.type] _ }
+    tree
+  }
+
+  implicit class TreeOps(val tree: Tree) {
+    def isRetierSynthetic: Boolean =
+      (internal attachments tree).get[RetierSynthetic.type].nonEmpty
+  }
 
 
   implicit class TypeOps(tpe: Type) {

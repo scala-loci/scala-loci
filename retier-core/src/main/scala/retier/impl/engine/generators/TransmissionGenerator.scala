@@ -63,10 +63,8 @@ trait TransmissionGenerator { this: Generation =>
 
         val localCompanion = q"$enclosingName.this.$localName"
 
-        val remoteCompanion = value match {
-          case q"$tpname.this.$_[..$_](...$_)" => q"$tpname.this.$remoteName"
-          case q"$expr.$_[..$_](...$_)" => q"$expr.$remoteName"
-        }
+        val q"$expr.$_[..$_](...$_)" = value
+        val remoteCompanion = q"$expr.$remoteName"
 
         val remote = q"$remoteCompanion.$peerTypeTag"
 
@@ -86,10 +84,13 @@ trait TransmissionGenerator { this: Generation =>
           case symbols.transmitSingle => "createSingleTransmission"
         })
 
+        markRetierSynthetic(
+          q"""$system.$createTransmission($transmissionProperties)(
+              $remote, $local)""",
+          value.pos)
 
-        q"$system.$createTransmission($transmissionProperties)($remote, $local)"
-
-      case _ if tree.tpe <:< types.transmissionProvider =>
+      case _ if tree.tpe <:< types.transmissionProvider &&
+                (types.bottom forall { tree.tpe <:!< _ }) =>
         c.abort(tree.pos, "unexpected value of type TransmissionProvider")
 
       case _ =>

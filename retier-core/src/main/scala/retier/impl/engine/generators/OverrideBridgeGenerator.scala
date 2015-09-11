@@ -43,7 +43,7 @@ trait OverrideBridgeGenerator { this: Generation =>
           overridingDecl, tparams, vparamss, tpt, expr)
 
         stat.copy(
-          tree = internal setPos (overridingDefinition, definition.pos),
+          tree = markRetierSynthetic(overridingDefinition, definition.pos),
           overridingDecl = None,
           expr = expr)
     }

@@ -54,6 +54,8 @@ trait PlacedExpressionsEraser { this: Generation =>
 
     def processPlacedExpression
         (stat: PlacedStatement): PlacedStatement = {
+      import trees._
+
       val PlacedStatement(
         tree, peerType, exprType, declTypeTree, overridingDecl, expr) = stat
 
@@ -79,11 +81,11 @@ trait PlacedExpressionsEraser { this: Generation =>
           if (exprType <:< types.issuedControlled &&
               exprType <:!< types.issued &&
               (types.functionPlacing exists { placedExpr.tpe <:< _ }))
-            q"""_root_.retier.impl.ControlledIssuedValue.create[
+            q"""${markRetierSynthetic(ControlledIssuedValueCreate)}[
                 ..${exprType.typeArgs}]($placedExpr)"""
           else if (exprType <:< types.issuedControlled &&
                    (types.issuedPlacing forall { placedExpr.tpe <:!< _ }))
-            q"""_root_.retier.impl.IssuedValue.create[
+            q"""${markRetierSynthetic(IssuedValueCreate)}[
                 ..${exprType.typeArgs}]($placedExpr)"""
           else
             placedExpr

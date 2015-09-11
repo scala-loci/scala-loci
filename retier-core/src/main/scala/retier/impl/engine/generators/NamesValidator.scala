@@ -17,7 +17,7 @@ trait NamesValidator { this: Generation =>
 
     aggregator.all[InputStatement] foreach {
       _.stat foreach {
-        case tree: DefTree if isRetierName(tree.name) =>
+        case tree: DefTree if tree.name.isRetierName =>
           c.abort(tree.pos,
             "identifier name not allowed in `multitier` environment")
         case _ =>
@@ -26,7 +26,7 @@ trait NamesValidator { this: Generation =>
 
     aggregator.all[EnclosingContext].head.bases foreach { base =>
       base.tpe.members foreach { member =>
-        if (isRetierName(member.name))
+        if (member.name.isRetierName)
           c.abort(base.pos,
             "identifier name not allowed in `multitier` environment: " +
             member.name)
