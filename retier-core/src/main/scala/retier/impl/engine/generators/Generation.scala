@@ -76,16 +76,19 @@ trait Generation {
     val system = retierTermName("system")
     val interface = retierTermName("interface")
     val implementation = retierTermName("implementation")
+    val dispatch = retierTermName("dispatch")
   }
 
   object trees {
     val Try = tq"_root_.scala.util.Try"
+    val String = tq"_root_.scala.Predef.String"
     val implicitly = q"_root_.scala.Predef.implicitly"
     val Success = q"_root_.scala.util.Success"
     val Failure = q"_root_.scala.util.Failure"
     val List = q"_root_.scala.collection.immutable.List"
     val AbstractionId = tq"_root_.retier.transmission.AbstractionId"
     val AbstractionIdCreate = q"_root_.retier.impl.AbstractionId.create"
+    val AbstractionRef = tq"_root_.retier.transmission.AbstractionRef"
     val Marshallable = tq"_root_.retier.transmission.Marshallable"
     val UnitMarshallable = q"_root_.retier.impl.UnitMarshallable"
     val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
@@ -95,6 +98,7 @@ trait Generation {
     val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
     val IssuedValueCreate = q"root_.retier.impl.IssuedValue.create"
     val ControlledIssuedValueCreate = q"_root_.retier.impl.ControlledIssuedValue.create"
+    val System = tq"_root_.retier.impl.System"
   }
 
 
