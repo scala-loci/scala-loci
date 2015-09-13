@@ -69,8 +69,9 @@ class Typer[C <: Context](val c: C) {
    */
   def untypecheck(tree: Tree): Tree =
     c untypecheck
-      (syntheticParamListCleaner transform
-        fixTypecheck(tree, abortWhenUnfixable = true))
+      (typeApplicationCleaner transform
+        (syntheticParamListCleaner transform
+          fixTypecheck(tree, abortWhenUnfixable = true)))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -86,8 +87,9 @@ class Typer[C <: Context](val c: C) {
    */
   def untypecheckAll(tree: Tree): Tree =
     c resetAllAttrs
-      (syntheticParamListCleaner transform
-        fixTypecheck(tree, abortWhenUnfixable = true))
+      (typeApplicationCleaner transform
+        (syntheticParamListCleaner transform
+          fixTypecheck(tree, abortWhenUnfixable = true)))
 
   /**
    * Cleans the flag set of the given modifiers.
@@ -233,6 +235,36 @@ class Typer[C <: Context](val c: C) {
         else
           super.transform(tree)
 
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+
+  object typeApplicationCleaner extends Transformer {
+    object typeApplicationCleaner extends Transformer {
+      override def transform(tree: Tree) = tree match {
+        case tree: TypeTree =>
+          if (tree.original != null)
+            transform(tree.original)
+          else
+            internal setType (tree, null)
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    override def transform(tree: Tree) = tree match {
+      case AppliedTypeTree(tpt, args) =>
+        internal setPos (
+          AppliedTypeTree(
+            transform(tpt), args map typeApplicationCleaner.transform),
+          tree.pos)
+      case TypeApply(fun, args) =>
+        internal setPos (
+          TypeApply(
+            transform(fun), args map typeApplicationCleaner.transform),
+          tree.pos)
       case _ =>
         super.transform(tree)
     }
