@@ -45,7 +45,7 @@ trait PeerDefinitionProcessor { this: Generation =>
 
       val bases = parents collect {
         case parent if parent.tpe =:= types.peer =>
-          q"$PeerType"
+          q"$Peer.$peerTypeTag.peerType"
 
         case parent @ tq"$expr.$tpnamePeer[..$_]"
             if parent.tpe <:< types.peer =>

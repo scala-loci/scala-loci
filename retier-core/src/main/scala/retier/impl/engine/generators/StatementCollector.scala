@@ -30,20 +30,11 @@ trait StatementCollector { this: Generation =>
     }
 
     def extractTypeTree(tree: Tree) = {
-      val args = tree match {
-        case tree: TypeTree if tree.original != null =>
-          tree.original match {
-            case AppliedTypeTree(_, args) => args
-            case _ => List(EmptyTree)
-          }
+      val args = tree.originalTree match {
         case AppliedTypeTree(_, args) => args
         case _ => List(EmptyTree)
       }
-
-      args.head match {
-        case tree: TypeTree if tree.original != null => tree.original
-        case tree => tree
-      }
+      args.head.originalTree
     }
 
     def isPlacedType(tpe: Type) =

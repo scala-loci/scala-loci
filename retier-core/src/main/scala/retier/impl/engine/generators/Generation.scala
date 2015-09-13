@@ -29,6 +29,10 @@ trait Generation {
 
     val transmissionProvider = typeOf[transmission.TransmissionProvider]
 
+    val multiple = typeOf[Multiple[_]]
+    val optional = typeOf[Optional[_]]
+    val single = typeOf[Single[_]]
+
     val peerTypeTag = typeOf[PeerTypeTag[_]]
   }
 
@@ -72,10 +76,10 @@ trait Generation {
   object names {
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")
+    val connection = TermName("Connection")
     val peer = retierTypeName("peer")
     val system = retierTermName("system")
     val interface = retierTermName("interface")
-    val implementation = retierTermName("implementation")
     val dispatch = retierTermName("dispatch")
   }
 
@@ -86,14 +90,21 @@ trait Generation {
     val Success = q"_root_.scala.util.Success"
     val Failure = q"_root_.scala.util.Failure"
     val List = q"_root_.scala.collection.immutable.List"
+    val Map = q"_root_.scala.collection.immutable.Map"
+    val peerTypeOf = q"_root_.retier.peerTypeOf"
     val AbstractionId = tq"_root_.retier.transmission.AbstractionId"
     val AbstractionIdCreate = q"_root_.retier.impl.AbstractionId.create"
     val AbstractionRef = tq"_root_.retier.transmission.AbstractionRef"
     val Marshallable = tq"_root_.retier.transmission.Marshallable"
     val UnitMarshallable = q"_root_.retier.impl.UnitMarshallable"
+    val Peer = q"_root_.retier.Peer"
+    val PeerType = tq"_root_.retier.PeerType"
     val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
     val PeerTypeTagCreate = q"_root_.retier.impl.PeerTypeTag.create"
-    val PeerType = q"_root_.retier.Peer.peerTypeTag.peerType"
+    val ConnectionMultiplicity = tq"_root_.retier.impl.ConnectionMultiplicity"
+    val SingleConnection = q"_root_.retier.impl.SingleConnection"
+    val OptionalConnection = q"_root_.retier.impl.OptionalConnection"
+    val MultipleConnection = q"_root_.retier.impl.MultipleConnection"
     val TransmissionProperties = tq"_root_.retier.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
     val IssuedValueCreate = q"root_.retier.impl.IssuedValue.create"
@@ -161,6 +172,10 @@ trait Generation {
   implicit class TreeOps(val tree: Tree) {
     def isRetierSynthetic: Boolean =
       (internal attachments tree).get[RetierSynthetic.type].nonEmpty
+    def originalTree: Tree = tree match {
+      case tree: TypeTree if tree.original != null => tree.original
+      case _ => tree
+    }
   }
 
 
