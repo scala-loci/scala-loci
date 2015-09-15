@@ -8,10 +8,10 @@ sealed trait OptionalConnection extends ConnectionMultiplicity
 sealed trait MultipleConnection extends ConnectionMultiplicity
 
 @implicitNotFound("No connection to ${P}.")
-private final abstract class PeerConnection
+protected final abstract class PeerConnection
   [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
 
-private object PeerConnection {
+protected object PeerConnection {
   implicit def multiple
     [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
     (implicit
@@ -56,7 +56,7 @@ private object PeerConnection {
 // The IntelliJ IDEA Scala Plugin cannot always resolve the implicit value
 // using the following more direct formulation:
 //
-// private object PeerConnection {
+// protected object PeerConnection {
 //   implicit def multiple
 //     [CS <: Peer#ConnectionSpec, P <: Peer]
 //     (implicit

@@ -4,40 +4,6 @@ import typeconstraints._
 import scala.language.implicitConversions
 
 protected trait ImplicitConversions {
-  private final abstract class ValueTypes[T, U]
-
-  private object ValueTypes {
-    implicit def placedValueNonIssued[P <: Peer, T, U]
-      (implicit
-          ev0: T <:< (U localOn P),
-          ev1: LocalPeer[P],
-          ev2: U <:!< (_ <=> _)): ValueTypes[T, U] = `#macro`
-    implicit def placedValueControlledIssued[P <: Peer, R <: Remote[Peer], T, U, V]
-      (implicit
-          ev0: T <:< (U localOn P),
-          ev1: LocalPeer[P],
-          ev2: U <:< (R <=> V), ev3: U <:!< (_ <-> _)): ValueTypes[T, R => V] = `#macro`
-    implicit def placedValueIssued[P <: Peer, T, U, V]
-      (implicit
-          ev0: T <:< (U localOn P),
-          ev1: LocalPeer[P],
-          ev2: U <:< (_ <-> V)): ValueTypes[T, V] = `#macro`
-    implicit def capturedValueCaptured[T, U, V]
-      (implicit
-          ev0: T <:< Captured[U],
-          ev1: U <:< Captured[_],          
-          ev2: ValueTypes[U, V]): ValueTypes[T, V] = `#macro`
-    implicit def capturedValueNonPlaced[T, U]
-      (implicit
-          ev0: T <:< Captured[U],
-          ev1: U <:!< Captured[_],
-          ev2: U <:!< (_ localOn _)): ValueTypes[T, U] = `#macro`
-    implicit def capturedValuePlaced[T, U, V]
-      (implicit
-          ev0: T <:< Captured[U],
-          ev1: U <:< (V localOn _)): ValueTypes[T, V] = `#macro`
-  }
-
   final implicit class ValueOp[T <: ValueProxy, U](v: T)
       (implicit ev: ValueTypes[T, U]) {
     def value: U = `#macro`
