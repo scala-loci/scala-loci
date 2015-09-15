@@ -5,14 +5,14 @@ package engine.generators
 import engine._
 import scala.reflect.macros.blackbox.Context
 
-trait PeerDefinitionProcessor { this: Generation =>
+trait PeerTypeTagGenerator { this: Generation =>
   val c: Context
   import c.universe._
 
-  val processPeerDefinitions = UniformAggregation[PeerDefinition] {
+  val generatePeerTypeTags = UniformAggregation[PeerDefinition] {
       aggregator =>
 
-    echo(verbose = true, " Processing peer definitions")
+    echo(verbose = true, " Generating peer type tags")
 
     val synthetic = Flag.SYNTHETIC
     val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
@@ -45,32 +45,33 @@ trait PeerDefinitionProcessor { this: Generation =>
 
       val bases = parents collect {
         case parent if parent.tpe =:= types.peer =>
-          q"$Peer.$peerTypeTag.peerType"
+          q"$Peer.$peerTypeTag.$peerType"
 
         case parent @ tq"$expr.$tpnamePeer[..$_]"
             if parent.tpe <:< types.peer =>
           if (!(peerTypes exists { parent.tpe <:< _ })) {
-            val symbol = parent.tpe.companion member peerTypeTag
+            val symbol = parent.tpe.dealias.companion member peerTypeTag
             val tpe = symbol.typeSignature.resultType
 
             if (!symbol.isImplicit ||
                 tpe <:!< types.peerTypeTag ||
                 tpe.typeArgs.head.typeSymbol != parent.tpe.typeSymbol)
               c.abort(parent.pos,
-                s"No peer type information available for $tpnamePeer " +
+                s"no peer type information available for $tpnamePeer " +
                 s"(maybe peer definition was not placed " +
                 s"inside `multitier` environment)")
           }
 
           val name = tpnamePeer.toTermName
-          q"$expr.$name.$peerTypeTag.peerType"
+          q"$expr.$name.$peerTypeTag.$peerType"
 
         case parent if parent.tpe <:< types.peer =>
           c.abort(parent.pos, "identifier expected")
       }
 
-      q"""$synthetic implicit val $peerTypeTag =
-            $PeerTypeTagCreate[$wildcardedPeerType]($name, $List(..$bases))"""
+      q"""$synthetic implicit val $peerTypeTag
+        : $PeerTypeTag[$wildcardedPeerType] =
+        $PeerTypeTagCreate[$wildcardedPeerType]($name, $List(..$bases))"""
     }
 
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
@@ -104,12 +105,13 @@ trait PeerDefinitionProcessor { this: Generation =>
 
           q"""$mods object $tname
             extends { ..$earlydefns } with ..$parents { $self =>
-            $implicitPeerTypeTag
+            ${markRetierSynthetic(implicitPeerTypeTag)}
             ..$stats
           }"""
 
         case _ =>
-          q"$synthetic object $companionName { $implicitPeerTypeTag }"
+          markRetierSynthetic(
+            q"$synthetic object $companionName { $implicitPeerTypeTag }")
       }
 
       peerDefinition.copy(companion = Some(generatedCompanion))
@@ -123,10 +125,12 @@ trait PeerDefinitionProcessor { this: Generation =>
         isClass, _) = peerDefinition
 
       val companionName = peerName.toTermName
-      val implicitPeerTypeTag = q"""$synthetic implicit val $peerTypeTag =
-        $companionName.$peerTypeTag.asInstanceOf[$PeerTypeTag[this.type]]"""
+      val implicitPeerTypeTag = markRetierSynthetic(
+        q"""$synthetic private[this] implicit val ${c freshName peerTypeTag}
+          : $PeerTypeTag[this.type] =
+          $companionName.$peerTypeTag.asInstanceOf[$PeerTypeTag[this.type]]""")
 
-      val generatedStats = implicitPeerTypeTag :: stats
+      val generatedStats = markRetierSynthetic(implicitPeerTypeTag) :: stats
       val generatedTree =
         if (isClass)
           q"""$mods class $peerName[..$typeArgs](...$args) extends ..$parents {
@@ -142,6 +146,9 @@ trait PeerDefinitionProcessor { this: Generation =>
 
     val definitions = aggregator.all[PeerDefinition] map
       (processPeerCompanion _ compose processPeerDefinition _)
+
+    echo(verbose = true,
+      s"  [${definitions.size} peer definitions generated, existing replaced]")
 
     aggregator replace definitions
   }

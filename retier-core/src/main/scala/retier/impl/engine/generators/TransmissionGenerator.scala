@@ -47,14 +47,7 @@ trait TransmissionGenerator { this: Generation =>
           }
 
         if (!(peerTypes contains remoteType)) {
-          val companionSymbol = remoteType.typeSymbol.companion
-          val companionType =
-            if (companionSymbol.isModule)
-              companionSymbol.asModule.moduleClass.asType.toType
-            else
-              NoType
-
-          if ((companionType member names.interface) == NoSymbol)
+          if ((remoteType.dealias.companion member names.interface) == NoSymbol)
             c.abort(value.pos,
               "cannot access peer type interface " +
               "(maybe peer definition was not placed " +

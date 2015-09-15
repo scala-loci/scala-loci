@@ -24,6 +24,21 @@ trait NamesValidator { this: Generation =>
       }
     }
 
+    aggregator.all[InputStatement] foreach {
+      _.stat foreach {
+        case tree: ImplDef =>
+          tree.impl.parents foreach { parent =>
+            parent.tpe.members foreach { member =>
+              if (member.name.isRetierName)
+                c.abort(parent.pos,
+                  "identifier name not allowed in `multitier` environment: " +
+                  member.name)
+            }
+          }
+        case _ =>
+      }
+    }
+
     aggregator.all[EnclosingContext].head.bases foreach { base =>
       base.tpe.members foreach { member =>
         if (member.name.isRetierName)

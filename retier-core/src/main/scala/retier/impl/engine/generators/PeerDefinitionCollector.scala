@@ -64,11 +64,11 @@ trait PeerDefinitionCollector { this: Generation =>
           val symbol = member.typeSignature.typeSymbol map { _.owner }
           val tpe = if (symbol.isType) symbol.asType.toType else NoType
 
-          if (tpe =:!= types.peer && !member.isType && !member.isMethod &&
-              (!member.isTerm || !member.asTerm.isParamAccessor ||
-               !member.isImplicit))
+          if (tpe =:!= types.peer &&
+              !member.isType && !member.isMethod && !member.isSynthetic)
             c.abort(parent.pos,
-              "only method and type definitions allowed in peer type parents")
+              "only method and type definitions " +
+              "allowed in peer type parents: " + member.name)
         }
       }
 

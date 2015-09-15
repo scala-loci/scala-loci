@@ -157,16 +157,17 @@ trait PeerImplementationGenerator { this: Generation =>
                   }""") =>
           q"""$mods object $tname
                   extends { ..$earlydefns } with ..$parents { $self =>
-                $peerInterface
-                $peerImpl
+                ${markRetierSynthetic(peerInterface)}
+                ${markRetierSynthetic(peerImpl)}
                 ..$stats
           }"""
 
         case _ =>
-          q"""$synthetic object ${peerName.toTermName} {
-                $peerInterface
-                $peerImpl
-          }"""
+          markRetierSynthetic(
+            q"""$synthetic object ${peerName.toTermName} {
+                  $peerInterface
+                  $peerImpl
+            }""")
       }
 
       peerDefinition.copy(companion = Some(generatedCompanion))
@@ -206,7 +207,7 @@ trait PeerImplementationGenerator { this: Generation =>
 
       val connectionImpl = q"$synthetic def $connection = $peerConnections"
 
-      val generatedStats = connectionImpl :: stats
+      val generatedStats = markRetierSynthetic(connectionImpl) :: stats
       val generatedTree =
         if (isClass)
           q"""$mods class $peerName[..$typeArgs](...$args)
