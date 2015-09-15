@@ -2,15 +2,6 @@ package retier
 
 import scala.annotation.implicitNotFound
 
-// `Single` and `Optional` are invariant in `T`, while `Multiple` is covariant.
-// This is because type inference may infer a super type `S` of `T` and it is
-// possible that other subtypes of S are part of the connection spec compound.
-// Therefore, when inferring a super type of `T`, `Multiple` must be inferred.
-sealed trait ConnectionSpec
-sealed trait Single[T] extends Multiple[T]
-sealed trait Optional[T] extends Multiple[T]
-sealed trait Multiple[+T] extends ConnectionSpec
-
 sealed trait ConnectionMultiplicity
 sealed trait SingleConnection extends ConnectionMultiplicity
 sealed trait OptionalConnection extends ConnectionMultiplicity
@@ -18,21 +9,21 @@ sealed trait MultipleConnection extends ConnectionMultiplicity
 
 @implicitNotFound("No connection to ${P}.")
 private final abstract class PeerConnection
-  [CS <: ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
+  [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
 
 private object PeerConnection {
   implicit def multiple
-    [CS <: ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
+    [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
     (implicit
         ev0: PeerConnectionHelper[CS, P, M],
         ev1: M =:= MultipleConnection): PeerConnection[CS, P, MultipleConnection] = `#macro`
   implicit def optional
-    [CS <: ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
+    [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
     (implicit
         ev0: PeerConnectionHelper[CS, P, M],
         ev1: M =:= OptionalConnection): PeerConnection[CS, P, OptionalConnection] = `#macro`
   implicit def single
-    [CS <: ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
+    [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
     (implicit
         ev0: PeerConnectionHelper[CS, P, M],
         ev1: M =:= SingleConnection): PeerConnection[CS, P, SingleConnection] = `#macro`
@@ -40,26 +31,26 @@ private object PeerConnection {
 
   sealed trait PeerConnectionHelperSecondFallback {
     implicit def multiple
-      [CS <: Multiple[P], P <: Peer]:
+      [CS <: Peer#Multiple[P], P <: Peer]:
       PeerConnectionHelper[CS, P, MultipleConnection] = `#macro`
   }
 
   sealed trait PeerConnectionHelperFirstFallback
       extends PeerConnectionHelperSecondFallback {
     implicit def optional
-      [CS <: Optional[P], P <: Peer]:
+      [CS <: Peer#Optional[P], P <: Peer]:
       PeerConnectionHelper[CS, P, OptionalConnection] = `#macro`
   }
 
   object PeerConnectionHelper
       extends PeerConnectionHelperFirstFallback {
     implicit def single
-      [CS <: Single[P], P <: Peer]:
+      [CS <: Peer#Single[P], P <: Peer]:
       PeerConnectionHelper[CS, P, SingleConnection] = `#macro`
   }
 
   final abstract class PeerConnectionHelper
-    [CS <: ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
+    [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
 }
 
 // The IntelliJ IDEA Scala Plugin cannot always resolve the implicit value
@@ -67,18 +58,18 @@ private object PeerConnection {
 //
 // private object PeerConnection {
 //   implicit def multiple
-//     [CS <: ConnectionSpec, P <: Peer]
+//     [CS <: Peer#ConnectionSpec, P <: Peer]
 //     (implicit
-//       ev0: CS <:< Multiple[P],
-//       ev1: CS <:!< Optional[P],
-//       ev2: CS <:!< Single[P]): PeerConnection[CS, P, MultipleConnection] = `#macro`
+//       ev0: CS <:< Peer#Multiple[P],
+//       ev1: CS <:!< Peer#Optional[P],
+//       ev2: CS <:!< Peer#Single[P]): PeerConnection[CS, P, MultipleConnection] = `#macro`
 //   implicit def optional
-//     [CS <: ConnectionSpec, P <: Peer]
+//     [CS <: Peer#ConnectionSpec, P <: Peer]
 //     (implicit
-//       ev0: CS <:< Optional[P],
-//       ev1: CS <:!< Single[P]): PeerConnection[CS, P, OptionalConnection] = `#macro`
+//       ev0: CS <:< Peer#Optional[P],
+//       ev1: CS <:!< Peer#Single[P]): PeerConnection[CS, P, OptionalConnection] = `#macro`
 //   implicit def single
-//     [CS <: ConnectionSpec, P <: Peer]
+//     [CS <: Peer#ConnectionSpec, P <: Peer]
 //     (implicit
-//       ev0: CS <:< Single[P]): PeerConnection[CS, P, SingleConnection] = `#macro`
+//       ev0: CS <:< Peer#Single[P]): PeerConnection[CS, P, SingleConnection] = `#macro`
 // }

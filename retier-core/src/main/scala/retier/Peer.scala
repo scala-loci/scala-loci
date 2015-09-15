@@ -9,6 +9,16 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.implicitConversions
 
 trait Peer {
+  // `Single` and `Optional` are invariant in `P`, while `Multiple` is covariant.
+  // This is because type inference may infer a super-type `S` of `P` and it is
+  // possible that other sub-types of S are part of the connection spec compound.
+  // Therefore, when inferring a super-type of `P`, `Multiple` must be inferred.
+  sealed trait ConnectionSpec
+  sealed trait Single[P] extends Multiple[P]
+  sealed trait Optional[P] extends Multiple[P]
+  sealed trait Multiple[+P] extends ConnectionSpec
+
+
   type Connection <: ConnectionSpec
 
   def peerTypeTag: PeerTypeTag[this.type]

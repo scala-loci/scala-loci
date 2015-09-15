@@ -29,9 +29,9 @@ trait Generation {
 
     val transmissionProvider = typeOf[transmission.TransmissionProvider]
 
-    val multiple = typeOf[Multiple[_]]
-    val optional = typeOf[Optional[_]]
-    val single = typeOf[Single[_]]
+    val multiple = typeOf[Peer#Multiple[_]]
+    val optional = typeOf[Peer#Optional[_]]
+    val single = typeOf[Peer#Single[_]]
 
     val peerTypeTag = typeOf[PeerTypeTag[_]]
   }
