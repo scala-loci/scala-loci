@@ -20,6 +20,7 @@ class CodeProcessor[C <: Context](val c: C) extends
     ProxyGenerator with
     OverrideBridgeGenerator with
     PeerDefinitionProcessor with
+    PeerConnectionMultiplicityGenerator with
     PeerImplementationGenerator {
   import c.universe._
 
@@ -35,6 +36,7 @@ class CodeProcessor[C <: Context](val c: C) extends
       generateProxies aggregate
       generateOverrideBridge aggregate
       processPeerDefinitions aggregate
+      generatePeerConnectionMultiplicities aggregate
       generatePeerImplementations
 
 

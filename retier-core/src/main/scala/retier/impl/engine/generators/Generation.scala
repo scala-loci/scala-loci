@@ -101,6 +101,7 @@ trait Generation {
     val PeerType = tq"_root_.retier.PeerType"
     val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
     val PeerTypeTagCreate = q"_root_.retier.impl.PeerTypeTag.create"
+    val PeerImpl = tq"_root_.retier.impl.PeerImpl"
     val ConnectionMultiplicity = tq"_root_.retier.impl.ConnectionMultiplicity"
     val SingleConnection = q"_root_.retier.impl.SingleConnection"
     val OptionalConnection = q"_root_.retier.impl.OptionalConnection"
@@ -129,6 +130,9 @@ trait Generation {
 
   case class PlacedAbstraction(peerType: Type, interfaceDefinitions: List[Tree],
     dispatchClause: CaseDef)
+
+  case class PeerConnectionMultiplicity(peerType: Type, connectedPeer: Tree,
+    connectionMultiplicity: Tree)
 
 
   val echo = Echo(c)
