@@ -22,7 +22,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
 
       val multiplicities = body collectFirst {
         case typeDef @ TypeDef(_, connectionTypeName, List(), rhs) =>
-          val connection = rhs.originalTree match {
+          val connection = rhs.typeTree match {
             case TypeBoundsTree(lo, _) if lo.tpe =:!= typeOf[Nothing] =>
               c.abort(lo.pos,
                 "lower type bounds not allowed for connection type")
@@ -30,7 +30,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
             case _ => rhs
           }
 
-          val connections = connection.originalTree match {
+          val connections = connection.typeTree match {
             case CompoundTypeTree(Template(parents, noSelfType, List())) =>
               val RefinedType(parentTypes, _) = connection.tpe
               parents zip parentTypes map { case (tree, tpe) =>
@@ -108,7 +108,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
     }
 
     echo(verbose = true,
-      s"  [${multiplicities.size} peer connection multiplicities added")
+      s"  [${multiplicities.size} peer connection multiplicities added]")
 
     aggregator add multiplicities
   }

@@ -77,40 +77,41 @@ trait Generation {
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")
     val connection = TermName("Connection")
-    val peer = retierTypeName("peer")
     val system = retierTermName("system")
-    val interface = retierTermName("interface")
+    val implementation = retierTypeName("peer")
+    val interface = retierTermName("peer")
     val dispatch = retierTermName("dispatch")
   }
 
   object trees {
-    val Try = tq"_root_.scala.util.Try"
-    val String = tq"_root_.scala.Predef.String"
-    val implicitly = q"_root_.scala.Predef.implicitly"
-    val Success = q"_root_.scala.util.Success"
-    val Failure = q"_root_.scala.util.Failure"
-    val List = q"_root_.scala.collection.immutable.List"
-    val Map = q"_root_.scala.collection.immutable.Map"
-    val peerTypeOf = q"_root_.retier.peerTypeOf"
-    val AbstractionId = tq"_root_.retier.transmission.AbstractionId"
-    val AbstractionIdCreate = q"_root_.retier.impl.AbstractionId.create"
-    val AbstractionRef = tq"_root_.retier.transmission.AbstractionRef"
-    val Marshallable = tq"_root_.retier.transmission.Marshallable"
-    val UnitMarshallable = q"_root_.retier.impl.UnitMarshallable"
-    val Peer = q"_root_.retier.Peer"
-    val PeerType = tq"_root_.retier.PeerType"
-    val PeerTypeTag = tq"_root_.retier.PeerTypeTag"
-    val PeerTypeTagCreate = q"_root_.retier.impl.PeerTypeTag.create"
-    val PeerImpl = tq"_root_.retier.impl.PeerImpl"
-    val ConnectionMultiplicity = tq"_root_.retier.impl.ConnectionMultiplicity"
-    val SingleConnection = q"_root_.retier.impl.SingleConnection"
-    val OptionalConnection = q"_root_.retier.impl.OptionalConnection"
-    val MultipleConnection = q"_root_.retier.impl.MultipleConnection"
-    val TransmissionProperties = tq"_root_.retier.impl.TransmissionProperties"
-    val TransmissionPropertiesCreate = q"_root_.retier.impl.TransmissionProperties.create"
-    val IssuedValueCreate = q"root_.retier.impl.IssuedValue.create"
-    val ControlledIssuedValueCreate = q"_root_.retier.impl.ControlledIssuedValue.create"
-    val System = tq"_root_.retier.impl.System"
+    private[this] val root = termNames.ROOTPKG
+    val Try = tq"$root.scala.util.Try"
+    val String = tq"$root.scala.Predef.String"
+    val implicitly = q"$root.scala.Predef.implicitly"
+    val Success = q"$root.scala.util.Success"
+    val Failure = q"$root.scala.util.Failure"
+    val List = q"$root.scala.collection.immutable.List"
+    val Map = q"$root.scala.collection.immutable.Map"
+    val peerTypeOf = q"$root.retier.peerTypeOf"
+    val AbstractionId = tq"$root.retier.transmission.AbstractionId"
+    val AbstractionIdCreate = q"$root.retier.impl.AbstractionId.create"
+    val AbstractionRef = tq"$root.retier.transmission.AbstractionRef"
+    val Marshallable = tq"$root.retier.transmission.Marshallable"
+    val UnitMarshallable = q"$root.retier.impl.UnitMarshallable"
+    val Peer = q"$root.retier.Peer"
+    val PeerType = tq"$root.retier.PeerType"
+    val PeerTypeTag = tq"$root.retier.PeerTypeTag"
+    val PeerTypeTagCreate = q"$root.retier.impl.PeerTypeTag.create"
+    val PeerImpl = tq"$root.retier.impl.PeerImpl"
+    val ConnectionMultiplicity = tq"$root.retier.impl.ConnectionMultiplicity"
+    val SingleConnection = q"$root.retier.impl.SingleConnection"
+    val OptionalConnection = q"$root.retier.impl.OptionalConnection"
+    val MultipleConnection = q"$root.retier.impl.MultipleConnection"
+    val TransmissionProperties = tq"$root.retier.impl.TransmissionProperties"
+    val TransmissionPropertiesCreate = q"$root.retier.impl.TransmissionProperties.create"
+    val IssuedValueCreate = q"$root.retier.impl.IssuedValue.create"
+    val ControlledIssuedValueCreate = q"$root.retier.impl.ControlledIssuedValue.create"
+    val System = tq"$root.retier.impl.System"
   }
 
 
@@ -176,8 +177,9 @@ trait Generation {
   implicit class TreeOps(val tree: Tree) {
     def isRetierSynthetic: Boolean =
       (internal attachments tree).get[RetierSynthetic.type].nonEmpty
-    def originalTree: Tree = tree match {
+    def typeTree: Tree = tree match {
       case tree: TypeTree if tree.original != null => tree.original
+      case _ if tree.tpe != null => typer createTypeTree tree.tpe
       case _ => tree
     }
   }

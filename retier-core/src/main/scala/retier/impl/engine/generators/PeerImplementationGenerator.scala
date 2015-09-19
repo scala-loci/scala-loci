@@ -65,7 +65,7 @@ trait PeerImplementationGenerator { this: Generation =>
             definition @ ValDef(mods, name, _, _),
             `peerType`, _, Some(declTypeTree), _, expr) =>
           internal setPos (
-            SelfReferenceChanger(enclosingName, names.peer) transform
+            SelfReferenceChanger(enclosingName, names.implementation) transform
               ValDef(mods, name, declTypeTree, expr),
             definition.pos)
 
@@ -73,12 +73,13 @@ trait PeerImplementationGenerator { this: Generation =>
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
             `peerType`, _, Some(declTypeTree), _, expr) =>
           internal setPos (
-            SelfReferenceChanger(enclosingName, names.peer) transform
+            SelfReferenceChanger(enclosingName, names.implementation) transform
               DefDef(mods, name, tparams, vparamss, declTypeTree, expr),
             definition.pos)
 
         case PlacedStatement(tree, `peerType`, _, None, _, expr) =>
-          SelfReferenceChanger(enclosingName, names.peer) transform expr
+          SelfReferenceChanger(enclosingName, names.implementation) transform
+            expr
       }
 
     def peerImplementationParents(parents: List[Tree]) = parents map {
@@ -88,7 +89,8 @@ trait PeerImplementationGenerator { this: Generation =>
       case parent @ tq"$expr.$tpnamePeer[..$tpts]"
           if parent.tpe <:< types.peer =>
         if (!(peerTypes exists { parent.tpe <:< _ })) {
-          if ((parent.tpe.dealias.companion member names.peer) == NoSymbol)
+          if ((parent.tpe.dealias.companion member names.implementation) ==
+              NoSymbol)
             c.abort(parent.pos,
               "cannot access peer type implementation " +
               "(maybe peer definition was not placed " +
@@ -96,7 +98,7 @@ trait PeerImplementationGenerator { this: Generation =>
         }
 
         val name = tpnamePeer.toTermName
-        tq"$expr.$name.${names.peer}[..$tpts]"
+        tq"$expr.$name.${names.implementation}[..$tpts]"
 
       case parent =>
         parent
@@ -131,14 +133,14 @@ trait PeerImplementationGenerator { this: Generation =>
 
       val peerImpl =
         if (isClass)
-          q"""$syntheticMods class $peer[..$typeArgs](...$args)
+          q"""$syntheticMods class $implementation[..$typeArgs](...$args)
                   extends ..$implParents {
                 $systemImpl
                 $dispatchImpl
                 ..$statements
           }"""
         else
-          q"""$syntheticMods trait $peer[..$typeArgs]
+          q"""$syntheticMods trait $implementation[..$typeArgs]
                   extends ..$implParents {
                 $systemImpl
                 $dispatchImpl

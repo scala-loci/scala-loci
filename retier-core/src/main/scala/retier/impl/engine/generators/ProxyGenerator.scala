@@ -111,7 +111,7 @@ trait ProxyGenerator { this: Generation =>
         val abstractionIdTerm = q"${names.interface}.$abstractionIdTermName"
         val localResponseTerm = q"${names.interface}.$localResponseTermName"
         val remoteRequestTerm = q"${names.interface}.$remoteRequestTermName"
-        val declTerm = q"${names.peer}.this.$declTermName"
+        val declTerm = q"${names.implementation}.this.$declTermName"
 
         val localResponseTypeTree = typeAsTypeTree(exprType)
 
