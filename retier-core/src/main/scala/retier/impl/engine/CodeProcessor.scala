@@ -21,7 +21,8 @@ class CodeProcessor[C <: Context](val c: C) extends
     OverrideBridgeGenerator with
     PeerTypeTagGenerator with
     PeerConnectionMultiplicityGenerator with
-    PeerImplementationGenerator {
+    PeerImplementationGenerator with
+    OutputGenerator {
   import c.universe._
 
   def process(state: CodeWrapper[c.type]): CodeWrapper[c.type] = {
@@ -37,11 +38,12 @@ class CodeProcessor[C <: Context](val c: C) extends
       generateOverrideBridge aggregate
       generatePeerTypeTags aggregate
       generatePeerConnectionMultiplicities aggregate
-      generatePeerImplementations
+      generatePeerImplementations aggregate
+      generateOutput
 
 
     // TODO: erase conversions on placed values before erasing placed expressions
 
-    state
+    state replaceBody (aggregator.all[OutputStatement] map { _.stat })
   }
 }
