@@ -46,9 +46,9 @@ class Typer[C <: Context](val c: C) {
   def typecheck(tree: Tree): Tree = {
     try
       fixTypecheck(
-        (syntheticParamListMarker transform
+        (syntheticTreeMarker transform
           (c typecheck
-            (nonSyntheticParamListMarker transform tree))),
+            (nonSyntheticTreeMarker transform tree))),
         abortWhenUnfixable = false)
     catch {
       case TypecheckException(pos, msg) =>
@@ -70,7 +70,7 @@ class Typer[C <: Context](val c: C) {
   def untypecheck(tree: Tree): Tree =
     c untypecheck
       (typeApplicationCleaner transform
-        (syntheticParamListCleaner transform
+        (syntheticImplicitParamListCleaner transform
           fixTypecheck(tree, abortWhenUnfixable = true)))
 
   /**
@@ -88,7 +88,7 @@ class Typer[C <: Context](val c: C) {
   def untypecheckAll(tree: Tree): Tree =
     c resetAllAttrs
       (typeApplicationCleaner transform
-        (syntheticParamListCleaner transform
+        (syntheticImplicitParamListCleaner transform
           fixTypecheck(tree, abortWhenUnfixable = true)))
 
   /**
@@ -179,6 +179,46 @@ class Typer[C <: Context](val c: C) {
 
         SingletonTypeTree(Select(preTree, sym.name.toTermName))
 
+      case TypeBounds(lo, hi) =>
+        TypeBoundsTree(
+          if (lo =:= typeOf[Nothing]) EmptyTree else expandType(lo),
+          if (hi =:= typeOf[Any]) EmptyTree else expandType(hi))
+
+      case ExistentialType(quantified, underlying) =>
+        val whereClauses = quantified map { quantified =>
+          quantified.typeSignature match {
+            case TypeBounds(lo, hi) =>
+              val name = quantified.name.toString
+              val mods = Modifiers(
+                DEFERRED | (if (quantified.isSynthetic) SYNTHETIC else NoFlags))
+
+              if (!(name endsWith ".type"))
+                Some(TypeDef(
+                  Modifiers(DEFERRED | SYNTHETIC),
+                  TypeName(name),
+                  List.empty,
+                  expandType(quantified.typeSignature)))
+              else if (lo =:= typeOf[Nothing])
+                Some(ValDef(
+                  Modifiers(DEFERRED),
+                  TermName(name substring (0, name.size - 5)),
+                  expandType(hi),
+                  EmptyTree))
+              else
+                None
+
+            case _ =>
+              None
+          }
+        }
+
+        if (whereClauses exists { _.isEmpty })
+          TypeTree(tpe)
+        else
+          ExistentialTypeTree(
+            expandType(underlying),
+            whereClauses collect { case Some(whereClause) => whereClause })
+        
       case _ =>
         TypeTree(tpe)
     }
@@ -187,22 +227,30 @@ class Typer[C <: Context](val c: C) {
   }
 
 
-  private case object NonSyntheticParamList
+  private case object NonSyntheticTree
 
-  private case object SyntheticParamList
+  private case object SyntheticTree
 
-  private object nonSyntheticParamListMarker extends Transformer {
+  private object nonSyntheticTreeMarker extends Transformer {
     override def transform(tree: Tree) = tree match {
       case tree @ Apply(_, _) =>
-        internal updateAttachment (tree, NonSyntheticParamList)
+        internal updateAttachment (tree, NonSyntheticTree)
+        internal removeAttachment[SyntheticTree.type] tree
+        super.transform(tree)
+
+      case tree @ ValDef(_, _, tpt, _) =>
+        internal updateAttachment (tpt, NonSyntheticTree)
+        internal removeAttachment[SyntheticTree.type] tpt
         super.transform(tree)
 
       case _ =>
+        internal removeAttachment[SyntheticTree.type] tree
+        internal removeAttachment[NonSyntheticTree.type] tree
         super.transform(tree)
     }
   }
 
-  private object syntheticParamListMarker extends Transformer {
+  private object syntheticTreeMarker extends Transformer {
     override def transform(tree: Tree) = tree match {
       case tree @ Apply(_, _) =>
         val hasImplicitParamList =
@@ -213,13 +261,20 @@ class Typer[C <: Context](val c: C) {
           } getOrElse false)
 
         val isNonSyntheticParamList =
-          (internal attachments tree).get[NonSyntheticParamList.type].nonEmpty
+          (internal attachments tree).get[NonSyntheticTree.type].nonEmpty
 
-        internal removeAttachment[NonSyntheticParamList.type] tree
+        internal removeAttachment[NonSyntheticTree.type] tree
 
         if (hasImplicitParamList && !isNonSyntheticParamList)
-          internal updateAttachment (tree, SyntheticParamList)
+          internal updateAttachment (tree, SyntheticTree)
 
+        super.transform(tree)
+
+      case tree @ ValDef(_, _, tpt, _) =>
+        if ((internal attachments tpt).get[NonSyntheticTree.type].isEmpty)
+          internal updateAttachment (tpt, SyntheticTree)
+        else
+          internal removeAttachment[NonSyntheticTree.type] tpt
         super.transform(tree)
 
       case _ =>
@@ -227,10 +282,11 @@ class Typer[C <: Context](val c: C) {
     }
   }
 
-  private object syntheticParamListCleaner extends Transformer {
+
+  private object syntheticImplicitParamListCleaner extends Transformer {
     override def transform(tree: Tree) = tree match {
       case tree @ Apply(fun, _) =>
-        if ((internal attachments tree).get[SyntheticParamList.type].nonEmpty)
+        if ((internal attachments tree).get[SyntheticTree.type].nonEmpty)
           super.transform(fun)
         else
           super.transform(tree)
@@ -241,7 +297,7 @@ class Typer[C <: Context](val c: C) {
   }
 
 
-  object typeApplicationCleaner extends Transformer {
+  private object typeApplicationCleaner extends Transformer {
     object typeApplicationCleaner extends Transformer {
       override def transform(tree: Tree) = tree match {
         case tree: TypeTree =>
@@ -255,6 +311,11 @@ class Typer[C <: Context](val c: C) {
     }
 
     override def transform(tree: Tree) = tree match {
+      case tree: TypeTree =>
+        if (tree.original != null)
+          transform(tree.original)
+        else
+          tree
       case AppliedTypeTree(tpt, args) =>
         internal setPos (
           AppliedTypeTree(
@@ -264,6 +325,19 @@ class Typer[C <: Context](val c: C) {
         internal setPos (
           TypeApply(
             transform(fun), args map typeApplicationCleaner.transform),
+          tree.pos)
+      case ValDef(mods, name, tpt, rhs)
+          if ((internal attachments tpt).get[SyntheticTree.type].isEmpty) =>
+        internal setPos (
+          ValDef(
+            mods, name, typeApplicationCleaner transform tpt, transform(rhs)),
+          tree.pos)
+      case DefDef(mods, name, tparams, vparamss, tpt, rhs)
+          if ((internal attachments tpt).get[SyntheticTree.type].isEmpty) =>
+        internal setPos (
+          DefDef(
+            mods, name, transformTypeDefs(tparams), transformValDefss(vparamss),
+            typeApplicationCleaner transform tpt, transform(rhs)),
           tree.pos)
       case _ =>
         super.transform(tree)
@@ -324,10 +398,23 @@ class Typer[C <: Context](val c: C) {
               defDef.symbol.asTerm.privateWithin.name
             else
               mods.privateWithin
+          val defAnnotations =
+            defDef.symbol.annotations map {
+              annotation => transform(annotation.tree)
+            } filterNot { annotation =>
+              mods.annotations exists { _ equalsStructure annotation }
+            }
+          val valAnnotations =
+            rhss(tree.symbol).symbol.annotations map {
+              annotation => transform(annotation.tree)
+            } filterNot { annotation =>
+              (mods.annotations exists { _ equalsStructure annotation }) ||
+              (defAnnotations exists { _ equalsStructure annotation })
+            }
+          val annotations = mods.annotations ++ defAnnotations ++ valAnnotations
           val newValDef = ValDef(
-            Modifiers(
-              flags, privateWithin, mods.annotations),
-              name, super.transform(valDef.tpt), super.transform(valDef.rhs))
+            Modifiers(flags, privateWithin, annotations),
+            name, super.transform(valDef.tpt), super.transform(valDef.rhs))
           internal setType (newValDef, valDef.tpe)
           internal setPos (newValDef, valDef.pos)
 
@@ -343,18 +430,31 @@ class Typer[C <: Context](val c: C) {
             case rhs :: _ => rhs
             case _ => rhs
           }
+          val valDef = rhss get tree.symbol
+          val typeTree = valDef map { _.tpt } getOrElse tpt
           val flags = cleanModifiers(mods).flags
           val privateWithin =
             if (defDef.symbol.asTerm.privateWithin != NoSymbol)
               defDef.symbol.asTerm.privateWithin.name
             else
               mods.privateWithin
-          val valDef = rhss get tree.symbol
-          val typeTree = valDef map { _.tpt } getOrElse tpt
+          val defAnnotations =
+            defDef.symbol.annotations map {
+              annotation => transform(annotation.tree)
+            } filterNot { annotation =>
+              mods.annotations exists { _ equalsStructure annotation }
+            }
+          val valAnnotations =
+            (rhss get tree.symbol).toList flatMap { _.symbol.annotations } map {
+              annotation => transform(annotation.tree)
+            } filterNot { annotation =>
+              (mods.annotations exists { _ equalsStructure annotation }) ||
+              (defAnnotations exists { _ equalsStructure annotation })
+            }
+          val annotations = mods.annotations ++ defAnnotations ++ valAnnotations
           val newValDef = ValDef(
-            Modifiers(
-              flags, privateWithin, mods.annotations),
-              name, super.transform(typeTree), super.transform(assignment))
+            Modifiers(flags, privateWithin, annotations),
+            name, super.transform(typeTree), super.transform(assignment))
           valDef map { valDef =>
             internal setType (newValDef, valDef.tpe)
             internal setPos (newValDef, valDef.pos)
