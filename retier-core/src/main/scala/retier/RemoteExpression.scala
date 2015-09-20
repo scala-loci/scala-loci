@@ -28,11 +28,12 @@ protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
   def exec[T, L <: Peer](f: () => T)
     (implicit
         ev0: LocalPeer[L],
-        ev2: PeerConnection[L#Connection, P, _]): T placed P = `#macro`
-  def call[T, L <: Peer, P0 >: P <: Peer](method: RemoteMethod[T, P0])
+        ev1: PeerConnection[L#Connection, P, _]): T placed P = `#macro`
+  def call[T, L <: Peer, P0 >: P <: Peer, `P'` <: Peer](method: RemoteMethod[T, P0])
     (implicit
         ev0: LocalPeer[L],
-        ev1: PeerConnection[L#Connection, P, _]): T placed P = `#macro`
+        ev1: FirstIfNotEmptyElseSecond[P, P0, `P'`],
+        ev2: PeerConnection[L#Connection, `P'`, _]): T placed `P'` = `#macro`
   def set[T, L <: Peer, P0 >: P <: Peer](property: RemoteProperty[T, P0])
     (implicit
         ev0: LocalPeer[L],
@@ -63,4 +64,24 @@ protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <:
         ev2: IssuingTypes[L, I, U],
         ev3: PeerConnection[L#Connection, P, _],
         ev4: PeerConnection[P#Connection, L, _]): U placed P = `#macro`
+}
+
+
+protected final abstract class FirstIfNotEmptyElseSecond[N, O, T]
+
+protected sealed trait FirstIfNotEmptyElseSecondSecondFallback {
+  implicit def nothingOrNotInferred[N, O]:
+    FirstIfNotEmptyElseSecond[N, O, O] = `#macro`
+}
+
+protected sealed trait FirstIfNotEmptyElseSecondFirstFallback
+    extends FirstIfNotEmptyElseSecondSecondFallback {
+  implicit def inferred[N, O]
+    (implicit ev: N =:= N): FirstIfNotEmptyElseSecond[N, O, N] = `#macro`
+}
+
+protected object FirstIfNotEmptyElseSecond
+    extends FirstIfNotEmptyElseSecondFirstFallback {
+  implicit def nothing[N, O]
+    (implicit ev: N =:= Nothing): FirstIfNotEmptyElseSecond[N, O, O] = `#macro`
 }
