@@ -160,8 +160,15 @@ class Typer[C <: Context](val c: C) {
         }
 
         val select =
-          if (typeProjection) SelectFromTypeTree(preTree, sym.name.toTypeName)
-          else Select(preTree, sym.name.toTypeName)
+          if (typeProjection)
+            preTree match {
+              case SingletonTypeTree(ref) =>
+                Select(ref, sym.name.toTypeName)
+              case _ =>
+                SelectFromTypeTree(preTree, sym.name.toTypeName)
+            }
+          else
+            Select(preTree, sym.name.toTypeName)
 
         if (!args.isEmpty)
           AppliedTypeTree(select, args map expandType)

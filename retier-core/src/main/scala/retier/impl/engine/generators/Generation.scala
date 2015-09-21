@@ -160,16 +160,30 @@ trait Generation {
 
   private case object RetierSynthetic
 
-  def markRetierSynthetic(tree: Tree, pos: Position = NoPosition): tree.type = {
-    tree foreach { tree =>
-      if (tree.pos == NoPosition)
-        internal setPos (tree, pos)
-    }
+  def markRetierSynthetic(tree: Tree, pos: Position): tree.type =
+    markRetierSynthetic(tree, pos, true)
+
+  def markRetierSynthetic(tree: Tree, pos: Position, recursive: Boolean)
+  : tree.type = {
+    if (recursive)
+      tree foreach { tree =>
+        if (tree.pos == NoPosition)
+          internal setPos (tree, pos)
+      }
+    else if (tree.pos == NoPosition)
+      internal setPos (tree, pos)
+
     markRetierSynthetic(tree)
   }
 
-  def markRetierSynthetic(tree: Tree): tree.type = {
-    tree foreach { internal updateAttachment (_, RetierSynthetic) }
+  def markRetierSynthetic(tree: Tree): tree.type =
+    markRetierSynthetic(tree, true)
+
+  def markRetierSynthetic(tree: Tree, recursive: Boolean): tree.type = {
+    if (recursive)
+      tree foreach { internal updateAttachment (_, RetierSynthetic) }
+    else
+      internal updateAttachment (tree, RetierSynthetic)
     tree
   }
 
@@ -181,11 +195,27 @@ trait Generation {
   implicit class TreeOps(val tree: Tree) {
     def isRetierSynthetic: Boolean =
       (internal attachments tree).get[RetierSynthetic.type].nonEmpty
-    def typeTree: Tree = tree match {
-      case tree: TypeTree if tree.original != null => tree.original
-      case _ if tree.tpe != null => typer createTypeTree tree.tpe
-      case _ => tree
+    def typeTree: Tree = typeTree(false)
+    def typeTree(abortOnFailure: Boolean): Tree = tree match {
+      case tree: TypeTree if tree.original != null =>
+        internal setType (tree.original, tree.tpe)
+
+      case _ if tree.tpe != null =>
+        (typer createTypeTree tree.tpe) match {
+          case _: TypeTree if abortOnFailure =>
+            typeTreeGenerationFailed(tree.pos, tree.tpe)
+          case createdTree =>
+            internal setType (createdTree, tree.tpe)
+        }
+
+      case _ if abortOnFailure =>
+        typeTreeGenerationFailed(tree.pos, tree)
+
+      case _ =>
+        tree
     }
+    private[this] def typeTreeGenerationFailed(pos: Position, any: Any) =
+      c.abort(pos, s"failed to generate type tree for $any")
   }
 
 
@@ -193,5 +223,53 @@ trait Generation {
     def =:!=(that: Type): Boolean = !(tpe =:= that)
     def <:!<(that: Type): Boolean = !(tpe <:< that)
     def isGeneric: Boolean = tpe exists { _.typeSymbol.isParameter }
+  }
+
+
+  def peerImplementationTree(baseTree: Tree, peerType: Type,
+      peerTypesUnderExpansion: List[Type]): Tree =
+    peerGeneratedComponentTree(
+      baseTree, peerType, peerTypesUnderExpansion,
+      names.implementation, "implementation")
+
+  def peerInterfaceTree(baseTree: Tree, peerType: Type,
+      peerTypesUnderExpansion: List[Type]): Tree =
+    peerGeneratedComponentTree(
+      baseTree, peerType, peerTypesUnderExpansion,
+      names.interface, "interface")
+
+  def peerTypeTagTree(baseTree: Tree, peerType: Type,
+      peerTypesUnderExpansion: List[Type]): Tree =
+    peerGeneratedComponentTree(
+      baseTree, peerType, peerTypesUnderExpansion,
+      names.peerTypeTag, "tag")
+
+  private[this] def peerGeneratedComponentTree(baseTree: Tree, peerType: Type,
+      peerTypesUnderExpansion: List[Type],
+      propName: Name, propMessage: String): Tree = {
+    if (!(peerTypesUnderExpansion exists { peerType <:< _ }) &&
+        (peerType.dealias.companion member propName) == NoSymbol)
+        c.abort(baseTree.pos,
+          s"cannot access peer type $propMessage " +
+          s"(maybe peer definition was not placed " +
+          s"inside `multitier` environment)")
+
+    val companion = peerType.dealias.typeSymbol.name.toTermName
+
+    val expr = baseTree match {
+      case q"$expr.$_[..$_](...$_)" => expr
+      case tq"$expr.$_[..$_]" => expr
+      case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
+      case _ =>
+        (typer createTypeTree peerType) match {
+          case tq"$expr.$_[..$_]" => expr
+          case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
+        }
+    }
+
+    propName match {
+      case propName: TermName => q"$expr.$companion.$propName"
+      case propName: TypeName => tq"$expr.$companion.$propName"
+    }
   }
 }
