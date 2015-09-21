@@ -10,6 +10,8 @@ trait Generation {
   import c.universe._
 
   object types {
+    import scala.language.{higherKinds, existentials}
+
     val bottom = Seq(typeOf[Nothing], typeOf[Null])
 
     val retier = typeOf[_root_.retier.`package`.type]
@@ -31,6 +33,9 @@ trait Generation {
 
     val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
     val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+
+    val remote = typeOf[RemoteExpression[_, T forSome { type T[_, _] }]]
+    val remoteSelection = typeOf[RemoteSelectionExpression[_]]
 
     val fromExpression = typeOf[FromExpression[_, _, _]]
 
@@ -54,6 +59,9 @@ trait Generation {
     val placedOverriding = types.overriding member TermName("overriding")
 
     val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
+
+    val remoteCall = types.remote member TermName("call")
+    val remoteOn = (types.remoteSelection member TermName("on")).alternatives
 
     val fromExpression = types.retier member TermName("FromExpression")
 
@@ -88,6 +96,9 @@ trait Generation {
     val peerType = TermName("peerType")
     val connection = TermName("Connection")
     val createPeerSelection = TermName("createPeerSelection")
+    val createMultipleTransmission = TermName("createMultipleTransmission")
+    val createOptionalTransmission = TermName("createOptionalTransmission")
+    val createSingleTransmission = TermName("createSingleTransmission")
     val system = retierTermName("system")
     val implementation = retierTypeName("peer")
     val interface = retierTermName("peer")

@@ -12,7 +12,7 @@ trait TransmissionGenerator { this: Generation =>
   import names._
 
   val generateTransmissions = UniformAggregation[
-    PlacedStatement with PeerDefinition with EnclosingContext] {
+    PeerDefinition with PlacedStatement with EnclosingContext] {
       aggregator =>
 
     echo(verbose = true, s" Generating transmissions for placed expressions")
@@ -37,52 +37,58 @@ trait TransmissionGenerator { this: Generation =>
     enclosingName: TypeName, peerTypes: List[Type])
       extends Transformer {
     override def transform(tree: Tree) = tree match {
-      case tree @ q"$_[..$_](...$exprss)"
+      case tree @ q"$_[..$tpts](...$exprss)"
           if symbols.transmit contains tree.symbol =>
+        val Seq(_, _, local, remote, _) = tpts
         val Seq(Seq(value), Seq(_, transmissionProvider)) = exprss
+        val Seq(_, peerType) = value.tpe.widen.typeArgs
 
-        val Seq(_, (remoteType, remoteName), (_, localName)) =
-          transmissionProvider.tpe.typeArgs.head.typeArgs map { tpe =>
-            (tpe, tpe.typeSymbol.name.toTermName)
-          }
+        val localPeerTypeTag = peerTypeTagTree(
+          local.typeTree(abortOnFailure = true), local.tpe, peerTypes)
 
-        if (!(peerTypes contains remoteType)) {
-          if ((remoteType.dealias.companion member names.interface) == NoSymbol)
-            c.abort(value.pos,
-              "cannot access peer type interface " +
-              "(maybe peer definition was not placed " +
-              "inside `multitier` environment)")
-        }
+        val remotePeerTypeTag = peerTypeTagTree(
+          remote.typeTree(abortOnFailure = true), remote.tpe, peerTypes)
 
-        val localCompanion = q"$enclosingName.this.$localName"
-
-        val q"$expr.$_[..$_](...$_)" = value
-        val remoteCompanion = q"$expr.$remoteName"
-
-        val remote = q"$remoteCompanion.$peerTypeTag"
-
-        val local = q"$localCompanion.$peerTypeTag"
+        val messageUnexpectedTree =
+          "identifier, selected remote value or remote expression expected"
+        val messageUnexpectedMethodTree =
+          messageUnexpectedTree +
+          " (note that method invocations require a `remote call` expression)"
 
         val transmissionProperties = value match {
+          case _ if types.selection exists { value.tpe <:< _ } =>
+            value
+
+          case q"$_.$tname" =>
+            val interface = peerInterfaceTree(value, peerType, peerTypes)
+            q"$interface.$tname"
+
           case q"$_.$tname[..$tpts](...$exprss)" =>
-            q"$remoteCompanion.$interface.$tname[..$tpts](...$exprss)"
+            val interface = peerInterfaceTree(value, peerType, peerTypes)
+            if (value.isRetierSynthetic)
+              q"$interface.$tname[..$tpts](...$exprss)"
+            else
+              c.abort(value.pos, messageUnexpectedMethodTree)
+
           case _ =>
-            c.abort(value.pos,
-              "identifier, selected remote value or remote expression expected")
+            c.abort(value.pos, messageUnexpectedTree)
         }
 
-        val createTransmission = TermName(tree.symbol match {
-          case symbols.transmitMultiple => "createMultipleTransmission"
-          case symbols.transmitOptional => "createOptionalTransmission"
-          case symbols.transmitSingle => "createSingleTransmission"
-        })
+        val createTransmission = tree.symbol match {
+          case symbols.transmitMultiple => createMultipleTransmission
+          case symbols.transmitOptional => createOptionalTransmission
+          case symbols.transmitSingle => createSingleTransmission
+        }
 
-        markRetierSynthetic(
-          q"""$system.$createTransmission($transmissionProperties)(
-              $remote, $local)""",
-          value.pos)
+        val localTypeTag = markRetierSynthetic(localPeerTypeTag, value.pos)
+        val remoteTypeTag = markRetierSynthetic(remotePeerTypeTag, value.pos)
+        val props = markRetierSynthetic(transmissionProperties, value.pos)
 
-      case _ if tree.tpe <:< types.transmissionProvider &&
+        super.transform(
+          q"$system.$createTransmission($props)($remoteTypeTag, $localTypeTag)")
+
+      case _ if tree.tpe != null &&
+                tree.tpe <:< types.transmissionProvider &&
                 (types.bottom forall { tree.tpe <:!< _ }) =>
         c.abort(tree.pos, "unexpected value of type TransmissionProvider")
 

@@ -16,6 +16,7 @@ class CodeProcessor[C <: Context](val c: C) extends
     StatementCollector with
     NamesValidator with
     PlacedExpressionsProcessor with
+    RemoteExpressionProcessor with
     FromExpressionProcessor with
     TransmissionGenerator with
     ProxyGenerator with
@@ -34,6 +35,7 @@ class CodeProcessor[C <: Context](val c: C) extends
       collectStatements aggregate
       validateNames aggregate
       processPlacedExpressions aggregate
+      processRemoteExpressions aggregate
       processFromExpressions aggregate
       generateTransmissions aggregate
       generateProxies aggregate
