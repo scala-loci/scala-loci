@@ -5,14 +5,14 @@ package engine.generators
 import engine._
 import scala.reflect.macros.blackbox.Context
 
-trait PlacedExpressionsEraser { this: Generation =>
+trait PlacedExpressionsProcessor { this: Generation =>
   val c: Context
   import c.universe._
 
-  val erasePlacedExpressions = UniformAggregation[PlacedStatement] {
+  val processPlacedExpressions = UniformAggregation[PlacedStatement] {
       aggregator =>
 
-    echo(verbose = true, " Erasing placed expressions")
+    echo(verbose = true, " Processing placed expressions")
 
     def reduceEtaExpansion(expr: Tree): Tree = {
       def reduceEtaExpansion(expr: Tree): Tree = {

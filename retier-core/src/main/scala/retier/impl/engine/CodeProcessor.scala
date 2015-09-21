@@ -15,7 +15,8 @@ class CodeProcessor[C <: Context](val c: C) extends
     PeerDefinitionCollector with
     StatementCollector with
     NamesValidator with
-    PlacedExpressionsEraser with
+    PlacedExpressionsProcessor with
+    FromExpressionProcessor with
     TransmissionGenerator with
     ProxyGenerator with
     OverrideBridgeGenerator with
@@ -32,7 +33,8 @@ class CodeProcessor[C <: Context](val c: C) extends
       collectPeerDefinitions aggregate
       collectStatements aggregate
       validateNames aggregate
-      erasePlacedExpressions aggregate
+      processPlacedExpressions aggregate
+      processFromExpressions aggregate
       generateTransmissions aggregate
       generateProxies aggregate
       generateOverrideBridge aggregate

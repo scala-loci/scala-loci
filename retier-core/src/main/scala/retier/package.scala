@@ -1,6 +1,7 @@
 package object retier extends
     ImplicitTransmissions with
-    ImplicitConversions with ide.intellij.ImplicitConversions {
+    ImplicitConversions with
+    ide.intellij.ImplicitConversions {
   type LocalDeclaration = Any
 
   type RemoteMethod[+T, P <: Peer] = T on P
@@ -26,14 +27,11 @@ package object retier extends
   final implicit class FromExpression[L <: Peer, R <: Peer, T]
       (v: T sharedOn R)
       (implicit ev: LocalPeer[L]) {
-    def from[P <: Peer]
-      (implicit ev: P <:< R): T on P = `#macro`
-    def from[P <: Peer](peer: Remote[P])
-      (implicit ev: P <:< R): T fromSingle P = `#macro`
-    def from[P <: Peer](peers: Remote[P]*)
-      (implicit ev: P <:< R): T fromMultiple P = `#macro`
+    def from[P <: R]: T from P = `#macro`
+    def from[P <: R](peer: Remote[P]): T fromSingle P = `#macro`
+    def from[P <: R](peers: Remote[P]*): T fromMultiple P = `#macro`
   }
 
   def `#macro`: Nothing =
-    throw new NotImplementedError("Only usable in multitier environment")
+    throw new NotImplementedError("Only usable in `multitier` environment")
 }

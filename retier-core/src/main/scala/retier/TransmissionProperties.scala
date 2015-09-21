@@ -15,7 +15,16 @@ object TransmissionProperties {
         connection: PeerConnection[L#Connection, R, M]):
     TransmissionProperties[V, T, R, L, M] = `#macro`
 
-  implicit def transmissionFromSingle
+  implicit def transmissionFromSelected
+    [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
+    (implicit
+        transmittable: V <:< (T from R),
+        value: T <:!< (_ <=> _),
+        localPeer: LocalPeer[L],
+        connection: PeerConnection[L#Connection, R, M]):
+    TransmissionProperties[V, T, R, L, M] = `#macro`
+
+  implicit def transmissionFromSelectedSingle
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (T fromSingle R),
@@ -24,7 +33,7 @@ object TransmissionProperties {
         connection: PeerConnection[L#Connection, R, M]):
     TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
 
-  implicit def transmissionFromMultiple
+  implicit def transmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (T fromMultiple R),
@@ -42,7 +51,16 @@ object TransmissionProperties {
         dispatched: L <:< P):
     TransmissionProperties[V, T, R, L, M] = `#macro`
 
-  implicit def issuedTransmissionFromSingle
+  implicit def issuedTransmissionFromSelected
+    [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
+    (implicit
+        transmittable: V <:< (Remote[P] <=> T from R),
+        localPeer: LocalPeer[L],
+        connection: PeerConnection[L#Connection, R, M],
+        dispatched: L <:< P):
+    TransmissionProperties[V, T, R, L, M] = `#macro`
+
+  implicit def issuedTransmissionFromSelectedSingle
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (Remote[P] <=> T fromSingle R),
@@ -51,7 +69,7 @@ object TransmissionProperties {
         dispatched: L <:< P):
     TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
 
-  implicit def issuedTransmissionFromMultiple
+  implicit def issuedTransmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (Remote[P] <=> T fromMultiple R),

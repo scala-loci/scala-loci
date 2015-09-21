@@ -20,12 +20,19 @@ trait Generation {
     val issued = typeOf[_ <-> _]
     val issuedControlled = typeOf[_ <=> _]
 
+    val from = typeOf[_ from _]
+    val fromSingle = typeOf[_ fromSingle _]
+    val fromMultiple = typeOf[_ fromMultiple _]
+    val selection = Seq(from, fromSingle, fromMultiple)
+
     val placing = typeOf[PlacingExpression[_]]
     val issuing = typeOf[IssuingExpression[_, _]]
     val overriding = typeOf[OverridingExpression[_]]
 
     val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
     val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+
+    val fromExpression = typeOf[FromExpression[_, _, _]]
 
     val transmissionProvider = typeOf[transmission.TransmissionProvider]
 
@@ -47,6 +54,8 @@ trait Generation {
     val placedOverriding = types.overriding member TermName("overriding")
 
     val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
+
+    val fromExpression = types.retier member TermName("FromExpression")
 
     val transmitMultiple = types.retier member TermName("transmitMultiple")
     val transmitOptional = types.retier member TermName("transmitOptional")
@@ -74,9 +83,11 @@ trait Generation {
   }
 
   object names {
+    val from = TermName("from")
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")
     val connection = TermName("Connection")
+    val createPeerSelection = TermName("createPeerSelection")
     val system = retierTermName("system")
     val implementation = retierTypeName("peer")
     val interface = retierTermName("peer")
@@ -100,6 +111,7 @@ trait Generation {
     val AbstractionRef = tq"$root.retier.transmission.AbstractionRef"
     val Marshallable = tq"$root.retier.transmission.Marshallable"
     val UnitMarshallable = q"$root.retier.impl.UnitMarshallable"
+    val Remote = tq"$root.retier.Remote"
     val Peer = q"$root.retier.Peer"
     val PeerType = tq"$root.retier.PeerType"
     val PeerTypeTag = tq"$root.retier.PeerTypeTag"

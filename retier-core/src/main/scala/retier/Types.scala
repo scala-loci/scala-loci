@@ -26,9 +26,14 @@ private trait RemoteImplBase[+P <: Peer] extends Remote[P]
 
 // selected remote types
 
+sealed trait from[+T, P <: Peer] extends Any
+
 sealed trait fromSingle[+T, P <: Peer] extends Any
 
 sealed trait fromMultiple[+T, P <: Peer] extends Any
+
+private trait SelectionImplBase[+T, P <: Peer]
+  extends (T from P)
 
 private trait SingleSelectionImplBase[+T, P <: Peer]
   extends (T fromSingle P)
