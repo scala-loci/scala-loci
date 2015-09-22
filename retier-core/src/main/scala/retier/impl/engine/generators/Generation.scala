@@ -10,7 +10,7 @@ trait Generation {
   import c.universe._
 
   object types {
-    import scala.language.{higherKinds, existentials}
+    import scala.language.higherKinds
 
     val bottom = Seq(typeOf[Nothing], typeOf[Null])
 
@@ -34,8 +34,9 @@ trait Generation {
     val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
     val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
 
-    val remote = typeOf[RemoteExpression[_, T forSome { type T[_, _] }]]
+    val remote = typeOf[RemoteExpression[_, T] forSome { type T[_, _] }]
     val remoteSelection = typeOf[RemoteSelectionExpression[_]]
+    val remoteSetting = typeOf[RemoteSettingExpression[_, _, _, T] forSome { type T[_, _] }]
 
     val fromExpression = typeOf[FromExpression[_, _, _]]
 
@@ -62,6 +63,7 @@ trait Generation {
 
     val remoteCall = types.remote member TermName("call")
     val remoteOn = (types.remoteSelection member TermName("on")).alternatives
+    val remoteSet = types.remoteSetting member TermName(":=").encodedName
 
     val fromExpression = types.retier member TermName("FromExpression")
 

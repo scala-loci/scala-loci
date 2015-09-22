@@ -4,6 +4,7 @@ package engine.generators
 
 import engine._
 import scala.collection.mutable.ListBuffer
+import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox.Context
 
 trait RemoteExpressionProcessor { this: Generation =>
@@ -28,8 +29,7 @@ trait RemoteExpressionProcessor { this: Generation =>
   }
 
   private class RemoteExpressionGenerator extends Transformer {
-    def processSelectionExpression(expr: Tree, selected: Tree,
-        finalResultType: Type) = {
+    def processSelectionExpression(expr: Tree, selected: Tree) = {
       val (remoteExpr, selectionTree) = expr match {
         case tree @ q"$expr.$_[..$_](...$exprss)"
             if symbols.remoteOn contains tree.symbol =>
@@ -43,9 +43,6 @@ trait RemoteExpressionProcessor { this: Generation =>
         tpt.typeTree(abortOnFailure = true),
         remoteExpr.pos)
 
-      val selectedPeerType = tpt.tpe
-      val Seq(_, peerType) = finalResultType.typeArgs
-
       val fromExpression = markRetierSynthetic(
         internal setSymbol (q"`<FromExpression>`", symbols.fromExpression),
         remoteExpr.pos)
@@ -53,9 +50,6 @@ trait RemoteExpressionProcessor { this: Generation =>
       selectionTree match {
         case Some(selectionTree) =>
           q"$fromExpression($selected) $from[$typeTree] (..$selectionTree)"
-        case _ if selectedPeerType =:!= typeOf[Nothing] &&
-                  selectedPeerType =:!= peerType =>
-          q"$fromExpression($selected).$from[$typeTree]"
         case _ =>
           markRetierSynthetic(selected, recursive = false)
       }
@@ -65,7 +59,34 @@ trait RemoteExpressionProcessor { this: Generation =>
       case q"$expr.$_[..$_](...$exprss)"
           if tree.symbol == symbols.remoteCall =>
         val call = super.transform(exprss.head.head)
-        processSelectionExpression(expr, call, tree.tpe)
+        processSelectionExpression(expr, call)
+
+      case q"$expr.$_[..$_](...$exprssIdentifier).$_[..$_](...$exprssValue)"
+          if tree.symbol == symbols.remoteSet =>
+        val value = exprssValue.head.head
+        val identifier = exprssIdentifier.head.head
+
+        val setter = identifier match {
+          case q"$expr.$tname" =>
+            if (!identifier.symbol.isTerm ||
+                !identifier.symbol.asTerm.isGetter ||
+                !identifier.symbol.asTerm.accessed.asTerm.isVar)
+              c.abort(identifier.pos, "variable expected")
+
+            val name = TermName(NameTransformer encode s"${tname.toString}_=")
+            q"$expr.$name"
+
+          case _ =>
+            c.abort(identifier.pos, "identifier expected")
+        }
+
+        val TypeRef(pre, sym, List(_, peerType)) =
+          identifier.tpe.widen.dealias
+        val tpe =
+          internal typeRef (pre, sym, List(definitions.UnitTpe, peerType))
+
+        val call = super.transform(internal setType (q"$setter($value)", tpe))
+        processSelectionExpression(expr, call)
 
       case _ =>
         super.transform(tree)

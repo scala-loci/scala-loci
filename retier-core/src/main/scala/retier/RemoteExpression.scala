@@ -34,15 +34,16 @@ protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
         ev0: LocalPeer[L],
         ev1: FirstIfNotEmptyElseSecond[P, P0, `P'`],
         ev2: PeerConnection[L#Connection, `P'`, _]): T placed `P'` = `#macro`
-  def set[T, L <: Peer, P0 >: P <: Peer](property: RemoteProperty[T, P0])
+  def set[T, L <: Peer, P0 >: P <: Peer, `P'` <: Peer](property: RemoteProperty[T, P0])
     (implicit
         ev0: LocalPeer[L],
-        ev1: PeerConnection[L#Connection, P, _]): RemoteSettingExpression[T, P, L] = `#macro`
+        ev1: FirstIfNotEmptyElseSecond[P, P0, `P'`],
+        ev2: PeerConnection[L#Connection, `P'`, _]): RemoteSettingExpression[T, `P'`, L, placed] = `#macro`
   def issued: RemoteIssuingExpression[P, placed] = `#macro`
 }
 
-protected final abstract class RemoteSettingExpression[T, P <: Peer, L <: Peer] {
-  def :=(v: T localOn L): Unit on P = `#macro`
+protected final abstract class RemoteSettingExpression[T, P <: Peer, L <: Peer, placed[_, _ <: Peer]] {
+  def :=(v: T localOn L): Unit placed P = `#macro`
 }
 
 protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <: Peer]]

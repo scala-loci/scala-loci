@@ -3,6 +3,7 @@ package impl
 package engine.generators
 
 import engine._
+import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox.Context
 
 trait ProxyGenerator { this: Generation =>
@@ -157,14 +158,14 @@ trait ProxyGenerator { this: Generation =>
         }
 
         val request = {
-          def setter(name: TermName) =
-            TermName(s"${name}_=")
-
           def transmissionPropertiesCreate(marshallable: Tree, request: Tree) =
             q"""$TransmissionPropertiesCreate(
                   $abstractionIdTerm, $marshallable, $request)"""
 
           if (isMutable) {
+            val declSetterTermName =
+              TermName(NameTransformer encode s"${declTermName}_=")
+
             val getterTransmissionProperties = transmissionPropertiesCreate(
               q"$localResponseTerm", q"($UnitMarshallable, ())")
 
@@ -173,7 +174,7 @@ trait ProxyGenerator { this: Generation =>
 
             Seq(
               q"""def $declTermName = $getterTransmissionProperties""",
-              q"""def ${setter(declTermName)}(v: $localResponseTypeTree) =
+              q"""def ${declSetterTermName}(v: $localResponseTypeTree) =
                     $setterTransmissionProperties""")
           }
           else {
