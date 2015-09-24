@@ -9,36 +9,55 @@ trait Generation {
   val c: Context
   import c.universe._
 
+  private[this] def root = termNames.ROOTPKG
+
+  private[this] implicit class TypeAndSymbolSelection(tpe: Type) {
+    def |(name: Name): Symbol = tpe member name
+    def |(name: TypeName): Type = {
+      val typeSymbol = (tpe member name).asType
+
+      val typeInPackageObject = typeSymbol.toType match {
+        case TypeRef(_, sym, args) =>
+          val packageObject = tpe member termNames.PACKAGE
+          if (packageObject.isModule) {
+            val packageType = packageObject.asModule.moduleClass.asType.toType
+            if ((packageType member name) == typeSymbol)
+              Some(internal typeRef (packageType, sym, args))
+            else
+              None
+          }
+          else
+            None
+        case _ =>
+          None
+      }
+
+      internal existentialAbstraction (
+        typeSymbol.typeParams,
+        typeInPackageObject getOrElse typeSymbol.toType)
+    }
+  }
+
   object types {
-    import scala.language.higherKinds
+    val retier = (c.mirror staticPackage s"$root.retier").typeSignature
 
     val bottom = Seq(typeOf[Nothing], typeOf[Null])
 
-    val retier = typeOf[_root_.retier.`package`.type]
     val peer = typeOf[Peer]
+    val peerTypeTag = typeOf[PeerTypeTag[_]]
 
     val localOn = typeOf[_ localOn _]
     val sharedOn = typeOf[_ sharedOn _]
     val issued = typeOf[_ <-> _]
     val issuedControlled = typeOf[_ <=> _]
 
+    val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
+    val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+
     val from = typeOf[_ from _]
     val fromSingle = typeOf[_ fromSingle _]
     val fromMultiple = typeOf[_ fromMultiple _]
     val selection = Seq(from, fromSingle, fromMultiple)
-
-    val placing = typeOf[PlacingExpression[_]]
-    val issuing = typeOf[IssuingExpression[_, _]]
-    val overriding = typeOf[OverridingExpression[_]]
-
-    val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
-    val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
-
-    val remote = typeOf[RemoteExpression[_, T] forSome { type T[_, _] }]
-    val remoteSelection = typeOf[RemoteSelectionExpression[_]]
-    val remoteSetting = typeOf[RemoteSettingExpression[_, _, _, T] forSome { type T[_, _] }]
-
-    val fromExpression = typeOf[FromExpression[_, _, _]]
 
     val transmissionProvider = typeOf[transmission.TransmissionProvider]
 
@@ -46,40 +65,46 @@ trait Generation {
     val optional = typeOf[Peer#Optional[_]]
     val single = typeOf[Peer#Single[_]]
 
-    val peerTypeTag = typeOf[PeerTypeTag[_]]
+    val placing = retier | TypeName("PlacingExpression")
+    val issuing = retier | TypeName("IssuingExpression")
+    val overriding = retier | TypeName("OverridingExpression")
+
+    val remote = retier | TypeName("RemoteExpression")
+    val remoteSelection = retier | TypeName("RemoteSelectionExpression")
+    val remoteSetting = retier | TypeName("RemoteSettingExpression")
+
+    val fromExpression = retier | TypeName("FromExpression")
   }
 
   object symbols {
-    val retier = types.retier.termSymbol
-
-    val placedApply = types.placing member TermName("apply")
-    val placedShared = types.placing member TermName("shared")
-    val placedLocal = types.placing member TermName("local")
-    val placedIssuedApply = types.issuing member TermName("apply")
-    val placedOverriding = types.overriding member TermName("overriding")
+    val placedApply = types.placing | TermName("apply")
+    val placedShared = types.placing | TermName("shared")
+    val placedLocal = types.placing | TermName("local")
+    val placedIssuedApply = types.issuing | TermName("apply")
+    val placedOverriding = types.overriding | TermName("overriding")
 
     val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
 
-    val remoteCall = types.remote member TermName("call")
-    val remoteOn = (types.remoteSelection member TermName("on")).alternatives
-    val remoteSet = types.remoteSetting member TermName(":=").encodedName
+    val remoteCall = types.remote | TermName("call")
+    val remoteOn = (types.remoteSelection | TermName("on")).alternatives
+    val remoteSet = types.remoteSetting | TermName(":=").encodedName
 
-    val fromExpression = types.retier member TermName("FromExpression")
+    val fromExpression = types.retier | TermName("FromExpression")
 
-    val transmitMultiple = types.retier member TermName("transmitMultiple")
-    val transmitOptional = types.retier member TermName("transmitOptional")
-    val transmitSingle = types.retier member TermName("transmitSingle")
+    val transmitMultiple = types.retier | TermName("transmitMultiple")
+    val transmitOptional = types.retier | TermName("transmitOptional")
+    val transmitSingle = types.retier | TermName("transmitSingle")
 
     val transmit = Seq(transmitMultiple, transmitOptional, transmitSingle)
 
-    val discardValue = types.retier member TermName("discardValue")
-    val issueValue = types.retier member TermName("issueValue")
-    val issueValueControlled = types.retier member TermName("issueValueControlled")
+    val discardValue = types.retier | retierTermName("discardValue")
+    val issueValue = types.retier | retierTermName("issueValue")
+    val issueValueControlled = types.retier | retierTermName("issueValueControlled")
 
-    val liftValueGlobally = types.retier member TermName("liftValueGlobally")
-    val liftValueLocally = types.retier member TermName("liftValueLocally")
-    val downcastValueGlobally = types.retier member TermName("downcastValueGlobally")
-    val downcastValueLocally = types.retier member TermName("downcastValueLocally")
+    val liftValueGlobally = types.retier | retierTermName("liftValueGlobally")
+    val liftValueLocally = types.retier | retierTermName("liftValueLocally")
+    val downcastValueGlobally = types.retier | retierTermName("downcastValueGlobally")
+    val downcastValueLocally = types.retier | retierTermName("downcastValueLocally")
 
     val globalCasts = Seq(discardValue, issueValue, issueValueControlled,
       liftValueGlobally, downcastValueGlobally)
@@ -103,7 +128,6 @@ trait Generation {
   }
 
   object trees {
-    private[this] val root = termNames.ROOTPKG
     val Try = tq"$root.scala.util.Try"
     val String = tq"$root.scala.Predef.String"
     val implicitly = q"$root.scala.Predef.implicitly"
