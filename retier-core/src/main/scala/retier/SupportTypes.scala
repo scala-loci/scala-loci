@@ -3,7 +3,7 @@ package retier
 import typeconstraints._
 import scala.annotation.implicitNotFound
 
-@implicitNotFound("Expression not placeable on peer ${P}")
+@implicitNotFound("Expression not placeable on peer")
 protected final abstract class PlacingTypes[P <: Peer, T, U]
 
 protected object PlacingTypes {
@@ -40,7 +40,9 @@ protected object IssuingTypes {
 protected final abstract class ValueTypes[T, U]
 
 protected object ValueTypes {
-  implicit def placedValueNonIssued[P <: Peer, T, U]
+  implicit def nonPlacedValue[T]
+    (implicit ev: T <:!< (_ localOn _)): ValueTypes[T, T] = `#macro`
+  implicit def placedValue[P <: Peer, T, U]
     (implicit
         ev0: T <:< (U localOn P),
         ev1: LocalPeer[P],
@@ -55,18 +57,4 @@ protected object ValueTypes {
         ev0: T <:< (U localOn P),
         ev1: LocalPeer[P],
         ev2: U <:< (_ <-> V)): ValueTypes[T, V] = `#macro`
-  implicit def capturedValueCaptured[T, U, V]
-    (implicit
-        ev0: T <:< Captured[U],
-        ev1: U <:< Captured[_],
-        ev2: ValueTypes[U, V]): ValueTypes[T, V] = `#macro`
-  implicit def capturedValueNonPlaced[T, U]
-    (implicit
-        ev0: T <:< Captured[U],
-        ev1: U <:!< Captured[_],
-        ev2: U <:!< (_ localOn _)): ValueTypes[T, U] = `#macro`
-  implicit def capturedValuePlaced[T, U, V]
-    (implicit
-        ev0: T <:< Captured[U],
-        ev1: U <:< (V localOn _)): ValueTypes[T, V] = `#macro`
 }

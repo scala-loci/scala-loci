@@ -1,20 +1,12 @@
 package retier
 
 
-protected sealed trait ValueProxy extends Any
-
-
 // placed types
 
-sealed trait localOn[+T, P <: Peer] extends Any with ValueProxy
+sealed trait localOn[+T, P <: Peer] extends Any
 
-sealed trait sharedOn[+T, P <: Peer] extends Any with ValueProxy
+sealed trait sharedOn[+T, P <: Peer] extends Any
   with (T localOn P)
-
-
-// captured type
-
-sealed trait Captured[+T] extends Any with ValueProxy
 
 
 // remote reference type

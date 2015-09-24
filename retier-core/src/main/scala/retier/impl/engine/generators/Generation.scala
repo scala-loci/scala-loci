@@ -55,7 +55,6 @@ trait Generation {
     val placedApply = types.placing member TermName("apply")
     val placedShared = types.placing member TermName("shared")
     val placedLocal = types.placing member TermName("local")
-    val placedIssued = types.placing member TermName("issued")
     val placedIssuedApply = types.issuing member TermName("apply")
     val placedOverriding = types.overriding member TermName("overriding")
 
@@ -77,9 +76,6 @@ trait Generation {
     val issueValue = types.retier member TermName("issueValue")
     val issueValueControlled = types.retier member TermName("issueValueControlled")
 
-    val reduceCapture = types.retier member TermName("reduceCapture")
-    val liftCapture = types.retier member TermName("liftCapture")
-
     val liftValueGlobally = types.retier member TermName("liftValueGlobally")
     val liftValueLocally = types.retier member TermName("liftValueLocally")
     val downcastValueGlobally = types.retier member TermName("downcastValueGlobally")
@@ -87,8 +83,7 @@ trait Generation {
 
     val globalCasts = Seq(discardValue, issueValue, issueValueControlled,
       liftValueGlobally, downcastValueGlobally)
-    val localCasts = Seq(reduceCapture, liftCapture, liftValueLocally,
-      downcastValueLocally)
+    val localCasts = Seq(liftValueLocally, downcastValueLocally)
     val casts = globalCasts ++ localCasts
   }
 

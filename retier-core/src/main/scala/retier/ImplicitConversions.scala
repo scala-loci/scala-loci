@@ -4,12 +4,12 @@ import typeconstraints._
 import scala.language.implicitConversions
 
 protected trait ImplicitConversions {
-  final implicit class ValueOp[T <: ValueProxy, U](v: T)
+  final implicit class ValueOp[T <: (_ localOn _), U](v: T)
       (implicit ev: ValueTypes[T, U]) {
     def value: U = `#macro`
   }
 
-  final implicit def value[T <: ValueProxy, U](v: T)
+  final implicit def value[T <: (_ localOn _), U](v: T)
     (implicit ev: ValueTypes[T, U]): U = `#macro`
 
 
@@ -20,13 +20,6 @@ protected trait ImplicitConversions {
 
   implicit def issueValueControlled[P <: Peer, R <: Remote[Peer], T, U](v: T localOn P)
     (implicit ev0: T <:!< (_ <=> _), ev1: T <:< (R => U)): R <=> U on P = `#macro`
-
-
-  final implicit def reduceCapture[T, U](v: Captured[T])
-    (implicit ev: T <:< (U localOn _)): Captured[U] = `#macro`
-
-  final implicit def liftCapture[P <: Peer, T, U](v: Captured[T])
-    (implicit ev0: LocalPeer[P], ev1: ValueTypes[Captured[T], U]): U on P = `#macro`
 
 
   final implicit def liftValueGlobally[P <: Peer, T](v: T)
