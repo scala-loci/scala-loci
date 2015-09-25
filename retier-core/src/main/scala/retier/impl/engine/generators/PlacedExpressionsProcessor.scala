@@ -45,7 +45,9 @@ trait PlacedExpressionsProcessor { this: Generation =>
             case q"$_.$tname" =>
               Some(tname)
             case _ =>
-              c.abort(identifier.pos, "identifier expected")
+              c.abort(identifier.pos,
+                "identifier expected " +
+                "(note that `identifier _` syntax should be used)")
           }
 
         case _ =>
@@ -63,7 +65,8 @@ trait PlacedExpressionsProcessor { this: Generation =>
       val (processedOverridingDecl, placedExpr) =
         if (symbols.placed contains expr.symbol) {
           val (exprBase, exprss) = expr match {
-            case q"$exprBase.$_[..$_].$_[..$_](...$exprss)" =>
+            case q"$exprBase.$_[..$_].$_[..$_](...$exprss)"
+                if expr.symbol == symbols.placedIssuedApply =>
               (exprBase, exprss)
             case q"$exprBase.$_[..$_](...$exprss)" =>
               (exprBase, exprss)

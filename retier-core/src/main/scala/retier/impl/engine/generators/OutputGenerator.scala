@@ -30,13 +30,15 @@ trait OutputGenerator { this: Generation =>
         OutputStatement(stat.tree)
       }) ++
       (aggregator.all[PlacedStatement] collect {
-        case PlacedStatement(
-            ValDef(mods, name, tpt, rhs), _, _, _, _, _) =>
+        case PlacedStatement(definition @
+              ValDef(mods, name, tpt, rhs), _, _, _, _, _)
+            if !definition.isRetierSynthetic =>
           OutputStatement(ValDef(annotate(mods), name,
             tpt.typeTree, `#macro`))
 
-        case PlacedStatement(
-            DefDef(mods, name, tparams, vparamss, tpt, rhs), _, _, _, _, _) =>
+        case PlacedStatement(definition @
+              DefDef(mods, name, tparams, vparamss, tpt, rhs), _, _, _, _, _)
+            if !definition.isRetierSynthetic =>
           OutputStatement(DefDef(annotate(mods), name, tparams, vparamss,
             tpt.typeTree, `#macro`))
       }) ++

@@ -71,7 +71,20 @@ trait Generation {
 
     val remote = retier | TypeName("RemoteExpression")
     val remoteSelection = retier | TypeName("RemoteSelectionExpression")
+    val remoteIssuing = retier | TypeName("RemoteIssuingExpression")
     val remoteSetting = retier | TypeName("RemoteSettingExpression")
+
+    val remoteUsing =
+      (retier | TypeName(s"RemoteUsingExpression")) +:
+      ((2 to 22) map { i =>
+        retier | TypeName(s"RemoteUsing${i}Expression")
+      })
+
+    val remoteIssuedUsing =
+      (retier | TypeName(s"RemoteIssuedUsingExpression")) +:
+      ((2 to 22) map { i =>
+        retier | TypeName(s"RemoteIssuedUsing${i}Expression")
+      })
 
     val fromExpression = retier | TypeName("FromExpression")
   }
@@ -85,9 +98,16 @@ trait Generation {
 
     val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
 
+    val remoteApply = types.remote | TermName("apply")
     val remoteCall = types.remote | TermName("call")
     val remoteOn = (types.remoteSelection | TermName("on")).alternatives
+    val remoteIssuedApply = types.remoteIssuing | TermName("apply")
     val remoteSet = types.remoteSetting | TermName(":=").encodedName
+
+    val remoteUsingIn = types.remoteUsing map { _ | TermName("in") }
+    val remoteIssuedUsingIn = types.remoteIssuedUsing map { _ | TermName("in") }
+
+    val remote = Seq(remoteApply, remoteIssuedApply) ++ remoteUsingIn ++ remoteIssuedUsingIn
 
     val fromExpression = types.retier | TermName("FromExpression")
 
