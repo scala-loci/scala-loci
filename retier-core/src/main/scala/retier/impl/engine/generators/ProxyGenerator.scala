@@ -32,6 +32,16 @@ trait ProxyGenerator { this: Generation =>
       }).mkString
     }
 
+    def extractTypeArgs(tree: Tree, tpe: Type) = {
+      val args = tree.typeTree match {
+        case AppliedTypeTree(_, args) => args
+        case _ => tpe.typeArgs map TypeTree
+      }
+      (args zip tpe.typeArgs) map { case (tree, tpe) =>
+        internal setType (tree.typeTree, tpe)
+      }
+    }
+
     def extractArgumentTypes(args: List[List[ValDef]]) =
       args map { _ map { _.tpt.tpe } }
 
@@ -44,10 +54,10 @@ trait ProxyGenerator { this: Generation =>
         case ValDef(_, _, _, _) => List.empty
       }
 
-    def typeAsTypeTree(tpe: Type) = typer createTypeTree tpe
-
     def argumentTypesAsTupleTypeTree(argTypes: List[List[Type]]) = {
-      val types = argTypes map { types => tq"(..${types map typeAsTypeTree })" }
+      val types = argTypes map { types =>
+        tq"(..${types map typer.createTypeTree })"
+      }
       tq"(..$types)"
     }
 
@@ -95,15 +105,22 @@ trait ProxyGenerator { this: Generation =>
         val argTypes = extractArgumentTypes(args)
         val argNames = extractArgumentNames(args)
 
+        val isIssued = types.issuedPlacing exists { exprType <:< _ }
+        val (valueType, valueTypeTree) =
+          if (isIssued)
+            (exprType.typeArgs.last, extractTypeArgs(declTypeTree, exprType).last)
+          else
+            (exprType, declTypeTree)
+
         val isMutable = decl.mods hasFlag Flag.MUTABLE
         val isStable = decl match {
           case ValDef(_, _, _, _) => !isMutable
           case DefDef(_, _, _, _, _, _) => false
         }
         val isNullary = (argTypes.headOption flatMap { _.headOption }).isEmpty
-        val hasReturnValue = exprType =:!= definitions.UnitTpe
+        val hasReturnValue = valueType =:!= definitions.UnitTpe
 
-        val abstractionId = generateAbstractionId(decl, decl.name, argTypes, exprType)
+        val abstractionId = generateAbstractionId(decl, decl.name, argTypes, valueType)
         val abstractionIdTermName = retierTermName(s"abs$$$index")
         val localResponseTermName = retierTermName(s"mar$$$index$$res")
         val remoteRequestTermName = retierTermName(s"mar$$$index$$req")
@@ -114,7 +131,7 @@ trait ProxyGenerator { this: Generation =>
         val remoteRequestTerm = q"${names.interface}.$remoteRequestTermName"
         val declTerm = q"${names.implementation}.this.$declTermName"
 
-        val localResponseTypeTree = typeAsTypeTree(exprType)
+        val localResponseTypeTree = valueTypeTree
 
         val remoteRequestTypeTree =
           if (isMutable)
@@ -123,54 +140,79 @@ trait ProxyGenerator { this: Generation =>
             argumentTypesAsTupleTypeTree(argTypes)
 
         val response = {
-          if (isMutable) {
-            q"""if (request.isEmpty)
-                  $Success($localResponseTerm marshall ($declTerm, ref))
+          val issuedNullaryDeclTerm =
+            if (isIssued) q"$declTerm(remote)" else declTerm
+
+          val response =
+            if (isMutable) {
+              q"""if (request.isEmpty)
+                    $Success(
+                      $localResponseTerm marshall ($issuedNullaryDeclTerm, ref))
+                  else
+                    $remoteRequestTerm unmarshall (request, ref) map { arg =>
+                      $declTerm = arg; ""
+                    }
+               """
+            }
+            else {
+              val arguments = applyTupleAsArguments(q"args", argTypes)
+
+              val response =
+                if (isNullary)
+                  q"""$issuedNullaryDeclTerm"""
+                else if (isIssued)
+                  q"""$declTerm(...$arguments)(remote)"""
                 else
-                  $remoteRequestTerm unmarshall (request, ref) map { arg =>
-                    $declTerm = arg; ""
-                  }
+                  q"""$declTerm(...$arguments)"""
+
+              val marshalled =
+                if (hasReturnValue)
+                  q"""$localResponseTerm marshall ($response, ref)"""
+                else
+                  q"""$response; """""
+
+              if (isNullary)
+                q"""$Success($marshalled)"""
+              else
+                q"""$remoteRequestTerm unmarshall (request, ref) map { args =>
+                      $marshalled
+                    }
+                 """
+          }
+
+          if (isIssued) {
+            val remoteTypeTree =
+              extractTypeArgs(declTypeTree, exprType).head
+            val peerTypeTree =
+              extractTypeArgs(remoteTypeTree, remoteTypeTree.tpe).head
+
+            q"""$TryCreate {
+                  ref.remote.asRemote[$peerTypeTree].get
+                } flatMap { remote =>
+                  $response
+                }
              """
           }
-          else {
-            val arguments = applyTupleAsArguments(q"args", argTypes)
-
-            val response =
-              if (isNullary)
-                q"""$declTerm"""
-              else
-                q"""$declTerm(...$arguments)"""
-
-            val marshalled =
-              if (hasReturnValue)
-                q"""$localResponseTerm marshall ($response, ref)"""
-              else
-                q"""$response; """""
-
-            if (isNullary)
-              q"""$Success($marshalled)"""
-            else
-              q"""$remoteRequestTerm unmarshall (request, ref) map { args =>
-                    $marshalled
-                  }
-               """
-          }
+          else
+            response
         }
 
         val request = {
-          def transmissionPropertiesCreate(marshallable: Tree, request: Tree) =
+          def transmissionPropertiesCreate(marshallable: Tree, request: Tree,
+              requestMarshallable: Tree) =
             q"""$TransmissionPropertiesCreate(
-                  $abstractionIdTerm, $marshallable, $request)"""
+                  $abstractionIdTerm, $marshallable,
+                  $request, $requestMarshallable)"""
 
           if (isMutable) {
             val declSetterTermName =
               TermName(NameTransformer encode s"${declTermName}_=")
 
             val getterTransmissionProperties = transmissionPropertiesCreate(
-              q"$localResponseTerm", q"($UnitMarshallable, ())")
+              localResponseTerm, q"()", UnitMarshallable)
 
             val setterTransmissionProperties = transmissionPropertiesCreate(
-              q"$UnitMarshallable", q"($remoteRequestTerm, v)")
+              UnitMarshallable, q"v", remoteRequestTerm)
 
             Seq(
               q"""def $declTermName = $getterTransmissionProperties""",
@@ -178,11 +220,11 @@ trait ProxyGenerator { this: Generation =>
                     $setterTransmissionProperties""")
           }
           else {
-            val request =
+            val (request, requestMarshallable) =
               if (isNullary)
-                q"($UnitMarshallable, ())"
+                (q"()", UnitMarshallable)
               else
-                q"($remoteRequestTerm, ${argumentNamesAsTuple(argNames)})"
+                (q"${argumentNamesAsTuple(argNames)}", remoteRequestTerm)
 
             val marshallable =
               if (hasReturnValue)
@@ -190,8 +232,8 @@ trait ProxyGenerator { this: Generation =>
               else
                 q"$UnitMarshallable"
 
-            val transmissionProperties =
-              transmissionPropertiesCreate(marshallable, request)
+            val transmissionProperties = transmissionPropertiesCreate(
+              marshallable, request, requestMarshallable)
 
             Seq(q"def $declTermName(...$args) = $transmissionProperties")
           }

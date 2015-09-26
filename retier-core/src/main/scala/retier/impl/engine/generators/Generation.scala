@@ -149,6 +149,7 @@ trait Generation {
 
   object trees {
     val Try = tq"$root.scala.util.Try"
+    val TryCreate = q"$root.scala.util.Try"
     val String = tq"$root.scala.Predef.String"
     val implicitly = q"$root.scala.Predef.implicitly"
     val Success = q"$root.scala.util.Success"

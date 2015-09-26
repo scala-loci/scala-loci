@@ -26,7 +26,7 @@ trait PeerImplementationGenerator { this: Generation =>
       val originalTypeName = originalName.toTypeName
       val originalTermName = originalName.toTermName
 
-      def isPlaced(tpe: Type): Boolean = tpe <:< types.localOn
+      def isPlaced(tpe: Type): Boolean = tpe != null && tpe <:< types.localOn
 
       def isPlaced(tree: Tree): Boolean =
         isPlaced(tree.tpe) ||
@@ -114,11 +114,14 @@ trait PeerImplementationGenerator { this: Generation =>
         q"""$synthetic override def $dispatch(
                 request: $String,
                 id: $AbstractionId,
-                ref: $AbstractionRef): $Try[$String] =
+                ref: $AbstractionRef): $Try[$String] = {
+              import _root_.retier.impl.AbstractionRef._
+              import _root_.retier.impl.RemoteRef._
               id match {
                 case ..${abstractions map { _.dispatchClause } }
                 case _ => super.$dispatch(request, id, ref)
               }
+            }
          """
 
       val systemImpl = q"$synthetic override lazy val $system = new $System"
