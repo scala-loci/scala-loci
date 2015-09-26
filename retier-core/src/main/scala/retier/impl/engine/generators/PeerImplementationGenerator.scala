@@ -88,17 +88,8 @@ trait PeerImplementationGenerator { this: Generation =>
 
       case parent @ tq"$expr.$tpnamePeer[..$tpts]"
           if parent.tpe <:< types.peer =>
-        if (!(peerSymbols contains parent.symbol)) {
-          if ((parent.tpe.dealias.companion member names.implementation) ==
-              NoSymbol)
-            c.abort(parent.pos,
-              "cannot access peer type implementation " +
-              "(maybe peer definition was not placed " +
-              "inside `multitier` environment)")
-        }
-
-        val name = tpnamePeer.toTermName
-        tq"$expr.$name.${names.implementation}[..$tpts]"
+        val impl = peerImplementationTree(parent, parent.tpe, peerSymbols)
+        tq"$impl[..$tpts]"
 
       case parent =>
         parent

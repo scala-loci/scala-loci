@@ -62,15 +62,15 @@ trait FromExpressionProcessor { this: Generation =>
       }
 
       val args =
-        markRetierSynthetic(transmissionProperties) +:
+        markRetierSynthetic(transmissionProperties, value.pos) +:
         (exprssPeer.headOption.toList flatMap {
           _ map { remote =>
-            val remoteType = markRetierSynthetic(tq"$Remote[$typeTree]")
-            q"$remote: $remoteType"
+            val tpe = markRetierSynthetic(tq"$Remote[$typeTree]", value.pos)
+            q"$remote: $tpe"
           }
         })
 
-      val peerTypeTag = markRetierSynthetic(typeTag)
+      val peerTypeTag = markRetierSynthetic(typeTag, value.pos)
 
       val tpe =
         if (exprssPeer.isEmpty || exprssPeer.head.isEmpty)

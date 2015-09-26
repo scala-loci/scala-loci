@@ -101,7 +101,7 @@ trait ProxyGenerator { this: Generation =>
           case DefDef(_, _, _, _, _, _) => false
         }
         val isNullary = (argTypes.headOption flatMap { _.headOption }).isEmpty
-        val hasReturnValue = exprType =:!= typeOf[Unit]
+        val hasReturnValue = exprType =:!= definitions.UnitTpe
 
         val abstractionId = generateAbstractionId(decl, decl.name, argTypes, exprType)
         val abstractionIdTermName = retierTermName(s"abs$$$index")

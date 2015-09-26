@@ -23,7 +23,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
       val multiplicities = body collectFirst {
         case typeDef @ TypeDef(_, connectionTypeName, List(), rhs) =>
           val connection = rhs.typeTree match {
-            case TypeBoundsTree(lo, _) if lo.tpe =:!= typeOf[Nothing] =>
+            case TypeBoundsTree(lo, _) if lo.tpe =:!= definitions.NothingTpe =>
               c.abort(lo.pos,
                 "lower type bounds not allowed for connection type")
             case TypeBoundsTree(_, hi) => hi
@@ -64,7 +64,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
               val AppliedTypeTree(_, List(arg)) = connection
               val argType = connection.tpe.typeArgs.head
 
-              if (argType <:!< types.peer || argType =:= typeOf[Nothing])
+              if (argType <:!< types.peer || argType =:= definitions.NothingTpe)
                 c.abort(arg.pos, "peer type expected")
 
               (connection, internal setType (arg, argType), multiplicity)

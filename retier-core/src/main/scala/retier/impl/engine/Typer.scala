@@ -188,8 +188,8 @@ class Typer[C <: Context](val c: C) {
 
       case TypeBounds(lo, hi) =>
         TypeBoundsTree(
-          if (lo =:= typeOf[Nothing]) EmptyTree else expandType(lo),
-          if (hi =:= typeOf[Any]) EmptyTree else expandType(hi))
+          if (lo =:= definitions.NothingTpe) EmptyTree else expandType(lo),
+          if (hi =:= definitions.AnyTpe) EmptyTree else expandType(hi))
 
       case ExistentialType(quantified, underlying) =>
         val whereClauses = quantified map { quantified =>
@@ -205,7 +205,7 @@ class Typer[C <: Context](val c: C) {
                   TypeName(name),
                   List.empty,
                   expandType(quantified.typeSignature)))
-              else if (lo =:= typeOf[Nothing])
+              else if (lo =:= definitions.NothingTpe)
                 Some(ValDef(
                   Modifiers(DEFERRED),
                   TermName(name substring (0, name.size - 5)),

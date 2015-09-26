@@ -50,21 +50,8 @@ trait PeerTypeTagGenerator { this: Generation =>
 
         case parent @ tq"$expr.$tpnamePeer[..$_]"
             if parent.tpe <:< types.peer =>
-          if (!(peerSymbols contains parent.symbol)) {
-            val symbol = parent.tpe.dealias.companion member peerTypeTag
-            val tpe = symbol.typeSignature.resultType
-
-            if (!symbol.isImplicit ||
-                tpe <:!< types.peerTypeTag ||
-                tpe.typeArgs.head.typeSymbol != parent.tpe.typeSymbol)
-              c.abort(parent.pos,
-                s"no peer type information available for $tpnamePeer " +
-                s"(maybe peer definition was not placed " +
-                s"inside `multitier` environment)")
-          }
-
-          val name = tpnamePeer.toTermName
-          q"$expr.$name.$peerTypeTag.$peerType"
+          val peerTypeTag = peerTypeTagTree(parent, parent.tpe, peerSymbols)
+          q"$peerTypeTag.$peerType"
 
         case parent if parent.tpe <:< types.peer =>
           c.abort(parent.pos, "identifier expected")

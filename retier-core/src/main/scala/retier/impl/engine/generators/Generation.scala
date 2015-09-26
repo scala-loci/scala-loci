@@ -41,7 +41,7 @@ trait Generation {
   object types {
     val retier = (c.mirror staticPackage s"$root.retier").typeSignature
 
-    val bottom = Seq(typeOf[Nothing], typeOf[Null])
+    val bottom = Seq(definitions.NothingTpe, definitions.NullTpe)
 
     val peer = typeOf[Peer]
     val peerTypeTag = typeOf[PeerTypeTag[_]]
