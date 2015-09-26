@@ -15,7 +15,7 @@ trait PeerTypeTagGenerator { this: Generation =>
     echo(verbose = true, " Generating peer type tags")
 
     val synthetic = Flag.SYNTHETIC
-    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
+    val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
 
     def wildcardedTypeTree(expr: Tree, typeArgsCount: Int) =
       if (typeArgsCount == 0)
@@ -37,9 +37,10 @@ trait PeerTypeTagGenerator { this: Generation =>
       import trees._
       import names._
 
-      val PeerDefinition(_, peerName, _, typeArgs, _, parents, _, _, _, _) =
+      val PeerDefinition(_, peerSymbol, typeArgs, _, parents, _, _, _, _) =
         peerDefinition
 
+      val peerName = peerSymbol.name
       val name = peerName.toString
       val wildcardedPeerType = wildcardedTypeTree(tq"$peerName", typeArgs.size)
 
@@ -49,7 +50,7 @@ trait PeerTypeTagGenerator { this: Generation =>
 
         case parent @ tq"$expr.$tpnamePeer[..$_]"
             if parent.tpe <:< types.peer =>
-          if (!(peerTypes exists { parent.tpe <:< _ })) {
+          if (!(peerSymbols contains parent.symbol)) {
             val symbol = parent.tpe.dealias.companion member peerTypeTag
             val tpe = symbol.typeSignature.resultType
 
@@ -77,10 +78,10 @@ trait PeerTypeTagGenerator { this: Generation =>
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
       import names._
 
-      val PeerDefinition(_, peerName, _, _, _, _, _, _, _, companion) =
+      val PeerDefinition(_, peerSymbol, _, _, _, _, _, _, companion) =
         peerDefinition
 
-      val companionName = peerName.toTermName
+      val companionName = peerSymbol.name.toTermName
       val implicitPeerTypeTag = createImplicitPeerTypeTag(peerDefinition)
 
       val generatedCompanion = companion match {
@@ -121,9 +122,10 @@ trait PeerTypeTagGenerator { this: Generation =>
       import trees._
       import names._
 
-      val PeerDefinition(_, peerName, _, typeArgs, args, parents, mods, stats,
+      val PeerDefinition(_, peerSymbol, typeArgs, args, parents, mods, stats,
         isClass, _) = peerDefinition
 
+      val peerName = peerSymbol.name
       val companionName = peerName.toTermName
       val implicitPeerTypeTag = markRetierSynthetic(
         q"""$synthetic private[this] implicit val ${c freshName peerTypeTag}

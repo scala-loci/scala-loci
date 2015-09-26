@@ -185,21 +185,21 @@ trait Generation {
 
   case class InputStatement(stat: Tree)
 
-  case class PeerDefinition(tree: Tree, peerName: TypeName, peerType: Type,
+  case class PeerDefinition(tree: Tree, peerSymbol: TypeSymbol,
     typeArgs: List[Tree], args: List[List[Tree]], parents: List[Tree],
     mods: Modifiers, stats: List[Tree], isClass: Boolean,
     companion: Option[Tree])
 
-  case class PlacedStatement(tree: Tree, peerType: Type, exprType: Type,
+  case class PlacedStatement(tree: Tree, peerSymbol: TypeSymbol, exprType: Type,
     declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)
 
   case class NonPlacedStatement(tree: Tree)
 
-  case class PlacedAbstraction(peerType: Type, interfaceDefinitions: List[Tree],
-    dispatchClause: CaseDef)
+  case class PlacedAbstraction(peerSymbol: TypeSymbol,
+    interfaceDefinitions: List[Tree], dispatchClause: CaseDef)
 
-  case class PeerConnectionMultiplicity(peerType: Type, connectedPeer: Tree,
-    connectionMultiplicity: Tree)
+  case class PeerConnectionMultiplicity(peerSymbol: TypeSymbol,
+    connectedPeer: Tree, connectionMultiplicity: Tree)
 
   case class OutputStatement(stat: Tree)
 
@@ -291,27 +291,27 @@ trait Generation {
 
 
   def peerImplementationTree(baseTree: Tree, peerType: Type,
-      peerTypesUnderExpansion: List[Type]): Tree =
+      peerSymbolsUnderExpansion: List[TypeSymbol]): Tree =
     peerGeneratedComponentTree(
-      baseTree, peerType, peerTypesUnderExpansion,
+      baseTree, peerType, peerSymbolsUnderExpansion,
       names.implementation, "implementation")
 
   def peerInterfaceTree(baseTree: Tree, peerType: Type,
-      peerTypesUnderExpansion: List[Type]): Tree =
+      peerSymbolsUnderExpansion: List[TypeSymbol]): Tree =
     peerGeneratedComponentTree(
-      baseTree, peerType, peerTypesUnderExpansion,
+      baseTree, peerType, peerSymbolsUnderExpansion,
       names.interface, "interface")
 
   def peerTypeTagTree(baseTree: Tree, peerType: Type,
-      peerTypesUnderExpansion: List[Type]): Tree =
+      peerSymbolsUnderExpansion: List[TypeSymbol]): Tree =
     peerGeneratedComponentTree(
-      baseTree, peerType, peerTypesUnderExpansion,
+      baseTree, peerType, peerSymbolsUnderExpansion,
       names.peerTypeTag, "tag")
 
   private[this] def peerGeneratedComponentTree(baseTree: Tree, peerType: Type,
-      peerTypesUnderExpansion: List[Type],
+      peerSymbolsUnderExpansion: List[TypeSymbol],
       propName: Name, propMessage: String): Tree = {
-    if (!(peerTypesUnderExpansion exists { peerType <:< _ }) &&
+    if (!(peerSymbolsUnderExpansion contains peerType.typeSymbol) &&
         (peerType.dealias.companion member propName) == NoSymbol)
         c.abort(baseTree.pos,
           s"cannot access peer type $propMessage " +

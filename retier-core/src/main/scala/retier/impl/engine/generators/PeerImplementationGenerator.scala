@@ -18,7 +18,7 @@ trait PeerImplementationGenerator { this: Generation =>
     echo(verbose = true, " Generating peer implementations")
 
     val synthetic = Flag.SYNTHETIC
-    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
+    val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
     val enclosingName = aggregator.all[EnclosingContext].head.name
 
     class SelfReferenceChanger(originalName: Name, name: TypeName)
@@ -49,21 +49,21 @@ trait PeerImplementationGenerator { this: Generation =>
         new SelfReferenceChanger(originalName, name.toTypeName)
     }
 
-    def peerPlacedAbstractions(peerType: Type) =
+    def peerPlacedAbstractions(peerSymbol: TypeSymbol) =
       aggregator.all[PlacedAbstraction] filter {
-        _.peerType =:= peerType
+        _.peerSymbol == peerSymbol
       }
 
-    def peerConnectionMultiplicities(peerType: Type) =
+    def peerConnectionMultiplicities(peerSymbol: TypeSymbol) =
       aggregator.all[PeerConnectionMultiplicity] filter {
-        _.peerType =:= peerType
+        _.peerSymbol == peerSymbol
       }
 
-    def peerPlacedStatements(peerType: Type) =
+    def peerPlacedStatements(peerSymbol: TypeSymbol) =
       aggregator.all[PlacedStatement] collect {
         case PlacedStatement(
             definition @ ValDef(mods, name, _, _),
-            `peerType`, _, Some(declTypeTree), _, expr) =>
+            `peerSymbol`, _, Some(declTypeTree), _, expr) =>
           internal setPos (
             SelfReferenceChanger(enclosingName, names.implementation) transform
               ValDef(mods, name, declTypeTree, expr),
@@ -71,13 +71,13 @@ trait PeerImplementationGenerator { this: Generation =>
 
         case PlacedStatement(
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
-            `peerType`, _, Some(declTypeTree), _, expr) =>
+            `peerSymbol`, _, Some(declTypeTree), _, expr) =>
           internal setPos (
             SelfReferenceChanger(enclosingName, names.implementation) transform
               DefDef(mods, name, tparams, vparamss, declTypeTree, expr),
             definition.pos)
 
-        case PlacedStatement(tree, `peerType`, _, None, _, expr) =>
+        case PlacedStatement(tree, `peerSymbol`, _, None, _, expr) =>
           SelfReferenceChanger(enclosingName, names.implementation) transform
             expr
       }
@@ -88,7 +88,7 @@ trait PeerImplementationGenerator { this: Generation =>
 
       case parent @ tq"$expr.$tpnamePeer[..$tpts]"
           if parent.tpe <:< types.peer =>
-        if (!(peerTypes exists { parent.tpe <:< _ })) {
+        if (!(peerSymbols contains parent.symbol)) {
           if ((parent.tpe.dealias.companion member names.implementation) ==
               NoSymbol)
             c.abort(parent.pos,
@@ -105,11 +105,12 @@ trait PeerImplementationGenerator { this: Generation =>
     }
 
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
-      val PeerDefinition(_, peerName, peerType, typeArgs, args, parents, mods,
+      val PeerDefinition(_, peerSymbol, typeArgs, args, parents, mods,
         _, isClass, companion) = peerDefinition
 
-      val abstractions = peerPlacedAbstractions(peerType)
-      val statements = peerPlacedStatements(peerType)
+      val peerName = peerSymbol.name
+      val abstractions = peerPlacedAbstractions(peerSymbol)
+      val statements = peerPlacedStatements(peerSymbol)
       val implParents = peerImplementationParents(parents)
 
       import trees._
@@ -176,10 +177,11 @@ trait PeerImplementationGenerator { this: Generation =>
     }
 
     def processPeerDefinition(peerDefinition: PeerDefinition) = {
-      val PeerDefinition(_, peerName, peerType, typeArgs, args, parents, mods,
+      val PeerDefinition(_, peerSymbol, typeArgs, args, parents, mods,
         stats, isClass, _) = peerDefinition
 
-      val multiplicities = peerConnectionMultiplicities(peerType)
+      val peerName = peerSymbol.name
+      val multiplicities = peerConnectionMultiplicities(peerSymbol)
 
       import trees._
       import names._

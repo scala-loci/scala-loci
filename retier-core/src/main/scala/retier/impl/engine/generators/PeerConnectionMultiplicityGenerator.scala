@@ -100,7 +100,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
           }
 
           multiplicities map { case (_, peer, multiplicity) =>
-            PeerConnectionMultiplicity(definition.peerType, peer, multiplicity)
+            PeerConnectionMultiplicity(definition.peerSymbol, peer, multiplicity)
           }
       }
 

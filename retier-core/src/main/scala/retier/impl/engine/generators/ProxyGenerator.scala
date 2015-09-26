@@ -82,11 +82,11 @@ trait ProxyGenerator { this: Generation =>
         stat
     }
 
-    val peerDecls = decls groupBy { _.peerType.typeSymbol.asType.name }
+    val peerDecls = decls groupBy { _.peerSymbol.name }
 
     val abstractions = peerDecls flatMap { case (peerName, stats) =>
       stats.zipWithIndex map {
-        case (PlacedStatement(decl: ValOrDefDef, peerType, exprType,
+        case (PlacedStatement(decl: ValOrDefDef, peerSymbol, exprType,
                               Some(declTypeTree), _, _),
               index) =>
         import trees._
@@ -223,7 +223,7 @@ trait ProxyGenerator { this: Generation =>
           cq"$abstractionIdTerm => $response", decl.pos)
 
         PlacedAbstraction(
-          peerType,
+          peerSymbol,
           Seq(abstractionIdDef).toList ++
             localResponseDef.toList ++ remoteRequestDef.toList ++ request,
           dispatchClause)

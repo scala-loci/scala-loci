@@ -18,12 +18,11 @@ trait TransmissionGenerator { this: Generation =>
     echo(verbose = true, s" Generating transmissions for placed expressions")
 
     val enclosingName = aggregator.all[EnclosingContext].head.name
-
-    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
+    val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
 
     val stats = aggregator.all[PlacedStatement] map { stat =>
       stat.copy(expr =
-        new TransmissionGenerator(stat, enclosingName, peerTypes)
+        new TransmissionGenerator(enclosingName, peerSymbols)
           transform stat.expr)
     }
 
@@ -33,8 +32,8 @@ trait TransmissionGenerator { this: Generation =>
     aggregator replace stats
   }
 
-  private class TransmissionGenerator(stat: PlacedStatement,
-    enclosingName: TypeName, peerTypes: List[Type])
+  private class TransmissionGenerator(enclosingName: TypeName,
+    peerSymbols: List[TypeSymbol])
       extends Transformer {
     override def transform(tree: Tree) = tree match {
       case tree @ q"$_[..$tpts](...$exprss)"
@@ -44,10 +43,10 @@ trait TransmissionGenerator { this: Generation =>
         val Seq(_, peerType) = value.tpe.widen.typeArgs
 
         val localPeerTypeTag = peerTypeTagTree(
-          local.typeTree(abortOnFailure = true), local.tpe, peerTypes)
+          local.typeTree(abortOnFailure = true), local.tpe, peerSymbols)
 
         val remotePeerTypeTag = peerTypeTagTree(
-          remote.typeTree(abortOnFailure = true), remote.tpe, peerTypes)
+          remote.typeTree(abortOnFailure = true), remote.tpe, peerSymbols)
 
         val messageUnexpectedTree =
           "identifier, selected remote value or remote expression expected"
@@ -60,11 +59,11 @@ trait TransmissionGenerator { this: Generation =>
             value
 
           case q"$_.$tname" =>
-            val interface = peerInterfaceTree(value, peerType, peerTypes)
+            val interface = peerInterfaceTree(value, peerType, peerSymbols)
             q"$interface.$tname"
 
           case q"$_.$tname[..$tpts](...$exprss)" =>
-            val interface = peerInterfaceTree(value, peerType, peerTypes)
+            val interface = peerInterfaceTree(value, peerType, peerSymbols)
             if (value.isRetierSynthetic)
               q"$interface.$tname[..$tpts](...$exprss)"
             else

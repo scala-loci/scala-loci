@@ -24,8 +24,8 @@ trait PeerDefinitionCollector { this: Generation =>
         val sym = peer.symbol.asClass
         (earlydefns, paramss, parents, stats,
          PeerDefinition(
-          peer, sym.name, sym.toType, tparams, paramss, parents,
-          typer cleanModifiers mods, stats, isClass = true, None))
+          peer, sym, tparams, paramss, parents, typer cleanModifiers mods,
+          stats, isClass = true, None))
 
       case InputStatement(peer @ q"""
            $mods trait $tpname[..$tparams]
@@ -35,8 +35,8 @@ trait PeerDefinitionCollector { this: Generation =>
         val sym = peer.symbol.asClass
         (earlydefns, List.empty, parents, stats,
          PeerDefinition(
-          peer, sym.name, sym.toType, tparams, List.empty, parents,
-          typer cleanModifiers mods, stats, isClass = false, None))
+          peer, sym, tparams, List.empty, parents, typer cleanModifiers mods,
+          stats, isClass = false, None))
     }
 
     peerDefs foreach { case (earlydefns, params, parents, stats, _) =>
@@ -79,7 +79,7 @@ trait PeerDefinitionCollector { this: Generation =>
     val decls = peerDefs map { case (_, _, _, _, decl) => decl }
 
     val names = (decls.zipWithIndex map { case (decl, index) =>
-      decl.peerName.toTermName -> index
+      decl.peerSymbol.name.toTermName -> index
     }).toMap
 
     val peers = aggregator.all[InputStatement].foldLeft(decls) {

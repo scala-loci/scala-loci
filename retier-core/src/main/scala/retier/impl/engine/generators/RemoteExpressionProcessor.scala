@@ -19,13 +19,13 @@ trait RemoteExpressionProcessor { this: Generation =>
     echo(verbose = true, " Processing remote expressions")
 
     val enclosingName = aggregator.all[EnclosingContext].head.name
-    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
+    val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
     val declStats = ListBuffer.empty[PlacedStatement]
 
     val stats = aggregator.all[PlacedStatement] map { stat =>
       val defs = (stat.expr collect { case tree: DefTree => tree.symbol }).toSet
       stat.copy(expr =
-        new RemoteExpressionGenerator(defs, enclosingName, peerTypes, declStats)
+        new RemoteExpressionGenerator(defs, enclosingName, peerSymbols, declStats)
           transform stat.expr)
     }
 
@@ -38,7 +38,7 @@ trait RemoteExpressionProcessor { this: Generation =>
   }
 
   private class RemoteExpressionGenerator(defs: Set[Symbol],
-    enclosingName: TypeName, peerTypes: List[Type],
+    enclosingName: TypeName, peerSymbols: List[Symbol],
     declStats: ListBuffer[PlacedStatement])
       extends Transformer {
     def processSelectionExpression(expr: Tree, selected: Tree) = {
@@ -149,10 +149,10 @@ trait RemoteExpressionProcessor { this: Generation =>
         val declTypeTree =
           internal setType (typer createTypeTree declType, declType)
 
-        if (!(peerTypes exists { peerType <:< _ }))
+        if (!(peerSymbols contains peerType.typeSymbol))
           c.abort(tree.pos,
             "remote expressions must be assigned to a peer " +
-            "that is defined in the same scope" + peerType + peerTypes)
+            "that is defined in the same scope")
 
         // handle issued types
         val processedRemoteExpr =
@@ -168,11 +168,7 @@ trait RemoteExpressionProcessor { this: Generation =>
           else
             remoteExpr
 
-        val Some(collectedPeerType) = peerTypes collectFirst {
-          case tpe if tpe <:< peerType => tpe
-        }
-
-        val count = declStats count { _.peerType == collectedPeerType }
+        val count = declStats count { _.peerSymbol == peerType.typeSymbol }
         val peerName = peerType.typeSymbol.asType.name
         val name = retierTermName(s"anonymous$$$peerName$$$count")
 
@@ -180,7 +176,7 @@ trait RemoteExpressionProcessor { this: Generation =>
           q"def $name(..$args): $declTypeTree = `<expressionDummy>`")
 
         declStats += PlacedStatement(
-          dummyDefinition, collectedPeerType, exprType,
+          dummyDefinition, peerType.typeSymbol.asType, exprType,
           Some(markRetierSynthetic(exprTypeTree)), None, processedRemoteExpr)
 
         val call = super.transform(

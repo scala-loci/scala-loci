@@ -18,11 +18,11 @@ trait FromExpressionProcessor { this: Generation =>
 
     echo(verbose = true, " Processing from expressions")
 
-    val peerTypes = aggregator.all[PeerDefinition] map { _.peerType }
+    val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
 
     val stats = aggregator.all[PlacedStatement] map { stat =>
       stat.copy(expr =
-        new FromExpressioProcessor(peerTypes) transform stat.expr)
+        new FromExpressioProcessor(peerSymbols) transform stat.expr)
     }
 
     echo(verbose = true,
@@ -31,17 +31,17 @@ trait FromExpressionProcessor { this: Generation =>
     aggregator replace stats
   }
 
-  private class FromExpressioProcessor(peerTypes: List[Type])
+  private class FromExpressioProcessor(peerSymbols: List[TypeSymbol])
       extends Transformer {
     def processFromExpression(exprssValue: List[List[Tree]], tpt: Tree,
         exprssPeer: List[List[Tree]], isRetierSynthetic: Boolean) = {
       val value = exprssValue.head.head
 
       val Seq(_, peerType) = value.tpe.widen.typeArgs
-      val interface = peerInterfaceTree(value, peerType, peerTypes)
+      val interface = peerInterfaceTree(value, peerType, peerSymbols)
 
       val typeTree = tpt.typeTree(abortOnFailure = true)
-      val typeTag = peerTypeTagTree(typeTree, tpt.tpe, peerTypes)
+      val typeTag = peerTypeTagTree(typeTree, tpt.tpe, peerSymbols)
 
       val messageUnexpectedTree = "identifier expected"
       val messageUnexpectedMethodTree = messageUnexpectedTree +
