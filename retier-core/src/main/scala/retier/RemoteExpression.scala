@@ -10,16 +10,19 @@ protected final abstract class RemoteSelectionExpression[P <: Peer] {
     (implicit ev: FirstIfNotEmptyElseSecond[P, P0, `P'`]): RemoteExpression[`P'`, fromMultiple]
 }
 
-protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
-    extends RemoteExpressionUsing[P, placed] {
+protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
         ev1: PlacingTypes[P, T, U],
         ev2: PeerConnection[L#Connection, P, _]): U placed P
-  def using[V0, T0](v0: V0)
+  def capture[T, U, L <: Peer]
+    (v: LocalDeclaration*)
+    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
-        ev: ValueTypes[V0, T0]): RemoteUsingExpression[P, placed, T0]
+        ev0: LocalPeer[L],
+        ev1: PlacingTypes[P, T, U],
+        ev2: PeerConnection[L#Connection, P, _]): U placed P
   def call[T, L <: Peer, P0 >: P <: Peer, `P'` <: Peer](method: RemoteMethod[T, P0])
     (implicit
         ev0: LocalPeer[L],
@@ -37,18 +40,7 @@ protected final abstract class RemoteSettingExpression[T, P <: Peer, L <: Peer, 
   def :=(v: T localOn L): Unit placed P
 }
 
-protected final abstract class RemoteUsingExpression[P <: Peer, placed[_, _ <: Peer], T0] {
-  def in[T, U, L <: Peer]
-    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` (
-      T0 => T))
-    (implicit
-        ev0: LocalPeer[L],
-        ev1: PlacingTypes[P, T, U],
-        ev2: PeerConnection[L#Connection, P, _]): U placed P
-}
-
-protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <: Peer]]
-    extends RemoteExpressionIssuedUsing[P, placed] {
+protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, I, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
@@ -56,15 +48,9 @@ protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <:
         ev2: IssuingTypes[L, I, U],
         ev3: PeerConnection[L#Connection, P, _],
         ev4: PeerConnection[P#Connection, L, _]): U placed P
-  def using[V0, T0](v0: V0)
-    (implicit
-        ev: ValueTypes[V0, T0]): RemoteIssuedUsingExpression[P, placed, T0]
-}
-
-protected final abstract class RemoteIssuedUsingExpression[P <: Peer, placed[_, _ <: Peer], T0] {
-  def in[T, U, I, L <: Peer]
-    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` (
-      T0 => T))
+  def capture[T, U, I, L <: Peer]
+    (v: LocalDeclaration*)
+    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
         ev1: PlacingTypes[P, T, I],

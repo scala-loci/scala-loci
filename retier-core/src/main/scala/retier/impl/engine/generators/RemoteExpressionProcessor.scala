@@ -102,44 +102,24 @@ trait RemoteExpressionProcessor { this: Generation =>
 
       case q"$_[..$_](...$_)"
           if symbols.remote contains tree.symbol =>
-        val (exprBase, values, expr) = tree match {
-          case q"$expr.$_[..$_].$_[..$_](...$values).$_[..$_](...$exprss)"
-              if symbols.remoteIssuedUsingIn contains tree.symbol =>
-            (expr, values.head, exprss.head.head)
-          case q"$expr.$_[..$_](...$values).$_[..$_](...$exprss)"
-              if symbols.remoteUsingIn contains tree.symbol =>
-            (expr, values.head, exprss.head.head)
+        // decompose tree
+        val (exprBase, exprss) = tree match {
           case q"$expr.$_[..$_].$_[..$_](...$exprss)"
-              if symbols.remoteIssuedApply == tree.symbol =>
-            (expr, List.empty, exprss.head.head)
+              if symbols.remoteIssued contains tree.symbol =>
+            (expr, exprss)
           case q"$expr.$_[..$_](...$exprss)" =>
-            (expr, List.empty, exprss.head.head)
+            (expr, exprss)
         }
 
-        val (remoteExpr, args) =
-          if (values.isEmpty) {
-            val q"(..$_) => $exprRemote" = expr
-            (transform(exprRemote), List.empty)
-          }
-          else {
-            val q"(..$_) => (..$args) => $exprRemote" = expr
-            (transform(exprRemote), args)
+        val (expr, args) =
+          exprss match {
+            case List(values, List(expr), _) =>
+              (expr, values)
+            case List(List(expr), _) =>
+              (expr, List.empty)
           }
 
-        val localDefs = (expr collect {
-          case tree: DefTree => tree.symbol
-        }).toSet
-        val refs = expr collect {
-          case tree: RefTree => tree.symbol -> tree.pos
-        }
-
-        refs foreach { case (ref, pos) =>
-          if ((defs contains ref) && !(localDefs contains ref))
-            c.abort(pos,
-              "remote value is not locally available " +
-              "(remote values can be transferred via `using in` clause)")
-        }
-
+        // decompose types
         val Seq(exprType, peerType) = tree.tpe.typeArgs
         val exprTypeTree =
           internal setType (typer createTypeTree exprType, exprType)
@@ -153,6 +133,94 @@ trait RemoteExpressionProcessor { this: Generation =>
           c.abort(tree.pos,
             "remote expressions must be assigned to a peer " +
             "that is defined in the same scope")
+
+        // handle captured values
+        val capturedArgs = args.zipWithIndex collect {
+          case (arg @ (Select(_, _) | Ident(_)), index) =>
+            val (typeTree, value) =
+              if (arg.tpe <:< types.localOn) {
+                val Seq(placedArg, peer) = arg.typeArgTrees
+
+                if (peer.tpe.typeSymbol == peerType.typeSymbol)
+                  c.warning(arg.pos, "captured value shadows placed value")
+
+                val issuedArg =
+                  if (types.issuedPlacing exists { placedArg.tpe <:< _ })
+                    placedArg.typeArgTrees.last
+                  else
+                    placedArg
+
+                val valueOp = markRetierSynthetic(
+                  internal setSymbol (q"`<ValueOpDummy>`", symbols.valueOp),
+                  arg.pos)
+
+                (issuedArg, q"$valueOp($arg).value")
+              }
+              else
+                (arg.typeTree, arg)
+
+            val name = retierTermName(s"arg$$$index")
+            val ref = internal setType (q"$name", typeTree.tpe)
+            val valDef = ValDef(
+              Modifiers(Flag.PARAM), name, typeTree, EmptyTree)
+
+            (arg.symbol, ref, valDef, value)
+
+          case (arg, _) =>
+            c.abort(arg.pos, "identifier expected")
+        }
+
+        val declArgs = capturedArgs map { case (_, _, valDef, _) => valDef }
+        val valueArgs = capturedArgs map { case (_, _, _, value) => value }
+
+        val capturedDefs = (capturedArgs map { case (symbol, ref, _, _) =>
+          symbol -> ref
+        }).toMap
+
+        val localDefs = (expr collect {
+          case tree: DefTree if tree.symbol != NoSymbol => tree.symbol
+        }).toSet
+
+        val transmittingRefs = (expr collect {
+          case tree @ q"$expr[..$_](...$exprss)"
+            if (symbols.transmit contains tree.symbol) ||
+               (symbols.fromExpression == expr.symbol) => exprss
+          case tree @ q"new $expr[..$_](...$exprss)"
+            if expr.tpe <:< types.fromExpression => exprss
+        } map {
+          _.headOption flatMap { _.headOption }
+        } collect {
+            case Some(q"$expr[..$_](...$_)") => expr
+        }).toSet
+
+        object referenceTreeProcessor extends Transformer {
+          override def transform(tree: Tree) = tree match {
+            case _ if transmittingRefs contains tree =>
+              tree
+
+            case tree: RefTree
+                if tree.symbol != NoSymbol && !tree.isRetierSynthetic =>
+              if (capturedDefs contains tree.symbol)
+                internal setType (q"${capturedDefs(tree.symbol)}", tree.tpe)
+              else if (localDefs contains tree.symbol)
+                super.transform(tree)
+              else if ((defs contains tree.symbol) ||
+                       (tree.tpe <:< types.localOn &&
+                        peerType.typeSymbol.asType.toType <:!<
+                          tree.tpe.typeArgs.last.typeSymbol.asType.toType))
+                c.abort(tree.pos,
+                  "remote value is not locally available " +
+                  "(remote values can be transferred via `capture` clause)")
+              else
+                super.transform(tree)
+
+            case _ =>
+              super.transform(tree)
+          }
+        }
+
+        val q"(..$_) => $exprRemote" = expr
+        val remoteExpr = referenceTreeProcessor transform transform(exprRemote)
 
         // handle issued types
         val processedRemoteExpr =
@@ -168,19 +236,20 @@ trait RemoteExpressionProcessor { this: Generation =>
           else
             remoteExpr
 
+        // generate synthetic placed expression
         val count = declStats count { _.peerSymbol == peerType.typeSymbol }
         val peerName = peerType.typeSymbol.asType.name
         val name = retierTermName(s"anonymous$$$peerName$$$count")
 
         val dummyDefinition = markRetierSynthetic(
-          q"def $name(..$args): $declTypeTree = `<expressionDummy>`")
+          q"def $name(..$declArgs): $declTypeTree = `<expressionDummy>`")
 
         declStats += PlacedStatement(
           dummyDefinition, peerType.typeSymbol.asType, exprType,
           Some(markRetierSynthetic(exprTypeTree)), None, processedRemoteExpr)
 
         val call = super.transform(
-          internal setType (q"$enclosingName.this.$name(..$values)", declType))
+          internal setType (q"$enclosingName.this.$name(..$valueArgs)", declType))
         processSelectionExpression(exprBase, call)
 
       case _ =>

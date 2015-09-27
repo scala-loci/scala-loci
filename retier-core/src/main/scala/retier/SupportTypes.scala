@@ -39,9 +39,28 @@ protected object IssuingTypes {
 @implicitNotFound("Value not accessible remotely")
 protected final abstract class ValueTypes[T, U]
 
-protected object ValueTypes {
-  implicit def nonPlacedValue[T]
-    (implicit ev: T <:!< (_ localOn _)): ValueTypes[T, T] = `#macro`
+protected trait ValueTypesFallback {
+  implicit def placedRemoteValue[T, U]
+    (implicit
+        ev0: T <:< (U localOn _),
+        ev1: LocalPeer[_],
+        ev2: CurrentLocalPeerRemoteComputation[_],
+        ev3: U <:!< (_ <=> _)): ValueTypes[T, U] = `#macro`
+  implicit def placedRemoteValueControlledIssued[R <: Remote[Peer], T, U, V]
+    (implicit
+        ev0: T <:< (U localOn _),
+        ev1: LocalPeer[_],
+        ev2: CurrentLocalPeerRemoteComputation[_],
+        ev3: U <:< (R <=> V), ev4: U <:!< (_ <-> _)): ValueTypes[T, R => V] = `#macro`
+  implicit def placedRemoteValueIssued[T, U, V]
+    (implicit
+        ev0: T <:< (U localOn _),
+        ev1: LocalPeer[_],
+        ev2: CurrentLocalPeerRemoteComputation[_],
+        ev3: U <:< (_ <-> V)): ValueTypes[T, V] = `#macro`
+}
+
+protected object ValueTypes extends ValueTypesFallback {
   implicit def placedValue[P <: Peer, T, U]
     (implicit
         ev0: T <:< (U localOn P),

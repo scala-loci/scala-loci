@@ -34,7 +34,7 @@ object RetierBuild extends Build {
   lazy val retierCore = Project(
     id = "retier-core",
     base = file("retier-core"),
-    settings = defaultSettings ++ SourceGenerator.usingExpressions ++ macroparadise ++ macrodeclaration
+    settings = defaultSettings ++ macroparadise ++ macrodeclaration
   )
 
   lazy val retierMarshallableUpickle = Project(
