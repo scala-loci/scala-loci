@@ -38,7 +38,8 @@ trait FromExpressionProcessor { this: Generation =>
       val value = exprssValue.head.head
 
       val Seq(_, peerType) = value.tpe.widen.typeArgs
-      val interface = peerInterfaceTree(value, peerType, peerSymbols)
+      val interface = markRetierSynthetic(
+        peerInterfaceTree(value, peerType, peerSymbols), value.pos)
 
       val typeTree = tpt.typeTree(abortOnFailure = true)
       val typeTag = peerTypeTagTree(typeTree, tpt.tpe, peerSymbols)
@@ -62,7 +63,7 @@ trait FromExpressionProcessor { this: Generation =>
       }
 
       val args =
-        markRetierSynthetic(transmissionProperties, value.pos) +:
+        transmissionProperties +:
         (exprssPeer.headOption.toList flatMap {
           _ map { remote =>
             val tpe = markRetierSynthetic(tq"$Remote[$typeTree]", value.pos)

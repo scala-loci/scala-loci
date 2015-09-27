@@ -119,11 +119,11 @@ trait RemoteExpressionProcessor { this: Generation =>
         val (remoteExpr, args) =
           if (values.isEmpty) {
             val q"(..$_) => $exprRemote" = expr
-            (exprRemote, List.empty)
+            (transform(exprRemote), List.empty)
           }
           else {
             val q"(..$_) => (..$args) => $exprRemote" = expr
-            (exprRemote, args)
+            (transform(exprRemote), args)
           }
 
         val localDefs = (expr collect {

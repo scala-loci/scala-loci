@@ -29,14 +29,6 @@ trait StatementCollector { this: Generation =>
       (peerType, exprType)
     }
 
-    def extractTypeTree(tree: Tree) = {
-      val args = tree.typeTree match {
-        case AppliedTypeTree(_, args) => args
-        case _ => List(EmptyTree)
-      }
-      args.head.typeTree
-    }
-
     def isPlacedType(tpe: Type) =
       tpe != null && tpe <:< types.localOn && (types.bottom forall { tpe <:!< _ })
 
@@ -46,7 +38,7 @@ trait StatementCollector { this: Generation =>
     val stats = aggregator.all[InputStatement] map { _.stat } collect {
       case stat: ValOrDefDef if isPlacedType(stat.tpt.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpt.tpe)
-        val declTypeTree = extractTypeTree(stat.tpt) orElse TypeTree(exprType)
+        val declTypeTree = stat.tpt.typeArgTrees.head
         PlacedStatement(
           stat, peerType.typeSymbol.asType, exprType, Some(declTypeTree), None,
           stat.rhs)

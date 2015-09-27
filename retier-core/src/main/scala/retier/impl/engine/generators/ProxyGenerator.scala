@@ -32,16 +32,6 @@ trait ProxyGenerator { this: Generation =>
       }).mkString
     }
 
-    def extractTypeArgs(tree: Tree, tpe: Type) = {
-      val args = tree.typeTree match {
-        case AppliedTypeTree(_, args) => args
-        case _ => tpe.typeArgs map TypeTree
-      }
-      (args zip tpe.typeArgs) map { case (tree, tpe) =>
-        internal setType (tree.typeTree, tpe)
-      }
-    }
-
     def extractArgumentTypes(args: List[List[ValDef]]) =
       args map { _ map { _.tpt.tpe } }
 
@@ -108,7 +98,7 @@ trait ProxyGenerator { this: Generation =>
         val isIssued = types.issuedPlacing exists { exprType <:< _ }
         val (valueType, valueTypeTree) =
           if (isIssued)
-            (exprType.typeArgs.last, extractTypeArgs(declTypeTree, exprType).last)
+            (exprType.typeArgs.last, declTypeTree.typeArgTrees.last)
           else
             (exprType, declTypeTree)
 
@@ -140,14 +130,18 @@ trait ProxyGenerator { this: Generation =>
             argumentTypesAsTupleTypeTree(argTypes)
 
         val response = {
-          val issuedNullaryDeclTerm =
-            if (isIssued) q"$declTerm(remote)" else declTerm
+          val arguments = applyTupleAsArguments(q"args", argTypes)
+          val declInvocation =
+            if (isIssued)
+              q"""$declTerm(...$arguments)(remote)"""
+            else
+              q"""$declTerm(...$arguments)"""
 
           val response =
             if (isMutable) {
               q"""if (request.isEmpty)
                     $Success(
-                      $localResponseTerm marshall ($issuedNullaryDeclTerm, ref))
+                      $localResponseTerm marshall ($declInvocation, ref))
                   else
                     $remoteRequestTerm unmarshall (request, ref) map { arg =>
                       $declTerm = arg; ""
@@ -155,21 +149,11 @@ trait ProxyGenerator { this: Generation =>
                """
             }
             else {
-              val arguments = applyTupleAsArguments(q"args", argTypes)
-
-              val response =
-                if (isNullary)
-                  q"""$issuedNullaryDeclTerm"""
-                else if (isIssued)
-                  q"""$declTerm(...$arguments)(remote)"""
-                else
-                  q"""$declTerm(...$arguments)"""
-
               val marshalled =
                 if (hasReturnValue)
-                  q"""$localResponseTerm marshall ($response, ref)"""
+                  q"""$localResponseTerm marshall ($declInvocation, ref)"""
                 else
-                  q"""$response; """""
+                  q"""$declInvocation; """""
 
               if (isNullary)
                 q"""$Success($marshalled)"""
@@ -181,10 +165,8 @@ trait ProxyGenerator { this: Generation =>
           }
 
           if (isIssued) {
-            val remoteTypeTree =
-              extractTypeArgs(declTypeTree, exprType).head
-            val peerTypeTree =
-              extractTypeArgs(remoteTypeTree, remoteTypeTree.tpe).head
+            val remoteTypeTree = declTypeTree.typeArgTrees.head
+            val peerTypeTree = remoteTypeTree.typeArgTrees.head
 
             q"""$TryCreate {
                   ref.remote.asRemote[$peerTypeTree].get

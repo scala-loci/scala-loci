@@ -36,7 +36,7 @@ trait TransmissionGenerator { this: Generation =>
     peerSymbols: List[TypeSymbol])
       extends Transformer {
     override def transform(tree: Tree) = tree match {
-      case tree @ q"$_[..$tpts](...$exprss)"
+      case q"$_[..$tpts](...$exprss)"
           if symbols.transmit contains tree.symbol =>
         val Seq(_, _, local, remote, _) = tpts
         val Seq(Seq(value), Seq(_, transmissionProvider)) = exprss
@@ -59,11 +59,13 @@ trait TransmissionGenerator { this: Generation =>
             value
 
           case q"$_.$tname" =>
-            val interface = peerInterfaceTree(value, peerType, peerSymbols)
+            val interface = markRetierSynthetic(
+              peerInterfaceTree(value, peerType, peerSymbols), value.pos)
             q"$interface.$tname"
 
           case q"$_.$tname[..$tpts](...$exprss)" =>
-            val interface = peerInterfaceTree(value, peerType, peerSymbols)
+            val interface = markRetierSynthetic(
+              peerInterfaceTree(value, peerType, peerSymbols), value.pos)
             if (value.isRetierSynthetic)
               q"$interface.$tname[..$tpts](...$exprss)"
             else
@@ -81,10 +83,9 @@ trait TransmissionGenerator { this: Generation =>
 
         val localTypeTag = markRetierSynthetic(localPeerTypeTag, value.pos)
         val remoteTypeTag = markRetierSynthetic(remotePeerTypeTag, value.pos)
-        val props = markRetierSynthetic(transmissionProperties, value.pos)
 
         super.transform(
-          q"$system.$createTransmission($props)($remoteTypeTag, $localTypeTag)")
+          q"$system.$createTransmission($transmissionProperties)($remoteTypeTag, $localTypeTag)")
 
       case _ if tree.tpe != null &&
                 tree.tpe <:< types.transmissionProvider &&

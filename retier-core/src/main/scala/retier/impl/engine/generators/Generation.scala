@@ -260,6 +260,7 @@ trait Generation {
   implicit class TreeOps(val tree: Tree) {
     def isRetierSynthetic: Boolean =
       (internal attachments tree).get[RetierSynthetic.type].nonEmpty
+
     def typeTree: Tree = typeTree(false)
     def typeTree(abortOnFailure: Boolean): Tree = tree match {
       case tree: TypeTree if tree.original != null =>
@@ -279,6 +280,18 @@ trait Generation {
       case _ =>
         tree
     }
+
+    def typeArgTrees: List[Tree] = typeArgTrees(false)
+    def typeArgTrees(abortOnFailure: Boolean): List[Tree] = {
+      val args = tree.typeTree(abortOnFailure) match {
+        case AppliedTypeTree(_, args) => args
+        case _ => tree.tpe.typeArgs map TypeTree
+      }
+      (args zip tree.tpe.typeArgs) map { case (tree, tpe) =>
+        internal setType (tree.typeTree(abortOnFailure), tpe)
+      }
+    }
+
     private[this] def typeTreeGenerationFailed(pos: Position, any: Any) =
       c.abort(pos, s"failed to generate type tree for $any")
   }
