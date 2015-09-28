@@ -71,8 +71,10 @@ trait Generation {
 
     val remote = retier | TypeName("RemoteExpression")
     val remoteSelection = retier | TypeName("RemoteSelectionExpression")
-    val remoteIssuing = retier | TypeName("RemoteIssuingExpression")
     val remoteSetting = retier | TypeName("RemoteSettingExpression")
+    val remoteIssuing = retier | TypeName("RemoteIssuingExpression")
+    val remoteCapturing = retier | TypeName("RemoteCapturingExpression")
+    val remoteIssuedCapturing = retier | TypeName("RemoteIssuedCapturingExpression")
 
     val fromExpression = retier | TypeName("FromExpression")
   }
@@ -87,15 +89,14 @@ trait Generation {
     val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
 
     val remoteApply = types.remote | TermName("apply")
-    val remoteCapture = types.remote | TermName("capture")
     val remoteCall = types.remote | TermName("call")
     val remoteOn = (types.remoteSelection | TermName("on")).alternatives
-    val remoteIssuedApply = types.remoteIssuing | TermName("apply")
-    val remoteIssuedCapture = types.remoteIssuing | TermName("capture")
     val remoteSet = types.remoteSetting | TermName(":=").encodedName
+    val remoteIssuedApply = types.remoteIssuing | TermName("apply")
+    val remoteCaptureApply = types.remoteCapturing | TermName("apply")
+    val remoteIssuedCaptureApply = types.remoteIssuedCapturing | TermName("apply")
 
-    val remoteIssued = Seq(remoteIssuedApply, remoteIssuedCapture)
-    val remote = remoteIssued ++ Seq(remoteApply, remoteCapture)
+    val remote = Seq(remoteIssuedApply, remoteIssuedCaptureApply, remoteApply, remoteCaptureApply)
 
     val fromExpression = types.retier | TermName("FromExpression")
 

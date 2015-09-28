@@ -103,21 +103,19 @@ trait RemoteExpressionProcessor { this: Generation =>
       case q"$_[..$_](...$_)"
           if symbols.remote contains tree.symbol =>
         // decompose tree
-        val (exprBase, exprss) = tree match {
+        val (exprBase, args, expr) = tree match {
+          case q"$expr.$_[..$_].$_[..$_](...$exprssArg).$_[..$_](...$exprss)"
+              if symbols.remoteIssuedCaptureApply == tree.symbol =>
+            (expr, exprssArg.head, exprss.head.head)
+          case q"$expr.$_[..$_](...$exprssArg).$_[..$_](...$exprss)"
+              if symbols.remoteCaptureApply == tree.symbol =>
+            (expr, exprssArg.head, exprss.head.head)
           case q"$expr.$_[..$_].$_[..$_](...$exprss)"
-              if symbols.remoteIssued contains tree.symbol =>
-            (expr, exprss)
+              if symbols.remoteIssuedApply == tree.symbol =>
+            (expr, List.empty, exprss.head.head)
           case q"$expr.$_[..$_](...$exprss)" =>
-            (expr, exprss)
+            (expr, List.empty, exprss.head.head)
         }
-
-        val (expr, args) =
-          exprss match {
-            case List(values, List(expr), _) =>
-              (expr, values)
-            case List(List(expr), _) =>
-              (expr, List.empty)
-          }
 
         // decompose types
         val Seq(exprType, peerType) = tree.tpe.typeArgs
