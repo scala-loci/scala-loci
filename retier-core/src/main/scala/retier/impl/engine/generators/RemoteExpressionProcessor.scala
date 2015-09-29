@@ -41,13 +41,13 @@ trait RemoteExpressionProcessor { this: Generation =>
     enclosingName: TypeName, peerSymbols: List[Symbol],
     declStats: ListBuffer[PlacedStatement])
       extends Transformer {
-    def processSelectionExpression(expr: Tree, selected: Tree) = {
-      val (remoteExpr, selectionTree) = expr match {
-        case tree @ q"$expr.$_[..$_](...$exprss)"
+    def processSelectionExpression(tree: Tree, selected: Tree) = {
+      val (remoteExpr, selectionTree) = tree match {
+        case q"$expr.$_[..$_](...$exprss)"
             if symbols.remoteOn contains tree.symbol =>
           (expr, Some(exprss.head))
         case _ =>
-          (expr, None)
+          (tree, None)
       }
 
       val q"$_[$tpt]" = remoteExpr
@@ -67,11 +67,26 @@ trait RemoteExpressionProcessor { this: Generation =>
       }
     }
 
-    override def transform(tree: Tree) = tree match {
+    def processTypedWrapper(tree: Tree, tpe: Option[Type]) = tpe match {
+      case Some(tpe) =>
+        val remoteExpression = markRetierSynthetic(
+          internal setSymbol (
+            q"`<RemoteExpressionDummy>`",
+            symbols.remoteApply),
+          tree.pos)
+
+        internal setType (q"$remoteExpression($tree)", tpe)
+
+      case _ =>
+        tree
+    }
+
+    def process(tree: Tree, wrapperType: Option[Type]) = tree match {
       case q"$expr.$_[..$_](...$exprss)"
           if symbols.remoteCall == tree.symbol =>
         val call = super.transform(exprss.head.head)
-        processSelectionExpression(expr, call)
+        processTypedWrapper(
+          processSelectionExpression(expr, call), wrapperType)
 
       case q"$expr.$_[..$_](...$exprssIdentifier).$_[..$_](...$exprssValue)"
           if symbols.remoteSet == tree.symbol =>
@@ -98,27 +113,31 @@ trait RemoteExpressionProcessor { this: Generation =>
           internal typeRef (pre, sym, List(definitions.UnitTpe, peerType))
 
         val call = super.transform(internal setType (q"$setter($value)", tpe))
-        processSelectionExpression(expr, call)
+        processTypedWrapper(
+          processSelectionExpression(expr, call), wrapperType)
 
       case q"$_[..$_](...$_)"
           if symbols.remote contains tree.symbol =>
         // decompose tree
         val (exprBase, args, expr) = tree match {
           case q"$expr.$_[..$_].$_[..$_](...$exprssArg).$_[..$_](...$exprss)"
-              if symbols.remoteIssuedCaptureApply == tree.symbol =>
+              if tree.symbol == symbols.remoteIssuedCaptureApply =>
             (expr, exprssArg.head, exprss.head.head)
           case q"$expr.$_[..$_](...$exprssArg).$_[..$_](...$exprss)"
-              if symbols.remoteCaptureApply == tree.symbol =>
+              if tree.symbol == symbols.remoteCaptureApply =>
             (expr, exprssArg.head, exprss.head.head)
           case q"$expr.$_[..$_].$_[..$_](...$exprss)"
-              if symbols.remoteIssuedApply == tree.symbol =>
+              if tree.symbol == symbols.remoteIssuedApply =>
             (expr, List.empty, exprss.head.head)
           case q"$expr.$_[..$_](...$exprss)" =>
             (expr, List.empty, exprss.head.head)
         }
 
         // decompose types
-        val Seq(exprType, peerType) = tree.tpe.typeArgs
+        val peerType = tree.tpe.typeArgs.last
+        val exprType =
+          if (wrapperType.isEmpty) tree.tpe.typeArgs.head
+          else definitions.UnitTpe
         val exprTypeTree =
           internal setType (typer createTypeTree exprType, exprType)
 
@@ -247,11 +266,23 @@ trait RemoteExpressionProcessor { this: Generation =>
           Some(markRetierSynthetic(exprTypeTree)), None, processedRemoteExpr)
 
         val call = super.transform(
-          internal setType (q"$enclosingName.this.$name(..$valueArgs)", declType))
-        processSelectionExpression(exprBase, call)
+          internal setType (
+            q"$enclosingName.this.$name(..$valueArgs)",
+            declType))
+        processTypedWrapper(
+          processSelectionExpression(exprBase, call), wrapperType)
 
       case _ =>
         super.transform(tree)
+    }
+
+    override def transform(tree: Tree) = tree match {
+      case q"$expr[..$tpts](...$exprss)"
+          if symbols.transmit contains tree.symbol =>
+        val transformedExprss = exprss map { _ map { process(_, None) } }
+        q"$expr[..$tpts](...$transformedExprss)"
+      case _ =>
+        process(tree, Some(tree.tpe))
     }
   }
 }

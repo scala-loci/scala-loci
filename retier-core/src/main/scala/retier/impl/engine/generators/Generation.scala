@@ -132,6 +132,7 @@ trait Generation {
     val createMultipleTransmission = TermName("createMultipleTransmission")
     val createOptionalTransmission = TermName("createOptionalTransmission")
     val createSingleTransmission = TermName("createSingleTransmission")
+    val executeTransmission = TermName("executeTransmission")
     val system = retierTermName("system")
     val implementation = retierTypeName("peer")
     val interface = retierTermName("peer")
