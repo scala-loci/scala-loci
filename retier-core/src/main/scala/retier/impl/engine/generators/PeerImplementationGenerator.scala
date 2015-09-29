@@ -26,14 +26,17 @@ trait PeerImplementationGenerator { this: Generation =>
       val originalTypeName = originalName.toTypeName
       val originalTermName = originalName.toTermName
 
-      def isPlaced(tpe: Type): Boolean = tpe != null && tpe <:< types.localOn
+      def isPlaced(tpe: Type): Boolean =
+        tpe != null && tpe.finalResultType <:< types.localOn
 
       def isPlaced(tree: Tree): Boolean =
         isPlaced(tree.tpe) ||
-        (tree.symbol.isMethod &&
-         isPlaced(tree.symbol.asMethod.accessed.typeSignature.finalResultType))
+        (tree.symbol.isTerm && tree.symbol.asTerm.isAccessor &&
+         isPlaced(tree.symbol.asMethod.accessed.typeSignature))
 
       override def transform(tree: Tree) = tree match {
+        case tree: TypeTree if tree.original != null =>
+          internal setOriginal (tree, transform(tree.original))
         case ClassDef(_, `originalTypeName`, _, _) => tree
         case ModuleDef(_, `originalTermName`, _) => tree
         case Select(This(`originalTypeName`), _)

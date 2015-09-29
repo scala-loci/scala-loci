@@ -3,6 +3,7 @@ package impl
 package engine
 
 import org.scalamacros.resetallattrs._
+import scala.collection.mutable.Stack
 import scala.reflect.macros.blackbox.Context
 import scala.reflect.macros.TypecheckException
 
@@ -69,9 +70,10 @@ class Typer[C <: Context](val c: C) {
    */
   def untypecheck(tree: Tree): Tree =
     c untypecheck
-      (typeApplicationCleaner transform
-        (syntheticImplicitParamListCleaner transform
-          fixTypecheck(tree, abortWhenUnfixable = true)))
+      (selfReferenceFixer transform
+        (typeApplicationCleaner transform
+          (syntheticImplicitParamListCleaner transform
+            fixTypecheck(tree, abortWhenUnfixable = true))))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -87,9 +89,10 @@ class Typer[C <: Context](val c: C) {
    */
   def untypecheckAll(tree: Tree): Tree =
     c resetAllAttrs
-      (typeApplicationCleaner transform
-        (syntheticImplicitParamListCleaner transform
-          fixTypecheck(tree, abortWhenUnfixable = true)))
+      (selfReferenceFixer transform
+        (typeApplicationCleaner transform
+          (syntheticImplicitParamListCleaner transform
+            fixTypecheck(tree, abortWhenUnfixable = true))))
 
   /**
    * Cleans the flag set of the given modifiers.
@@ -240,12 +243,17 @@ class Typer[C <: Context](val c: C) {
 
   private object nonSyntheticTreeMarker extends Transformer {
     override def transform(tree: Tree) = tree match {
-      case tree @ Apply(_, _) =>
+      case Apply(_, _) =>
         internal updateAttachment (tree, NonSyntheticTree)
         internal removeAttachment[SyntheticTree.type] tree
         super.transform(tree)
 
-      case tree @ ValDef(_, _, tpt, _) =>
+      case ValDef(_, _, tpt, _) =>
+        internal updateAttachment (tpt, NonSyntheticTree)
+        internal removeAttachment[SyntheticTree.type] tpt
+        super.transform(tree)
+
+      case DefDef(_, _, _, _, tpt, _) =>
         internal updateAttachment (tpt, NonSyntheticTree)
         internal removeAttachment[SyntheticTree.type] tpt
         super.transform(tree)
@@ -259,7 +267,7 @@ class Typer[C <: Context](val c: C) {
 
   private object syntheticTreeMarker extends Transformer {
     override def transform(tree: Tree) = tree match {
-      case tree @ Apply(_, _) =>
+      case Apply(_, _) =>
         val hasImplicitParamList =
           tree.symbol != null &&
           tree.symbol.isMethod &&
@@ -277,7 +285,14 @@ class Typer[C <: Context](val c: C) {
 
         super.transform(tree)
 
-      case tree @ ValDef(_, _, tpt, _) =>
+      case ValDef(_, _, tpt, _) =>
+        if ((internal attachments tpt).get[NonSyntheticTree.type].isEmpty)
+          internal updateAttachment (tpt, SyntheticTree)
+        else
+          internal removeAttachment[NonSyntheticTree.type] tpt
+        super.transform(tree)
+
+      case DefDef(_, _, _, _, tpt, _) =>
         if ((internal attachments tpt).get[NonSyntheticTree.type].isEmpty)
           internal updateAttachment (tpt, SyntheticTree)
         else
@@ -292,7 +307,7 @@ class Typer[C <: Context](val c: C) {
 
   private object syntheticImplicitParamListCleaner extends Transformer {
     override def transform(tree: Tree) = tree match {
-      case tree @ Apply(fun, _) =>
+      case Apply(fun, _) =>
         if ((internal attachments tree).get[SyntheticTree.type].nonEmpty)
           super.transform(fun)
         else
@@ -346,6 +361,52 @@ class Typer[C <: Context](val c: C) {
             mods, name, transformTypeDefs(tparams), transformValDefss(vparamss),
             typeApplicationCleaner transform tpt, transform(rhs)),
           tree.pos)
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+
+  private def selfReferenceFixer = new Transformer {
+    val stack = Stack.empty[(TypeName, Set[Name])]
+
+    override def transform(tree: Tree) = tree match {
+      case implDef: ImplDef =>
+        stack push implDef.name.toTypeName -> (
+          (implDef.impl.parents flatMap { parent =>
+            if (parent.symbol.isType)
+              parent.symbol.asType.toType.members map { _.name }
+            else
+              Iterable.empty
+          }) ++
+          (implDef.impl.body collect {
+            case defTree: DefTree => defTree.name
+          })
+        ).toSet
+
+        val tree = super.transform(implDef)
+        stack.pop
+        tree
+
+      case Select(thisTree @ This(thisName), selectedName) =>
+        val lookupResult = stack collectFirst {
+          case (name, names) if name == thisName =>
+            names contains selectedName
+        }
+
+        lookupResult match {
+          case Some(false) =>
+            val ident = Ident(selectedName)
+            if (tree.pos != NoPosition)
+              internal setPos (ident, tree.pos)
+            else
+              internal setPos (ident, thisTree.pos)
+            internal setType (ident, tree.tpe)
+
+          case _ =>
+            tree
+        }
+
       case _ =>
         super.transform(tree)
     }
@@ -466,6 +527,31 @@ class Typer[C <: Context](val c: C) {
             internal setType (newValDef, valDef.tpe)
             internal setPos (newValDef, valDef.pos)
           } getOrElse newValDef
+
+        // fix defs
+        case defDef @ DefDef(mods, name, tparams, vparamss, tpt, rhs)
+            if tree.symbol.isTerm =>
+          val flags = cleanModifiers(mods).flags
+          val privateWithin =
+            if (defDef.symbol.asTerm.privateWithin != NoSymbol)
+              defDef.symbol.asTerm.privateWithin.name
+            else
+              mods.privateWithin
+          val defAnnotations =
+            defDef.symbol.annotations map {
+              annotation => transform(annotation.tree)
+            } filterNot { annotation =>
+              mods.annotations exists { _ equalsStructure annotation }
+            }
+          val annotations = mods.annotations ++ defAnnotations
+          val newDefDef = DefDef(
+            Modifiers(flags, privateWithin, annotations), name,
+            super.transformTypeDefs(tparams),
+            super.transformValDefss(vparamss),
+            super.transform(tpt),
+            super.transform(rhs))
+          internal setType (newDefDef, defDef.tpe)
+          internal setPos (newDefDef, defDef.pos)
 
         // abort on case class
         case ClassDef(mods, _, _, _)
