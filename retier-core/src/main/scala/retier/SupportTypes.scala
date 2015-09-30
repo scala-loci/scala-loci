@@ -24,16 +24,20 @@ protected object PlacingTypes {
 protected final abstract class IssuingTypes[R <: Peer, T, U]
 
 protected object IssuingTypes {
+  implicit def issuedType[R <: Peer, T]
+    (implicit
+        ev0: T <:!< (Remote[R] <=> _),
+        ev1: T <:!< (Remote[R] <-> _),
+        ev2: T <:!< (Remote[R] => _)): IssuingTypes[R, T, Remote[R] <-> T] = `#macro`
   implicit def controlledIssuedType[R <: Peer, T, U]
     (implicit
-        ev0: T <:< (Remote[R] => U),
-        ev1: T <:!< (Remote[R] <-> U)): IssuingTypes[R, T, Remote[R] <=> U] = `#macro`
+        ev: T <:< (Remote[R] => U)): IssuingTypes[R, T, Remote[R] <=> U] = `#macro`
   implicit def issuedTypePassed[R <: Peer, T, U]
     (implicit
         ev: T <:< (Remote[R] <-> U)): IssuingTypes[R, T, Remote[R] <-> U] = `#macro`
-  implicit def issuedTypeLifted[R <: Peer, T]
+  implicit def controlledIssuedTypePassed[R <: Peer, T, U]
     (implicit
-        ev: T <:!< (_ => _)): IssuingTypes[R, T, Remote[R] <-> T] = `#macro`
+        ev: T <:< (Remote[R] <=> U)): IssuingTypes[R, T, Remote[R] <=> U] = `#macro`
 }
 
 @implicitNotFound("Value not accessible remotely")
@@ -45,13 +49,14 @@ protected trait ValueTypesFallback {
         ev0: T <:< (U localOn _),
         ev1: LocalPeer[_],
         ev2: CurrentLocalPeerRemoteComputation[_],
-        ev3: U <:!< (_ <=> _)): ValueTypes[T, U] = `#macro`
+        ev3: U <:!< (_ <=> _),
+        ev4: U <:!< (_ <-> _)): ValueTypes[T, U] = `#macro`
   implicit def placedRemoteValueControlledIssued[R <: Remote[Peer], T, U, V]
     (implicit
         ev0: T <:< (U localOn _),
         ev1: LocalPeer[_],
         ev2: CurrentLocalPeerRemoteComputation[_],
-        ev3: U <:< (R <=> V), ev4: U <:!< (_ <-> _)): ValueTypes[T, R => V] = `#macro`
+        ev3: U <:< (R <=> V)): ValueTypes[T, R => V] = `#macro`
   implicit def placedRemoteValueIssued[T, U, V]
     (implicit
         ev0: T <:< (U localOn _),
@@ -65,12 +70,13 @@ protected object ValueTypes extends ValueTypesFallback {
     (implicit
         ev0: T <:< (U localOn P),
         ev1: LocalPeer[P],
-        ev2: U <:!< (_ <=> _)): ValueTypes[T, U] = `#macro`
+        ev2: U <:!< (_ <=> _),
+        ev3: U <:!< (_ <-> _)): ValueTypes[T, U] = `#macro`
   implicit def placedValueControlledIssued[P <: Peer, R <: Remote[Peer], T, U, V]
     (implicit
         ev0: T <:< (U localOn P),
         ev1: LocalPeer[P],
-        ev2: U <:< (R <=> V), ev3: U <:!< (_ <-> _)): ValueTypes[T, R => V] = `#macro`
+        ev2: U <:< (R <=> V)): ValueTypes[T, R => V] = `#macro`
   implicit def placedValueIssued[P <: Peer, T, U, V]
     (implicit
         ev0: T <:< (U localOn P),

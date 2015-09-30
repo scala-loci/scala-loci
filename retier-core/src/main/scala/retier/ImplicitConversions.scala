@@ -16,10 +16,10 @@ protected trait ImplicitConversions {
   implicit def $$retier$discardValue[P <: Peer](v: _ localOn P): Unit on P = `#macro`
 
   implicit def $$retier$issueValue[P <: Peer, R <: Remote[Peer], T](v: T localOn P)
-    (implicit ev: T <:!< (_ <=> _)): R <-> T on P = `#macro`
+    (implicit ev0: T <:!< (_ <=> _), ev1: T <:!< (_ <-> _)): R <-> T on P = `#macro`
 
   implicit def $$retier$issueValueControlled[P <: Peer, R <: Remote[Peer], T, U](v: T localOn P)
-    (implicit ev0: T <:!< (_ <=> _), ev1: T <:< (R => U)): R <=> U on P = `#macro`
+    (implicit ev: T <:< (R => U)): R <=> U on P = `#macro`
 
 
   final implicit def $$retier$liftValueGlobally[P <: Peer, T](v: T)

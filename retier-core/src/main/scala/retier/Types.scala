@@ -9,6 +9,13 @@ sealed trait sharedOn[+T, P <: Peer] extends Any
   with (T localOn P)
 
 
+// issued types
+
+sealed trait <=>[-P <: Remote[Peer], +T] extends Any
+
+sealed trait <->[-P <: Remote[Peer], +T] extends Any
+
+
 // remote reference type
 
 sealed trait Remote[+P <: Peer] extends Any with Equals
@@ -32,16 +39,3 @@ private trait SingleSelectionImplBase[+T, P <: Peer]
 
 private trait MultipleSelectionImplBase[+T, P <: Peer]
   extends (T fromMultiple P)
-
-
-// issued types
-
-sealed trait <=>[-P <: Remote[Peer], +T] extends (P => T)
-
-sealed trait <->[-P <: Remote[Peer], +T] extends (P <=> T)
-
-private trait ControlledIssuedValueImplBase[-P <: Remote[Peer], +T]
-  extends (P <=> T)
-
-private trait IssuedValueImplBase[-P <: Remote[Peer], +T]
-  extends (P <-> T)

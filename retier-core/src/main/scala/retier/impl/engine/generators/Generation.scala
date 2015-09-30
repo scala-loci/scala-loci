@@ -52,7 +52,8 @@ trait Generation {
     val issuedControlled = typeOf[_ <=> _]
 
     val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
-    val issuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+    val controlledIssuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+    val issuedPlacing = Seq(typeOf[_ <-> _], typeOf[(_ <-> _) localOn _])
 
     val from = typeOf[_ from _]
     val fromSingle = typeOf[_ fromSingle _]
@@ -168,8 +169,6 @@ trait Generation {
     val MultipleConnection = q"$root.retier.impl.MultipleConnection"
     val TransmissionProperties = tq"$root.retier.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"$root.retier.impl.TransmissionProperties.create"
-    val IssuedValueCreate = q"$root.retier.impl.IssuedValue.create"
-    val ControlledIssuedValueCreate = q"$root.retier.impl.ControlledIssuedValue.create"
     val System = tq"$root.retier.impl.System"
   }
 

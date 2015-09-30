@@ -79,27 +79,13 @@ trait PlacedExpressionsProcessor { this: Generation =>
         else
           (overridingDecl, expr)
 
-        // handle issued types
-        val processedPlacedExpr =
-          if (exprType <:< types.issuedControlled &&
-              exprType <:!< types.issued &&
-              (types.functionPlacing exists { placedExpr.tpe <:< _ }))
-            q"""${markRetierSynthetic(ControlledIssuedValueCreate)}[
-                ..${exprType.typeArgs}]($placedExpr)"""
-          else if (exprType <:< types.issuedControlled &&
-                   (types.issuedPlacing forall { placedExpr.tpe <:!< _ }))
-            q"""${markRetierSynthetic(IssuedValueCreate)}[
-                ..${exprType.typeArgs}]($placedExpr)"""
-          else
-            placedExpr
-
         if (expr.symbol == symbols.placedIssuedApply && declTypeTree.isEmpty)
           c.abort(tree.pos, "issuing must be part of a declaration")
 
         // construct new placed statement
         // with the actual placed expression syntactic construct removed
         PlacedStatement(tree, peerSymbol, exprType, declTypeTree,
-          processedOverridingDecl, processedPlacedExpr)
+          processedOverridingDecl, placedExpr)
     }
 
     def dropPrecedingGlobalCasts

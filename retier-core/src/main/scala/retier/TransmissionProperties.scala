@@ -10,7 +10,8 @@ object TransmissionProperties {
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (T sharedOn R),
-        value: T <:!< (_ <=> _),
+        nonControlledIssued: T <:!< (_ <=> _),
+        nonIssued: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
     TransmissionProperties[V, T, R, L, M] = `#macro`
@@ -19,7 +20,8 @@ object TransmissionProperties {
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (T from R),
-        value: T <:!< (_ <=> _),
+        nonControlledIssued: T <:!< (_ <=> _),
+        nonIssued: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
     TransmissionProperties[V, T, R, L, M] = `#macro`
@@ -28,7 +30,8 @@ object TransmissionProperties {
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (T fromSingle R),
-        value: T <:!< (_ <=> _),
+        nonControlledIssued: T <:!< (_ <=> _),
+        nonIssued: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
     TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
@@ -37,12 +40,13 @@ object TransmissionProperties {
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (T fromMultiple R),
-        value: T <:!< (_ <=> _),
+        nonControlledIssued: T <:!< (_ <=> _),
+        nonIssued: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
     TransmissionProperties[V, T, R, L, MultipleConnection] = `#macro`
 
-  implicit def issuedTransmission
+  implicit def controlledIssuedTransmission
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (Remote[P] <=> T sharedOn R),
@@ -51,7 +55,7 @@ object TransmissionProperties {
         dispatched: L <:< P):
     TransmissionProperties[V, T, R, L, M] = `#macro`
 
-  implicit def issuedTransmissionFromSelected
+  implicit def controlledIssuedTransmissionFromSelected
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (Remote[P] <=> T from R),
@@ -60,7 +64,7 @@ object TransmissionProperties {
         dispatched: L <:< P):
     TransmissionProperties[V, T, R, L, M] = `#macro`
 
-  implicit def issuedTransmissionFromSelectedSingle
+  implicit def controlledIssuedTransmissionFromSelectedSingle
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (Remote[P] <=> T fromSingle R),
@@ -69,10 +73,46 @@ object TransmissionProperties {
         dispatched: L <:< P):
     TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
 
-  implicit def issuedTransmissionFromSelectedMultiple
+  implicit def controlledIssuedTransmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
     (implicit
         transmittable: V <:< (Remote[P] <=> T fromMultiple R),
+        localPeer: LocalPeer[L],
+        connection: PeerConnection[L#Connection, R, M],
+        dispatched: L <:< P):
+    TransmissionProperties[V, T, R, L, MultipleConnection] = `#macro`
+
+  implicit def issuedTransmission
+    [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
+    (implicit
+        transmittable: V <:< (Remote[P] <-> T sharedOn R),
+        localPeer: LocalPeer[L],
+        connection: PeerConnection[L#Connection, R, M],
+        dispatched: L <:< P):
+    TransmissionProperties[V, T, R, L, M] = `#macro`
+
+  implicit def issuedTransmissionFromSelected
+    [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
+    (implicit
+        transmittable: V <:< (Remote[P] <-> T from R),
+        localPeer: LocalPeer[L],
+        connection: PeerConnection[L#Connection, R, M],
+        dispatched: L <:< P):
+    TransmissionProperties[V, T, R, L, M] = `#macro`
+
+  implicit def issuedTransmissionFromSelectedSingle
+    [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
+    (implicit
+        transmittable: V <:< (Remote[P] <-> T fromSingle R),
+        localPeer: LocalPeer[L],
+        connection: PeerConnection[L#Connection, R, M],
+        dispatched: L <:< P):
+    TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
+
+  implicit def issuedTransmissionFromSelectedMultiple
+    [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
+    (implicit
+        transmittable: V <:< (Remote[P] <-> T fromMultiple R),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):

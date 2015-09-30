@@ -154,34 +154,29 @@ trait RemoteExpressionProcessor { this: Generation =>
         // handle captured values
         val capturedArgs = args.zipWithIndex collect {
           case (arg @ (Select(_, _) | Ident(_)), index) =>
-            val (typeTree, value) =
-              if (arg.tpe <:< types.localOn) {
+            val typeTree =
+              if ((arg.tpe <:< types.localOn) &&
+                  (types.bottom forall { arg.tpe <:!< _ })) {
                 val Seq(placedArg, peer) = arg.typeArgTrees
 
                 if (peer.tpe.typeSymbol == peerType.typeSymbol)
                   c.warning(arg.pos, "captured value shadows placed value")
 
-                val issuedArg =
-                  if (types.issuedPlacing exists { placedArg.tpe <:< _ })
-                    placedArg.typeArgTrees.last
-                  else
-                    placedArg
-
-                val valueOp = markRetierSynthetic(
-                  internal setSymbol (q"`<ValueOpDummy>`", symbols.valueOp),
-                  arg.pos)
-
-                (issuedArg, q"$valueOp($arg).value")
+                if ((types.issuedPlacing exists { placedArg.tpe <:< _ }) &&
+                    (types.bottom forall { placedArg.tpe <:!< _ }))
+                  placedArg.typeArgTrees.last
+                else
+                  placedArg
               }
               else
-                (arg.typeTree, arg)
+                arg.typeTree
 
             val name = retierTermName(s"arg$$$index")
             val ref = internal setType (q"$name", typeTree.tpe)
             val valDef = ValDef(
               Modifiers(Flag.PARAM), name, typeTree, EmptyTree)
 
-            (arg.symbol, ref, valDef, value)
+            (arg.symbol, ref, valDef, arg)
 
           case (arg, _) =>
             c.abort(arg.pos, "identifier expected")
@@ -239,20 +234,6 @@ trait RemoteExpressionProcessor { this: Generation =>
         val q"(..$_) => $exprRemote" = expr
         val remoteExpr = referenceTreeProcessor transform transform(exprRemote)
 
-        // handle issued types
-        val processedRemoteExpr =
-          if (exprType <:< types.issuedControlled &&
-              exprType <:!< types.issued &&
-              (types.functionPlacing exists { remoteExpr.tpe <:< _ }))
-            q"""${markRetierSynthetic(trees.ControlledIssuedValueCreate)}[
-                ..${exprType.typeArgs}]($remoteExpr)"""
-          else if (exprType <:< types.issuedControlled &&
-                   (types.issuedPlacing forall { remoteExpr.tpe <:!< _ }))
-            q"""${markRetierSynthetic(trees.IssuedValueCreate)}[
-                ..${exprType.typeArgs}]($remoteExpr)"""
-          else
-            remoteExpr
-
         // generate synthetic placed expression
         val count = declStats count { _.peerSymbol == peerType.typeSymbol }
         val peerName = peerType.typeSymbol.asType.name
@@ -263,7 +244,7 @@ trait RemoteExpressionProcessor { this: Generation =>
 
         declStats += PlacedStatement(
           dummyDefinition, peerType.typeSymbol.asType, exprType,
-          Some(markRetierSynthetic(exprTypeTree)), None, processedRemoteExpr)
+          Some(markRetierSynthetic(exprTypeTree)), None, remoteExpr)
 
         val call = super.transform(
           internal setType (

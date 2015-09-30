@@ -52,6 +52,20 @@ trait PeerImplementationGenerator { this: Generation =>
         new SelfReferenceChanger(originalName, name.toTypeName)
     }
 
+    def createDeclTypeTree(declTypeTree: Tree, exprType: Type) =
+      if (types.bottom exists { exprType <:< _ })
+        declTypeTree
+      else if (types.controlledIssuedPlacing exists { exprType <:< _ }) {
+        val Seq(peer, value) = declTypeTree.typeArgTrees
+        tq"$peer => $value"
+      }
+      else if (types.issuedPlacing exists { exprType <:< _ }) {
+        val Seq(_, value) = declTypeTree.typeArgTrees
+        value
+      }
+      else
+        declTypeTree
+
     def peerPlacedAbstractions(peerSymbol: TypeSymbol) =
       aggregator.all[PlacedAbstraction] filter {
         _.peerSymbol == peerSymbol
@@ -66,18 +80,20 @@ trait PeerImplementationGenerator { this: Generation =>
       aggregator.all[PlacedStatement] collect {
         case PlacedStatement(
             definition @ ValDef(mods, name, _, _),
-            `peerSymbol`, _, Some(declTypeTree), _, expr) =>
+            `peerSymbol`, exprType, Some(declTypeTree), _, expr) =>
           internal setPos (
             SelfReferenceChanger(enclosingName, names.implementation) transform
-              ValDef(mods, name, declTypeTree, expr),
+              ValDef(mods, name,
+                createDeclTypeTree(declTypeTree, exprType), expr),
             definition.pos)
 
         case PlacedStatement(
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
-            `peerSymbol`, _, Some(declTypeTree), _, expr) =>
+            `peerSymbol`, exprType, Some(declTypeTree), _, expr) =>
           internal setPos (
             SelfReferenceChanger(enclosingName, names.implementation) transform
-              DefDef(mods, name, tparams, vparamss, declTypeTree, expr),
+              DefDef(mods, name, tparams, vparamss,
+                createDeclTypeTree(declTypeTree, exprType), expr),
             definition.pos)
 
         case PlacedStatement(tree, `peerSymbol`, _, None, _, expr) =>
