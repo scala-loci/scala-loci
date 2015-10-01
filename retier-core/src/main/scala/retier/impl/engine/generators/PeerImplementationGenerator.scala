@@ -21,35 +21,43 @@ trait PeerImplementationGenerator { this: Generation =>
     val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
     val enclosingName = aggregator.all[EnclosingContext].head.name
 
-    class SelfReferenceChanger(originalName: Name, name: TypeName)
-        extends Transformer {
-      val originalTypeName = originalName.toTypeName
-      val originalTermName = originalName.toTermName
+    class PlacedReferenceAdapter(peerSymbol: TypeSymbol) extends Transformer {
+      val baseClasses = peerSymbol.toType.baseClasses
 
-      def isPlaced(tpe: Type): Boolean =
-        tpe != null && tpe.finalResultType <:< types.localOn
+      def placedType(tpe: Type): Option[Type] =
+        if (tpe != null && tpe.finalResultType <:< types.localOn &&
+            (types.bottom forall { tpe.finalResultType <:!< _ }))
+          Some(tpe.finalResultType)
+        else
+          None
 
-      def isPlaced(tree: Tree): Boolean =
-        isPlaced(tree.tpe) ||
-        (tree.symbol.isTerm && tree.symbol.asTerm.isAccessor &&
-         isPlaced(tree.symbol.asMethod.accessed.typeSignature))
+      def placedType(tree: Tree): Option[Type] =
+        placedType(tree.tpe) orElse {
+          if (tree.symbol.isTerm && tree.symbol.asTerm.isAccessor)
+            placedType(tree.symbol.asMethod.accessed.typeSignature)
+          else
+            None
+        }
 
       override def transform(tree: Tree) = tree match {
         case tree: TypeTree if tree.original != null =>
           internal setOriginal (tree, transform(tree.original))
-        case ClassDef(_, `originalTypeName`, _, _) => tree
-        case ModuleDef(_, `originalTermName`, _) => tree
-        case Select(This(`originalTypeName`), _)
-          if !tree.isRetierSynthetic && !isPlaced(tree) => tree
-        case This(`originalTypeName`)
-          if !tree.isRetierSynthetic => This(name)
-        case _ => super.transform(tree)
-      }
-    }
 
-    object SelfReferenceChanger {
-      def apply(originalName: Name, name: Name) =
-        new SelfReferenceChanger(originalName, name.toTypeName)
+        case q"$_.$name" if !tree.isRetierSynthetic =>
+          placedType(tree) match {
+            case Some(tpe) =>
+              val Seq(_, peerType) = tpe.widen.typeArgs
+              if (baseClasses contains peerType.typeSymbol)
+                q"$name"
+              else
+                super.transform(tree)
+            case _ =>
+              super.transform(tree)
+          }
+
+        case _ =>
+          super.transform(tree)
+      }
     }
 
     def createDeclTypeTree(declTypeTree: Tree, exprType: Type) =
@@ -65,6 +73,11 @@ trait PeerImplementationGenerator { this: Generation =>
       }
       else
         declTypeTree
+
+    def flagDefinition(mods: Modifiers, expr: Tree) =
+      Modifiers(
+        if (expr == EmptyTree) mods.flags | Flag.DEFERRED else mods.flags,
+        mods.privateWithin, mods.annotations)
 
     def peerPlacedAbstractions(peerSymbol: TypeSymbol) =
       aggregator.all[PlacedAbstraction] filter {
@@ -82,8 +95,8 @@ trait PeerImplementationGenerator { this: Generation =>
             definition @ ValDef(mods, name, _, _),
             `peerSymbol`, exprType, Some(declTypeTree), _, expr) =>
           internal setPos (
-            SelfReferenceChanger(enclosingName, names.implementation) transform
-              ValDef(mods, name,
+            new PlacedReferenceAdapter(peerSymbol) transform
+              ValDef(flagDefinition(mods, expr), name,
                 createDeclTypeTree(declTypeTree, exprType), expr),
             definition.pos)
 
@@ -91,13 +104,13 @@ trait PeerImplementationGenerator { this: Generation =>
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
             `peerSymbol`, exprType, Some(declTypeTree), _, expr) =>
           internal setPos (
-            SelfReferenceChanger(enclosingName, names.implementation) transform
-              DefDef(mods, name, tparams, vparamss,
+            new PlacedReferenceAdapter(peerSymbol) transform
+              DefDef(flagDefinition(mods, expr), name, tparams, vparamss,
                 createDeclTypeTree(declTypeTree, exprType), expr),
             definition.pos)
 
         case PlacedStatement(tree, `peerSymbol`, _, None, _, expr) =>
-          SelfReferenceChanger(enclosingName, names.implementation) transform
+          new PlacedReferenceAdapter(peerSymbol) transform
             expr
       }
 

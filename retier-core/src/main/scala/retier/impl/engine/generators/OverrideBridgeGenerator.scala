@@ -14,33 +14,45 @@ trait OverrideBridgeGenerator { this: Generation =>
 
     echo(verbose = true, " Generating override bridge methods")
 
+    def validatePlacedResultTypes(base: Type, sub: Type, pos: Position) =
+      if (sub.widen.typeArgs.head <:!< base.widen.typeArgs.head)
+        c.abort(pos, "overriding abstraction has incompatible type")
+
     val stats = aggregator.all[PlacedStatement] collect {
       case stat @ PlacedStatement(
-          definition @ ValDef(mods, name, tpt, _), _, _,
-          Some(declTypeTree), Some(overridingDecl), _) =>
+          definition @ ValDef(mods, name, tpt, _), _, _, _,
+          Some(overridingDecl), _) =>
+        validatePlacedResultTypes(
+          overridingDecl.typeSignature.finalResultType, tpt.tpe, definition.pos)
+
         val expr = q"$name"
         val overridingDefinition = ValDef(
           Modifiers(
             mods.flags | Flag.OVERRIDE | Flag.SYNTHETIC | Flag.ARTIFACT,
             mods.privateWithin,
             mods.annotations),
-          overridingDecl, tpt, expr)
+          overridingDecl.name, tpt, expr)
 
         stat.copy(
-          tree = internal setPos (overridingDefinition, definition.pos),
+          tree = markRetierSynthetic(overridingDefinition, definition.pos),
           overridingDecl = None,
           expr = expr)
 
       case stat @ PlacedStatement(
-          definition @ DefDef(mods, name, tparams, vparamss, tpt, _), _, _,
-          Some(declTypeTree), Some(overridingDecl), _) =>
+          definition @ DefDef(mods, name, tparams, vparamss, tpt, _), _, _, _,
+          Some(overridingDecl), _) =>
+        validatePlacedResultTypes(
+          overridingDecl.typeSignature.finalResultType, tpt.tpe, definition.pos)
+        if (overridingDecl.isStable)
+          c.abort(definition.pos, "overriding abstraction needs to be stable")
+
         val expr = q"$name(...${vparamss map { _ map { _.name } } })"
         val overridingDefinition = DefDef(
           Modifiers(
             mods.flags | Flag.OVERRIDE | Flag.SYNTHETIC | Flag.ARTIFACT,
             mods.privateWithin,
             mods.annotations),
-          overridingDecl, tparams, vparamss, tpt, expr)
+          overridingDecl.name, tparams, vparamss, tpt, expr)
 
         stat.copy(
           tree = markRetierSynthetic(overridingDefinition, definition.pos),

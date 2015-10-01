@@ -14,6 +14,21 @@ trait PlacedExpressionsProcessor { this: Generation =>
 
     echo(verbose = true, " Processing placed expressions")
 
+    object baseReferencProcessor extends Transformer {
+      override def transform(tree: Tree) = tree match {
+        case q"$_[..$_](...$exprss)" if tree.symbol == symbols.placedBase =>
+          exprss.head.head match {
+            case q"$_.$tname[..$tpts](...$exprss)" =>
+              super.transform(q"super.$tname[..$tpts](...$exprss)")
+            case _ =>
+              super.transform(exprss.head.head)
+          }
+
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
     def reduceEtaExpansion(expr: Tree): Tree = {
       def reduceEtaExpansion(expr: Tree): Tree = {
         expr match {
@@ -32,7 +47,7 @@ trait PlacedExpressionsProcessor { this: Generation =>
     }
 
     def processOverridingDeclaration
-        (overridingExpr: Tree, stat: PlacedStatement): Option[TermName] =
+        (overridingExpr: Tree, stat: PlacedStatement): Option[TermSymbol] =
       overridingExpr match {
         case expr if expr.symbol == symbols.placedOverriding =>
           val q"$exprBase.$_[..$_].$_[..$_](...$exprss)" = expr
@@ -43,7 +58,7 @@ trait PlacedExpressionsProcessor { this: Generation =>
 
           identifier match {
             case q"$_.$tname" =>
-              Some(tname)
+              Some(identifier.symbol.asTerm)
             case _ =>
               c.abort(identifier.pos,
                 "identifier expected " +
@@ -72,9 +87,21 @@ trait PlacedExpressionsProcessor { this: Generation =>
               (exprBase, exprss)
           }
 
-          val q"(..$_) => $exprPlaced" = exprss.head.head
+          val placedExpr =
+            if (symbols.placedAbstract == expr.symbol) {
+              if (!peerSymbol.isAbstract)
+                c.abort(tree.pos,
+                  "undefined members not allowed for " +
+                  "concrete (non-abstract) peer types")
 
-          (processOverridingDeclaration(exprBase, stat), exprPlaced)
+              EmptyTree
+            }
+            else {
+              val q"(..$_) => $exprPlaced" = exprss.head.head
+              exprPlaced
+            }
+
+          (processOverridingDeclaration(exprBase, stat), placedExpr)
         }
         else
           (overridingDecl, expr)
@@ -85,7 +112,7 @@ trait PlacedExpressionsProcessor { this: Generation =>
         // construct new placed statement
         // with the actual placed expression syntactic construct removed
         PlacedStatement(tree, peerSymbol, exprType, declTypeTree,
-          processedOverridingDecl, placedExpr)
+          processedOverridingDecl, baseReferencProcessor transform placedExpr)
     }
 
     def dropPrecedingGlobalCasts

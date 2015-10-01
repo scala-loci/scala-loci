@@ -77,19 +77,21 @@ trait Generation {
     val remoteCapturing = retier | TypeName("RemoteCapturingExpression")
     val remoteIssuedCapturing = retier | TypeName("RemoteIssuedCapturingExpression")
 
-    val fromExpression = retier | TypeName("FromExpression")
+    val fromExpression = retier | retierTypeName("FromExpression")
 
     val valueOp = retier | retierTypeName("ValueOp")
   }
 
   object symbols {
+    val placedAbstract = types.placing | TermName("abstract")
+    val placedBase = types.placing | TermName("base")
     val placedApply = types.placing | TermName("apply")
     val placedShared = types.placing | TermName("shared")
     val placedLocal = types.placing | TermName("local")
     val placedIssuedApply = types.issuing | TermName("apply")
     val placedOverriding = types.overriding | TermName("overriding")
 
-    val placed = Seq(placedApply, placedShared, placedLocal, placedIssuedApply)
+    val placed = Seq(placedAbstract, placedApply, placedShared, placedLocal, placedIssuedApply)
 
     val remoteApply = types.remote | TermName("apply")
     val remoteCall = types.remote | TermName("call")
@@ -101,7 +103,7 @@ trait Generation {
 
     val remote = Seq(remoteIssuedApply, remoteIssuedCaptureApply, remoteApply, remoteCaptureApply)
 
-    val fromExpression = types.retier | TermName("FromExpression")
+    val fromExpression = types.retier | retierTermName("FromExpression")
 
     val transmitMultiple = types.retier | TermName("transmitMultiple")
     val transmitOptional = types.retier | TermName("transmitOptional")
@@ -187,7 +189,7 @@ trait Generation {
     companion: Option[Tree])
 
   case class PlacedStatement(tree: Tree, peerSymbol: TypeSymbol, exprType: Type,
-    declTypeTree: Option[Tree], overridingDecl: Option[TermName], expr: Tree)
+    declTypeTree: Option[Tree], overridingDecl: Option[TermSymbol], expr: Tree)
 
   case class NonPlacedStatement(tree: Tree)
 

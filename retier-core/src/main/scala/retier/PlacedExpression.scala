@@ -7,6 +7,12 @@ protected final abstract class OverridingExpression[P <: Peer] {
 }
 
 protected final abstract class PlacingExpression[P <: Peer] {
+  def `abstract`[T]
+    (implicit ev: NoLocalPeer[_]): T on P = `#macro`
+  def base[T <: (_ localOn _), U](v: T)
+    (implicit
+        ev0: LocalPeer[P],
+        ev1: ValueTypes[T, U]): U = `#macro`
   def apply[T, U](f: CurrentLocalPeer[P] `implicit =>` T)
     (implicit
         ev0: NoLocalPeer[_],

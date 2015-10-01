@@ -4,6 +4,15 @@ import typeconstraints._
 import scala.language.implicitConversions
 
 protected trait ImplicitConversions {
+  final implicit class $$retier$FromExpression[L <: Peer, R <: Peer, T]
+      (v: T sharedOn R)
+      (implicit ev: LocalPeer[L]) {
+    def from[P <: R]: T from P = `#macro`
+    def from[P <: R](peer: Remote[P]): T fromSingle P = `#macro`
+    def from[P <: R](peers: Remote[P]*): T fromMultiple P = `#macro`
+  }
+
+
   final implicit class $$retier$ValueOp[T <: (_ localOn _), U](v: T)
       (implicit ev: ValueTypes[T, U]) {
     def value: U = `#macro`

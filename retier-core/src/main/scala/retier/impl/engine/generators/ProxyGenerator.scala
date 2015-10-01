@@ -17,10 +17,11 @@ trait ProxyGenerator { this: Generation =>
     echo(verbose = true, " Generating shared abstraction proxies")
 
     val synthetic = Flag.SYNTHETIC
+    val artifact = Flag.ARTIFACT
 
     def generateAbstractionId(tree: Tree, name: TermName,
         argTypes: List[List[Type]], resultType: Type) = {
-      if (resultType.isGeneric ||
+      if ((resultType exists { _.isGeneric }) ||
           (argTypes exists { _ exists { _.isGeneric } }))
         c.abort(tree.pos,
           "placed methods cannot be parameterized over " +
@@ -115,7 +116,8 @@ trait ProxyGenerator { this: Generation =>
         val isNullary = (argTypes.headOption flatMap { _.headOption }).isEmpty
         val hasReturnValue = valueType =:!= definitions.UnitTpe
 
-        val abstractionId = generateAbstractionId(decl, decl.name, argTypes, valueType)
+        val abstractionId = generateAbstractionId(
+          decl, decl.name, argTypes, valueType)
         val abstractionIdTermName = retierTermName(s"abs$$$index")
         val localResponseTermName = retierTermName(s"mar$$$index$$res")
         val remoteRequestTermName = retierTermName(s"mar$$$index$$req")
@@ -222,7 +224,11 @@ trait ProxyGenerator { this: Generation =>
             val transmissionProperties = transmissionPropertiesCreate(
               marshallable, request, requestMarshallable)
 
-            Seq(q"def $declTermName(...$args) = $transmissionProperties")
+            val flags =
+              if (decl.isRetierSynthetic) synthetic | artifact
+              else NoFlags
+
+            Seq(q"$flags def $declTermName(...$args) = $transmissionProperties")
           }
         }
 

@@ -12,8 +12,6 @@ package object retier extends
   type on[+T, P <: Peer] = T sharedOn P
 
 
-  def `abstract`[P <: Peer, T](implicit ev: NoLocalPeer[_]): T on P = `#macro`
-
   def placed[P <: Peer]:
     PlacingExpression[P] with OverridingExpression[P] = `#macro`
 
@@ -23,14 +21,6 @@ package object retier extends
 
   def peerTypeOf[P](implicit tag: PeerTypeTag[P]): PeerType = tag.peerType
 
-
-  final implicit class FromExpression[L <: Peer, R <: Peer, T]
-      (v: T sharedOn R)
-      (implicit ev: LocalPeer[L]) {
-    def from[P <: R]: T from P = `#macro`
-    def from[P <: R](peer: Remote[P]): T fromSingle P = `#macro`
-    def from[P <: R](peers: Remote[P]*): T fromMultiple P = `#macro`
-  }
 
   def `#macro`: Nothing =
     throw new NotImplementedError("Only usable in `multitier` environment")
