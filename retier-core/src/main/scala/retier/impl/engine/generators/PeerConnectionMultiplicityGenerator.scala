@@ -10,7 +10,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
   import c.universe._
 
   val generatePeerConnectionMultiplicities = AugmentedAggregation[
-    PeerDefinition, PeerConnectionMultiplicity] {
+    PeerDefinition with PlacedStatement, PeerConnectionMultiplicity] {
       aggregator =>
 
     echo(verbose = true, " Generating peer Connection multiplicities")
@@ -20,8 +20,21 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
     val multiplicities = aggregator.all[PeerDefinition] flatMap { definition =>
       val ClassDef(_, _, _, Template(_, _, body)) = definition.tree
 
+      val expressions = aggregator.all[PlacedStatement] collect {
+        case stat if stat.peerSymbol == definition.peerSymbol => stat.expr
+      }
+
       val multiplicities = body collectFirst {
         case typeDef @ TypeDef(_, connectionTypeName, List(), rhs) =>
+          val single = 1
+          val optional = 2
+          val multiple = 3
+          def string(multiplicity: Int) = multiplicity match {
+            case `single` => "single"
+            case `optional` => "optional"
+            case `multiple` => "multiple"
+          }
+
           val connection = rhs.typeTree match {
             case TypeBoundsTree(lo, _) if lo.tpe =:!= definitions.NothingTpe =>
               c.abort(lo.pos,
@@ -47,14 +60,12 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
           }
 
           val multiplicities = connections map { connection =>
-            import trees._
-
             if (connection.tpe <:< types.single)
-              (q"$SingleConnection", connection)
+              (single, connection)
             else if (connection.tpe <:< types.optional)
-              (q"$OptionalConnection", connection)
+              (optional, connection)
             else if (connection.tpe <:< types.multiple)
-              (q"$MultipleConnection", connection)
+              (multiple, connection)
             else
               c.abort(connection.pos,
                 "only multiple, optional or single compounds " +
@@ -70,12 +81,10 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
               (connection, internal setType (arg, argType), multiplicity)
           }
 
-          val combinations = (multiplicities combinations 2 map { pair =>
-            val Seq(multiplicity0, multiplicity1) = pair
-            (multiplicity0, multiplicity1)
-          }).toList
 
-          combinations foreach { case ((_, peer0, _), (_, peer1, _)) =>
+          val combinations = multiplicities combinations 2
+
+          combinations foreach { case Seq((_, peer0, _), (_, peer1, _)) =>
             if (peer0.tpe =:!= peer1.tpe &&
                 peer0.tpe.typeSymbol == peer1.tpe.typeSymbol)
               c.abort(typeDef.pos,
@@ -83,7 +92,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
                 s"is not allowed: $peer0 and $peer1")
           }
 
-          combinations foreach { case ((_, peer0, _), (_, peer1, _)) =>
+          combinations foreach { case Seq((_, peer0, _), (_, peer1, _)) =>
             if (peer0.tpe =:!= peer1.tpe &&
                 peer0.tpe.typeSymbol.name == peer1.tpe.typeSymbol.name)
               c.abort(typeDef.pos,
@@ -92,15 +101,101 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
           }
 
           combinations foreach {
-            case ((connection0, peer0, _), (connection1, peer1, _)) =>
+            case Seq((connection0, peer0, _), (connection1, peer1, _)) =>
               if (peer0.tpe =:= peer1.tpe)
                 c.abort(typeDef.pos,
                   s"multiple occurrences of same peer type " +
                   s"are not allowed: $connection0 and $connection1")
           }
 
+
+          val statedPeerMultiplicities =
+            (multiplicities map { case (_, peer, multiplicity) =>
+              val typeSymbol = peer.tpe.typeSymbol
+              val symbol = typeSymbol.typeSignature match {
+                case TypeBounds(_, hi)
+                  if typeSymbol.isParameter => hi.typeSymbol
+                case _ => typeSymbol
+              }
+              symbol -> multiplicity
+            }).toMap
+
+          val peerBaseMultiplicities = statedPeerMultiplicities map {
+            case (peer, multiplicity) =>
+              val bases = peer.asType.toType.baseClasses filter {
+                _.asType.toType <:< types.peer
+              }
+              (peer, bases, multiplicity)
+          }
+
+          val peerBases = (peerBaseMultiplicities flatMap {
+            case (_, bases, _) => bases
+          }).toSet
+
+          peerBases groupBy { _.name } foreach { case (name, peers) =>
+            if (peers.size > 1)
+              c.abort(typeDef.pos,
+                s"distinct peer type parents of the same name " +
+                s"are not allowed: $name")
+          }
+
+          val combinedPeerBaseMultiplicities =
+            peerBaseMultiplicities flatMap { case (_, bases, multiplicity) =>
+              bases map { (_, multiplicity) }
+            } groupBy { case (peer, _) =>
+              peer
+            } map { case (peer, multiplicities) =>
+              peer -> (multiplicities map {
+                case (peer, multiplicity) => multiplicity
+              }).max
+            }
+
+          val leafPeerBases =
+            peerBaseMultiplicities filterNot { case (peer, _, _) =>
+              peerBaseMultiplicities exists { case (other, bases, _) =>
+                (peer != other) && (bases contains peer)
+              }
+            } flatMap { case (_, bases, _) =>
+              bases
+            }
+
+          val potentialPeerMultiplicities =
+            combinedPeerBaseMultiplicities map { case (peer, multiplicity) =>
+              val count = leafPeerBases count { _ == peer }
+              peer -> (if (count > 1) multiple else multiplicity)
+            }
+
+          potentialPeerMultiplicities foreach { case (peer, multiplicity) =>
+            (multiplicity, statedPeerMultiplicities get peer) match {
+              case (potential @ (`optional` | `single`), None) =>
+                val peerAccessed = expressions exists {
+                  _ exists { tree =>
+                    tree.tpe != null && (tree.tpe contains peer)
+                  }
+                }
+                if (peerAccessed)
+                  c.warning(typeDef.pos,
+                    s"connection for ${peer.name} not specified " +
+                    s"(inferred as ${string(multiple)}, " +
+                    s"but can be specified as ${string(potential)})")
+
+              case (potential, Some(stated))
+                  if potential > stated =>
+                c.abort(typeDef.pos,
+                  s"connection for ${peer.name} specified as " +
+                  s"${string(stated)}, but must be ${string(potential)}")
+
+              case _ =>
+            }
+          }
+
           multiplicities map { case (_, peer, multiplicity) =>
-            PeerConnectionMultiplicity(definition.peerSymbol, peer, multiplicity)
+            PeerConnectionMultiplicity(definition.peerSymbol, peer,
+              multiplicity match {
+                case `single` => trees.SingleConnection
+                case `optional` => trees.OptionalConnection
+                case `multiple` => trees.MultipleConnection
+              })
           }
       }
 

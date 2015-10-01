@@ -9,8 +9,6 @@ import scala.reflect.macros.blackbox.Context
 trait FromExpressionProcessor { this: Generation =>
   val c: Context
   import c.universe._
-  import names._
-  import trees._
 
   val processFromExpressions = UniformAggregation[
     PeerDefinition with PlacedStatement] {
@@ -37,7 +35,7 @@ trait FromExpressionProcessor { this: Generation =>
         exprssPeer: List[List[Tree]], isRetierSynthetic: Boolean) = {
       val value = exprssValue.head.head
 
-      val Seq(_, peerType) = value.tpe.widen.typeArgs
+      val Seq(valueType, peerType) = value.tpe.widen.typeArgs
       val interface = markRetierSynthetic(
         peerInterfaceTree(value, peerType, peerSymbols), value.pos)
 
@@ -62,6 +60,21 @@ trait FromExpressionProcessor { this: Generation =>
           c.abort(value.pos, messageUnexpectedTree)
       }
 
+      val peerTypeTag = markRetierSynthetic(typeTag, value.pos)
+
+      val ExistentialType(_, TypeRef(pre, sym, _)) =
+        if (exprssPeer.isEmpty || exprssPeer.head.isEmpty)
+          types.from
+        else if (exprssPeer.head.size == 1)
+          types.fromSingle
+        else
+          types.fromMultiple
+
+      val tpe = internal typeRef (pre, sym, List(valueType, tpt.tpe))
+
+      import names._
+      import trees._
+
       val args =
         transmissionProperties +:
         (exprssPeer.headOption.toList flatMap {
@@ -71,18 +84,8 @@ trait FromExpressionProcessor { this: Generation =>
           }
         })
 
-      val peerTypeTag = markRetierSynthetic(typeTag, value.pos)
-
-      val tpe =
-        if (exprssPeer.isEmpty || exprssPeer.head.isEmpty)
-          types.from
-        else if (exprssPeer.head.size == 1)
-          types.fromSingle
-        else
-          types.fromMultiple
-
       internal setType (
-        q"$system.createPeerSelection(..$args)($peerTypeTag)",
+        q"$system.$createPeerSelection(..$args)($peerTypeTag)",
         tpe)
     }
 

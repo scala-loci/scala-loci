@@ -105,8 +105,7 @@ trait PeerImplementationGenerator { this: Generation =>
       case parent if parent.tpe =:= types.peer =>
         trees.PeerImpl
 
-      case parent @ tq"$expr.$tpnamePeer[..$tpts]"
-          if parent.tpe <:< types.peer =>
+      case parent @ tq"$_[..$tpts]" if parent.tpe <:< types.peer =>
         val impl = peerImplementationTree(parent, parent.tpe, peerSymbols)
         tq"$impl[..$tpts]"
 
@@ -115,13 +114,26 @@ trait PeerImplementationGenerator { this: Generation =>
     }
 
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
-      val PeerDefinition(_, peerSymbol, typeArgs, args, parents, mods,
+      val PeerDefinition(tree, peerSymbol, typeArgs, args, parents, mods,
         _, isClass, companion) = peerDefinition
 
       val peerName = peerSymbol.name
       val abstractions = peerPlacedAbstractions(peerSymbol)
       val statements = peerPlacedStatements(peerSymbol)
       val implParents = peerImplementationParents(parents)
+
+      val duplicateName = peerSymbol.toType.baseClasses filter {
+        _.asType.toType <:< types.peer
+      } groupBy {
+        _.name
+      } collectFirst {
+        case (name, symbols) if symbols.size > 1 => name
+      }
+
+      if (duplicateName.nonEmpty)
+        c.abort(tree.pos,
+          s"inheritance from peer types of the same name " +
+          s"is not allowed: ${duplicateName.get}")
 
       import trees._
       import names._
@@ -190,8 +202,8 @@ trait PeerImplementationGenerator { this: Generation =>
     }
 
     def processPeerDefinition(peerDefinition: PeerDefinition) = {
-      val PeerDefinition(_, peerSymbol, typeArgs, args, parents, mods,
-        stats, isClass, _) = peerDefinition
+      val PeerDefinition(tree, peerSymbol, typeArgs, args, parents, mods, stats,
+        isClass, _) = peerDefinition
 
       val peerName = peerSymbol.name
       val multiplicities = peerConnectionMultiplicities(peerSymbol)
@@ -237,7 +249,10 @@ trait PeerImplementationGenerator { this: Generation =>
                 ..$generatedStats
           }"""
 
-      peerDefinition.copy(tree = generatedTree, stats = generatedStats)
+      peerDefinition.copy(
+        tree = internal setPos (internal setType (
+          generatedTree, tree.tpe), tree.pos),
+        stats = generatedStats)
     }
 
     val definitions = aggregator.all[PeerDefinition] map

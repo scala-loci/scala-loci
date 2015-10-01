@@ -48,13 +48,9 @@ trait PeerTypeTagGenerator { this: Generation =>
         case parent if parent.tpe =:= types.peer =>
           q"$Peer.$peerTypeTag.$peerType"
 
-        case parent @ tq"$expr.$tpnamePeer[..$_]"
-            if parent.tpe <:< types.peer =>
+        case parent if parent.tpe <:< types.peer =>
           val peerTypeTag = peerTypeTagTree(parent, parent.tpe, peerSymbols)
           q"$peerTypeTag.$peerType"
-
-        case parent if parent.tpe <:< types.peer =>
-          c.abort(parent.pos, "identifier expected")
       }
 
       q"""$synthetic implicit val $peerTypeTag
@@ -109,7 +105,7 @@ trait PeerTypeTagGenerator { this: Generation =>
       import trees._
       import names._
 
-      val PeerDefinition(_, peerSymbol, typeArgs, args, parents, mods, stats,
+      val PeerDefinition(tree, peerSymbol, typeArgs, args, parents, mods, stats,
         isClass, _) = peerDefinition
 
       val peerName = peerSymbol.name
@@ -130,7 +126,10 @@ trait PeerTypeTagGenerator { this: Generation =>
             ..$generatedStats
           }"""
 
-      peerDefinition.copy(tree = generatedTree, stats = generatedStats)
+      peerDefinition.copy(
+        tree = internal setPos (internal setType (
+          generatedTree, tree.tpe), tree.pos),
+        stats = generatedStats)
     }
 
     val definitions = aggregator.all[PeerDefinition] map

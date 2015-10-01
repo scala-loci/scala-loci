@@ -8,8 +8,6 @@ import scala.reflect.macros.blackbox.Context
 trait TransmissionGenerator { this: Generation =>
   val c: Context
   import c.universe._
-  import trees._
-  import names._
 
   val generateTransmissions = UniformAggregation[
     PeerDefinition with PlacedStatement with EnclosingContext] {
@@ -70,6 +68,9 @@ trait TransmissionGenerator { this: Generation =>
         case Some(localPeerTypeTag) =>
           val localTypeTag = markRetierSynthetic(localPeerTypeTag, value.pos)
 
+          import trees._
+          import names._
+
           val createTransmission = tree.symbol match {
             case symbols.transmitMultiple => createMultipleTransmission
             case symbols.transmitOptional => createOptionalTransmission
@@ -80,6 +81,9 @@ trait TransmissionGenerator { this: Generation =>
                 $remoteTypeTag, $localTypeTag)"""
 
         case _ =>
+          import trees._
+          import names._
+
           q"""$system.$executeTransmission($transmissionProperties)(
                 $remoteTypeTag)"""
       }
@@ -94,9 +98,15 @@ trait TransmissionGenerator { this: Generation =>
         val remotePeerTypeTag = peerTypeTagTree(
           remote.typeTree(abortOnFailure = true), remote.tpe, peerSymbols)
 
+        val ExistentialType(_, TypeRef(pre, sym, _)) = types.peerTypeTag
+        val localPeerType = internal typeRef (pre, sym, List(local.tpe))
+        val remotePeerType = internal typeRef (pre, sym, List(remote.tpe))
+
         super.transform(
           processTransmission(
-            tree, exprss.head.head, Some(localPeerTypeTag), remotePeerTypeTag))
+            tree, exprss.head.head,
+            Some(internal setType (localPeerTypeTag, localPeerType)),
+            internal setType (remotePeerTypeTag, remotePeerType)))
 
       case q"$expr[..$_](...$exprss)"
           if expr.isRetierSynthetic && expr.symbol == symbols.remoteApply =>
@@ -104,8 +114,13 @@ trait TransmissionGenerator { this: Generation =>
         val remotePeerTypeTag = peerTypeTagTree(
           TypeTree(remote).typeTree(abortOnFailure = true), remote, peerSymbols)
 
+        val ExistentialType(_, TypeRef(pre, sym, _)) = types.peerTypeTag
+        val remotePeerType = internal typeRef (pre, sym, List(remote))
+
         super.transform(
-          processTransmission(tree, exprss.head.head, None, remotePeerTypeTag))
+          processTransmission(
+            tree, exprss.head.head, None,
+            internal setType (remotePeerTypeTag, remotePeerType)))
 
       case _ if tree.tpe != null &&
                 tree.tpe <:< types.transmissionProvider &&

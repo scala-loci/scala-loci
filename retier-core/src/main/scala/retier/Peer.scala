@@ -14,7 +14,7 @@ trait Peer {
   // possible that other sub-types of S are part of the connection spec compound.
   // Therefore, when inferring a super-type of `P`, `Multiple` must be inferred.
   sealed trait ConnectionSpec
-  sealed trait Single[P] extends Multiple[P]
+  sealed trait Single[P] extends Optional[P]
   sealed trait Optional[P] extends Multiple[P]
   sealed trait Multiple[+P] extends ConnectionSpec
 
