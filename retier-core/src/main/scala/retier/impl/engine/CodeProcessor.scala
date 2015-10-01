@@ -18,6 +18,7 @@ class CodeProcessor[C <: Context](val c: C) extends
     PlacedExpressionsProcessor with
     RemoteExpressionProcessor with
     FromExpressionProcessor with
+    ImplicitCastsProcessor with
     TransmissionGenerator with
     ProxyGenerator with
     OverrideBridgeGenerator with
@@ -37,6 +38,7 @@ class CodeProcessor[C <: Context](val c: C) extends
       processPlacedExpressions aggregate
       processRemoteExpressions aggregate
       processFromExpressions aggregate
+      processImplicitCasts aggregate
       generateTransmissions aggregate
       generateProxies aggregate
       generateOverrideBridge aggregate
@@ -44,9 +46,6 @@ class CodeProcessor[C <: Context](val c: C) extends
       generatePeerConnectionMultiplicities aggregate
       generatePeerImplementations aggregate
       generateOutput
-
-
-    // TODO: erase conversions on placed values before erasing placed expressions
 
     state replaceBody (aggregator.all[OutputStatement] map { _.stat })
   }
