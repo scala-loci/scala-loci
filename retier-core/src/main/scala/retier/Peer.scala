@@ -21,107 +21,135 @@ trait Peer {
 
   type Connection <: ConnectionSpec
 
-  def connect: ConnectionSetup[ConnectionSetupSpec]
+  def connect: ConnectionSetup
 
   def context: ExecutionContext = implicitly[ExecutionContext]
 
   def setup: Boolean = true
 
 
-  sealed trait ConnectionSetupSpec
-  sealed trait Request[+P] extends ConnectionSetupSpec
-  sealed trait Listen[+P] extends ConnectionSetupSpec
+  sealed trait ConnectionSetup {
+    def setup(peerType: PeerType, peerTypes: List[PeerType]):
+      Map[PeerType, (List[ConnectionListener], List[ConnectionRequestor])]
+  }
 
-  sealed trait ConnectionSetup[+T] {
-    def listeners(peerType: PeerType): List[ConnectionListener]
-    def requestors(peerType: PeerType): List[ConnectionRequestor]
+  protected[this] object Default {
+    sealed trait Default[+D] extends Any
+    sealed trait Request[+P] extends Any
+    sealed trait Listen[+P] extends Any
+
+    def Listen[P]: Default[Listen[P]] = new Default[Listen[P]] { }
+    def Request[P]: Default[Request[P]] = new Default[Request[P]] { }
   }
 
   protected[this] object ConnectionSetup {
-    final implicit def listenerToSetup
-        (listener: ConnectionListener): ConnectionSetup[Listen[Nothing]] =
-      new ConnectionSetup[Listen[Nothing]] {
-        def listeners(peerType: PeerType) = List(listener)
-        def requestors(peerType: PeerType) = List.empty
+    final implicit def listenerToSetup[D, P](listener: ConnectionListener)
+      (implicit
+          ev0: Default.Default[D],
+          ev1: D <:< Default.Listen[P],
+          ev2: PeerTypeTag[P]): ConnectionSetup =
+      new ConnectionSetup {
+        def setup(peerType: PeerType, peerTypes: List[PeerType]) =
+          Map(peerTypeOf[P] -> ((List(listener), List.empty)))
       }
 
-    final implicit def requestorToSetup
-        (requestor: ConnectionRequestor): ConnectionSetup[Request[Nothing]] =
-      new ConnectionSetup[Request[Nothing]] {
-        def listeners(peerType: PeerType) = List.empty
-        def requestors(peerType: PeerType) = List(requestor)
+    final implicit def requestorToSetup[D, P](requestor: ConnectionRequestor)
+      (implicit
+          ev0: Default.Default[D],
+          ev1: D <:< Default.Request[P],
+          ev2: PeerTypeTag[P]): ConnectionSetup =
+      new ConnectionSetup {
+        def setup(peerType: PeerType, peerTypes: List[PeerType]) =
+          Map(peerTypeOf[P] -> ((List.empty, List(requestor))))
       }
 
-    implicit class Composition[T](self: ConnectionSetup[T]) {
-      def and[U](setup: ConnectionSetup[U]): ConnectionSetup[T with U] =
-        new ConnectionSetup[T with U] {
-          def listeners(peerType: PeerType) =
-            (self listeners peerType) ++ (setup listeners peerType)
-          def requestors(peerType: PeerType) =
-            (self requestors peerType) ++ (setup requestors peerType)
+    implicit class Composition(self: ConnectionSetup) {
+      def and(other: ConnectionSetup): ConnectionSetup =
+        new ConnectionSetup {
+          def setup(peerType: PeerType, peerTypes: List[PeerType]) = {
+            val selfMap = self setup (peerType, peerTypes)
+            val setupMap = other setup (peerType, peerTypes)
+            ((selfMap.keySet ++ setupMap.keySet) map { key =>
+              val (selfListeners, selfRequestors) =
+                selfMap getOrElse (key, (List.empty, List.empty))
+              val (setupListeners, setupRequestors) =
+                setupMap getOrElse (key, (List.empty, List.empty))
+              key -> ((
+                selfListeners ++ setupListeners,
+                selfRequestors ++ setupRequestors))
+            }).toMap
+          }
         }
     }
   }
 
   protected[this] final def listen[P: PeerTypeTag]
-      (setup: ConnectionSetup[Listen[P]]): ConnectionSetup[Listen[P]] =
-    new ConnectionSetup[Listen[P]] {
-      def listeners(peerType: PeerType) =
-        if (peerType == peerTypeOf[P]) setup listeners peerType else List.empty
-      def requestors(peerType: PeerType) = List.empty
+      (listener: ConnectionListener): ConnectionSetup =
+    new ConnectionSetup {
+      def setup(peerType: PeerType, peerTypes: List[PeerType]) =
+        Map(peerTypeOf[P] -> ((List(listener), List.empty)))
     }
 
   protected[this] final def request[P: PeerTypeTag]
-      (setup: ConnectionSetup[Request[P]]): ConnectionSetup[Request[P]] =
-    new ConnectionSetup[Request[P]] {
-      def listeners(peerType: PeerType) = List.empty
-      def requestors(peerType: PeerType) =
-        if (peerType == peerTypeOf[P]) setup requestors peerType else List.empty
+      (requestor: ConnectionRequestor): ConnectionSetup =
+    new ConnectionSetup {
+      def setup(peerType: PeerType, peerTypes: List[PeerType]) =
+        Map(peerTypeOf[P] -> ((List.empty, List(requestor))))
     }
 
   protected[this] final def listen[P: PeerTypeTag]
       (factory: ConnectionFactory)
       (config: String,
-       attrs: Attributes = Attributes.empty): ConnectionSetup[Listen[P]] =
-    new ConnectionSetup[Listen[P]] {
-      def listeners(peerType: PeerType) =
-        (factory listener (config, attrs)).toList
-      def requestors(peerType: PeerType) = List.empty
+       attrs: Attributes = Attributes.empty): ConnectionSetup =
+    new ConnectionSetup {
+      def setup(peerType: PeerType, peerTypes: List[PeerType]) =
+        Map(peerTypeOf[P] ->
+          (((factory listener (config, attrs)).toList, List.empty)))
     }
 
   protected[this] final def request[P: PeerTypeTag]
       (factory: ConnectionFactory)
       (url: String,
-       attrs: Attributes = Attributes.empty): ConnectionSetup[Request[P]] =
-    new ConnectionSetup[Request[P]] {
-      def listeners(peerType: PeerType) = List.empty
-      def requestors(peerType: PeerType) =
-        (factory requestor (url, attrs)).toList
+       attrs: Attributes = Attributes.empty): ConnectionSetup =
+    new ConnectionSetup {
+      def setup(peerType: PeerType, peerTypes: List[PeerType]) =
+        Map(peerTypeOf[P] ->
+          ((List.empty, (factory requestor (url, attrs)).toList)))
     }
 
-  protected[this] final def load[T]
+  protected[this] final def load
       (factory: ConnectionFactory)
       (configfile: String)
-      (implicit
-        parser: ConfigurationParser,
-        peerTypeTag: PeerTypeTag[this.type]): ConnectionSetup[T] = {
-    val config = parser load (configfile, peerTypeTag.peerType)
+      (implicit parser: ConfigurationParser): ConnectionSetup =
+    new ConnectionSetup {
+      def setup(peerType: PeerType, peerTypes: List[PeerType]) = {
+        val config = parser load (configfile, peerType, peerTypes)
 
-    val peerListeners =
-      config.listeners map { case (peerType, config, attrs) =>
-        peerType -> (factory listener (config, attrs))
-      } collect { case (peerType, Some(listener)) => peerType -> listener }
+        val peerListeners =
+          (config.listeners map { case (peerType, config, attrs) =>
+            peerType -> (factory listener (config, attrs))
+          } groupBy { case (peerType, _) =>
+            peerType
+          } collect { case (peerType, listeners) =>
+            peerType ->
+              (listeners collect { case (_, Some(listener)) => listener })
+          }).toMap
 
-    val peerRequestors =
-      config.requestors map { case (peerType, url, attrs) =>
-        peerType -> (factory requestor (url, attrs))
-      } collect { case (peerType, Some(requestor)) => peerType -> requestor }
+        val peerRequestors =
+          (config.requestors map { case (peerType, url, attrs) =>
+            peerType -> (factory requestor (url, attrs))
+          } groupBy { case (peerType, _) =>
+            peerType
+          } collect { case (peerType, requestors) =>
+            peerType ->
+              (requestors collect { case (_, Some(requestor)) => requestor })
+          }).toMap
 
-    new ConnectionSetup[T] {
-      def listeners(peerType: PeerType): List[ConnectionListener] =
-        peerListeners collect { case (`peerType`, listener) => listener }
-      def requestors(peerType: PeerType): List[ConnectionRequestor] =
-        peerRequestors collect { case (`peerType`, requestor) => requestor }
+        ((peerListeners.keySet ++ peerRequestors.keySet) map { key =>
+          val listeners = peerListeners getOrElse (key, List.empty)
+          val requestors = peerRequestors getOrElse (key, List.empty)
+          key -> ((listeners, requestors))
+        }).toMap
+      }
     }
-  }
 }

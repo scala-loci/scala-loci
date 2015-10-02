@@ -7,5 +7,6 @@ case class Configuration(
   requestors: List[(PeerType, String, Attributes)])
 
 trait ConfigurationParser {
-  def load(configfile: String, peerType: PeerType): Configuration
+  def load(configfile: String, peerType: PeerType, peerTypes: List[PeerType]):
+    Configuration
 }

@@ -101,39 +101,7 @@ trait PeerTypeTagGenerator { this: Generation =>
       peerDefinition.copy(companion = Some(generatedCompanion))
     }
 
-    def processPeerDefinition(peerDefinition: PeerDefinition) = {
-      import trees._
-      import names._
-
-      val PeerDefinition(tree, peerSymbol, typeArgs, args, parents, mods, stats,
-        isClass, _) = peerDefinition
-
-      val peerName = peerSymbol.name
-      val companionName = peerName.toTermName
-      val implicitPeerTypeTag = markRetierSynthetic(
-        q"""$synthetic private[this] implicit val ${c freshName peerTypeTag}
-          : $PeerTypeTag[this.type] =
-          $companionName.$peerTypeTag.asInstanceOf[$PeerTypeTag[this.type]]""")
-
-      val generatedStats = markRetierSynthetic(implicitPeerTypeTag) :: stats
-      val generatedTree =
-        if (isClass)
-          q"""$mods class $peerName[..$typeArgs](...$args) extends ..$parents {
-            ..$generatedStats
-          }"""
-        else
-          q"""$mods trait $peerName[..$typeArgs] extends ..$parents {
-            ..$generatedStats
-          }"""
-
-      peerDefinition.copy(
-        tree = internal setPos (internal setType (
-          generatedTree, tree.tpe), tree.pos),
-        stats = generatedStats)
-    }
-
-    val definitions = aggregator.all[PeerDefinition] map
-      (processPeerCompanion _ compose processPeerDefinition _)
+    val definitions = aggregator.all[PeerDefinition] map processPeerCompanion
 
     echo(verbose = true,
       s"  [${definitions.size} peer definitions generated, existing replaced]")
