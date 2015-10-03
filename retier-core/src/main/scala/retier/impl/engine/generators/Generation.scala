@@ -78,8 +78,6 @@ trait Generation {
     val remoteIssuedCapturing = retier | TypeName("RemoteIssuedCapturingExpression")
 
     val fromExpression = retier | retierTypeName("FromExpression")
-
-    val valueOp = retier | retierTypeName("ValueOp")
   }
 
   object symbols {
@@ -112,7 +110,6 @@ trait Generation {
     val transmit = Seq(transmitMultiple, transmitOptional, transmitSingle)
 
     val value = types.retier | retierTermName("value")
-    val valueOp = types.retier | retierTermName("ValueOp")
 
     val discardValue = types.retier | retierTermName("discardValue")
     val issueValue = types.retier | retierTermName("issueValue")
@@ -130,7 +127,6 @@ trait Generation {
   }
 
   object names {
-    val value = TermName("value")
     val from = TermName("from")
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")

@@ -71,9 +71,6 @@ trait PeerDefinitionCollector { this: Generation =>
               "allowed in peer type parents: " + member.name)
         }
       }
-
-      // TODO: - no type parameters for peer types to be instantiated
-      //       - multiple empty constructor argument lists possible
     }
 
     val decls = peerDefs map { case (_, _, _, _, decl) => decl }

@@ -24,6 +24,9 @@ trait PlacedExpressionsProcessor { this: Generation =>
               super.transform(exprss.head.head)
           }
 
+        case tree @ q"$_(...$exprss)" if symbols.casts contains tree.symbol =>
+          super.transform(exprss.head.head)
+
         case _ =>
           super.transform(tree)
       }

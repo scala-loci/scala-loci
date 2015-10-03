@@ -13,11 +13,6 @@ protected trait ImplicitConversions {
   }
 
 
-  final implicit class $$retier$ValueOp[T <: (_ localOn _), U](v: T)
-      (implicit ev: ValueTypes[T, U]) {
-    def value: U = `#macro`
-  }
-
   final implicit def $$retier$value[T <: (_ localOn _), U](v: T)
     (implicit ev: ValueTypes[T, U]): U = `#macro`
 

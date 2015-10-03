@@ -19,7 +19,7 @@ trait StatementCollector { this: Generation =>
     val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
 
     def extractAndValidateType(tree: Tree, tpe: Type) = {
-      val Seq(exprType, peerType) = tpe.typeArgs
+      val Seq(exprType, peerType) = tpe.widen.typeArgs
 
       if (!(peerSymbols contains peerType.typeSymbol))
         c.abort(tree.pos,

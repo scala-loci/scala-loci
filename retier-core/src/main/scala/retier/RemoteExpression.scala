@@ -4,17 +4,15 @@ import dslparadise._
 import scala.language.higherKinds
 
 protected final abstract class RemoteSelectionExpression[P <: Peer] {
-  def on[P0 <: P, `P'` <: Peer](peer: Remote[P0])
-    (implicit ev: FirstIfNotEmptyElseSecond[P, P0, `P'`]): RemoteExpression[`P'`, fromSingle]
-  def on[P0 <: P, `P'` <: Peer](peers: Remote[P0]*)
-    (implicit ev: FirstIfNotEmptyElseSecond[P, P0, `P'`]): RemoteExpression[`P'`, fromMultiple]
+  def on[P0 <: P](peer: Remote[P0]): RemoteExpression[P, fromSingle]
+  def on[P0 <: P](peers: Remote[P0]*): RemoteExpression[P, fromMultiple]
 }
 
 protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
-        ev1: PlacingTypes[P, T, U],
+        ev1: RemotePlacingTypes[T, U],
         ev2: PeerConnection[L#Connection, P, _]): U placed P
   def capture
     (v: LocalDeclaration*): RemoteCapturingExpression[P, placed]
@@ -40,7 +38,7 @@ protected final abstract class RemoteCapturingExpression[P <: Peer, placed[_, _ 
     (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
-        ev1: PlacingTypes[P, T, U],
+        ev1: RemotePlacingTypes[T, U],
         ev2: PeerConnection[L#Connection, P, _]): U placed P
 }
 
@@ -48,7 +46,7 @@ protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <:
   def apply[T, U, I, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
-        ev1: PlacingTypes[P, T, I],
+        ev1: RemotePlacingTypes[T, I],
         ev2: IssuingTypes[L, I, U],
         ev3: PeerConnection[L#Connection, P, _],
         ev4: PeerConnection[P#Connection, L, _]): U placed P
@@ -61,7 +59,7 @@ protected final abstract class RemoteIssuedCapturingExpression[P <: Peer, placed
     (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
     (implicit
         ev0: LocalPeer[L],
-        ev1: PlacingTypes[P, T, I],
+        ev1: RemotePlacingTypes[T, I],
         ev2: IssuingTypes[L, I, U],
         ev3: PeerConnection[L#Connection, P, _],
         ev4: PeerConnection[P#Connection, L, _]): U placed P

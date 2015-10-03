@@ -20,6 +20,18 @@ protected object PlacingTypes {
         ev: T <:!< (_ localOn _)): PlacingTypes[P, T, T] = `#macro`
 }
 
+@implicitNotFound("Expression not placeable on peer")
+protected final abstract class RemotePlacingTypes[T, U]
+
+protected object RemotePlacingTypes {
+  implicit def placedType[T, U]
+    (implicit
+        ev: T <:< (U localOn _)): RemotePlacingTypes[T, U] = `#macro`
+  implicit def nonPlacedType[T]
+    (implicit
+        ev: T <:!< (_ localOn _)): RemotePlacingTypes[T, T] = `#macro`
+}
+
 @implicitNotFound("Issued type not inferable")
 protected final abstract class IssuingTypes[R <: Peer, T, U]
 

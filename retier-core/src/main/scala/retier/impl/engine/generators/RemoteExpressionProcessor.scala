@@ -213,7 +213,9 @@ trait RemoteExpressionProcessor { this: Generation =>
             case tree: RefTree
                 if tree.symbol != NoSymbol && !tree.isRetierSynthetic =>
               if (capturedDefs contains tree.symbol)
-                internal setType (q"${capturedDefs(tree.symbol)}", tree.tpe)
+                internal setPos (
+                  internal setType (q"${capturedDefs(tree.symbol)}", tree.tpe),
+                  tree.pos)
               else if (localDefs contains tree.symbol)
                 super.transform(tree)
               else if ((defs contains tree.symbol) ||
