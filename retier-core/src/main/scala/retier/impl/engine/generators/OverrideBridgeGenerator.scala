@@ -21,7 +21,7 @@ trait OverrideBridgeGenerator { this: Generation =>
     val stats = aggregator.all[PlacedStatement] collect {
       case stat @ PlacedStatement(
           definition @ ValDef(mods, name, tpt, _), _, _, _,
-          Some(overridingDecl), _) =>
+          Some(overridingDecl), _, _) =>
         validatePlacedResultTypes(
           overridingDecl.typeSignature.finalResultType, tpt.tpe, definition.pos)
 
@@ -40,7 +40,7 @@ trait OverrideBridgeGenerator { this: Generation =>
 
       case stat @ PlacedStatement(
           definition @ DefDef(mods, name, tparams, vparamss, tpt, _), _, _, _,
-          Some(overridingDecl), _) =>
+          Some(overridingDecl), _, _) =>
         validatePlacedResultTypes(
           overridingDecl.typeSignature.finalResultType, tpt.tpe, definition.pos)
         if (overridingDecl.isStable)

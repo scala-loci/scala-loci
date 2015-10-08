@@ -26,30 +26,48 @@ trait OutputGenerator { this: Generation =>
         compileTimeOnlyAnnotation +: mods.annotations)
 
     val stats =
-      (aggregator.all[NonPlacedStatement] map { stat =>
-        OutputStatement(stat.tree)
+      (aggregator.all[NonPlacedStatement] collect {
+        case NonPlacedStatement(importStat @ Import(_, _), _) =>
+          importStat
+
+        case NonPlacedStatement(definition, _)
+            if definition.symbol == NoSymbol ||
+               definition.symbol.isType ||
+               definition.symbol.name == termNames.CONSTRUCTOR  =>
+          definition
+
+        case NonPlacedStatement(definition @
+            ValDef(mods, name, tpt, rhs), _) =>
+          ValDef(
+            annotate(mods), name, tpt.typeTree, `#macro`)
+
+        case NonPlacedStatement(definition @
+              DefDef(mods, name, tparams, vparamss, tpt, rhs), _) =>
+          DefDef(
+            annotate(mods), name, tparams, vparamss, tpt.typeTree, `#macro`)
       }) ++
       (aggregator.all[PlacedStatement] collect {
         case PlacedStatement(definition @
-              ValDef(mods, name, tpt, rhs), _, _, _, _, _)
+              ValDef(mods, name, tpt, rhs), _, _, _, _, _, _)
             if !definition.isRetierSynthetic =>
-          OutputStatement(ValDef(annotate(mods), name,
-            tpt.typeTree, `#macro`))
+          ValDef(
+            annotate(mods), name, tpt.typeTree, `#macro`)
 
         case PlacedStatement(definition @
-              DefDef(mods, name, tparams, vparamss, tpt, rhs), _, _, _, _, _)
+              DefDef(mods, name, tparams, vparamss, tpt, rhs), _, _, _, _, _, _)
             if !definition.isRetierSynthetic =>
-          OutputStatement(DefDef(annotate(mods), name, tparams, vparamss,
-            tpt.typeTree, `#macro`))
+          DefDef(
+            annotate(mods), name, tparams, vparamss, tpt.typeTree, `#macro`)
       }) ++
       (aggregator.all[PeerDefinition] flatMap { stat =>
-        OutputStatement(stat.tree) +:
-          (stat.companion map OutputStatement).toList
+        stat.tree +: stat.companion.toList
       })
 
-    echo(verbose = true,
-      s"  [${stats.size} output statements added]")
+    val outputStats = stats.zipWithIndex map OutputStatement.tupled
 
-    aggregator add stats
+    echo(verbose = true,
+      s"  [${outputStats.size} output statements added]")
+
+    aggregator add outputStats
   }
 }

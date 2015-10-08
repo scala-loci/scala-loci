@@ -246,7 +246,7 @@ trait RemoteExpressionProcessor { this: Generation =>
 
         declStats += PlacedStatement(
           dummyDefinition, peerType.typeSymbol.asType, exprType,
-          Some(markRetierSynthetic(exprTypeTree)), None, remoteExpr)
+          Some(markRetierSynthetic(exprTypeTree)), None, remoteExpr, -1)
 
         val call = super.transform(
           internal setType (

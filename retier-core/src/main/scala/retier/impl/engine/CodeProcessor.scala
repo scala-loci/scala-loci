@@ -29,7 +29,7 @@ class CodeProcessor[C <: Context](val c: C) extends
 
   def process(state: CodeWrapper[c.type]): CodeWrapper[c.type] = {
     val aggregator =
-      Aggregator.create(state.body map InputStatement) add
+      Aggregator.create(state.body.zipWithIndex map InputStatement.tupled) add
       List(EnclosingContext(state.name, state.bases)) aggregate
       collectPeerDefinitions aggregate
       collectStatements aggregate

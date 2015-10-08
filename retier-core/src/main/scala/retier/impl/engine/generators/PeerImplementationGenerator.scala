@@ -10,9 +10,8 @@ trait PeerImplementationGenerator { this: Generation =>
   import c.universe._
 
   val generatePeerImplementations = UniformAggregation[
-    EnclosingContext with PeerDefinition with
-    PlacedStatement with PlacedAbstraction with
-    PeerConnectionMultiplicity] {
+    EnclosingContext with PeerDefinition with NonPlacedStatement with
+    PlacedStatement with PlacedAbstraction with PeerConnectionMultiplicity] {
       aggregator =>
 
     echo(verbose = true, " Generating peer implementations")
@@ -89,30 +88,95 @@ trait PeerImplementationGenerator { this: Generation =>
         _.peerSymbol == peerSymbol
       }
 
-    def peerPlacedStatements(peerSymbol: TypeSymbol) =
-      aggregator.all[PlacedStatement] collect {
+    def peerPlacedStatements(peerSymbol: TypeSymbol,
+        peerSymbols: List[TypeSymbol]) = {
+      val hasExpandingParent =
+        (peerSymbol.toType.baseClasses.tail intersect peerSymbols).nonEmpty
+
+      val placedStats = aggregator.all[PlacedStatement] collect {
         case PlacedStatement(
             definition @ ValDef(mods, name, _, _),
-            `peerSymbol`, exprType, Some(declTypeTree), _, expr) =>
-          internal setPos (
+            `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) =>
+          (internal setPos (
             new PlacedReferenceAdapter(peerSymbol) transform
               ValDef(flagDefinition(mods, expr), name,
                 createDeclTypeTree(declTypeTree, exprType), expr),
-            definition.pos)
+            definition.pos),
+          index)
 
         case PlacedStatement(
             definition @ DefDef(mods, name, tparams, vparamss, _, _),
-            `peerSymbol`, exprType, Some(declTypeTree), _, expr) =>
-          internal setPos (
+            `peerSymbol`, exprType, Some(declTypeTree), _, expr, index) =>
+          (internal setPos (
             new PlacedReferenceAdapter(peerSymbol) transform
               DefDef(flagDefinition(mods, expr), name, tparams, vparamss,
                 createDeclTypeTree(declTypeTree, exprType), expr),
-            definition.pos)
+            definition.pos),
+          index)
 
-        case PlacedStatement(tree, `peerSymbol`, _, None, _, expr) =>
-          new PlacedReferenceAdapter(peerSymbol) transform
-            expr
+        case PlacedStatement(tree, `peerSymbol`, _, None, _, expr, index) =>
+          (new PlacedReferenceAdapter(peerSymbol) transform expr, index)
       }
+
+      val nonPlacedStats =
+        if (hasExpandingParent)
+          List.empty
+        else
+          aggregator.all[NonPlacedStatement] collect {
+            case NonPlacedStatement(stat, index)
+                if stat.symbol != NoSymbol &&
+                   !stat.symbol.isType &&
+                   stat.symbol.name != termNames.CONSTRUCTOR =>
+              (stat, index)
+          }
+
+      if (hasExpandingParent) {
+        val firstConstructorStatement = (placedStats filter {
+          case (ValDef(mods, _, _, _), _) => !(mods hasFlag Flag.LAZY)
+          case (DefDef(_, _, _, _, _, _), _) => false
+          case (ModuleDef(_, _, _), _) => false
+          case _ => true
+        }).headOption map {
+          case (_, index) => index
+        }
+
+        firstConstructorStatement match {
+          case Some(firstConstructorIndex) =>
+            val placedStats = aggregator.all[PlacedStatement] filter {
+              case PlacedStatement(stat, otherPeerSymbol, _, _, _, _, index) =>
+                peerSymbol.toType =:!= otherPeerSymbol.toType &&
+                peerSymbol.toType <:< otherPeerSymbol.toType &&
+                !stat.isRetierSynthetic &&
+                index > firstConstructorIndex
+            } map { _.tree }
+
+            val nonPlacedStats = aggregator.all[NonPlacedStatement] filter {
+              case NonPlacedStatement(stat, index) =>
+                stat.symbol != NoSymbol &&
+                !stat.symbol.isType &&
+                stat.symbol.name != termNames.CONSTRUCTOR &&
+                index > firstConstructorIndex
+            } map { _.tree }
+
+            (placedStats ++ nonPlacedStats) filter {
+              case ValDef(mods, _, _, _) => !(mods hasFlag Flag.LAZY)
+              case DefDef(mods, _, _, _, _, _) => false
+              case ModuleDef(_, _, _) => false
+              case _ => true
+            } foreach { stat =>
+              c.warning(stat.pos,
+                "Expression will be evaluated before preceding expressions " +
+                "that are placed on peer subtypes")
+            }
+
+          case _ =>
+        }
+      }
+
+      (placedStats ++ nonPlacedStats) sortBy { case (_, index) => index } map {
+        case (stat, _) => stat
+      }
+    }
 
     def peerImplementationParents(parents: List[Tree]) = parents map {
       case parent if parent.tpe =:= types.peer =>
@@ -128,11 +192,11 @@ trait PeerImplementationGenerator { this: Generation =>
 
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
       val PeerDefinition(tree, peerSymbol, typeArgs, args, parents, mods,
-        _, isClass, companion) = peerDefinition
+        _, isClass, companion, _) = peerDefinition
 
       val peerName = peerSymbol.name
       val abstractions = peerPlacedAbstractions(peerSymbol)
-      val statements = peerPlacedStatements(peerSymbol)
+      val statements = peerPlacedStatements(peerSymbol, peerSymbols)
       val implParents = peerImplementationParents(parents)
 
       val duplicateName = peerSymbol.toType.baseClasses filter {
@@ -216,7 +280,7 @@ trait PeerImplementationGenerator { this: Generation =>
 
     def processPeerDefinition(peerDefinition: PeerDefinition) = {
       val PeerDefinition(tree, peerSymbol, typeArgs, args, parents, mods, stats,
-        isClass, _) = peerDefinition
+        isClass, _, _) = peerDefinition
 
       val peerName = peerSymbol.name
       val multiplicities = peerConnectionMultiplicities(peerSymbol)

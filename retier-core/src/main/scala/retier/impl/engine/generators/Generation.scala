@@ -175,19 +175,22 @@ trait Generation {
   }
 
 
+  trait Statement { def index: Int }
+
   case class EnclosingContext(name: TypeName, bases: List[Tree])
 
-  case class InputStatement(stat: Tree)
+  case class InputStatement(stat: Tree, index: Int) extends Statement
 
   case class PeerDefinition(tree: Tree, peerSymbol: TypeSymbol,
     typeArgs: List[Tree], args: List[List[Tree]], parents: List[Tree],
     mods: Modifiers, stats: List[Tree], isClass: Boolean,
-    companion: Option[Tree])
+    companion: Option[Tree], index: Int) extends Statement
 
   case class PlacedStatement(tree: Tree, peerSymbol: TypeSymbol, exprType: Type,
-    declTypeTree: Option[Tree], overridingDecl: Option[TermSymbol], expr: Tree)
+    declTypeTree: Option[Tree], overridingDecl: Option[TermSymbol], expr: Tree,
+    index: Int) extends Statement
 
-  case class NonPlacedStatement(tree: Tree)
+  case class NonPlacedStatement(tree: Tree, index: Int) extends Statement
 
   case class PlacedAbstraction(peerSymbol: TypeSymbol,
     interfaceDefinitions: List[Tree], dispatchClause: CaseDef)
@@ -195,7 +198,7 @@ trait Generation {
   case class PeerConnectionMultiplicity(peerSymbol: TypeSymbol,
     connectedPeer: Tree, connectionMultiplicity: Tree)
 
-  case class OutputStatement(stat: Tree)
+  case class OutputStatement(stat: Tree, index: Int) extends Statement
 
 
   val echo = Echo(c)

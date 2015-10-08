@@ -35,23 +35,24 @@ trait StatementCollector { this: Generation =>
     def isPeerDefinition(symbol: Symbol) =
       symbol != null && symbol.isClass && symbol.asClass.toType <:< types.peer
 
-    val stats = aggregator.all[InputStatement] map { _.stat } collect {
-      case stat: ValOrDefDef if isPlacedType(stat.tpt.tpe) =>
+    val stats = aggregator.all[InputStatement] collect {
+      case InputStatement(stat: ValOrDefDef, index)
+          if isPlacedType(stat.tpt.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpt.tpe)
         val declTypeTree = stat.tpt.typeArgTrees.head
-        PlacedStatement(
-          stat, peerType.typeSymbol.asType, exprType, Some(declTypeTree), None,
-          stat.rhs)
+        PlacedStatement(stat, peerType.typeSymbol.asType, exprType.widen,
+          Some(declTypeTree), None, stat.rhs, index)
 
-      case stat if isPlacedType(stat.tpe) =>
+      case InputStatement(stat, index)
+          if isPlacedType(stat.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpe)
-        PlacedStatement(
-          stat, peerType.typeSymbol.asType, exprType, None, None, stat)
+        PlacedStatement(stat, peerType.typeSymbol.asType, exprType.widen,
+          None, None, stat, index)
 
-      case stat
+      case InputStatement(stat, index)
           if !isPeerDefinition(stat.symbol) &&
              !isPeerDefinition(stat.symbol.companion) =>
-        NonPlacedStatement(stat)
+        NonPlacedStatement(stat, index)
     }
 
     val placedStats = stats collect { case stat: PlacedStatement => stat }

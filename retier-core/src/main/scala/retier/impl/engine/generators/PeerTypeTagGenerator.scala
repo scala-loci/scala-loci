@@ -37,7 +37,7 @@ trait PeerTypeTagGenerator { this: Generation =>
       import trees._
       import names._
 
-      val PeerDefinition(_, peerSymbol, typeArgs, _, parents, _, _, _, _) =
+      val PeerDefinition(_, peerSymbol, typeArgs, _, parents, _, _, _, _, _) =
         peerDefinition
 
       val peerName = peerSymbol.name
@@ -61,7 +61,7 @@ trait PeerTypeTagGenerator { this: Generation =>
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
       import names._
 
-      val PeerDefinition(_, peerSymbol, _, _, _, _, _, _, companion) =
+      val PeerDefinition(_, peerSymbol, _, _, _, _, _, _, companion, _) =
         peerDefinition
 
       val companionName = peerSymbol.name.toTermName

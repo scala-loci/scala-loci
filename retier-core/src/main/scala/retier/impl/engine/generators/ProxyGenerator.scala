@@ -77,8 +77,8 @@ trait ProxyGenerator { this: Generation =>
     }
 
     val decls = aggregator.all[PlacedStatement] collect {
-      case stat @
-            PlacedStatement(decl: ValOrDefDef, _, _, Some(declTypeTree), _, _)
+      case stat @ PlacedStatement(
+            decl: ValOrDefDef, _, _, Some(declTypeTree), _, _, _)
           if decl.tpt.tpe <:< types.sharedOn =>
         stat
     }
@@ -88,7 +88,7 @@ trait ProxyGenerator { this: Generation =>
     val abstractions = peerDecls flatMap { case (peerName, stats) =>
       stats.zipWithIndex map {
         case (PlacedStatement(decl: ValOrDefDef, peerSymbol, exprType,
-                              Some(declTypeTree), _, _),
+                              Some(declTypeTree), _, _, _),
               index) =>
         import trees._
 

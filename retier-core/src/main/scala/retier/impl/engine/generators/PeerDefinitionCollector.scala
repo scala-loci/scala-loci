@@ -20,23 +20,23 @@ trait PeerDefinitionCollector { this: Generation =>
            $mods class $tpname[..$tparams] $ctorMods(...$paramss)
              extends { ..$earlydefns } with ..$parents { $self =>
              ..$stats
-           }""") if peer.symbol.asClass.toType <:< types.peer =>
+           }""", index) if peer.symbol.asClass.toType <:< types.peer =>
         val sym = peer.symbol.asClass
         (earlydefns, paramss, parents, stats,
          PeerDefinition(
           peer, sym, tparams, paramss, parents, typer cleanModifiers mods,
-          stats, isClass = true, None))
+          stats, isClass = true, None, index))
 
       case InputStatement(peer @ q"""
            $mods trait $tpname[..$tparams]
              extends { ..$earlydefns } with ..$parents { $self =>
              ..$stats
-           }""") if peer.symbol.asClass.toType <:< types.peer =>
+           }""", index) if peer.symbol.asClass.toType <:< types.peer =>
         val sym = peer.symbol.asClass
         (earlydefns, List.empty, parents, stats,
          PeerDefinition(
           peer, sym, tparams, List.empty, parents, typer cleanModifiers mods,
-          stats, isClass = false, None))
+          stats, isClass = false, None, index))
     }
 
     peerDefs foreach { case (earlydefns, params, parents, stats, _) =>
@@ -84,7 +84,7 @@ trait PeerDefinitionCollector { this: Generation =>
           $mods object $tname
             extends { ..$earlydefns } with ..$parents { $self =>
             ..$body
-          }""")) if names contains tname =>
+          }""", _)) if names contains tname =>
         val index = names(tname)
         val decl = decls(index)
         decls updated (index, decl copy (companion = Some(companion)))

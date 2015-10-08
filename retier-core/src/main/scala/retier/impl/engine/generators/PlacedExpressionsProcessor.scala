@@ -76,8 +76,8 @@ trait PlacedExpressionsProcessor { this: Generation =>
         (stat: PlacedStatement): PlacedStatement = {
       import trees._
 
-      val PlacedStatement(
-        tree, peerSymbol, exprType, declTypeTree, overridingDecl, expr) = stat
+      val PlacedStatement(tree, peerSymbol, exprType, declTypeTree,
+        overridingDecl, expr, index) = stat
 
       // process overriding declaration and extract placed expression
       val (processedOverridingDecl, placedExpr) =
@@ -114,8 +114,9 @@ trait PlacedExpressionsProcessor { this: Generation =>
 
         // construct new placed statement
         // with the actual placed expression syntactic construct removed
-        PlacedStatement(tree, peerSymbol, exprType, declTypeTree,
-          processedOverridingDecl, baseReferencProcessor transform placedExpr)
+        PlacedStatement(
+          tree, peerSymbol, exprType, declTypeTree, processedOverridingDecl,
+          baseReferencProcessor transform placedExpr, index)
     }
 
     def dropPrecedingGlobalCasts
