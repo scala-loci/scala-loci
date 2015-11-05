@@ -18,10 +18,17 @@ trait PeerImplementationGenerator { this: Generation =>
 
     val synthetic = Flag.SYNTHETIC
     val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
-    val enclosingName = aggregator.all[EnclosingContext].head.name
 
     class PlacedReferenceAdapter(peerSymbol: TypeSymbol) extends Transformer {
-      val baseClasses = peerSymbol.toType.baseClasses
+      val baseClasses = peerSymbol.toType.baseClasses filter {
+        _.asType.toType <:< types.peer
+      }
+      val baseOwners = baseClasses map { baseClass =>
+        if (baseClass.owner.isModule)
+          baseClass.owner.asModule.moduleClass
+        else
+          baseClass.owner
+      }
 
       def placedType(tpe: Type): Option[Type] =
         if (tpe != null && tpe.finalResultType <:< types.localOn &&
@@ -50,8 +57,12 @@ trait PeerImplementationGenerator { this: Generation =>
                 q"$name"
               else
                 super.transform(tree)
+
             case _ =>
-              super.transform(tree)
+              if (baseOwners contains tree.symbol.owner)
+                q"$name"
+              else
+                super.transform(tree)
           }
 
         case _ =>
