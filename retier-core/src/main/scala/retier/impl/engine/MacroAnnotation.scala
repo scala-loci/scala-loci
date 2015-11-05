@@ -69,10 +69,10 @@ object multitier {
      */
     val result = annottee match {
       // class or trait definition
-      case ClassDef(_, realName, _, _) =>
-        val dummyName = TypeName(s"${realName.toString} ")
+      case ClassDef(_, originalName, _, _) =>
+        val surrogateName = typer surrogateName originalName
         val ClassDef(mods, tpname, tparams, Template(parents, self, body)) =
-          renameAnnottee(annottee, dummyName)
+          renameAnnottee(annottee, surrogateName)
         val constructors = extractConstructors(body)
 
         class ClassWrapper(stats: List[c.Tree]) extends CodeWrapper[c.type] {
@@ -81,7 +81,7 @@ object multitier {
             typer retypecheckAll
               ClassDef(mods, tpname, tparams, Template(
                 parents, self, constructors ++ extractNonConstructors(stats)))
-          val name = dummyName
+          val name = surrogateName
           val  ClassDef(_, _, _, Template(bases, _, body)) = tree
 
           def replaceBody(body: List[context.Tree]) = new ClassWrapper(body)
@@ -94,13 +94,13 @@ object multitier {
 
         val result = processor process state
 
-        (typer untypecheckAll renameAnnottee(result.tree, realName))
+        renameAnnottee(typer untypecheckAll result.tree, originalName)
 
       // module definition
-      case ModuleDef(_, realName, _) =>
-        val dummyName = TypeName(s"${realName.toString} ")
+      case ModuleDef(_, originalName, _) =>
+        val surrogateName = typer surrogateName originalName.toTypeName
         val ModuleDef(mods, tname, Template(parents, self, body)) =
-          renameAnnottee(annottee, dummyName)
+          renameAnnottee(annottee, surrogateName)
         val constructors = extractConstructors(body)
 
         class ModuleWrapper(stats: List[c.Tree]) extends CodeWrapper[c.type] {
@@ -109,7 +109,7 @@ object multitier {
             typer retypecheckAll
               ModuleDef(mods, tname, Template(
                 parents, self, constructors ++ extractNonConstructors(stats)))
-          val name = dummyName
+          val name = surrogateName
           val ModuleDef(_, _, Template(bases, _, body)) = tree
 
           def replaceBody(body: List[context.Tree]) = new ModuleWrapper(body)
@@ -122,13 +122,12 @@ object multitier {
 
         val result = processor process state
 
-        typer untypecheckAll renameAnnottee(result.tree, realName)
+        renameAnnottee(typer untypecheckAll result.tree, originalName)
 
       case _ =>
         c.abort(
           c.enclosingPosition,
           "`multitier` macro only applicable to class, trait or object")
-        EmptyTree
     }
 
     if (companion.isEmpty)
