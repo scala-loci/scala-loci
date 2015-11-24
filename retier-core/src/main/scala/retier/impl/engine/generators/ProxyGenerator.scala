@@ -148,9 +148,9 @@ trait ProxyGenerator { this: Generation =>
             if (isMutable) {
               q"""if (request.isEmpty)
                     $Success(
-                      $localResponseTerm marshall ($declInvocation, ref))
+                      $localResponseTerm marshal ($declInvocation, ref))
                   else
-                    $remoteRequestTerm unmarshall (request, ref) map { arg =>
+                    $remoteRequestTerm unmarshal (request, ref) map { arg =>
                       $declTerm = arg; ""
                     }
                """
@@ -158,14 +158,14 @@ trait ProxyGenerator { this: Generation =>
             else {
               val marshalled =
                 if (hasReturnValue)
-                  q"""$localResponseTerm marshall ($declInvocation, ref)"""
+                  q"""$localResponseTerm marshal ($declInvocation, ref)"""
                 else
                   q"""$declInvocation; """""
 
               if (isNullary)
                 q"""$Success($marshalled)"""
               else
-                q"""$remoteRequestTerm unmarshall (request, ref) map { args =>
+                q"""$remoteRequestTerm unmarshal (request, ref) map { args =>
                       $marshalled
                     }
                  """
@@ -240,7 +240,7 @@ trait ProxyGenerator { this: Generation =>
           if (isMutable || hasReturnValue)
             Some(markRetierSynthetic(
               q"""$synthetic private[$peerName] val $localResponseTermName =
-                    $implicitly[$Marshallable[$localResponseTypeTree]]""",
+                    $Marshallable[$localResponseTypeTree]""",
               decl.pos))
           else
             None
@@ -249,7 +249,7 @@ trait ProxyGenerator { this: Generation =>
           if (isMutable || !isNullary)
             Some(markRetierSynthetic(
               q"""$synthetic private[$peerName] val $remoteRequestTermName =
-                    $implicitly[$Marshallable[$remoteRequestTypeTree]]""",
+                    $MarshallableArgument[$remoteRequestTypeTree]""",
               decl.pos))
           else
             None

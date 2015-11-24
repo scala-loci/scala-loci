@@ -29,17 +29,18 @@ object RetierBuild extends Build {
     id = "retier",
     base = file("."),
     settings = defaultSettings ++ nopublish
-  ) aggregate (retierCore, retierMarshallableUpickle)
+  ) aggregate (retierCore, retierSerializableUpickle)
 
   lazy val retierCore = Project(
     id = "retier-core",
     base = file("retier-core"),
-    settings = defaultSettings ++ macroparadise ++ macrodeclaration
+    settings = defaultSettings ++
+      SourceGenerator.transmittableTuples ++ macroparadise ++ macrodeclaration
   )
 
-  lazy val retierMarshallableUpickle = Project(
-    id = "retier-marshallable-upickle",
-    base = file("retier-marshallable-upickle"),
+  lazy val retierSerializableUpickle = Project(
+    id = "retier-serializable-upickle",
+    base = file("retier-serializable-upickle"),
     settings = defaultSettings ++ upickle
   ) dependsOn (retierCore)
 }
