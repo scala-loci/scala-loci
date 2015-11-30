@@ -1,6 +1,8 @@
 package retier
 package network
 
+import scala.concurrent.Future
+
 trait ConnectionRequestor {
-  def request: Connection
+  def request: Future[Connection]
 }
