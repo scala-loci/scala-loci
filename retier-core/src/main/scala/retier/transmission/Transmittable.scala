@@ -17,13 +17,13 @@ abstract class PushBasedTransmittable[T, T0, S, R0, R](implicit
   private[retier] val marshallable =
     Marshallable.marshallable(transmittable, serializable)
 
-  def send(value: T, sending: Sending[T0]): S
-  def receive(value: S, receiving: Receiving[R0]): R
+  def send(value: T, remote: RemoteRef, sending: Sending[T0]): S
+  def receive(value: S, remote: RemoteRef, receiving: Receiving[R0]): R
 }
 
 abstract class PullBasedTransmittable[T, S, R] extends Transmittable[T, S, R] {
-  def send(value: T): S
-  def receive(value: S): R
+  def send(value: T, remote: RemoteRef): S
+  def receive(value: S, remote: RemoteRef): R
 }
 
 
@@ -46,8 +46,8 @@ object IdenticallyTransmittable {
 
   sealed class PullBasedIdenticallyTransmittable[T]
       extends PullBasedTransmittable[T, T, T] {
-    def send(value: T) = value
-    def receive(value: T) = value
+    def send(value: T, remote: RemoteRef) = value
+    def receive(value: T, remote: RemoteRef) = value
   }
 
   private[this] final val singletonPullBasedIdenticallyTransmittable =

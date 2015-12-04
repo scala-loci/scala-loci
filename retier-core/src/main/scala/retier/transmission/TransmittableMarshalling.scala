@@ -39,14 +39,15 @@ object transmittableMarshalling {
       value: T, abstraction: AbstractionRef): S =
     transmittable match {
       case transmittable: PullBasedTransmittable[T, S, R] =>
-        transmittable send value
+        transmittable send (value, abstraction.remote)
 
       case transmittable: PushBasedTransmittable[T, T0, S, R0, R] @unchecked =>
-        def _abstraction = abstraction
+        abstract class SendingImpl[U](val abstraction: AbstractionRef)
+          extends Sending[U]
 
         val sending =
-          new { val abstraction = _abstraction } with Sending[T0] {
-            val doSend: T0 => Unit = withValue(0) { (value, turn) =>
+          new SendingImpl[T0](abstraction) {
+            private val doSend: T0 => Unit = withValue(0) { (value, turn) =>
               abstraction.channel send ("Value-Push",
                 marshall(value, abstraction derive turn.toString))
               turn + 1
@@ -54,27 +55,28 @@ object transmittableMarshalling {
 
             def send(value: T0) = doSend(value)
 
-            def marshall(value: T0, abstraction: AbstractionRef) =
+            private def marshall(value: T0, abstraction: AbstractionRef) =
               currentAbstraction.withValue(Some((abstraction, 0))) {
                 transmittable.marshallable marshal (value, abstraction)
               }
           }
 
-        transmittable send (value, sending)
+        transmittable send (value, abstraction.remote, sending)
     }
 
   private def receive[T, T0, S, R0, R](transmittable: Transmittable[T, S, R],
       value: S, abstraction: AbstractionRef): R =
     transmittable match {
       case transmittable: PullBasedTransmittable[T, S, R] =>
-        transmittable receive value
+        transmittable receive (value, abstraction.remote)
 
       case transmittable: PushBasedTransmittable[T, T0, S, R0, R] @unchecked =>
-        def _abstraction = abstraction
+        abstract class ReceivingImpl[U](val abstraction: AbstractionRef)
+          extends Receiving[U]
 
         val receiving =
-          new { val abstraction = _abstraction } with Receiving[R0] {
-            val doReceive = Notifier[R0]
+          new ReceivingImpl[R0](abstraction) {
+            private val doReceive = Notifier[R0]
 
             abstraction.channel.receive +=
               withValue(0) { case ((messageType, payload), turn) =>
@@ -89,13 +91,13 @@ object transmittableMarshalling {
 
             val receive = doReceive.notification
 
-            def unmarshall(value: String, abstraction: AbstractionRef) =
+            private def unmarshall(value: String, abstraction: AbstractionRef) =
               currentAbstraction.withValue(Some((abstraction, 0))) {
                 transmittable.marshallable unmarshal (value, abstraction)
               }
           }
 
-        transmittable receive (value, receiving)
+        transmittable receive (value, abstraction.remote, receiving)
     }
 
   private def deriveAbstraction(

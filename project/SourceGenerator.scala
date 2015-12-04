@@ -34,8 +34,8 @@ object SourceGenerator {
           |        $tuple[$tupleArgsT],
           |        $tuple[$tupleArgsS],
           |        $tuple[$tupleArgsR]] {
-          |      def send(value: $tuple[$tupleArgsT]) = $tuple($send)
-          |      def receive(value: $tuple[$tupleArgsS]) = $tuple($receive)
+          |      def send(value: $tuple[$tupleArgsT], remote: RemoteRef) = $tuple($send)
+          |      def receive(value: $tuple[$tupleArgsS], remote: RemoteRef) = $tuple($receive)
           |    }
           |"""
 

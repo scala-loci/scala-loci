@@ -10,4 +10,5 @@ trait Channel {
 
   def send(messageType: String, payload: String): Unit
   def close(): Unit
+  def isOpen: Boolean
 }
