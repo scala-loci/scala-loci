@@ -17,6 +17,10 @@ object RetierBuild extends Build {
     )
   )
 
+  val rescala = Seq(
+    libraryDependencies += "de.tuda.stg" %% "rescala" % "0+"
+  )
+
   val upickle = Seq(
     libraryDependencies += "com.lihaoyi" %% "upickle" % "0.3.4"
   )
@@ -29,7 +33,9 @@ object RetierBuild extends Build {
     id = "retier",
     base = file("."),
     settings = defaultSettings ++ nopublish
-  ) aggregate (retierCore, retierSerializableUpickle)
+  ) aggregate (
+    retierCore, retierSerializableUpickle,
+    retierTransmitterBasic, retierTransmitterRescala)
 
   lazy val retierCore = Project(
     id = "retier-core",
@@ -42,5 +48,17 @@ object RetierBuild extends Build {
     id = "retier-serializable-upickle",
     base = file("retier-serializable-upickle"),
     settings = defaultSettings ++ upickle
-  ) dependsOn (retierCore)
+  ) dependsOn retierCore
+
+  lazy val retierTransmitterBasic = Project(
+    id = "retier-transmitter-basic",
+    base = file("retier-transmitter-basic"),
+    settings = defaultSettings
+  ) dependsOn retierCore
+
+  lazy val retierTransmitterRescala = Project(
+    id = "retier-transmitter-rescala",
+    base = file("retier-transmitter-rescala"),
+    settings = defaultSettings ++ rescala
+  ) dependsOn retierCore
 }
