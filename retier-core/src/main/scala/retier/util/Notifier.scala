@@ -4,21 +4,32 @@ package util
 import java.util.concurrent.ConcurrentLinkedDeque
 import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
+import scala.util.control.NonFatal
 
 trait Notification[T] { self =>
   private val listeners =
     new ConcurrentLinkedDeque[(T => _, Option[ExecutionContext])]
 
+  protected def reportFailure(exception: Throwable): Unit
+
   protected def notify(v: T): Unit =
     listeners.asScala foreach {
-      case (f, Some(ec)) => ec execute new Runnable { def run() = f(v) }
-      case (f, None) => f(v)
+      case (f, Some(ec)) => ec execute new Runnable { def run() =
+        try f(v)
+        catch { case NonFatal(exception) => reportFailure(exception) }
+      }
+
+      case (f, None) =>
+        try f(v)
+        catch { case NonFatal(exception) => reportFailure(exception) }
     }
 
   private def createTransformedNotification[U]
       (transformation: PartialFunction[T, U],
        oec: Option[ExecutionContext]): Notification[U] =
     new Notification[U] {
+      protected def reportFailure(exception: Throwable) =
+        self.reportFailure(exception)
 
       private[this] val propagate: T => Unit = value =>
         if (transformation isDefinedAt value)
@@ -75,9 +86,12 @@ trait Notification[T] { self =>
     }
 }
 
-class Notifier[T] {
+class Notifier[T](failureReporter: Throwable => Unit) {
   protected class NotifierNotification extends Notification[T] {
-    override protected[Notifier] def notify(v: T) = super.notify(v)
+    override protected[Notifier] def reportFailure(exception: Throwable) =
+      failureReporter(exception)
+    override protected[Notifier] def notify(v: T) =
+      super.notify(v)
   }
 
   protected val notifierNotification = new NotifierNotification
@@ -91,5 +105,8 @@ class Notifier[T] {
 }
 
 object Notifier {
-  def apply[T] = new Notifier[T]
+  def apply[T] =
+    new Notifier[T](ExecutionContext.defaultReporter)
+  def apply[T](failureReporter: Throwable => Unit) =
+    new Notifier[T](failureReporter)
 }

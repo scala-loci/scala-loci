@@ -72,7 +72,9 @@ class RemoteConnections(peerType: PeerType,
 
   private val doConstraintsSatisfied = Notifier[Unit]
 
-  private val doConstraintsViolated = Notifier[Unit]
+  private val doConstraintsViolated = Notifier[RemoteConnectionException]
+
+  private val doTerminated = Notifier[Unit]
 
   private val doReceive = Notifier[(RemoteRef, Message)]
 
@@ -80,9 +82,13 @@ class RemoteConnections(peerType: PeerType,
 
   def remoteLeft: Notification[RemoteRef] = doRemoteLeft.notification
 
-  def constraintsSatisfied: Notification[Unit] = doConstraintsSatisfied.notification
+  def constraintsSatisfied: Notification[Unit] =
+    doConstraintsSatisfied.notification
 
-  def constraintsViolated: Notification[Unit] = doConstraintsViolated.notification
+  def constraintsViolated: Notification[RemoteConnectionException] =
+    doConstraintsViolated.notification
+
+  def terminated: Notification[Unit] = doTerminated.notification
 
   def remotes: List[RemoteRef] = state.connections.keys.asScala.toList
 
@@ -107,24 +113,35 @@ class RemoteConnections(peerType: PeerType,
 
             val receive = { data: String =>
               state synchronized {
-                val handleAccept = handleAcceptMessage(connection, remote)
-                val handleRequest = handleRequestMessage(connection) andThen {
-                  _ map { case (remote, _) => remote }
+                if (promise.isCompleted)
+                  Message deserialize data map { doBufferedReceive(remote, _) }
+                else {
+                  val handleAccept =
+                    handleAcceptMessage(connection, remote)
+                  val handleRequest =
+                    handleRequestMessage(connection, remotePeerType) andThen {
+                      _ map { case (remote, _) => remote }
+                    }
+
+                  state.potentials -= remotePeerType
+
+                  val result = Message deserialize data flatMap {
+                    handleAccept orElse handleRequest orElse handleUnknownMessage
+                  }
+
+                  state.potentials += remotePeerType
+
+                  promise complete result
                 }
-
-                state.potentials -= remotePeerType
-
-                val result = Message deserialize data flatMap {
-                  handleAccept orElse handleRequest orElse handleUnknownMessage
-                }
-
-                state.potentials += remotePeerType
-
-                promise complete result
               }
             }
 
-            val terminated = { _: Unit => promise failure terminatedException }
+            val terminated = { _: Unit =>
+              state synchronized {
+                if (!promise.isCompleted)
+                  promise failure terminatedException
+              }
+            }
 
             future onComplete { _ =>
               connection.receive -= receive
@@ -147,7 +164,7 @@ class RemoteConnections(peerType: PeerType,
           Future failed violationException
       }
 
-  def listen(connectionListener: ConnectionListener,
+  def listen(connectionListener: ConnectionListener, remotePeerType: PeerType,
       createDesignatedInstance: Boolean = false)
   : Notification[Try[(RemoteRef, RemoteConnections)]] = {
     val doNotify = Notifier[Try[(RemoteRef, RemoteConnections)]]
@@ -156,8 +173,8 @@ class RemoteConnections(peerType: PeerType,
       val doRemoveConnectionListener = Notifier[Unit]
 
       val receive = { data: String =>
-        val handleRequest =
-          handleRequestMessage(connection, createDesignatedInstance)
+        val handleRequest = handleRequestMessage(
+          connection, remotePeerType, createDesignatedInstance)
 
         val result = Message deserialize data flatMap {
           handleRequest orElse handleUnknownMessage
@@ -189,7 +206,7 @@ class RemoteConnections(peerType: PeerType,
   }
 
   private def handleRequestMessage(connection: Connection,
-      createDesignatedInstance: Boolean = false)
+      remotePeerType: PeerType, createDesignatedInstance: Boolean = false)
   : PartialFunction[Message, Try[(RemoteRef, RemoteConnections)]] = {
     case RequestMessage(requested, requesting) =>
       state.synchronized {
@@ -197,38 +214,19 @@ class RemoteConnections(peerType: PeerType,
           PeerType deserialize requested flatMap { requestedPeerType =>
             PeerType deserialize requesting flatMap { requestingPeerType =>
               if (peerType <= requestedPeerType &&
-                  constraintViolationsConnecting(requestingPeerType).isEmpty) {
+                  requestingPeerType <= remotePeerType &&
+                  constraintViolationsConnecting(remotePeerType).isEmpty) {
                 val instance =
                   if (!createDesignatedInstance) this
                   else new RemoteConnections(peerType, connectionMultiplicities)
 
-                val remote = RemoteRef.create(requestingPeerType,
+                val remote = RemoteRef.create(remotePeerType,
                   instance.state.createId, connection.protocol)
 
-                handleConstraintChanges(instance) {
-                  instance.state.connections put (remote, connection)
+                val result = addRemoteConnection(instance, remote, connection,
+                  sendAcceptMessage = true)
 
-                  connection.receive += {
-                    Message deserialize _ map {
-                      instance.doBufferedReceive(remote, _)
-                    }
-                  }
-
-                  connection.terminated += { connection =>
-                    state.synchronized {
-                      handleConstraintChanges(instance) {
-                        instance.state.connections remove remote
-                        instance.doRemoteLeft(remote)
-                      }
-                    }
-                  }
-
-                  instance.doRemoteJoined(remote)
-                }
-
-                connection send (Message serialize AcceptMessage())
-
-                Success((remote, instance))
+                result map { _ => (remote, instance) }
               }
               else
                 Failure(violationException)
@@ -244,25 +242,9 @@ class RemoteConnections(peerType: PeerType,
     case AcceptMessage() =>
       state synchronized {
         if (!state.isTerminated) {
-          handleConstraintChanges(this) {
-            state.connections put (remote, connection)
-
-            connection.receive += {
-              Message deserialize _ map { doBufferedReceive(remote, _) }
-            }
-
-            connection.terminated += { connection =>
-              state synchronized {
-                handleConstraintChanges(this) {
-                  state.connections remove remote
-                  doRemoteLeft(remote)
-                }
-              }
-            }
-
-            doRemoteJoined(remote)
-          }
-          Success(remote)
+          val result = addRemoteConnection(this, remote, connection,
+            sendAcceptMessage = false)
+          result map { _ => remote }
         }
         else
           Failure(terminatedException)
@@ -273,18 +255,57 @@ class RemoteConnections(peerType: PeerType,
     case message => Failure(messageException(message))
   }
 
-  private def handleConstraintChanges
-      (instance: RemoteConnections)(changeConnection: => Unit): Unit = {
+  private def addRemoteConnection(instance: RemoteConnections,
+      remote: RemoteRef, connection: Connection,
+      sendAcceptMessage: Boolean): Try[Unit] =
+    handleConstraintChanges(instance) {
+      instance.state.connections put (remote, connection)
+
+      if (sendAcceptMessage)
+        connection send (Message serialize AcceptMessage())
+
+      instance.doRemoteJoined(remote)
+
+      connection.receive += {
+        Message deserialize _ map { instance.doBufferedReceive(remote, _) }
+      }
+
+      connection.terminated += { connection =>
+        state.synchronized {
+          if (state.connections containsKey remote)
+            removeRemoteConnection(instance, remote)
+        }
+      }
+
+      if (!connection.isOpen) {
+        removeRemoteConnection(instance, remote)
+        Failure(terminatedException)
+      }
+      else
+        Success(())
+    }
+
+  private def removeRemoteConnection(instance: RemoteConnections,
+      remote: RemoteRef): Unit =
+    handleConstraintChanges(instance) {
+      instance.state.connections remove remote
+      instance.doRemoteLeft(remote)
+    }
+
+  private def handleConstraintChanges[T]
+      (instance: RemoteConnections)(changeConnection: => T): T = {
     val constraintsSatisfiedBefore = instance.constraintViolations.isEmpty
 
-    changeConnection
+    val result = changeConnection
 
     val constraintsSatisfiedAfter = instance.constraintViolations.isEmpty
 
     if (!constraintsSatisfiedBefore && constraintsSatisfiedAfter)
       instance.doConstraintsSatisfied()
     if (constraintsSatisfiedBefore && !constraintsSatisfiedAfter)
-      instance.doConstraintsViolated()
+      instance.doConstraintsViolated(violationException)
+
+    result
   }
 
   def constraintViolationsConnecting(peerType: PeerType): Option[PeerType] =
@@ -339,8 +360,15 @@ class RemoteConnections(peerType: PeerType,
 
         state.listeners foreach { _.stop }
         state.listeners.clear
+
+        state.terminate
+        doTerminated()
       }
     }
+
+  def isRunning: Boolean = state.isRunning
+
+  def isTerminated: Boolean = state.isTerminated
 
   def disconnect(remote: RemoteRef): Unit =
     if (!state.isTerminated)
