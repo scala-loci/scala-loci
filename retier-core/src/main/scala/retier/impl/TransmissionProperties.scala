@@ -1,30 +1,38 @@
 package retier
 package impl
 
-import transmission.AbstractionId
-import transmission.AbstractionRef
+import AbstractionId._
+import AbstractionRef._
 import transmission.Marshallable
 import transmission.MarshallableArgument
+import scala.util.Try
 
-trait TransmissionProperties[T, R] {
+trait TransmissionProperties[T] {
   def abstraction: AbstractionId
-  def marshallable: Marshallable[T] { type Result = R }
   def marshalRequest(abstraction: AbstractionRef): String
+  def unmarshalResponse(response: String, abstraction: AbstractionRef): Try[T]
+  def isStable: Boolean
+  def isPushBased: Boolean
 }
 
-private final case class RequestPropertiesImpl[T, R, U](
-  abstraction: AbstractionId, marshallable: Marshallable[T] { type Result = R },
+private final case class TransmissionPropertiesImpl[T, U](
+  abstraction: AbstractionId,
+  responseMarshallable: Marshallable[_] { type Result = T },
   request: U, requestMarshallable: MarshallableArgument[U])
-    extends TransmissionProperties[T, R] {
+    extends TransmissionProperties[T] {
   def marshalRequest(abstraction: AbstractionRef) =
     requestMarshallable marshal (request, abstraction)
+  def unmarshalResponse(response: String, abstraction: AbstractionRef) =
+    responseMarshallable unmarshal (response, abstraction)
+  def isStable = abstraction.isStable
+  def isPushBased = responseMarshallable.isPushBased
 }
 
 object TransmissionProperties {
-  def create[T, U, R](
-      abstraction: AbstractionId, marshallable: Marshallable[T],
+  def create[T, U](
+      abstraction: AbstractionId, responseMarshallable: Marshallable[T],
       request: U, requestMarshallable: MarshallableArgument[U])
-  : TransmissionProperties[T, marshallable.Result] =
-    RequestPropertiesImpl(
-      abstraction, marshallable, request, requestMarshallable)
+  : TransmissionProperties[responseMarshallable.Result] =
+    TransmissionPropertiesImpl(
+      abstraction, responseMarshallable, request, requestMarshallable)
 }

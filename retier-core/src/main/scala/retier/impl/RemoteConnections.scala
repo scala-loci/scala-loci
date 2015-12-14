@@ -372,7 +372,7 @@ class RemoteConnections(peerType: PeerType,
 
   def disconnect(remote: RemoteRef): Unit =
     if (!state.isTerminated)
-      Option(state.connections get remote) foreach { _.close }
+      Option(state.connections remove remote) foreach { _.close }
 
   def send(remote: RemoteRef, message: Message): Unit =
     if (!state.isTerminated)

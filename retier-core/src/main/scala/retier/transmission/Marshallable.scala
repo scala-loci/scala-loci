@@ -14,6 +14,8 @@ trait Marshallable[T] {
 
   def marshal(unmarshalled: T, abstraction: AbstractionRef): String
   def unmarshal(marshalled: String, abstraction: AbstractionRef): Try[Result]
+
+  def isPushBased: Boolean
 }
 
 @implicitNotFound("${T} is not marshallable")
@@ -33,6 +35,10 @@ object Marshallable {
         (transmittable, serializable) marshal (unmarshalled, abstraction)
       def unmarshal(marshalled: String, abstraction: AbstractionRef): Try[Result] =
         (transmittable, serializable) unmarshal (marshalled, abstraction)
+      def isPushBased = transmittable match {
+        case _: PushBasedTransmittable[_, _, _, _, _] => true
+        case _: PullBasedTransmittable[_, _, _] => false
+      }
     }
 
   def apply[T](implicit marshallable: Marshallable[T])
@@ -50,6 +56,10 @@ object MarshallableArgument {
         (transmittable, serializable) marshal (unmarshalled, abstraction)
       def unmarshal(marshalled: String, abstraction: AbstractionRef): Try[T] =
         (transmittable, serializable) unmarshal (marshalled, abstraction) map supertype
+      def isPushBased = transmittable match {
+        case _: PushBasedTransmittable[_, _, _, _, _] => true
+        case _: PullBasedTransmittable[_, _, _] => false
+      }
     }
 
   def apply[T](implicit marshallable: MarshallableArgument[T])

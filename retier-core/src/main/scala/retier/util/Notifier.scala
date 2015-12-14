@@ -7,7 +7,7 @@ import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
 
 trait Notification[T] { self =>
-  private val listeners =
+  protected val listeners =
     new ConcurrentLinkedDeque[(T => _, Option[ExecutionContext])]
 
   protected def reportFailure(exception: Throwable): Unit

@@ -39,6 +39,33 @@ object RequestMessage {
     }
 }
 
+object ContentMessage {
+  def apply(messageType: String, channel: String, abstraction: Option[String],
+      payload: String): Message = {
+    val attrs = Seq("Type" -> messageType, "Channel" -> channel)
+    val attrsAbstraction = (abstraction map { abstraction =>
+      "Abstraction" -> abstraction
+    }).toSeq
+    Message(Message.Content, Attributes(attrs ++ attrsAbstraction), payload)
+  }
+  def unapply(msg: Message): Option[(String, String, Option[String], String)] =
+    (msg.method,
+     msg.properties("Type"),
+     msg.properties("Channel"),
+     msg.properties("Abstraction")) match {
+      case (Message.Content,
+          Value(messageType),
+          Value(channel),
+          Value(abstraction)) =>
+        Some((messageType, channel, Some(abstraction), msg.payload))
+      case (Message.Content,
+          Value(messageType),
+          Value(channel), _) =>
+        Some((messageType, channel, None, msg.payload))
+      case _ => None
+    }
+}
+
 class MessageException(msg: String) extends IllegalArgumentException(msg)
 
 object Message {

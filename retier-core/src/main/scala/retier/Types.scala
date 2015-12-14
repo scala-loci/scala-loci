@@ -16,13 +16,6 @@ sealed trait <=>[-P <: Remote[Peer], +T] extends Any
 sealed trait <->[-P <: Remote[Peer], +T] extends Any
 
 
-// remote reference type
-
-sealed trait Remote[+P <: Peer] extends Any with Equals
-
-private trait RemoteImplBase[+P <: Peer] extends Remote[P]
-
-
 // selected remote types
 
 sealed trait from[+T, P <: Peer] extends Any

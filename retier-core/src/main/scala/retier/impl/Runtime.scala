@@ -1,6 +1,9 @@
 package retier
 package impl
 
+import RemoteRef._
+import network.ConnectionListener
+import network.ConnectionRequestor
 import scala.util.Try
 import scala.util.Success
 import scala.collection.mutable.ListBuffer
@@ -10,14 +13,12 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Awaitable
 import scala.concurrent.CanAwait
 import scala.concurrent.duration.Duration
-import network.ConnectionListener
-import network.ConnectionRequestor
 
 class Runtime(
     connectionMultiplicities: Map[PeerType, ConnectionMultiplicity],
     peer: Peer,
     peerType: PeerType,
-    peerSystem: (ExecutionContext, RemoteConnections) => System)
+    peerSystem: Runtime.SystemFactory)
   extends Awaitable[Unit] {
 
   private val remoteConnections =
@@ -115,8 +116,8 @@ class Runtime(
             (listener, peerType, createDesignatedInstance = true)
 
           notification += { connection =>
-            connection map { case (_, remoteConnections) =>
-              runPeer(remoteConnections, Seq.empty, requestors)
+            connection map { case (remote, remoteConnections) =>
+              runPeer(remoteConnections, Seq(remote), Seq.empty, requestors)
             }
           }
         }
@@ -126,7 +127,7 @@ class Runtime(
           if (remoteConnections.isTerminated)
             terminate
           else
-            runPeer(remoteConnections, listeners, requestors)
+            runPeer(remoteConnections, Seq.empty, listeners, requestors)
         }
       }
       catch {
@@ -140,6 +141,7 @@ class Runtime(
   }
 
   private def runPeer(remoteConnections: RemoteConnections,
+      requiredListeners: Seq[RemoteRef],
       listeners: Seq[(ConnectionListener, PeerType)],
       requestors: Seq[(ConnectionRequestor, PeerType)]): Unit = {
     val requiredAndOptionalRequestors =
@@ -167,7 +169,7 @@ class Runtime(
         remoteConnections request (requestor, peerType)
     }
 
-    future onSuccess { case _ =>
+    future onSuccess { case requiredRequestors =>
       optionalRequestors foreach { case (requestor, peerType) =>
         remoteConnections request (requestor, peerType) }
 
@@ -178,7 +180,8 @@ class Runtime(
         def run() = state.synchronized {
           if (!state.isTerminated &&
               remoteConnections.constraintViolations.isEmpty)
-            state.systems += peerSystem(peerExecutionContext, remoteConnections)
+            state.systems += peerSystem(peerExecutionContext, remoteConnections,
+              requiredListeners ++ requiredRequestors)
             remoteConnections.run
         }
       }
@@ -210,13 +213,16 @@ class Runtime(
 }
 
 object Runtime {
+  type SystemFactory =
+    (ExecutionContext, RemoteConnections, Seq[RemoteRef]) => System
+
   @throws[RemoteConnectionException](
     "if the connection setup does not respect the connection specification")
   def run(
       connectionMultiplicities: Map[PeerType, ConnectionMultiplicity],
       peer: Peer,
       peerType: PeerType,
-      peerSystem: (ExecutionContext, RemoteConnections) => System): Runtime = {
+      peerSystem: SystemFactory): Runtime = {
     val runtime =
       new Runtime(connectionMultiplicities, peer, peerType, peerSystem)
     runtime.run
