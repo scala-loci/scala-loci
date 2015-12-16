@@ -278,16 +278,6 @@ class Typer[C <: Context](val c: C) {
         internal removeAttachment[SyntheticTree.type] tree
         super.transform(tree)
 
-      case ValDef(_, _, tpt, _) =>
-        internal updateAttachment (tpt, NonSyntheticTree)
-        internal removeAttachment[SyntheticTree.type] tpt
-        super.transform(tree)
-
-      case DefDef(_, _, _, _, tpt, _) =>
-        internal updateAttachment (tpt, NonSyntheticTree)
-        internal removeAttachment[SyntheticTree.type] tpt
-        super.transform(tree)
-
       case _ =>
         internal removeAttachment[SyntheticTree.type] tree
         internal removeAttachment[NonSyntheticTree.type] tree
@@ -315,20 +305,6 @@ class Typer[C <: Context](val c: C) {
 
         super.transform(tree)
 
-      case ValDef(_, _, tpt, _) =>
-        if ((internal attachments tpt).get[NonSyntheticTree.type].isEmpty)
-          internal updateAttachment (tpt, SyntheticTree)
-        else
-          internal removeAttachment[NonSyntheticTree.type] tpt
-        super.transform(tree)
-
-      case DefDef(_, _, _, _, tpt, _) =>
-        if ((internal attachments tpt).get[NonSyntheticTree.type].isEmpty)
-          internal updateAttachment (tpt, SyntheticTree)
-        else
-          internal removeAttachment[NonSyntheticTree.type] tpt
-        super.transform(tree)
-
       case _ =>
         super.transform(tree)
     }
@@ -350,49 +326,16 @@ class Typer[C <: Context](val c: C) {
 
 
   private object typeApplicationCleaner extends Transformer {
-    object typeApplicationCleaner extends Transformer {
-      override def transform(tree: Tree) = tree match {
-        case tree: TypeTree =>
-          if (tree.original != null)
-            transform(tree.original)
-          else
-            internal setType (tree, null)
-        case _ =>
-          super.transform(tree)
-      }
-    }
-
     override def transform(tree: Tree) = tree match {
       case tree: TypeTree =>
         if (tree.original != null)
           transform(tree.original)
+        else if (tree.tpe != null)
+          createTypeTree(tree.tpe.dealias)
         else
-          createTypeTree(tree.tpe)
+          tree
       case DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) =>
         tree
-      case AppliedTypeTree(tpt, args) =>
-        internal setPos (
-          AppliedTypeTree(
-            transform(tpt), args map typeApplicationCleaner.transform),
-          tree.pos)
-      case TypeApply(fun, args) =>
-        internal setPos (
-          TypeApply(
-            transform(fun), args map typeApplicationCleaner.transform),
-          tree.pos)
-      case ValDef(mods, name, tpt, rhs)
-          if ((internal attachments tpt).get[SyntheticTree.type].isEmpty) =>
-        internal setPos (
-          ValDef(
-            mods, name, typeApplicationCleaner transform tpt, transform(rhs)),
-          tree.pos)
-      case DefDef(mods, name, tparams, vparamss, tpt, rhs)
-          if ((internal attachments tpt).get[SyntheticTree.type].isEmpty) =>
-        internal setPos (
-          DefDef(
-            mods, name, transformTypeDefs(tparams), transformValDefss(vparamss),
-            typeApplicationCleaner transform tpt, transform(rhs)),
-          tree.pos)
       case _ =>
         super.transform(tree)
     }
