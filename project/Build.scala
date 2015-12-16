@@ -35,7 +35,8 @@ object RetierBuild extends Build {
     settings = defaultSettings ++ nopublish
   ) aggregate (
     retierCore, retierSerializableUpickle,
-    retierTransmitterBasic, retierTransmitterRescala)
+    retierTransmitterBasic, retierTransmitterRescala,
+    retierNetworkTCP)
 
   lazy val retierCore = Project(
     id = "retier-core",
@@ -60,5 +61,11 @@ object RetierBuild extends Build {
     id = "retier-transmitter-rescala",
     base = file("retier-transmitter-rescala"),
     settings = defaultSettings ++ rescala
+  ) dependsOn retierCore
+
+  lazy val retierNetworkTCP = Project(
+    id = "retier-network-tcp",
+    base = file("retier-network-tcp"),
+    settings = defaultSettings
   ) dependsOn retierCore
 }
