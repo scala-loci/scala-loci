@@ -131,10 +131,10 @@ class Runtime(
         }
       }
       catch {
-        case e: RemoteConnectionException =>
+        case exception: RemoteConnectionException =>
           state.terminate
           promise success (())
-          throw e
+          throw exception
       }
 
       state.run
@@ -186,13 +186,17 @@ class Runtime(
         }
       }
     }
+
+    future onFailure { case exception =>
+      peerExecutionContext reportFailure exception
+    }
   }
 
   def terminate(): Unit = state.synchronized {
     if (!state.isTerminated) {
+      state.terminate
       state.systems foreach { _.terminate }
       state.systems.clear
-      state.terminate
 
       remoteConnections.terminate
       promise success (())

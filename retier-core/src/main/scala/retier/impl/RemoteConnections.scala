@@ -126,7 +126,8 @@ class RemoteConnections(peerType: PeerType,
                   state.potentials -= remotePeerType
 
                   val result = Message deserialize data flatMap {
-                    handleAccept orElse handleRequest orElse handleUnknownMessage
+                    handleAccept orElse handleRequest orElse
+                    handleUnknownMessage
                   }
 
                   state.potentials += remotePeerType
@@ -136,7 +137,7 @@ class RemoteConnections(peerType: PeerType,
               }
             }
 
-            val terminated = { _: Unit =>
+            val closed = { _: Unit =>
               state synchronized {
                 if (!promise.isCompleted)
                   promise failure terminatedException
@@ -145,12 +146,12 @@ class RemoteConnections(peerType: PeerType,
 
             future onComplete { _ =>
               connection.receive -= receive
-              connection.terminated -= terminated
+              connection.closed -= closed
               state synchronized { state.potentials -= remotePeerType }
             }
 
             connection.receive += receive
-            connection.terminated += terminated
+            connection.closed += closed
 
             connection send
               (Message serialize RequestMessage(
@@ -270,7 +271,7 @@ class RemoteConnections(peerType: PeerType,
         Message deserialize _ map { instance.doBufferedReceive(remote, _) }
       }
 
-      connection.terminated += { connection =>
+      connection.closed += { connection =>
         state.synchronized {
           if (state.connections containsKey remote)
             removeRemoteConnection(instance, remote)
@@ -353,6 +354,8 @@ class RemoteConnections(peerType: PeerType,
   def terminate(): Unit =
     state synchronized {
       if (!state.isTerminated) {
+        state.terminate
+
         state.connections.asScala foreach { case (remote, connection) =>
           connection.close
         }
@@ -361,7 +364,6 @@ class RemoteConnections(peerType: PeerType,
         state.listeners foreach { _.stop }
         state.listeners.clear
 
-        state.terminate
         doTerminated()
       }
     }

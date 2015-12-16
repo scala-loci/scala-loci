@@ -5,15 +5,15 @@ import util.Notification
 import util.Notifier
 
 trait ConnectionListener { self =>
-  protected final val notifier = Notifier[Connection]
+  protected final val doConnectionEstablished = Notifier[Connection]
 
   final val connectionEstablished: Notification[Connection] =
-    notifier.notification
+    doConnectionEstablished.notification
 
   final def and(listener: ConnectionListener): ConnectionListener =
     new ConnectionListener {
-      self.connectionEstablished += { notifier(_) }
-      listener.connectionEstablished += { notifier(_) }
+      self.connectionEstablished += { doConnectionEstablished(_) }
+      listener.connectionEstablished += { doConnectionEstablished(_) }
 
       def start = {
         self.start()

@@ -4,17 +4,18 @@ package impl
 import RemoteRef._
 import network.ProtocolInfo
 import util.Notifier
+import java.util.concurrent.atomic.AtomicBoolean
 
 private final case class RemoteRefImpl(peerType: PeerType, id: Long,
     protocol: ProtocolInfo)(
-    var connected: Boolean,
-    var authenticated: Boolean) extends Remote[Nothing] {
+    val connected: AtomicBoolean,
+    val authenticated: AtomicBoolean) extends Remote[Nothing] {
   val doDisconnected = Notifier[Unit]
 
   def disconnected = doDisconnected.notification
-  def isConnected = connected
-  def isAuthenticated = authenticated
-  def authenticate() = authenticated = true
+  def isConnected = connected.get
+  def isAuthenticated = authenticated.get
+  def authenticate() = authenticated set true
 }
 
 object RemoteRef {
@@ -22,11 +23,15 @@ object RemoteRef {
 
   private[impl] def create[R <: Peer: PeerTypeTag](id: Long,
       protocol: ProtocolInfo): Remote[R] =
-    RemoteRefImpl(peerTypeOf[R], id, protocol)(true, protocol.isAuthenticated)
+    RemoteRefImpl(
+      peerTypeOf[R], id, protocol)(
+      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated))
 
   private[impl] def create(peerType: PeerType, id: Long,
       protocol: ProtocolInfo): RemoteRef =
-    RemoteRefImpl(peerType, id, protocol)(true, protocol.isAuthenticated)
+    RemoteRefImpl(
+      peerType, id, protocol)(
+      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated))
 
   implicit class RemoteRefOps(remote: RemoteRef) {
     def peerType: PeerType = remote match {
@@ -41,7 +46,7 @@ object RemoteRef {
 
     def disconnect(): Unit = remote match {
       case remote @ RemoteRefImpl(_, _, _) =>
-        remote.connected = false
+        remote.connected set false
         remote.doDisconnected()
       case _ => throwRetierImplementationError(remote)
     }
