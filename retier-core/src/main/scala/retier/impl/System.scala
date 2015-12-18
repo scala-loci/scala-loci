@@ -10,12 +10,14 @@ import transmission.MultipleTransmission
 import transmission.OptionalTransmission
 import transmission.SingleTransmission
 import util.Notification
+import scala.annotation.tailrec
 import scala.concurrent.Promise
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConverters._
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class System(
     executionContext: ExecutionContext,
@@ -170,24 +172,35 @@ class System(
     new ConcurrentHashMap[(String, RemoteRef), Channel]
   private val channelResponseHandlers =
     new ConcurrentHashMap[Channel, String => Unit]
-  private val channelBuffers =
-    new ConcurrentHashMap[Channel, ListBuffer[(String, String)]]
+  private val channelQueue =
+    new ConcurrentLinkedQueue[(RemoteRef, Message)]
   private val pushedValues =
     new ConcurrentHashMap[(RemoteRef, AbstractionId), Future[_]]
 
   def allChannels: List[Channel] = channels.values.asScala.toList
 
   def obtainChannel(name: String, remote: RemoteRef): Channel = {
+    val channelId = (name, remote)
     val channel = Channel.create(name, remote, this)
-    if (isConnected(remote))
-      Option(channels putIfAbsent ((name, remote), channel)) getOrElse channel
+    if (isConnected(remote)) {
+      val obtainedChannel =
+        Option(channels putIfAbsent (channelId, channel)) getOrElse channel
+
+      if (!isConnected(remote))
+        channels remove obtainedChannel
+
+      obtainedChannel
+    }
     else
       channel
   }
 
   def closeChannel(channel: Channel): Unit = {
-    Option(channels remove ((channel.name, channel.remote))) foreach {
-      _.closed()
+    val channelId = (channel.name, channel.remote)
+    Option(channels remove channelId) foreach { channel =>
+      context execute new Runnable {
+        def run = channel.closed()
+      }
     }
   }
 
@@ -196,7 +209,6 @@ class System(
       if (channel.remote == remote) {
         closeChannel(channel)
         channelResponseHandlers remove channel
-        channelBuffers remove channel
       }
     }
 
@@ -218,57 +230,54 @@ class System(
 
 
   remoteConnections.remoteLeft += { remote =>
-    closeChannels(remote)
-    executionContext execute new Runnable {
+    context execute new Runnable {
       def run = remote.disconnect
     }
+    closeChannels(remote)
   }
 
-  remoteConnections.receive += {
-    case (remote,
-        ContentMessage("Request", channelName, Some(abstraction), payload)) =>
-      val id = AbstractionId.create(abstraction)
-      val ref = AbstractionRef.create(id, channelName, remote, this)
-      peerImpl.dispatch(payload, id, ref) foreach { payload =>
-        ref.channel send ("Response", payload)
-      }
+  remoteConnections.constraintsViolated += { _ => remoteConnections.terminate }
 
-    case (remote,
-        ContentMessage("Response", channelName, None, payload)) =>
-      channels synchronized {
-        val channel = obtainChannel(channelName, remote)
-        val buffer = ListBuffer.empty[(String, String)]
-        if (Option(channelBuffers putIfAbsent (channel, buffer)).isEmpty)
-          executionContext execute new Runnable {
-            def run = channels synchronized {
-              Option(channelResponseHandlers remove channel) foreach {
-                _(payload)
-              }
-              Option(channelBuffers remove channel) foreach {
-                _ foreach { case (messageType, payload) =>
-                  channel receive (messageType, payload)
+  remoteConnections.receive += { message =>
+    val executing = !channelQueue.isEmpty
+    channelQueue add message
+
+    if (!executing && !channelQueue.isEmpty)
+      context execute new Runnable {
+        def run = channelQueue synchronized {
+          @tailrec def processQueue(): Unit = {
+            channelQueue.poll match {
+              case (remote, ContentMessage(
+                  "Request", channelName, Some(abstraction), payload)) =>
+                val id =
+                  AbstractionId.create(abstraction)
+                val ref =
+                  AbstractionRef.create(id, channelName, remote, System.this)
+                peerImpl.dispatch(payload, id, ref) foreach { payload =>
+                  ref.channel send ("Response", payload)
                 }
-              }
+                processQueue
+
+              case (remote, ContentMessage(
+                  "Response", channelName, None, payload)) =>
+                val channel = obtainChannel(channelName, remote)
+                Option(channelResponseHandlers remove channel) foreach {
+                  _(payload)
+                }
+                processQueue
+
+              case (remote, ContentMessage(
+                  messageType, channelName, None, payload)) =>
+                val channel = obtainChannel(channelName, remote)
+                channel receive (messageType, payload)
+                processQueue
+
+              case _ =>
             }
           }
-      }
-
-    case (remote,
-        ContentMessage(messageType, channelName, None, payload)) =>
-      val channel = obtainChannel(channelName, remote)
-      if (channelBuffers containsKey channel)
-        channels synchronized {
-          Option(channelBuffers get channel) match{
-            case Some(buffer) =>
-              buffer += ((messageType, payload))
-            case None =>
-              channel receive (messageType, payload)
-          }
+          processQueue
         }
-      else
-        channel receive (messageType, payload)
-
-    case _ =>
+      }
   }
 
 
@@ -302,7 +311,7 @@ class System(
           promise tryFailure new RemoteConnectionException("channel closed")
         }
 
-        executionContext execute new Runnable {
+        context execute new Runnable {
           def run = remoteConnections send (
             channel.remote,
             ContentMessage(

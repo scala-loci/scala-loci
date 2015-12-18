@@ -43,11 +43,7 @@ class RemoteConnections(peerType: PeerType,
   private def bases(peerType: PeerType): Set[PeerType] =
     peerType.bases.toSet ++ (peerType.bases flatMap bases)
 
-  private implicit val executionContext = new ExecutionContext {
-    def execute(runnable: Runnable) = runnable.run
-    def reportFailure(throwable: Throwable) =
-      ExecutionContext.defaultReporter(throwable)
-  }
+  private implicit val executionContext = contexts.Immediate.global
 
   private object state {
     private val running = new AtomicBoolean(false)
@@ -64,6 +60,8 @@ class RemoteConnections(peerType: PeerType,
     val listeners = new ListBuffer[ConnectionListener]
     val potentials = new ListBuffer[PeerType]
     val connections = new ConcurrentHashMap[RemoteRef, Connection]
+
+    val sync = new FairSync
   }
 
   private val doRemoteJoined = Notifier[RemoteRef]
@@ -100,7 +98,7 @@ class RemoteConnections(peerType: PeerType,
     if (state.isTerminated)
       Future failed terminatedException
     else
-      state synchronized {
+      state sync {
         if (constraintViolationsConnecting(remotePeerType).isEmpty) {
           state.potentials += remotePeerType
 
@@ -112,7 +110,7 @@ class RemoteConnections(peerType: PeerType,
             val future = promise.future
 
             val receive = { data: String =>
-              state synchronized {
+              state sync {
                 if (promise.isCompleted)
                   Message deserialize data map { doBufferedReceive(remote, _) }
                 else {
@@ -138,7 +136,7 @@ class RemoteConnections(peerType: PeerType,
             }
 
             val closed = { _: Unit =>
-              state synchronized {
+              state sync {
                 if (!promise.isCompleted)
                   promise failure terminatedException
               }
@@ -147,7 +145,7 @@ class RemoteConnections(peerType: PeerType,
             future onComplete { _ =>
               connection.receive -= receive
               connection.closed -= closed
-              state synchronized { state.potentials -= remotePeerType }
+              state sync { state.potentials -= remotePeerType }
             }
 
             connection.receive += receive
@@ -196,7 +194,7 @@ class RemoteConnections(peerType: PeerType,
       connection.receive += receive
     }
 
-    state.synchronized {
+    state sync {
       if (!state.isTerminated) {
         state.listeners += connectionListener
         connectionListener.start
@@ -210,7 +208,7 @@ class RemoteConnections(peerType: PeerType,
       remotePeerType: PeerType, createDesignatedInstance: Boolean = false)
   : PartialFunction[Message, Try[(RemoteRef, RemoteConnections)]] = {
     case RequestMessage(requested, requesting) =>
-      state.synchronized {
+      state sync {
         if (!state.isTerminated)
           PeerType deserialize requested flatMap { requestedPeerType =>
             PeerType deserialize requesting flatMap { requestingPeerType =>
@@ -241,7 +239,7 @@ class RemoteConnections(peerType: PeerType,
   private def handleAcceptMessage(connection: Connection, remote: RemoteRef)
   : PartialFunction[Message, Try[RemoteRef]] = {
     case AcceptMessage() =>
-      state synchronized {
+      state sync {
         if (!state.isTerminated) {
           val result = addRemoteConnection(this, remote, connection,
             sendAcceptMessage = false)
@@ -272,7 +270,7 @@ class RemoteConnections(peerType: PeerType,
       }
 
       connection.closed += { connection =>
-        state.synchronized {
+        state sync {
           if (state.connections containsKey remote)
             removeRemoteConnection(instance, remote)
         }
@@ -329,7 +327,7 @@ class RemoteConnections(peerType: PeerType,
 
   private def connections: Seq[PeerType] =
     (state.connections.keys.asScala map { _.peerType }).toSeq ++
-    (state synchronized { state.potentials.toSeq }) flatMap { peerType =>
+    (state sync { state.potentials.toSeq }) flatMap { peerType =>
       bases(peerType) + peerType
     }
 
@@ -343,7 +341,7 @@ class RemoteConnections(peerType: PeerType,
     }) reduceOption { _ && _ } getOrElse false
 
   def run(): Unit =
-    state synchronized {
+    state sync {
       if (!state.isTerminated && !state.isRunning) {
         state.messages foreach { doReceive(_) }
         state.messages.clear
@@ -352,7 +350,7 @@ class RemoteConnections(peerType: PeerType,
     }
 
   def terminate(): Unit =
-    state synchronized {
+    state sync {
       if (!state.isTerminated) {
         state.terminate
 
@@ -389,7 +387,7 @@ class RemoteConnections(peerType: PeerType,
       if (state.isRunning)
         doReceive((remote, message))
       else
-        state synchronized {
+        state sync {
           if (state.isRunning)
             doReceive((remote, message))
           else

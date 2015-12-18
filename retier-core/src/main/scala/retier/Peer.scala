@@ -5,7 +5,6 @@ import network.ConnectionListener
 import network.ConnectionRequestor
 import util.Attributes
 import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.implicitConversions
 
 trait Peer {
@@ -23,9 +22,7 @@ trait Peer {
 
   def connect: ConnectionSetup
 
-  def context: ExecutionContext = implicitly[ExecutionContext]
-
-  def setup: Boolean = true
+  def context: ExecutionContext = contexts.Queued.create
 
 
   sealed trait ConnectionSetup {
@@ -152,4 +149,8 @@ trait Peer {
         }).toMap
       }
     }
+}
+
+object Peer {
+  implicit val peerTypeTag = retier.impl.PeerImpl.peerTypeTag
 }

@@ -43,11 +43,7 @@ class Runtime(
     val systems = ListBuffer.empty[System]
   }
 
-  private implicit val executionContext = new ExecutionContext {
-    def execute(runnable: Runnable) = runnable.run
-    def reportFailure(throwable: Throwable) =
-      ExecutionContext.defaultReporter(throwable)
-  }
+  private implicit val executionContext = contexts.Immediate.global
 
   @throws[RemoteConnectionException](
     "if the connection setup does not respect the connection specification")
