@@ -19,7 +19,7 @@ class Runtime(
     peer: Peer,
     peerType: PeerType,
     peerSystem: Runtime.SystemFactory)
-  extends Awaitable[Unit] {
+  extends retier.Runtime {
 
   private val remoteConnections =
     new RemoteConnections(peerType, connectionMultiplicities)

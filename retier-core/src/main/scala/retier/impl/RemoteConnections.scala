@@ -20,9 +20,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 
-class RemoteConnectionException(msg: String)
-  extends IllegalArgumentException(msg)
-
 class RemoteConnections(peerType: PeerType,
     connectionMultiplicities: Map[PeerType, ConnectionMultiplicity]) {
 

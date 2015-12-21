@@ -7,7 +7,8 @@ import scala.util.Try
 import scala.util.Failure
 
 trait PeerImpl {
-  def $$retier$system: System
+  def $$retier$system: System =
+    throw new RetierImplementationError("peer instance system not set up")
 
   def $$retier$dispatch(request: String, id: AbstractionId, ref: AbstractionRef)
     : Try[String] = Failure(

@@ -173,6 +173,7 @@ trait Generation {
     val TransmissionProperties = tq"$root.retier.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"$root.retier.impl.TransmissionProperties.create"
     val System = tq"$root.retier.impl.System"
+    val Runtime = q"$root.retier.impl.Runtime"
   }
 
 

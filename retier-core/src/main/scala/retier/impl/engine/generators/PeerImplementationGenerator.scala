@@ -243,20 +243,16 @@ trait PeerImplementationGenerator { this: Generation =>
             }
          """
 
-      val systemImpl = q"$synthetic override lazy val $system = new $System"
-
       val peerImpl =
         if (isClass)
           q"""$syntheticMods class $implementation[..$typeArgs](...$args)
                   extends ..$implParents {
-                $systemImpl
                 $dispatchImpl
                 ..$statements
           }"""
         else
           q"""$syntheticMods trait $implementation[..$typeArgs]
                   extends ..$implParents {
-                $systemImpl
                 $dispatchImpl
                 ..$statements
           }"""

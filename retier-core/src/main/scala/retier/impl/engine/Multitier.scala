@@ -2,10 +2,10 @@ package retier
 package impl
 package engine
 
-import scala.reflect.macros.whitebox.Context
+import scala.reflect.macros.blackbox.Context
 
 object multitier {
-  def impl(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
+  def annotation(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     import c.universe._
 
     val echo = Echo(c)
@@ -134,5 +134,25 @@ object multitier {
       c.Expr[Any](result)
     else
       c.Expr[Any](q"$result; ${companion.head}")
+  }
+
+  def run[P <: Peer: c.WeakTypeTag](c: Context): c.Expr[Runtime] = {
+    import c.universe._
+    import generators._
+
+    val context: c.type = c
+    val typer = Typer(context)
+
+    val generation = new { val c: context.type = context } with
+      SetupExpressionProcessor with Generation
+
+    val result = generation createSetupExpression (
+      generation markRetierSynthetic (
+        typer createTypeTree weakTypeOf[P],
+        c.enclosingPosition),
+      weakTypeOf[P],
+      List.empty)
+
+    c.Expr[Runtime](result)
   }
 }
