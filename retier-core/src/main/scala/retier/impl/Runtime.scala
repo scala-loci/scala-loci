@@ -178,7 +178,6 @@ class Runtime(
               remoteConnections.constraintViolations.isEmpty)
             state.systems += peerSystem(peerExecutionContext, remoteConnections,
               requiredListeners ++ requiredRequestors)
-            remoteConnections.run
         }
       }
     }
