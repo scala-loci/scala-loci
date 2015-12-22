@@ -15,4 +15,7 @@ object multitier {
     "if the connection setup does not respect the connection specification")
   def run[P <: Peer]: Runtime =
     macro impl.engine.multitier.run[P]
+
+  @compileTimeOnly("only usable in `multitier` environment")
+  def terminate(): Unit = `#macro`
 }

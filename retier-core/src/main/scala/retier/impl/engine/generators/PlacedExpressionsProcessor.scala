@@ -14,7 +14,7 @@ trait PlacedExpressionsProcessor { this: Generation =>
 
     echo(verbose = true, " Processing placed expressions")
 
-    object baseReferencProcessor extends Transformer {
+    object baseReferencesAndCastsProcessor extends Transformer {
       override def transform(tree: Tree) = tree match {
         case q"$_[..$_](...$exprss)" if tree.symbol == symbols.placedBase =>
           exprss.head.head match {
@@ -109,14 +109,21 @@ trait PlacedExpressionsProcessor { this: Generation =>
         else
           (overridingDecl, expr)
 
-        if (expr.symbol == symbols.placedIssuedApply && declTypeTree.isEmpty)
+        if (declTypeTree.isEmpty &&
+            expr.symbol == symbols.placedIssuedApply)
           c.abort(tree.pos, "issuing must be part of a declaration")
+
+        if (declTypeTree.nonEmpty &&
+            (symbols.specialPlaced contains expr.symbol))
+          c.abort(tree.pos,
+            s"${expr.symbol.name} placed expression " +
+            s"must not be part of a declaration")
 
         // construct new placed statement
         // with the actual placed expression syntactic construct removed
         PlacedStatement(
           tree, peerSymbol, exprType, declTypeTree, processedOverridingDecl,
-          baseReferencProcessor transform placedExpr, index)
+          baseReferencesAndCastsProcessor transform placedExpr, index)
     }
 
     def dropPrecedingGlobalCasts

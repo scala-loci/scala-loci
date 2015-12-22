@@ -137,7 +137,7 @@ class Runtime(
   }
 
   private def runPeer(remoteConnections: RemoteConnections,
-      requiredListeners: Seq[RemoteRef],
+      requiredListenedRemotes: Seq[RemoteRef],
       listeners: Seq[(ConnectionListener, PeerType)],
       requestors: Seq[(ConnectionRequestor, PeerType)]): Unit = {
     val requiredAndOptionalRequestors =
@@ -165,8 +165,8 @@ class Runtime(
         remoteConnections request (requestor, peerType)
     }
 
-    future onSuccess { case requiredRequestors =>
-      optionalRequestors foreach { case (requestor, peerType) =>
+    future onSuccess { case requiredRequestedRemotes =>
+      val remotes = optionalRequestors map { case (requestor, peerType) =>
         remoteConnections request (requestor, peerType) }
 
       listeners foreach { case (listener, peerType) =>
@@ -177,7 +177,7 @@ class Runtime(
           if (!state.isTerminated &&
               remoteConnections.constraintViolations.isEmpty)
             state.systems += peerSystem(peerExecutionContext, remoteConnections,
-              requiredListeners ++ requiredRequestors)
+              requiredListenedRemotes ++ requiredRequestedRemotes, remotes)
         }
       }
     }
@@ -200,20 +200,21 @@ class Runtime(
 
   private val promise = Promise[Unit]
 
-  val exited: Future[Unit] = promise.future
+  val terminated: Future[Unit] = promise.future
 
   override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = {
-    exited ready atMost
+    terminated ready atMost
     this
   }
 
   override def result(atMost: Duration)(implicit permit: CanAwait): Unit =
-    exited result atMost
+    terminated result atMost
 }
 
 object Runtime {
   type SystemFactory =
-    (ExecutionContext, RemoteConnections, Seq[RemoteRef]) => System
+    (ExecutionContext, RemoteConnections,
+     Seq[RemoteRef], Seq[Future[RemoteRef]]) => System
 
   @throws[RemoteConnectionException](
     "if the connection setup does not respect the connection specification")

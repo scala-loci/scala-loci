@@ -5,5 +5,5 @@ import scala.concurrent.Awaitable
 
 trait Runtime extends Awaitable[Unit] {
   def terminate(): Unit
-  val exited: Future[Unit]
+  val terminated: Future[Unit]
 }

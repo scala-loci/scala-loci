@@ -10,24 +10,33 @@ import transmission.MultipleTransmission
 import transmission.OptionalTransmission
 import transmission.SingleTransmission
 import util.Notification
-import scala.annotation.tailrec
 import scala.concurrent.Promise
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
-import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConverters._
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 
 class System(
     executionContext: ExecutionContext,
     remoteConnections: RemoteConnections,
     singleConnectedRemotes: Seq[RemoteRef],
+    connectingRemotes: Seq[Future[RemoteRef]],
     peerImpl: PeerImpl.Ops) {
 
   implicit val context = executionContext
 
+  def main(): this.type = {
+    new Thread {
+      override def run = peerImpl.main
+    }.start
+    this
+  }
+
   def terminate(): Unit = remoteConnections.terminate
+
+  connectingRemotes foreach {
+    _ onFailure { case _ => peerImpl.error }
+  }
 
 
 
@@ -235,7 +244,18 @@ class System(
     closeChannels(remote)
   }
 
-  remoteConnections.constraintsViolated += { _ => remoteConnections.terminate }
+  remoteConnections.constraintsViolated += { _ =>
+    context execute new Runnable {
+      def run = peerImpl.fatal
+    }
+    remoteConnections.terminate
+  }
+
+  remoteConnections.terminated += { _ =>
+    context execute new Runnable {
+      def run = peerImpl.terminating
+    }
+  }
 
   remoteConnections.receive += { message =>
     sync {

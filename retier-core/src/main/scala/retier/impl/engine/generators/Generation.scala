@@ -66,7 +66,10 @@ trait Generation {
     val optional = typeOf[Peer#Optional[_]]
     val single = typeOf[Peer#Single[_]]
 
+    val multitier = typeOf[_root_.retier.multitier.type]
+
     val placing = retier | TypeName("PlacingExpression")
+    val specialPlacing = retier | TypeName("SpecialPlacingExpression")
     val issuing = retier | TypeName("IssuingExpression")
     val overriding = retier | TypeName("OverridingExpression")
 
@@ -81,15 +84,26 @@ trait Generation {
   }
 
   object symbols {
-    val placedAbstract = types.placing | TermName("abstract")
-    val placedBase = types.placing | TermName("base")
+    val placedAbstract = types.specialPlacing | TermName("abstract")
+    val placedBase = types.specialPlacing | TermName("base")
+    val placedMain = types.specialPlacing | TermName("main")
+    val placedTerminating = types.specialPlacing | TermName("terminating")
+    val placedError = types.specialPlacing | TermName("error")
+    val placedFatal = types.specialPlacing | TermName("fatal")
     val placedApply = types.placing | TermName("apply")
     val placedShared = types.placing | TermName("shared")
     val placedLocal = types.placing | TermName("local")
     val placedIssuedApply = types.issuing | TermName("apply")
     val placedOverriding = types.overriding | TermName("overriding")
 
-    val placed = Seq(placedAbstract, placedApply, placedShared, placedLocal, placedIssuedApply)
+    val placed = Seq(placedAbstract, placedMain, placedTerminating, placedError,
+      placedFatal, placedApply, placedShared, placedLocal, placedIssuedApply)
+
+    val specialPlaced = Map(
+      placedMain -> names.main,
+      placedTerminating -> names.terminating,
+      placedError -> names.error,
+      placedFatal -> names.fatal)
 
     val remoteApply = types.remote | TermName("apply")
     val remoteCall = types.remote | TermName("call")
@@ -100,6 +114,8 @@ trait Generation {
     val remoteIssuedCaptureApply = types.remoteIssuedCapturing | TermName("apply")
 
     val remote = Seq(remoteIssuedApply, remoteIssuedCaptureApply, remoteApply, remoteCaptureApply)
+
+    val terminate = types.multitier | TermName("terminate")
 
     val fromExpression = types.retier | retierTermName("FromExpression")
 
@@ -137,9 +153,15 @@ trait Generation {
     val createSingleTransmission = TermName("createSingleTransmission")
     val executeTransmission = TermName("executeTransmission")
     val system = retierTermName("system")
+    val systemMain = TermName("main")
+    val systemTerminate = TermName("terminate")
     val implementation = retierTypeName("peer")
     val interface = retierTermName("peer")
     val dispatch = retierTermName("dispatch")
+    val main = retierTermName("main")
+    val terminating = retierTermName("terminating")
+    val error = retierTermName("error")
+    val fatal = retierTermName("fatal")
   }
 
   object trees {

@@ -13,7 +13,8 @@ package object retier extends
 
 
   def placed[P <: Peer]:
-    PlacingExpression[P] with OverridingExpression[P] = `#macro`
+    SpecialPlacingExpression[P] with PlacingExpression[P] with
+    OverridingExpression[P] = `#macro`
 
   def remote[P <: Peer]:
     RemoteExpression[P, on] with RemoteSelectionExpression[P] = `#macro`
@@ -23,5 +24,5 @@ package object retier extends
 
 
   def `#macro`: Nothing =
-    throw new NotImplementedError("Only usable in `multitier` environment")
+    throw new NotImplementedError("only usable in `multitier` environment")
 }

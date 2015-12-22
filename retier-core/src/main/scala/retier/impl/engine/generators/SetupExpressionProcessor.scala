@@ -24,10 +24,10 @@ trait SetupExpressionProcessor { this: Generation =>
           peer.$connection,
           peer,
           $typeTag.${names.peerType},
-          (context, connections, remotes) => new $implementation {
+          (context, connections, connected, connecting) => new $implementation {
             override lazy val $system =
-              new $System(context, connections, remotes, this)
-          }.$system)
+              new $System(context, connections, connected, connecting, this)
+          }.$system.$systemMain)
       }""",
       peerTree.pos)
   }

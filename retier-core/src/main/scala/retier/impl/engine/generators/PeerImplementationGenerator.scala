@@ -70,6 +70,18 @@ trait PeerImplementationGenerator { this: Generation =>
       }
     }
 
+    object multitierInterfaceProcessor extends Transformer {
+      import names._
+
+      override def transform(tree: Tree) = tree match {
+        case tree if tree.symbol == symbols.terminate =>
+          q"$system.$systemTerminate"
+
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
     def createDeclTypeTree(declTypeTree: Tree, exprType: Type) =
       if (types.bottom exists { exprType <:< _ })
         declTypeTree
@@ -125,8 +137,24 @@ trait PeerImplementationGenerator { this: Generation =>
             definition.pos),
           index)
 
-        case PlacedStatement(tree, `peerSymbol`, _, None, _, expr, index) =>
+        case PlacedStatement(tree, `peerSymbol`, _, None, _, expr, index)
+            if !(symbols.specialPlaced contains tree.symbol) =>
           (new PlacedReferenceAdapter(peerSymbol) transform expr, index)
+      }
+
+      val specialPlacedStats = aggregator.all[PlacedStatement] collect {
+        case PlacedStatement(tree, `peerSymbol`, _, None, _, expr, index)
+            if symbols.specialPlaced contains tree.symbol =>
+          (symbols.specialPlaced(tree.symbol),
+           new PlacedReferenceAdapter(peerSymbol) transform expr)
+      } groupBy {
+        case (name, _) => name
+      } map { case (name, exprs) =>
+        val stats = exprs map { case (_, expr) => expr }
+        q"""override def $name() = {
+          super.$name
+          ..$stats
+        }"""
       }
 
       val nonPlacedStats =
@@ -184,9 +212,14 @@ trait PeerImplementationGenerator { this: Generation =>
         }
       }
 
-      (placedStats ++ nonPlacedStats) sortBy { case (_, index) => index } map {
-        case (stat, _) => stat
-      }
+      val stats = specialPlacedStats ++
+        ((placedStats ++ nonPlacedStats) sortBy {
+          case (_, index) => index
+        } map {
+          case (stat, _) => stat
+        })
+
+      stats map multitierInterfaceProcessor.transform
     }
 
     def peerImplementationParents(parents: List[Tree]) = parents map {
