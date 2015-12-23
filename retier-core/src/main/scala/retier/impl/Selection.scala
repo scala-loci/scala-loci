@@ -5,9 +5,14 @@ import RemoteRef._
 import scala.language.implicitConversions
 
 private[impl] final case class Selection[T, P <: Peer](
-    props: TransmissionProperties[T], filter: RemoteRef => Boolean)
-  extends SelectionImplBase[T, P] with SingleSelectionImplBase[T, P]
-  with MultipleSelectionImplBase[T, P]
+  props: TransmissionProperties[T], remotes: Option[Set[RemoteRef]])
+    extends SelectionImplBase[T, P] with SingleSelectionImplBase[T, P]
+    with MultipleSelectionImplBase[T, P] {
+  def filter(remote: RemoteRef): Boolean = remotes match {
+    case Some(remotes) => remotes contains remote
+    case None => true
+  }
+}
 
 private[impl] object Selection {
   implicit def from[T, P <: Peer](selection: T from P)

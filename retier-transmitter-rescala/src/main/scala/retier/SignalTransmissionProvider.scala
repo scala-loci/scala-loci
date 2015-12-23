@@ -17,47 +17,50 @@ protected[retier] trait SignalTransmissionProvider {
       ExecutionContext.defaultReporter(throwable)
   }
 
+  private final val asLocalId = 0
+
   implicit class RescalaSignalMultipleTransmissionProvider
       [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
       (transmission: MultipleTransmission[Sig[T], R, L])
     extends TransmissionProvider {
 
-    def asLocal: Signal[Map[Remote[R], Signal[T]]] = {
-      val mapping = Var(Map.empty[Remote[R], Signal[T]])
+    def asLocal: Signal[Map[Remote[R], Signal[T]]] =
+      transmission.memo(asLocalId) {
+        val mapping = Var(Map.empty[Remote[R], Signal[T]])
 
-      def update() = {
-        // if REScala signals could capture the state of not being evaluated
-        // yet, we would not need to filter the mapping
-        mapping() = transmission.retrieveMappedRemoteValues mapValues {
-          _.value
-        } collect {
-          case (remote, Some(Success(signal))) => (remote, signal)
+        def update() = {
+          // if REScala signals could capture the state of not being evaluated
+          // yet, we would not need to filter the mapping
+          mapping() = transmission.retrieveMappedRemoteValues mapValues {
+            _.value
+          } collect {
+            case (remote, Some(Success(signal))) => (remote, signal)
+          }
         }
-      }
 
-      transmission.retrieveRemoteValues foreach {
-        _.onComplete { _ => update }
-      }
-
-      transmission.remoteJoined += { remote =>
-        transmission.retrieveMappedRemoteValues get remote foreach {
+        transmission.retrieveRemoteValues foreach {
           _.onComplete { _ => update }
         }
-        update
+
+        transmission.remoteJoined += { remote =>
+          transmission.retrieveMappedRemoteValues get remote foreach {
+            _.onComplete { _ => update }
+          }
+          update
+        }
+
+        transmission.remoteLeft += { _ => update }
+
+        mapping
       }
-
-      transmission.remoteLeft += { _ => update }
-
-      mapping
     }
-  }
 
   implicit class RescalaSignalOptionalTransmissionProvider
       [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
       (transmission: OptionalTransmission[Sig[T], R, L])
     extends TransmissionProvider {
 
-    def asLocal: Signal[Option[T]] = {
+    def asLocal: Signal[Option[T]] = transmission.memo(asLocalId) {
       val option = Var(Option.empty[Signal[T]])
 
       def update() = {

@@ -6,6 +6,9 @@ import scala.concurrent.Future
 
 sealed trait Transmission
     [T, R <: Peer, L <: Peer, M <: ConnectionMultiplicity] {
+  val id: Any
+  def memo[U <: AnyRef](id: Any)(body: => U): U
+
   val remoteJoined: Notification[Remote[R]]
   val remoteLeft: Notification[Remote[R]]
   def remotes: Seq[Remote[R]]

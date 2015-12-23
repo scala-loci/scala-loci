@@ -11,6 +11,7 @@ import transmission.OptionalTransmission
 import transmission.SingleTransmission
 import network.ConnectionRequestor
 import util.Notification
+import scala.ref.WeakReference
 import scala.concurrent.Promise
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
@@ -137,6 +138,22 @@ class System(
 
 
 
+  // memoization
+
+  private val memos = new ConcurrentHashMap[Any, WeakReference[AnyRef]]
+
+  private[impl] def memo[T <: AnyRef](id: Any, body: => T): T =
+    Option(memos get id) collect {
+      case WeakReference(value) => value.asInstanceOf[T]
+    } getOrElse {
+      val value = body
+      memos put (id, WeakReference(value))
+      value
+    }
+
+
+
+
   // transmissions
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
@@ -155,7 +172,7 @@ class System(
   def createMultipleTransmission
       [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T]): MultipleTransmission[T, R, L] =
-    MultipleTransmissionImpl(this, Selection(props, Function const true))
+    MultipleTransmissionImpl(this, Selection(props, None))
 
   def createMultipleTransmission
       [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
@@ -170,7 +187,7 @@ class System(
   def createOptionalTransmission
       [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T]): OptionalTransmission[T, R, L] =
-    OptionalTransmissionImpl(this, Selection(props, Function const true))
+    OptionalTransmissionImpl(this, Selection(props, None))
 
   def createOptionalTransmission
       [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
@@ -199,15 +216,15 @@ class System(
 
   def createPeerSelection[T, P <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T]): T from P =
-    Selection(props, Function const true)
+    Selection(props, None)
 
   def createPeerSelection[T, P <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T], peer: Remote[P]): T fromSingle P =
-    Selection(props, { _ == peer })
+    Selection(props, Some(Set(peer)))
 
   def createPeerSelection[T, P <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T], peers: Remote[P]*): T fromMultiple P =
-    Selection(props, { peers contains _ })
+    Selection(props, Some(peers.toSet))
 
 
 
@@ -338,40 +355,44 @@ class System(
   def requestRemotes[T](props: TransmissionProperties[T],
       remotes: Seq[RemoteRef]): Seq[Future[T]] = {
     remotes map { remote =>
-      val promise = Promise[T]
-      val future = promise.future
       val remoteAbstraction = (remote, props.abstraction)
-      val pushValuesFuture =
-        if (props.isStable && props.isPushBased)
-          (Option(pushedValues putIfAbsent (remoteAbstraction, future))
-            getOrElse future).asInstanceOf[Future[T]]
-        else
+      Option(pushedValues get remoteAbstraction) map {
+        _.asInstanceOf[Future[T]]
+      } getOrElse {
+        val promise = Promise[T]
+        val future = promise.future
+        val pushValuesFuture =
+          if (props.isStable && props.isPushBased)
+            (Option(pushedValues putIfAbsent (remoteAbstraction, future))
+              getOrElse future).asInstanceOf[Future[T]]
+          else
+            future
+
+        if (pushValuesFuture eq future) {
+          val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
+          val channel = abstraction.channel
+
+          channelResponseHandlers put (channel, { response =>
+            promise tryComplete (props unmarshalResponse (response, abstraction))
+          })
+
+          channel.closed += { _ =>
+            promise tryFailure new RemoteConnectionException("channel closed")
+          }
+
+          remoteConnections send (
+            channel.remote,
+            ContentMessage(
+              "Request",
+              channel.name,
+              Some(props.abstraction.name),
+              props marshalRequest abstraction))
+
           future
-
-      if (pushValuesFuture eq future) {
-        val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
-        val channel = abstraction.channel
-
-        channelResponseHandlers put (channel, { response =>
-          promise tryComplete (props unmarshalResponse (response, abstraction))
-        })
-
-        channel.closed += { _ =>
-          promise tryFailure new RemoteConnectionException("channel closed")
         }
-
-        remoteConnections send (
-          channel.remote,
-          ContentMessage(
-            "Request",
-            channel.name,
-            Some(props.abstraction.name),
-            props marshalRequest abstraction))
-
-        future
+        else
+          pushValuesFuture
       }
-      else
-        pushValuesFuture
     }
   }
 

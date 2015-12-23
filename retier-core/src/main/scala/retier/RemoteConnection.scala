@@ -4,6 +4,9 @@ import network.ConnectionRequestor
 import util.Notification
 
 sealed trait RemoteConnection[R <: Peer, M <: ConnectionMultiplicity] {
+  val id: Any
+  def memo[T <: AnyRef](id: Any)(body: => T): T
+
   val remoteJoined: Notification[Remote[R]]
   val remoteLeft: Notification[Remote[R]]
   def remotes: Seq[Remote[R]]

@@ -9,6 +9,9 @@ private final case class MultipleTransmissionImpl[
   T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag](
   system: System, selection: Selection[T, R])
     extends MultipleTransmissionImplBase[T, R, L] {
+  val id = (peerTypeOf[R], system, selection)
+  def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
+
   val remoteJoined = system.remoteJoined[R] transform {
     case remote if selection filter remote => remote
   }
@@ -24,6 +27,9 @@ private final case class OptionalTransmissionImpl[
   T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag](
   system: System, selection: Selection[T, R])
     extends OptionalTransmissionImplBase[T, R, L] {
+  val id = (peerTypeOf[R], system, selection)
+  def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
+
   val remoteJoined = system.remoteJoined[R] transform {
     case remote if selection filter remote => remote
   }
@@ -40,6 +46,9 @@ private final case class SingleTransmissionImpl[
   T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag](
   system: System, props: TransmissionProperties[T])
     extends SingleTransmissionImplBase[T, R, L] {
+  val id = (peerTypeOf[R], system, props)
+  def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
+
   val remoteJoined = system.remoteJoined[R]
   val remoteLeft = system.remoteLeft[R]
   def remote = system.singleRemote[R]
