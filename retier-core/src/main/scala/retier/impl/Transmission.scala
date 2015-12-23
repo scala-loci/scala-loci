@@ -1,8 +1,6 @@
 package retier
 package impl
 
-import AbstractionId._
-import RemoteRef._
 import transmission.MultipleTransmissionImplBase
 import transmission.OptionalTransmissionImplBase
 import transmission.SingleTransmissionImplBase

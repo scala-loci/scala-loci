@@ -9,6 +9,7 @@ import Selection._
 import transmission.MultipleTransmission
 import transmission.OptionalTransmission
 import transmission.SingleTransmission
+import network.ConnectionRequestor
 import util.Notification
 import scala.concurrent.Promise
 import scala.concurrent.Future
@@ -109,6 +110,29 @@ class System(
     anyRemoteLeft transformInContext {
       Function unlift { _.asRemote[R] }
     }
+
+
+
+
+  // connections
+
+  def requestRemoteConnection
+      [R <: Peer: PeerTypeTag](requestor: ConnectionRequestor): Unit =
+    remoteConnections request (requestor, peerTypeOf[R]) onFailure {
+      case _ => peerImpl.error
+    }
+
+  def createMultipleRemoteConnection
+      [R <: Peer: PeerTypeTag]: MultipleRemoteConnection[R] =
+    MultipleRemoteConnectionImpl(this)
+
+  def createOptionalRemoteConnection
+      [R <: Peer: PeerTypeTag]: OptionalRemoteConnection[R] =
+    OptionalRemoteConnectionImpl(this)
+
+  def createSingleRemoteConnection
+      [R <: Peer: PeerTypeTag]: SingleRemoteConnection[R] =
+    SingleRemoteConnectionImpl(this)
 
 
 

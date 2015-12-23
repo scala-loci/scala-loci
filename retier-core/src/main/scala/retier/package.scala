@@ -17,7 +17,8 @@ package object retier extends
     OverridingExpression[P] = `#macro`
 
   def remote[P <: Peer]:
-    RemoteExpression[P, on] with RemoteSelectionExpression[P] = `#macro`
+    RemoteExpression[P, on] with RemoteSelectionExpression[P] with
+    RemoteConnectionExpression[P] = `#macro`
 
 
   def peerTypeOf[P](implicit tag: PeerTypeTag[P]): PeerType = tag.peerType

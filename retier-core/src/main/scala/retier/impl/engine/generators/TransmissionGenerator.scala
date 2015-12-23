@@ -10,7 +10,7 @@ trait TransmissionGenerator { this: Generation =>
   import c.universe._
 
   val generateTransmissions = UniformAggregation[
-    PeerDefinition with PlacedStatement with EnclosingContext] {
+    PeerDefinition with PlacedStatement] {
       aggregator =>
 
     echo(verbose = true, s" Generating transmissions for placed expressions")
@@ -68,7 +68,6 @@ trait TransmissionGenerator { this: Generation =>
         case Some(localPeerTypeTag) =>
           val localTypeTag = markRetierSynthetic(localPeerTypeTag, value.pos)
 
-          import trees._
           import names._
 
           val createTransmission = tree.symbol match {
@@ -81,7 +80,6 @@ trait TransmissionGenerator { this: Generation =>
                 $remoteTypeTag, $localTypeTag)"""
 
         case _ =>
-          import trees._
           import names._
 
           q"""$system.$executeTransmission($transmissionProperties)(

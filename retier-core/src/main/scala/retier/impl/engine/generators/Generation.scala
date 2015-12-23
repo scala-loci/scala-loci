@@ -62,6 +62,9 @@ trait Generation {
 
     val transmissionProvider = typeOf[transmission.TransmissionProvider]
 
+    val connectionExpression = typeOf[RemoteConnectionExpression.type]
+    val connectionInterface = typeOf[RemoteConnectionInterface]
+
     val multiple = typeOf[Peer#Multiple[_]]
     val optional = typeOf[Peer#Optional[_]]
     val single = typeOf[Peer#Single[_]]
@@ -126,6 +129,12 @@ trait Generation {
 
     val transmit = Seq(transmitMultiple, transmitOptional, transmitSingle)
 
+    val multipleConnection = types.connectionExpression | TermName("multipleConnection")
+    val optionalConnection = types.connectionExpression | TermName("optionalConnection")
+    val singleConnection = types.connectionExpression | TermName("singleConnection")
+
+    val connection = Seq(multipleConnection, optionalConnection, singleConnection)
+
     val value = types.retier | retierTermName("value")
 
     val discardValue = types.retier | retierTermName("discardValue")
@@ -153,6 +162,9 @@ trait Generation {
     val createOptionalTransmission = TermName("createOptionalTransmission")
     val createSingleTransmission = TermName("createSingleTransmission")
     val executeTransmission = TermName("executeTransmission")
+    val createMultipleRemoteConnection = TermName("createMultipleRemoteConnection")
+    val createOptionalRemoteConnection = TermName("createOptionalRemoteConnection")
+    val createSingleRemoteConnection = TermName("createSingleRemoteConnection")
     val system = retierTermName("system")
     val systemMain = TermName("main")
     val systemRunning = TermName("running")

@@ -1,6 +1,7 @@
 package retier
 
 object rescalaTransmitter extends
+  ReactiveRemoteConnectionInterface with
   SignalTransmissionProvider with
   SignalTransmittable with
   EventTransmissionProvider with
