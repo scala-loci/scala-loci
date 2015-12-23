@@ -29,9 +29,7 @@ sealed trait PeerType extends Equals with PartiallyOrdered[PeerType] {
 private trait PeerTypeImplBase extends PeerType
 
 
-@implicitNotFound(
-  "No peer type information available for ${P} " +
-  "(maybe peer definition was not placed inside `multitier` environment)")
+@implicitNotFound("No peer type information available for ${P} (maybe peer definition was not placed inside `multitier` environment)")
 sealed trait PeerTypeTag[P] {
   def peerType: PeerType
 }

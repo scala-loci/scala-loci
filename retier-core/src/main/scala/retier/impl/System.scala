@@ -15,6 +15,7 @@ import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
 
 class System(
     executionContext: ExecutionContext,
@@ -23,14 +24,26 @@ class System(
     connectingRemotes: Seq[Future[RemoteRef]],
     peerImpl: PeerImpl.Ops) {
 
-  implicit val context = executionContext
+  private implicit val context = executionContext
+
+  private val mainThread = new AtomicReference(Option.empty[Thread])
 
   def main(): this.type = {
-    new Thread {
-      override def run = peerImpl.main
-    }.start
+    if (mainThread.get.isEmpty) {
+      val thread = new Thread {
+        override def run =
+          try peerImpl.main
+          catch {
+            case _: InterruptedException if remoteConnections.isTerminated =>
+          }
+      }
+      thread.start
+      mainThread set Some(thread)
+    }
     this
   }
+
+  def running(): Boolean = !remoteConnections.isTerminated
 
   def terminate(): Unit = remoteConnections.terminate
 
@@ -255,6 +268,7 @@ class System(
     context execute new Runnable {
       def run = peerImpl.terminating
     }
+    (mainThread getAndSet None) foreach { _.interrupt }
   }
 
   remoteConnections.receive += { message =>

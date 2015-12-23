@@ -92,7 +92,7 @@ trait TransmissionGenerator { this: Generation =>
     override def transform(tree: Tree) = tree match {
       case q"$_[..$tpts](...$exprss)"
           if symbols.transmit contains tree.symbol =>
-        val Seq(_, _, local, remote, _) = tpts
+        val Seq(_, _, _, _, local, remote, _) = tpts
         val localPeerTypeTag = peerTypeTagTree(
           local.typeTree(abortOnFailure = true), local.tpe, peerSymbols)
         val remotePeerTypeTag = peerTypeTagTree(

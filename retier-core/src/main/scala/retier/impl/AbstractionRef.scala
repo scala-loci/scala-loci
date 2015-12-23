@@ -6,7 +6,7 @@ import AbstractionRef._
 import RemoteRef._
 
 private final case class AbstractionRefImpl(abstraction: AbstractionId,
-    link: String, remote: RemoteRef, system: System)  extends AbstractionRef {
+    link: String, remote: RemoteRef, system: System) extends AbstractionRef {
   def channel = system.obtainChannel(link, remote)
   def derive(name: String) = AbstractionRef.create(
     AbstractionId.create(abstraction.name, false),

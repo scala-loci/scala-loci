@@ -74,6 +74,9 @@ trait PeerImplementationGenerator { this: Generation =>
       import names._
 
       override def transform(tree: Tree) = tree match {
+        case tree if tree.symbol == symbols.running =>
+          q"$system.$systemRunning"
+
         case tree if tree.symbol == symbols.terminate =>
           q"$system.$systemTerminate"
 

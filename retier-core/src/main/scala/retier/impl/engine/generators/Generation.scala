@@ -115,13 +115,14 @@ trait Generation {
 
     val remote = Seq(remoteIssuedApply, remoteIssuedCaptureApply, remoteApply, remoteCaptureApply)
 
+    val running = types.multitier | TermName("running")
     val terminate = types.multitier | TermName("terminate")
 
     val fromExpression = types.retier | retierTermName("FromExpression")
 
-    val transmitMultiple = types.retier | TermName("transmitMultiple")
-    val transmitOptional = types.retier | TermName("transmitOptional")
-    val transmitSingle = types.retier | TermName("transmitSingle")
+    val transmitMultiple = types.retier | retierTermName("transmitMultiple")
+    val transmitOptional = types.retier | retierTermName("transmitOptional")
+    val transmitSingle = types.retier | retierTermName("transmitSingle")
 
     val transmit = Seq(transmitMultiple, transmitOptional, transmitSingle)
 
@@ -154,6 +155,7 @@ trait Generation {
     val executeTransmission = TermName("executeTransmission")
     val system = retierTermName("system")
     val systemMain = TermName("main")
+    val systemRunning = TermName("running")
     val systemTerminate = TermName("terminate")
     val implementation = retierTypeName("peer")
     val interface = retierTermName("peer")

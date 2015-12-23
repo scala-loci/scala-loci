@@ -6,7 +6,7 @@ import scala.annotation.implicitNotFound
 @implicitNotFound("Cannot prove that ${A} =:!= ${B}.")
 final abstract class =:!=[A, B]
 
-private object =:!= {
+protected object =:!= {
   implicit def unequal[A, B](implicit ev: Unequal[A, B]): A =:!= B = null
 
   final abstract class Unequal[A, B]
@@ -18,7 +18,7 @@ private object =:!= {
 @implicitNotFound("Cannot prove that ${A} <:!< ${B}.")
 final abstract class <:!<[A, B]
 
-private object <:!< {
+protected object <:!< {
   implicit def nonSubtype[A, B](implicit ev: NonSubtype[A, B]): A <:!< B = null
 
   final abstract class NonSubtype[A, B]

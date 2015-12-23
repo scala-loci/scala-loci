@@ -30,16 +30,7 @@ private object TCPConnectionHandler {
 
     val delay = 20000
     val timeout = 40000
-
-    socket setSoTimeout timeout
-
     val executor = Executors.newSingleThreadScheduledExecutor
-    executor scheduleWithFixedDelay (new Runnable {
-      def run = writer synchronized {
-        writer write ("!", 0, 1)
-        writer.flush
-      }
-    }, delay, delay, TimeUnit.MILLISECONDS)
 
 
     // connection interface
@@ -59,9 +50,12 @@ private object TCPConnectionHandler {
 
       def send(data: String) =
         if (isOpen) writer synchronized {
-          val output = "[" + data.length + "]" + data
-          writer write (output, 0, output.length)
-          writer.flush
+          try {
+            val output = "[" + data.length + "]" + data
+            writer write (output, 0, output.length)
+            writer.flush
+          }
+          catch { case _: IOException => close }
         }
 
       def close() = open synchronized {
@@ -84,6 +78,21 @@ private object TCPConnectionHandler {
     connectionEstablished(connection)
 
 
+    // keep alive
+
+    socket setSoTimeout timeout
+
+    executor scheduleWithFixedDelay (new Runnable {
+      def run = writer synchronized {
+        try {
+          writer write ("!", 0, 1)
+          writer.flush
+        }
+        catch { case _: IOException => connection.close }
+      }
+    }, delay, delay, TimeUnit.MILLISECONDS)
+
+
     // frame parsing
 
     def read = {
@@ -104,7 +113,7 @@ private object TCPConnectionHandler {
             ch = read
           }
 
-          val size = Integer parseInt builder.toString
+          val size = builder.toString.toInt
 
           builder setLength 0
           for (_ <- 0 until size)

@@ -17,5 +17,8 @@ object multitier {
     macro impl.engine.multitier.run[P]
 
   @compileTimeOnly("only usable in `multitier` environment")
+  def running(): Boolean = `#macro`
+
+  @compileTimeOnly("only usable in `multitier` environment")
   def terminate(): Unit = `#macro`
 }
