@@ -334,6 +334,12 @@ class Typer[C <: Context](val c: C) {
           createTypeTree(tree.tpe.dealias)
         else
           tree
+      case ValDef(mods, name, tpt, rhs) if mods hasFlag ARTIFACT =>
+        val valDef = ValDef(
+          super.transformModifiers(mods), name, tpt,
+          super.transform(rhs))
+        internal setType (valDef, tree.tpe)
+        internal setPos (valDef, tree.pos)
       case DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) =>
         tree
       case _ =>

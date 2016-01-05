@@ -4,7 +4,9 @@ import scala.language.implicitConversions
 
 protected final abstract class RemoteConnectionExpression[P <: Peer]
 
-object RemoteConnectionExpression {
+object RemoteConnectionExpression extends
+    ide.intellij.RemoteConnectionConversions {
+
   implicit def multipleConnection
     [R <: Peer, L <: Peer, Provider <: RemoteConnectionInterface]
     (v: RemoteConnectionExpression[R])

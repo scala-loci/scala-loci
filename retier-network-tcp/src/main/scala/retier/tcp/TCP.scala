@@ -3,7 +3,9 @@ package tcp
 
 import network.ConnectionListener
 import network.ConnectionRequestor
+import network.ConnectionFactory
 import network.ProtocolInfo
+import util.Attributes
 
 abstract case class TCP private[TCP] (host: String, port: Int)
     extends ProtocolInfo {
@@ -19,11 +21,16 @@ abstract case class TCP private[TCP] (host: String, port: Int)
   val identification = None
 }
 
-object TCP {
+object TCP extends ConnectionFactory {
   def apply(port: Int, interface: String = "localhost"): ConnectionListener =
     new TCPConnectionListener(port, interface)
   def apply(host: String, port: Int): ConnectionRequestor =
     new TCPConnectionRequestor(host, port)
   def createProtocolInfo(host: String, port: Int) =
     new TCP(host, port) { }
+
+  def listener(config: String, attrs: Attributes) =
+    TCPConnectionFactory listener (config, attrs)
+  def requestor(url: String, attrs: Attributes) =
+    TCPConnectionFactory requestor (url, attrs)
 }

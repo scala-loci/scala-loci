@@ -25,8 +25,6 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
       event
     }
 
-    def connect(requestor: ConnectionRequestor) = connection.request(requestor)
-
     protected def update(update: => Unit) = {
       connection.remoteJoined += { _ => update }
       connection.remoteLeft += { _ => update }
@@ -43,6 +41,8 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
         update { signal() = connection.remotes }
         signal
       }
+
+    def connect(requestor: ConnectionRequestor) = connection.request(requestor)
   }
 
   implicit class RescalaOptionalRemoteConnectionInterface[P <: Peer](
@@ -55,6 +55,8 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
         update { signal() = connection.remote }
         signal
       }
+
+    def connect(requestor: ConnectionRequestor) = connection.request(requestor)
   }
 
   implicit class RescalaSingleRemoteConnectionInterface[P <: Peer](

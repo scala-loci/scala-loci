@@ -70,6 +70,5 @@ object SingleRemoteConnection {
     val joined = connection.remoteJoined
     val left = connection.remoteLeft
     def connected = connection.remote
-    def connect(requestor: ConnectionRequestor) = connection.request(requestor)
   }
 }

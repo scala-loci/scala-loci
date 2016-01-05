@@ -6,5 +6,6 @@ object rescalaTransmitter extends
   SignalTransmittable with
   EventTransmissionProvider with
   EventTransmittable with
+  ide.intellij.ReactiveRemoteConnectionInterface with
   ide.intellij.SignalTransmissionProvider with
   ide.intellij.EventTransmissionProvider
