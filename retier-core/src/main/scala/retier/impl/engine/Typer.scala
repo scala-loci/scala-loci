@@ -555,7 +555,6 @@ class Typer[C <: Context](val c: C) {
         case ClassDef(mods, _, _, _)
             if (mods hasFlag CASE) && abortWhenUnfixable =>
           c.abort(tree.pos, "case class not allowed inside macro application")
-          EmptyTree
 
         case _ =>
           super.transform(tree)

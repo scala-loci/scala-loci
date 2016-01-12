@@ -13,7 +13,7 @@ object RetierBuild extends Build {
   val macrodeclaration = Seq(
     libraryDependencies ++= Seq(
       "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-      "org.scalamacros" %% "resetallattrs" % "1.0.0-M1"
+      "org.scalamacros" %% "resetallattrs" % "1.0.0"
     )
   )
 

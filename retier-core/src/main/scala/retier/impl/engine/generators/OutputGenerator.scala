@@ -25,6 +25,9 @@ trait OutputGenerator { this: Generation =>
         mods.flags, mods.privateWithin,
         compileTimeOnlyAnnotation +: mods.annotations)
 
+    def nullValue(typeTree: Tree) =
+      q"null.asInstanceOf[${typeTree.typeTree}]"
+
     val stats =
       (aggregator.all[NonPlacedStatement] collect {
         case NonPlacedStatement(importStat @ Import(_, _), _) =>
@@ -33,31 +36,32 @@ trait OutputGenerator { this: Generation =>
         case NonPlacedStatement(definition, _)
             if definition.symbol == NoSymbol ||
                definition.symbol.isType ||
+               definition.symbol.asTerm.isParamAccessor ||
                definition.symbol.name == termNames.CONSTRUCTOR  =>
           definition
 
         case NonPlacedStatement(definition @
             ValDef(mods, name, tpt, rhs), _) =>
           ValDef(
-            annotate(mods), name, tpt.typeTree, `#macro`)
+            annotate(mods), name, tpt.typeTree, nullValue(tpt))
 
         case NonPlacedStatement(definition @
               DefDef(mods, name, tparams, vparamss, tpt, rhs), _) =>
           DefDef(
-            annotate(mods), name, tparams, vparamss, tpt.typeTree, `#macro`)
+            annotate(mods), name, tparams, vparamss, tpt.typeTree, nullValue(tpt))
       }) ++
       (aggregator.all[PlacedStatement] collect {
         case PlacedStatement(definition @
               ValDef(mods, name, tpt, rhs), _, _, _, _, _, _)
             if !definition.isRetierSynthetic =>
           ValDef(
-            annotate(mods), name, tpt.typeTree, `#macro`)
+            annotate(mods), name, tpt.typeTree, nullValue(tpt))
 
         case PlacedStatement(definition @
               DefDef(mods, name, tparams, vparamss, tpt, rhs), _, _, _, _, _, _)
             if !definition.isRetierSynthetic =>
           DefDef(
-            annotate(mods), name, tparams, vparamss, tpt.typeTree, `#macro`)
+            annotate(mods), name, tparams, vparamss, tpt.typeTree, nullValue(tpt))
       }) ++
       (aggregator.all[PeerDefinition] flatMap { stat =>
         stat.tree +: stat.companion.toList

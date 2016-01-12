@@ -168,6 +168,7 @@ trait PeerImplementationGenerator { this: Generation =>
             case NonPlacedStatement(stat, index)
                 if stat.symbol != NoSymbol &&
                    !stat.symbol.isType &&
+                   !stat.symbol.asTerm.isParamAccessor &&
                    stat.symbol.name != termNames.CONSTRUCTOR =>
               (stat, index)
           }

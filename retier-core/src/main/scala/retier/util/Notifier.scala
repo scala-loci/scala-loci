@@ -1,19 +1,22 @@
 package retier
 package util
 
-import java.util.concurrent.ConcurrentLinkedDeque
 import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
 import scala.util.control.NonFatal
+import java.util.concurrent.ConcurrentLinkedQueue
 
 trait Notification[T] { self =>
-  protected val listeners =
-    new ConcurrentLinkedDeque[(T => _, Option[ExecutionContext])]
+  case class Listener(f: T => _)(val ec: Option[ExecutionContext])
+
+  protected val listeners = new ConcurrentLinkedQueue[Listener]
 
   protected def reportFailure(exception: Throwable): Unit
 
   protected def notify(v: T): Unit =
-    listeners.asScala foreach {
+    listeners.asScala map {
+      listener => (listener.f, listener.ec)
+    } foreach {
       case (f, Some(ec)) => ec execute new Runnable { def run() =
         try f(v)
         catch { case NonFatal(exception) => reportFailure(exception) }
@@ -74,16 +77,13 @@ trait Notification[T] { self =>
     createTransformedNotification(PartialFunction(identity), Some(ec))
 
   def +=~>[R](f: T => R)(implicit ec: ExecutionContext): Unit =
-    listeners add ((f, Some(ec)))
+    listeners add Listener(f)(Some(ec))
 
   def +=[R](f: T => R): Unit =
-    listeners add ((f, None))
+    listeners add Listener(f)(None)
 
   def -=[R](f: T => R): Unit =
-    listeners remove new {
-      override def equals(other: Any) =
-        other match { case (`f`, _) => true case _ => false }
-    }
+    listeners remove Listener(f)(None)
 }
 
 class Notifier[T](failureReporter: Throwable => Unit) {

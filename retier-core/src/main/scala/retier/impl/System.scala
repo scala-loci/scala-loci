@@ -11,12 +11,14 @@ import transmission.OptionalTransmission
 import transmission.SingleTransmission
 import network.ConnectionRequestor
 import util.Notification
+import scala.annotation.tailrec
 import scala.ref.WeakReference
 import scala.concurrent.Promise
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicReference
 
 class System(
@@ -31,17 +33,16 @@ class System(
   private val mainThread = new AtomicReference(Option.empty[Thread])
 
   def main(): this.type = {
-    if (mainThread.get.isEmpty) {
-      val thread = new Thread {
-        override def run =
-          try peerImpl.main
-          catch {
-            case _: InterruptedException if remoteConnections.isTerminated =>
-          }
+    implicit val context = contexts.Queued.create
+
+    Future {
+      mainThread set Some(Thread.currentThread)
+      try peerImpl.main
+      catch {
+        case _: InterruptedException if remoteConnections.isTerminated =>
       }
-      thread.start
-      mainThread set Some(thread)
     }
+
     this
   }
 
@@ -237,7 +238,8 @@ class System(
     new ConcurrentHashMap[Channel, String => Unit]
   private val pushedValues =
     new ConcurrentHashMap[(RemoteRef, AbstractionId), Future[_]]
-  private val sync = new FairSync
+  private val channelQueue =
+    new ConcurrentLinkedQueue[(RemoteRef, Message)]
 
   def allChannels: List[Channel] = channels.values.asScala.toList
 
@@ -313,36 +315,49 @@ class System(
   }
 
   remoteConnections.receive += { message =>
-    sync {
-      message match {
-        case (remote, ContentMessage(
-            "Request", channelName, Some(abstraction), payload)) =>
-          val id =
-            AbstractionId.create(abstraction)
-          val ref =
-            AbstractionRef.create(id, channelName, remote, System.this)
+    message match {
+      case (remote, ContentMessage(
+          "Request", channelName, Some(abstraction), payload)) =>
+        val id = AbstractionId.create(abstraction)
+        val ref = AbstractionRef.create(id, channelName, remote, this)
+        context execute new Runnable {
+          def run = peerImpl.dispatch(payload, id, ref) foreach { payload =>
+            ref.channel send ("Response", payload)
+          }
+        }
+
+      case (remote, ContentMessage(
+          "Response", channelName, None, payload)) =>
+        val channel = obtainChannel(channelName, remote)
+        Option(channelResponseHandlers remove channel) foreach { handle =>
           context execute new Runnable {
-            def run = peerImpl.dispatch(payload, id, ref) foreach { payload =>
-              ref.channel send ("Response", payload)
+            def run = handle(payload)
+          }
+        }
+
+      case message =>
+        val executing = !channelQueue.isEmpty
+        channelQueue add message
+
+        if (!executing && !channelQueue.isEmpty)
+          context execute new Runnable {
+            def run = channelQueue synchronized {
+              @tailrec def processQueue(): Unit =
+                channelQueue.poll match {
+                  case (remote, ContentMessage(
+                      messageType, channelName, None, payload)) =>
+                    val channel = obtainChannel(channelName, remote)
+                    channel receive (messageType, payload)
+                    processQueue
+
+                  case message =>
+                    if (Option(message).nonEmpty)
+                      processQueue
+                }
+
+              processQueue
             }
           }
-
-        case (remote, ContentMessage(
-            "Response", channelName, None, payload)) =>
-          val channel = obtainChannel(channelName, remote)
-          Option(channelResponseHandlers remove channel) foreach { handle =>
-            context execute new Runnable {
-              def run = handle(payload)
-            }
-          }
-
-        case (remote, ContentMessage(
-            messageType, channelName, None, payload)) =>
-          val channel = obtainChannel(channelName, remote)
-          channel receive (messageType, payload)
-
-        case _ =>
-      }
     }
   }
 

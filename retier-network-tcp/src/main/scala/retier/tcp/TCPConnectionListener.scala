@@ -32,9 +32,7 @@ private class TCPConnectionListener(port: Int, interface: String)
                 executor execute new Runnable {
                   def run = TCPConnectionHandler handleConnection (
                     connection,
-                    { connection =>
-                      doConnectionEstablished(connection)
-                    })
+                    { doConnectionEstablished(_) })
                 }
             }
           }

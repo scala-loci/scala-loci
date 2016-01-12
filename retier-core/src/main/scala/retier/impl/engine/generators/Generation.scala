@@ -189,7 +189,6 @@ trait Generation {
     val Map = q"$root.scala.collection.immutable.Map"
     val compileTimeOnly = tq"$root.scala.annotation.compileTimeOnly"
     val peerTypeOf = q"$root.retier.peerTypeOf"
-    val `#macro` = q"$root.retier.`#macro`"
     val AbstractionId = tq"$root.retier.transmission.AbstractionId"
     val AbstractionIdCreate = q"$root.retier.impl.AbstractionId.create"
     val AbstractionRef = tq"$root.retier.transmission.AbstractionRef"
