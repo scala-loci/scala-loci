@@ -188,6 +188,7 @@ trait Generation {
     val List = q"$root.scala.collection.immutable.List"
     val Map = q"$root.scala.collection.immutable.Map"
     val compileTimeOnly = tq"$root.scala.annotation.compileTimeOnly"
+    val multitier = q"new $root.retier.multitier"
     val peerTypeOf = q"$root.retier.peerTypeOf"
     val AbstractionId = tq"$root.retier.transmission.AbstractionId"
     val AbstractionIdCreate = q"$root.retier.impl.AbstractionId.create"
@@ -373,8 +374,8 @@ trait Generation {
       case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
       case _ =>
         (typer createTypeTree peerType) match {
-          case tq"$expr.$_[..$_]" => expr
-          case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
+          case tq"$expr[..$_]" => expr
+          case tq"$expr[..$_] forSome { ..$_ }" => expr
         }
     }
 

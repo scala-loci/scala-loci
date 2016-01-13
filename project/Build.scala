@@ -34,7 +34,7 @@ object RetierBuild extends Build {
     base = file("."),
     settings = defaultSettings ++ nopublish
   ) aggregate (
-    retierCore, retierSerializableUpickle,
+    retierCore, retierArchitectureBasic, retierSerializableUpickle,
     retierTransmitterBasic, retierTransmitterRescala,
     retierNetworkTCP)
 
@@ -44,6 +44,12 @@ object RetierBuild extends Build {
     settings = defaultSettings ++
       SourceGenerator.transmittableTuples ++ macroparadise ++ macrodeclaration
   )
+
+  lazy val retierArchitectureBasic = Project(
+    id = "retier-architecture-basic",
+    base = file("retier-architecture-basic"),
+    settings = defaultSettings ++ macroparadise
+  ) dependsOn retierCore
 
   lazy val retierSerializableUpickle = Project(
     id = "retier-serializable-upickle",

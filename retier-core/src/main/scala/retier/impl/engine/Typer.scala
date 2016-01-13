@@ -372,10 +372,14 @@ class Typer[C <: Context](val c: C) {
       case Select(thisTree @ This(thisName), selectedName) =>
         val originalThisName = originalName(thisName)
 
-        val lookupResult = stack collectFirst {
-          case (name, names) if name == originalThisName =>
-            names contains selectedName
-        }
+        val lookupResult =
+          if (thisName.toString startsWith "$anon")
+            Some(false)
+          else
+            stack collectFirst {
+              case (name, names) if name == originalThisName =>
+                names contains selectedName
+            }
 
         lookupResult match {
           case Some(false) =>
@@ -387,7 +391,13 @@ class Typer[C <: Context](val c: C) {
             internal setType (ident, tree.tpe)
 
           case _ =>
-            tree
+            if (thisName == originalThisName &&
+                thisTree.symbol.isModuleClass &&
+                !thisTree.symbol.isPackage &&
+                !thisTree.symbol.isPackageClass)
+              Select(Ident(thisName.toTermName), selectedName)
+            else
+              tree
         }
 
       case _ =>

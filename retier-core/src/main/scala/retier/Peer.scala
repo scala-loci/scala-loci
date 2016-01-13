@@ -80,6 +80,34 @@ trait Peer {
     }
   }
 
+  protected[this] case class FactorySetup(factory: ConnectionFactory)
+
+  protected[this] def setup(factory: ConnectionFactory) = FactorySetup(factory)
+
+  protected[this] implicit class FactorySetupListener[D, P]
+      (factorySetup: FactorySetup)
+      (implicit
+          ev0: Default.Default[D],
+          ev1: D <:< Default.Listen[P],
+          ev2: PeerTypeTag[P]) {
+    def apply(config: String) =
+      listen[P] (factorySetup.factory) (config, Attributes.empty)
+    def apply(config: String, attrs: Attributes) =
+      listen[P] (factorySetup.factory) (config, attrs)
+  }
+
+  protected[this] implicit class FactorySetupRequestor[D, P]
+      (factorySetup: FactorySetup)
+      (implicit
+          ev0: Default.Default[D],
+          ev1: D <:< Default.Request[P],
+          ev2: PeerTypeTag[P]) {
+    def apply(url: String) =
+      request[P] (factorySetup.factory) (url, Attributes.empty)
+    def apply(url: String, attrs: Attributes) =
+      request[P] (factorySetup.factory) (url, attrs)
+  }
+
   protected[this] final def listen[P: PeerTypeTag]
       (listener: ConnectionListener): ConnectionSetup =
     new ConnectionSetup {

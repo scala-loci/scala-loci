@@ -16,6 +16,11 @@ object multitier {
   def run[P <: Peer]: Runtime =
     macro impl.engine.multitier.run[P]
 
+  @throws[RemoteConnectionException](
+    "if the connection setup does not respect the connection specification")
+  def setup(peer: Peer): Runtime =
+    macro impl.engine.multitier.setup
+
   @compileTimeOnly("only usable in `multitier` environment")
   def running(): Boolean = `#macro`
 
