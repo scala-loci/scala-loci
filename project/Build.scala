@@ -66,7 +66,7 @@ object RetierBuild extends Build {
   lazy val retierTransmitterRescala = Project(
     id = "retier-transmitter-rescala",
     base = file("retier-transmitter-rescala"),
-    settings = defaultSettings ++ rescala
+    settings = defaultSettings ++ SourceGenerator.signalDefaultTuples ++ rescala
   ) dependsOn retierCore
 
   lazy val retierNetworkTCP = Project(

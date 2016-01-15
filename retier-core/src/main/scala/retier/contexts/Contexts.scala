@@ -9,6 +9,10 @@ import java.util.concurrent.ThreadFactory
 
 object Pooled {
   lazy val global: ExecutionContextExecutor = ExecutionContext.global
+
+  object Implicits {
+    implicit lazy val global = Pooled.global
+  }
 }
 
 object Immediate {
@@ -20,6 +24,10 @@ object Immediate {
       catch { case NonFatal(exception) => reportFailure(exception) }
 
     def reportFailure(throwable: Throwable) = report(throwable)
+  }
+
+  object Implicits {
+    implicit lazy val global = Immediate.global
   }
 }
 
@@ -33,4 +41,8 @@ object Queued {
         thread
       }
     })
+
+  object Implicits {
+    implicit lazy val global = Queued.global
+  }
 }

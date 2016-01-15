@@ -1,6 +1,7 @@
 package retier
 
 import transmission._
+import contexts.Immediate.Implicits.global
 import rescala.Signal
 import rescala.Var
 import makro.SignalMacro.{SignalM => Signal}
@@ -10,13 +11,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
 
-protected[retier] trait SignalTransmissionProvider {
-  private implicit val executionContext = new ExecutionContext {
-    def execute(runnable: Runnable) = runnable.run
-    def reportFailure(throwable: Throwable) =
-      ExecutionContext.defaultReporter(throwable)
-  }
-
+protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
   private final val asLocalId = 0
 
   implicit class RescalaSignalMultipleTransmissionProvider
@@ -91,15 +86,48 @@ protected[retier] trait SignalTransmissionProvider {
     }
   }
 
-  implicit class RescalaSignalSingleTransmissionProvider
+  protected class RescalaSignalSingleTransmissionProviderCommon
       [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
       (transmission: SingleTransmission[Sig[T], R, L])
     extends TransmissionProvider {
 
-    def asLocal: Signal[T] = {
+    def asLocal_?(timeout: Duration): Signal[T] = {
       // if REScala signals could capture the state of not being evaluated yet,
       // we would not need to block
-      Await result (transmission.retrieveRemoteValue, Duration.Inf)
+      Await result (transmission.retrieveRemoteValue, timeout)
     }
+
+    def asLocal_! : Signal[T] = asLocal_?(Duration.Inf)
+
+    def asLocalOption: Signal[Option[T]] = transmission.memo(asLocalId) {
+      val option = Var(Option.empty[Signal[T]])
+
+      transmission.retrieveRemoteValue onSuccess {
+        case signal => option() = Some(signal)
+      }
+
+      Signal { option() map { _() } }
+    }
+
+    def asLocal(default: T): Signal[T] =
+      transmission.memo((asLocalId, default)) {
+        Signal { asLocalOption() getOrElse default }
+      }
+  }
+
+  implicit class RescalaSignalSingleTransmissionProviderWithDefaultValue
+      [Sig[T] <: Signal[T], T: SignalDefaultValue, R <: Peer, L <: Peer]
+      (transmission: SingleTransmission[Sig[T], R, L])
+    extends RescalaSignalSingleTransmissionProviderCommon(transmission) {
+
+    def asLocal: Signal[T] = asLocal(implicitly[SignalDefaultValue[T]].value)
+  }
+
+  implicit class RescalaSignalSingleTransmissionProviderWithoutDefaultValue
+      [Sig[T] <: Signal[T], T: NoSignalDefaultValue, R <: Peer, L <: Peer]
+      (transmission: SingleTransmission[Sig[T], R, L])
+    extends RescalaSignalSingleTransmissionProviderCommon(transmission) {
+
+    def asLocal: Signal[Option[T]] = asLocalOption
   }
 }

@@ -1,6 +1,7 @@
 package retier
 
 import transmission._
+import contexts.Immediate.Implicits.global
 import rescala.Signal
 import rescala.Var
 import rescala.events.Event
@@ -12,12 +13,6 @@ import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
 
 protected[retier] trait EventTransmissionProvider {
-  private implicit val executionContext = new ExecutionContext {
-    def execute(runnable: Runnable) = runnable.run
-    def reportFailure(throwable: Throwable) =
-      ExecutionContext.defaultReporter(throwable)
-  }
-
   private final val asLocalId = 0
   private final val asLocalSeqId = 1
 

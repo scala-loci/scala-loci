@@ -68,4 +68,35 @@ object SourceGenerator {
       files.keys.toSeq
     }
   )
+
+  val signalDefaultTuples = Seq(
+    sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
+      val tuples = (1 to 22) map { i =>
+        val args = (0 until i) map { i => s"default[T$i]" } mkString ", "
+        val typeArgs = (0 until i) map { i => s"""
+          |        T$i: SignalDefaultValue""" } mkString ", "
+
+        val tuple = s"""
+          |    implicit def defaultTuple$i[$typeArgs] =
+          |      SignalDefaultValue(Tuple$i($args))"""
+
+        tuple
+      }
+
+      val files = Map(
+        dir / "retier" / "SignalDefaultTuples.scala" ->
+        s"""package retier
+           |
+           |trait SignalDefaultTuples { this: SignalDefaultValues =>
+           |  trait SignalDefaultTupleValues extends BasicSignalDefaultValues {
+           |${tuples.mkString}
+           |  }
+           |}
+           |""".stripMargin
+      )
+
+      files foreach { case (file, content) => IO write (file, content) }
+      files.keys.toSeq
+    }
+  )
 }

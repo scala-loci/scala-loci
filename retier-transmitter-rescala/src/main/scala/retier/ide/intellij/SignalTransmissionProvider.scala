@@ -33,13 +33,26 @@ protected[retier] trait SignalTransmissionProvider {
     RescalaSignalOptionalTransmissionProvider[Sig, P, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitSingleRescalaSignal
+  implicit def $$retier$transmitSingleRescalaSignalWithDefault
     [V, T, U, S, P, Sig[U] <: Signal[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,
         ev0: TransmissionProperties[V, T, R, L, SingleConnection],
         ev1: T <:< Sig[U],
-        ev2: Transmittable[U, S, P],
-        ev3: SingleTransmission[Sig[P], R, L] => RescalaSignalSingleTransmissionProvider[Sig, P, R, L]):
-    RescalaSignalSingleTransmissionProvider[Sig, P, R, L] = ???
+        ev2: SignalDefaultValue[U],
+        ev3: Transmittable[U, S, P],
+        ev4: SingleTransmission[Sig[P], R, L] => RescalaSignalSingleTransmissionProviderWithDefaultValue[Sig, P, R, L]):
+    RescalaSignalSingleTransmissionProviderWithDefaultValue[Sig, P, R, L] = ???
+
+  @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
+  implicit def $$retier$transmitSingleRescalaSignalWithoutDefault
+    [V, T, U, S, P, Sig[U] <: Signal[U], L <: Peer, R <: Peer](v: V)
+    (implicit
+        dummy: IntelliJDummy,
+        ev0: TransmissionProperties[V, T, R, L, SingleConnection],
+        ev1: T <:< Sig[U],
+        ev2: NoSignalDefaultValue[U],
+        ev3: Transmittable[U, S, P],
+        ev4: SingleTransmission[Sig[P], R, L] => RescalaSignalSingleTransmissionProviderWithoutDefaultValue[Sig, P, R, L]):
+    RescalaSignalSingleTransmissionProviderWithoutDefaultValue[Sig, P, R, L] = ???
 }
