@@ -17,6 +17,7 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -56,6 +57,7 @@ class RemoteConnections(peerType: PeerType,
     val messages = new ListBuffer[(RemoteRef, Message)]
     val listeners = new ListBuffer[ConnectionListener]
     val potentials = new ListBuffer[PeerType]
+    val remotes = new ConcurrentLinkedQueue[RemoteRef]
     val connections = new ConcurrentHashMap[RemoteRef, Connection]
 
     val sync = new FairSync
@@ -85,7 +87,7 @@ class RemoteConnections(peerType: PeerType,
 
   def terminated: Notification[Unit] = doTerminated.notification
 
-  def remotes: List[RemoteRef] = state.connections.keys.asScala.toList
+  def remotes: List[RemoteRef] = state.remotes.asScala.toList
 
   def isConnected(remote: RemoteRef): Boolean =
     state.connections containsKey remote
@@ -256,6 +258,7 @@ class RemoteConnections(peerType: PeerType,
       sendAcceptMessage: Boolean): Try[Unit] =
     handleConstraintChanges(instance) {
       instance.state.connections put (remote, connection)
+      instance.state.remotes add remote
 
       if (sendAcceptMessage)
         connection send (Message serialize AcceptMessage())
@@ -284,6 +287,7 @@ class RemoteConnections(peerType: PeerType,
   private def removeRemoteConnection(instance: RemoteConnections,
       remote: RemoteRef): Unit =
     handleConstraintChanges(instance) {
+      instance.state.remotes remove remote
       instance.state.connections remove remote
       instance.doRemoteLeft(remote)
     }
@@ -323,7 +327,7 @@ class RemoteConnections(peerType: PeerType,
   }
 
   private def connections: Seq[PeerType] =
-    (state.connections.keys.asScala map { _.peerType }).toSeq ++
+    (state.remotes.asScala map { _.peerType }).toSeq ++
     (state sync { state.potentials.toSeq }) flatMap { peerType =>
       bases(peerType) + peerType
     }
@@ -351,6 +355,7 @@ class RemoteConnections(peerType: PeerType,
       if (!state.isTerminated) {
         state.terminate
 
+        state.remotes.clear
         state.connections.asScala foreach { case (remote, connection) =>
           connection.close
         }
@@ -368,8 +373,10 @@ class RemoteConnections(peerType: PeerType,
   def isTerminated: Boolean = state.isTerminated
 
   def disconnect(remote: RemoteRef): Unit =
-    if (!state.isTerminated)
+    if (!state.isTerminated) {
+      state.remotes remove remote
       Option(state.connections remove remote) foreach { _.close }
+    }
 
   def send(remote: RemoteRef, message: Message): Unit =
     if (!state.isTerminated)

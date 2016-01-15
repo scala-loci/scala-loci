@@ -70,7 +70,7 @@ class Typer[C <: Context](val c: C) {
    */
   def untypecheck(tree: Tree): Tree =
     c untypecheck
-      (selfReferenceFixer transform
+      (typeApplicationCleaner transform
         (syntheticImplicitParamListCleaner transform
           fixTypecheck(tree, abortWhenUnfixable = true)))
 
@@ -326,22 +326,58 @@ class Typer[C <: Context](val c: C) {
 
 
   private object typeApplicationCleaner extends Transformer {
+    def prependRootPackage(tree: Tree): Tree = tree match {
+      case Ident(termNames.ROOTPKG) =>
+        tree
+      case Ident(name) if tree.symbol.owner.owner == NoSymbol =>
+        Select(Ident(termNames.ROOTPKG), name)
+      case Select(qualifier, name) =>
+        Select(prependRootPackage(qualifier), name)
+      case _ =>
+        tree
+    }
+
     override def transform(tree: Tree) = tree match {
       case tree: TypeTree =>
         if (tree.original != null)
-          transform(tree.original)
+          transform(prependRootPackage(tree.original))
         else if (tree.tpe != null)
           createTypeTree(tree.tpe.dealias)
         else
           tree
+
       case ValDef(mods, name, tpt, rhs) if mods hasFlag ARTIFACT =>
         val valDef = ValDef(
           super.transformModifiers(mods), name, tpt,
           super.transform(rhs))
         internal setType (valDef, tree.tpe)
         internal setPos (valDef, tree.pos)
+
+      case Apply(TypeApply(fun, targs), args) =>
+        val hasImplicitParamList =
+          tree.symbol != null &&
+          tree.symbol.isMethod &&
+          (tree.symbol.asMethod.paramLists.lastOption flatMap {
+            _.headOption map { _.isImplicit }
+          } getOrElse false)
+
+        val hasNonRepresentableType = targs exists { arg =>
+          arg.tpe != null && (arg.tpe exists {
+            case TypeRef(NoPrefix, name, List()) =>
+              name.toString endsWith ".type"
+            case _ =>
+              false
+          })
+        }
+
+        if (hasImplicitParamList && hasNonRepresentableType)
+          super.transform(fun)
+        else
+          super.transform(tree)
+
       case DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) =>
         tree
+
       case _ =>
         super.transform(tree)
     }

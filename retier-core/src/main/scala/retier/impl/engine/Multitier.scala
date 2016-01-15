@@ -149,26 +149,30 @@ object multitier {
 
     val result = peer.tree match {
       case q"new { ..$earlydefns } with ..$parents { $self => ..$stats }" =>
-        val q"new { ..$_ } with ..$typedParents { $_ => ..$_ }" =
-          processor.c typecheck q"new ..$parents"
-
-        val peerParents = typedParents collect {
-          case parent if parent.tpe <:< types.peer => parent.symbol.name
+        val peerParents = parents collect {
+          case parent if parent.tpe <:< types.peer => parent
         }
 
-        if (peerParents.isEmpty)
+        val peerParentParents = peerParents flatMap { _.tpe.baseClasses.tail }
+
+        val peerParentNames = peerParents collect {
+          case parent if !(peerParentParents contains parent.tpe.typeSymbol) =>
+            parent.symbol.name
+        }
+
+        if (peerParentNames.isEmpty)
           peerConstructionExpressionExpected
 
-        val tpname = TypeName(peerParents :+ "Instance" mkString "-")
-        val tname = TermName("Multitier-Environment")
+        val tpname = TypeName(peerParentNames :+ "Instance" mkString "-")
+        val tname = TermName(peerParentNames :+ "Setup" mkString "-")
 
         q"""
-        @${trees.multitier} object $tname {
+        @${trees.multitierAnnotation} object $tname {
           class $tpname extends { ..$earlydefns } with ..$parents {
             $self => ..$stats
           }
         }
-        multitier.run[$tname.$tpname]
+        ${trees.multitier}.run[$tname.$tpname]
         """
 
       case _ =>
