@@ -1,5 +1,5 @@
 package retier
-package architecture
+package architectures
 
 @multitier
 object P2P {

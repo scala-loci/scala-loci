@@ -1,10 +1,10 @@
 package retier
-package architecture
+package architectures
 
 @multitier
-object MultiClientServer {
+object ClientServer {
   abstract class ServerPeer[C <: ClientPeer[_]: PeerTypeTag] extends Peer {
-    type Connection <: Multiple[C]
+    type Connection <: Single[C]
     implicit def connectDefault = Default.Listen[C]
   }
 
