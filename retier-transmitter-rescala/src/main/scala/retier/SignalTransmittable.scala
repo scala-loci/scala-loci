@@ -1,8 +1,8 @@
 package retier
 
 import transmission._
-import rescala.Signal
-import rescala.Var
+import rescala.synchronization.Engines.default
+import rescala.synchronization.Engines.default._
 import scala.language.higherKinds
 
 protected[retier] trait SignalTransmittable {
@@ -12,7 +12,7 @@ protected[retier] trait SignalTransmittable {
     new PushBasedTransmittable[Sig[T], T, S, U, Signal[U]] {
       def send(value: Sig[T], remote: RemoteRef, enpoint: Endpoint[T, U]) = {
         value.changed += enpoint.send
-        value.get
+        value.now
       }
 
       def receive(value: U, remote: RemoteRef, enpoint: Endpoint[T, U]) = {

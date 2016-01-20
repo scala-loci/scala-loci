@@ -1,10 +1,9 @@
 package retier
 
 import network.ConnectionRequestor
-import rescala.Var
-import rescala.Signal
-import rescala.events.Event
-import rescala.events.ImperativeEvent
+import rescala.synchronization.Engines.default
+import rescala.synchronization.Engines.default._
+
 
 protected[retier] trait ReactiveRemoteConnectionInterface {
   private final val joinedId = 0
@@ -14,13 +13,13 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
   protected class RescalaRemoteConnectionInterface[P <: Peer](
       connection: RemoteConnection[P, _]) {
     lazy val joined: Event[Remote[P]] = connection.memo(joinedId) {
-      val event = new ImperativeEvent[Remote[P]]
+      val event = Evt[Remote[P]]
       connection.remoteJoined += event.apply
       event
     }
 
     lazy val left: Event[Remote[P]] = connection.memo(leftId) {
-      val event = new ImperativeEvent[Remote[P]]
+      val event = Evt[Remote[P]]
       connection.remoteLeft += event.apply
       event
     }

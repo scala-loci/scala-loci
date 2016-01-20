@@ -2,12 +2,8 @@ package retier
 
 import transmission._
 import contexts.Immediate.Implicits.global
-import rescala.Signal
-import rescala.Var
-import rescala.events.Event
-import rescala.events.ImperativeEvent
-import rescala.events.emptyevent
-import makro.SignalMacro.{SignalM => Signal}
+import rescala.synchronization.Engines.default
+import rescala.synchronization.Engines.default._
 import scala.util.Success
 import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
@@ -17,8 +13,8 @@ protected[retier] trait EventTransmissionProvider {
   private final val asLocalSeqId = 1
 
   implicit class RescalaEventMultipleTransmissionProvider
-      [Evt[T] <: Event[T], T, R <: Peer, L <: Peer]
-      (transmission: MultipleTransmission[Evt[T], R, L])
+      [Evnt[T] <: Event[T], T, R <: Peer, L <: Peer]
+      (transmission: MultipleTransmission[Evnt[T], R, L])
     extends TransmissionProvider {
 
     def asLocal: Signal[Map[Remote[R], Event[T]]] =
@@ -30,7 +26,7 @@ protected[retier] trait EventTransmissionProvider {
             _.value
           } collect {
             case (remote, Some(Success(event))) => (remote, event)
-            case (remote, _) => (remote, emptyevent)
+            case (remote, _) => (remote, Evt())
           }
         }
 
@@ -56,14 +52,14 @@ protected[retier] trait EventTransmissionProvider {
           event map { (remote, _) }
         } reduceOption {
           _ || _
-        } getOrElse emptyevent
+        } getOrElse Evt()
       }).unwrap
     }
   }
 
   implicit class RescalaEventOptionalTransmissionProvider
-      [Evt[T] <: Event[T], T, R <: Peer, L <: Peer]
-      (transmission: OptionalTransmission[Evt[T], R, L])
+      [Evnt[T] <: Event[T], T, R <: Peer, L <: Peer]
+      (transmission: OptionalTransmission[Evnt[T], R, L])
     extends TransmissionProvider {
 
     def multiple =
@@ -76,7 +72,7 @@ protected[retier] trait EventTransmissionProvider {
         option() = transmission.retrieveRemoteValue map {
           _.value match {
             case Some(Success(event)) => event
-            case _ => emptyevent
+            case _ => Evt()
           }
         }
       }
@@ -98,13 +94,13 @@ protected[retier] trait EventTransmissionProvider {
     }
 
     def asLocalSeq: Event[T] = transmission.memo(asLocalSeqId) {
-      (Signal { asLocal() getOrElse emptyevent }).unwrap
+      (Signal { asLocal() getOrElse Evt() }).unwrap
     }
   }
 
   implicit class RescalaEventSingleTransmissionProvider
-      [Evt[T] <: Event[T], T, R <: Peer, L <: Peer]
-      (transmission: SingleTransmission[Evt[T], R, L])
+      [Evnt[T] <: Event[T], T, R <: Peer, L <: Peer]
+      (transmission: SingleTransmission[Evnt[T], R, L])
     extends TransmissionProvider {
 
     def optional =
@@ -114,7 +110,7 @@ protected[retier] trait EventTransmissionProvider {
       RescalaEventMultipleTransmissionProvider(transmission.multiple)
 
     def asLocal: Event[T] = transmission.memo(asLocalId) {
-      val event = new ImperativeEvent[T]
+      val event = Evt[T]
       transmission.retrieveRemoteValue foreach { _ += event.apply }
       event
     }

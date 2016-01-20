@@ -3,7 +3,8 @@ package ide.intellij
 
 import typeconstraints._
 import transmission._
-import rescala.Signal
+import rescala.synchronization.Engines.default
+import rescala.synchronization.Engines.default._
 import scala.language.implicitConversions
 import scala.language.higherKinds
 

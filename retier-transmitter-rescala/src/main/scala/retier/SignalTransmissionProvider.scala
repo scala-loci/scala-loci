@@ -2,9 +2,8 @@ package retier
 
 import transmission._
 import contexts.Immediate.Implicits.global
-import rescala.Signal
-import rescala.Var
-import makro.SignalMacro.{SignalM => Signal}
+import rescala.synchronization.Engines.{default => defaultEngine}
+import rescala.synchronization.Engines.default._
 import scala.util.Success
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
