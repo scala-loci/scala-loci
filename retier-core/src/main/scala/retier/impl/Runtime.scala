@@ -184,6 +184,7 @@ class Runtime(
 
     future onFailure { case exception =>
       peerExecutionContext reportFailure exception
+      remoteConnections.terminate
     }
   }
 

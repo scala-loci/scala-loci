@@ -12,9 +12,10 @@ protected[retier] trait EventTransmittable {
     new PushBasedTransmittable[Evt[T], T, S, U, Event[U]] {
       def send(value: Evt[T], remote: RemoteRef, sending: Sending[T]) = {
         value += sending.send
-        transmittable send null.asInstanceOf[T]
+        null.asInstanceOf[T]
       }
-      def receive(value: S, remote: RemoteRef, receiving: Receiving[U]) = {
+
+      def receive(value: U, remote: RemoteRef, receiving: Receiving[U]) = {
         val event = new ImperativeEvent[U]
         receiving.receive += event.apply
         event

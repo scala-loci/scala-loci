@@ -11,7 +11,7 @@ import java.util.concurrent.ExecutorService
 
 private class TCPConnectionListener(port: Int, interface: String)
     extends ConnectionListener {
-  val lock = new Object
+  private val lock = new Object
   @volatile private var serverSocket: ServerSocket = _
   @volatile private var executorService: ExecutorService = _
 

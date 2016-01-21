@@ -11,14 +11,14 @@ sealed trait Transmittable[T, S, R] {
 }
 
 abstract class PushBasedTransmittable[T, T0, S, R0, R](implicit
-  transmittable: Transmittable[T0, S, R0],
-  serializable: Serializable[S])
+  private[retier] val transmittable: Transmittable[T0, S, R0],
+  private[retier] val serializable: Serializable[S])
     extends Transmittable[T, S, R] {
   private[retier] val marshallable =
-    Marshallable.marshallable(transmittable, serializable)
+    Marshallable marshallable (transmittable, serializable)
 
-  def send(value: T, remote: RemoteRef, sending: Sending[T0]): S
-  def receive(value: S, remote: RemoteRef, receiving: Receiving[R0]): R
+  def send(value: T, remote: RemoteRef, sending: Sending[T0]): T0
+  def receive(value: R0, remote: RemoteRef, receiving: Receiving[R0]): R
 }
 
 abstract class PullBasedTransmittable[T, S, R] extends Transmittable[T, S, R] {

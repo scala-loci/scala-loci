@@ -61,7 +61,8 @@ object transmittableMarshalling {
               }
           }
 
-        transmittable send (value, abstraction.remote, sending)
+        transmittable.transmittable send
+          (transmittable send (value, abstraction.remote, sending))
     }
 
   private def receive[T, T0, S, R0, R](transmittable: Transmittable[T, S, R],
@@ -97,7 +98,9 @@ object transmittableMarshalling {
               }
           }
 
-        transmittable receive (value, abstraction.remote, receiving)
+        transmittable receive (
+          transmittable.transmittable receive value,
+          abstraction.remote, receiving)
     }
 
   private def deriveAbstraction(
@@ -118,8 +121,9 @@ object transmittableMarshalling {
     }
 
   private def withValue[T, U](init: U)(f: (T, U) => U): T => Unit = {
+    val lock = new Object
     var current = init
-    v => current = f(v, current)
+    v => lock synchronized { current = f(v, current) }
   }
 
   class InvalidDynamicScope extends RuntimeException(
