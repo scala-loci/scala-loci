@@ -22,7 +22,7 @@ object RetierBuild extends Build {
   )
 
   val upickle = Seq(
-    libraryDependencies += "com.lihaoyi" %% "upickle" % "0.3.4"
+    libraryDependencies += "com.lihaoyi" %% "upickle" % "0.3.6"
   )
 
   val nopublish = Seq(

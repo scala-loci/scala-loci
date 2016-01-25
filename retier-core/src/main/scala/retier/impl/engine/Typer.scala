@@ -12,6 +12,9 @@ object Typer {
     new Typer[c.type](c)
 }
 
+/**
+ * heavy wizardry to fight the dark forces of Scala type-checking in macros
+ */
 class Typer[C <: Context](val c: C) {
   import c.universe._
   import Flag._
@@ -170,7 +173,7 @@ class Typer[C <: Context](val c: C) {
         Ident(termNames.ROOTPKG)
     }
 
-    def expandType(tpe: Type): Tree = tpe match {
+    def expandType(tpe: Type): Tree = tpe.dealias match {
       case ThisType(pre) if isClass(pre) =>
         This(pre.asType.name)
 
@@ -200,8 +203,10 @@ class Typer[C <: Context](val c: C) {
               case _ =>
                 SelectFromTypeTree(preTree, sym.name.toTypeName)
             }
-          else
+          else if (isClass(sym))
             Select(preTree, sym.name.toTypeName)
+          else
+            Select(preTree, sym.name.toTermName)
 
         if (!args.isEmpty)
           AppliedTypeTree(select, args map expandType)
@@ -342,7 +347,7 @@ class Typer[C <: Context](val c: C) {
         if (tree.original != null)
           transform(prependRootPackage(tree.original))
         else if (tree.tpe != null)
-          createTypeTree(tree.tpe.dealias)
+          createTypeTree(tree.tpe)
         else
           tree
 
@@ -350,6 +355,7 @@ class Typer[C <: Context](val c: C) {
         val valDef = ValDef(
           super.transformModifiers(mods), name, tpt,
           super.transform(rhs))
+        internal setSymbol (valDef, tree.symbol)
         internal setType (valDef, tree.tpe)
         internal setPos (valDef, tree.pos)
 

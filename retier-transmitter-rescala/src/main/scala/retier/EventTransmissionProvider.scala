@@ -53,7 +53,7 @@ protected[retier] trait EventTransmissionProvider {
     def asLocalSeq: Event[(Remote[R], T)] = transmission.memo(asLocalSeqId) {
       (Signal {
         asLocal() map { case (remote, event) =>
-          event map { (remote, _: T) }
+          event map { (remote, _) }
         } reduceOption {
           _ || _
         } getOrElse emptyevent
