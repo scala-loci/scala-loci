@@ -25,6 +25,10 @@ object RetierBuild extends Build {
     libraryDependencies += "com.lihaoyi" %% "upickle" % "0.3.6"
   )
 
+  val akkaHttp = Seq(
+    libraryDependencies += "com.typesafe.akka" %% "akka-http-experimental" % "2.0.2"
+  )
+
   val nopublish = Seq(
     publishArtifact := false
   )
@@ -36,7 +40,7 @@ object RetierBuild extends Build {
   ) aggregate (
     retierCore, retierArchitecturesBasic, retierSerializableUpickle,
     retierTransmitterBasic, retierTransmitterRescala,
-    retierNetworkTCP)
+    retierNetworkTCP, retierNetworkWS)
 
   lazy val retierCore = Project(
     id = "retier-core",
@@ -73,5 +77,11 @@ object RetierBuild extends Build {
     id = "retier-network-tcp",
     base = file("retier-network-tcp"),
     settings = defaultSettings
+  ) dependsOn retierCore
+
+  lazy val retierNetworkWS = Project(
+    id = "retier-network-ws-akka",
+    base = file("retier-network-ws-akka"),
+    settings = defaultSettings ++ akkaHttp
   ) dependsOn retierCore
 }
