@@ -2,8 +2,10 @@ package retier
 
 import transmission._
 import contexts.Immediate.Implicits.global
-import rescala.synchronization.Engines.default
-import rescala.synchronization.Engines.default._
+import rescala.turns.Engine
+import rescala.turns.Turn
+import rescala.graph.Spores
+import rescala.{ Event => EngineEvent }
 import scala.util.Success
 import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
@@ -13,9 +15,12 @@ protected[retier] trait EventTransmissionProvider {
   private final val asLocalSeqId = 1
 
   implicit class RescalaEventMultipleTransmissionProvider
-      [Evnt[T] <: Event[T], T, R <: Peer, L <: Peer]
-      (transmission: MultipleTransmission[Evnt[T], R, L])
+      [Evt[T, ES <: Spores] <: EngineEvent[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: MultipleTransmission[Evt[T, ES], R, L])
+      (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
+    import engine._
 
     def asLocal: Signal[Map[Remote[R], Event[T]]] =
       transmission.memo(asLocalId) {
@@ -58,9 +63,12 @@ protected[retier] trait EventTransmissionProvider {
   }
 
   implicit class RescalaEventOptionalTransmissionProvider
-      [Evnt[T] <: Event[T], T, R <: Peer, L <: Peer]
-      (transmission: OptionalTransmission[Evnt[T], R, L])
+      [Evt[T, ES <: Spores] <: EngineEvent[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: OptionalTransmission[Evt[T, ES], R, L])
+      (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
+    import engine._
 
     def multiple =
       RescalaEventMultipleTransmissionProvider(transmission.multiple)
@@ -99,9 +107,12 @@ protected[retier] trait EventTransmissionProvider {
   }
 
   implicit class RescalaEventSingleTransmissionProvider
-      [Evnt[T] <: Event[T], T, R <: Peer, L <: Peer]
-      (transmission: SingleTransmission[Evnt[T], R, L])
+      [Evt[T, ES <: Spores] <: EngineEvent[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: SingleTransmission[Evt[T, ES], R, L])
+      (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
+    import engine._
 
     def optional =
       RescalaEventOptionalTransmissionProvider(transmission.optional)

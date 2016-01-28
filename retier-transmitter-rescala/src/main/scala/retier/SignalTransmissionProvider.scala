@@ -2,8 +2,10 @@ package retier
 
 import transmission._
 import contexts.Immediate.Implicits.global
-import rescala.synchronization.Engines.{default => defaultEngine}
-import rescala.synchronization.Engines.default._
+import rescala.turns.Engine
+import rescala.turns.Turn
+import rescala.graph.Spores
+import rescala.{ Signal => EngineSignal }
 import scala.util.Success
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -14,9 +16,12 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
   private final val asLocalId = 0
 
   implicit class RescalaSignalMultipleTransmissionProvider
-      [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
-      (transmission: MultipleTransmission[Sig[T], R, L])
+      [Sig[T, ES <: Spores] <: EngineSignal[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: MultipleTransmission[Sig[T, ES], R, L])
+      (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
+    import engine._
 
     def asLocal: Signal[Map[Remote[R], Signal[T]]] =
       transmission.memo(asLocalId) {
@@ -50,9 +55,12 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
     }
 
   implicit class RescalaSignalOptionalTransmissionProvider
-      [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
-      (transmission: OptionalTransmission[Sig[T], R, L])
+      [Sig[T, ES <: Spores] <: EngineSignal[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: OptionalTransmission[Sig[T, ES], R, L])
+      (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
+    import engine._
 
     def multiple =
       RescalaSignalMultipleTransmissionProvider(transmission.multiple)
@@ -89,9 +97,12 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
   }
 
   protected class RescalaSignalSingleTransmissionProviderCommon
-      [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
-      (transmission: SingleTransmission[Sig[T], R, L])
+      [Sig[T, ES <: Spores] <: EngineSignal[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: SingleTransmission[Sig[T, ES], R, L])
+      (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
+    import engine._
 
     def optional =
       RescalaSignalOptionalTransmissionProvider(transmission.optional)
@@ -124,17 +135,25 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
   }
 
   implicit class RescalaSignalSingleTransmissionProviderWithDefaultValue
-      [Sig[T] <: Signal[T], T: SignalDefaultValue, R <: Peer, L <: Peer]
-      (transmission: SingleTransmission[Sig[T], R, L])
-    extends RescalaSignalSingleTransmissionProviderCommon(transmission) {
+      [Sig[T, ES <: Spores] <: EngineSignal[T, ES], T: SignalDefaultValue,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: SingleTransmission[Sig[T, ES], R, L])
+      (implicit override val engine: Engine[ES, Turn[ES]])
+    extends RescalaSignalSingleTransmissionProviderCommon
+      [Sig, T, R, L, ES](transmission) {
+    import engine._
 
     def asLocal: Signal[T] = asLocal(implicitly[SignalDefaultValue[T]].value)
   }
 
   implicit class RescalaSignalSingleTransmissionProviderWithoutDefaultValue
-      [Sig[T] <: Signal[T], T: NoSignalDefaultValue, R <: Peer, L <: Peer]
-      (transmission: SingleTransmission[Sig[T], R, L])
-    extends RescalaSignalSingleTransmissionProviderCommon(transmission) {
+      [Sig[T, ES <: Spores] <: EngineSignal[T, ES], T: NoSignalDefaultValue,
+       R <: Peer, L <: Peer, ES <: Spores]
+      (transmission: SingleTransmission[Sig[T, ES], R, L])
+      (implicit override val engine: Engine[ES, Turn[ES]])
+    extends RescalaSignalSingleTransmissionProviderCommon
+      [Sig, T, R, L, ES](transmission) {
+    import engine._
 
     def asLocal: Signal[Option[T]] = asLocalOption
   }
