@@ -166,12 +166,13 @@ class Typer[C <: Context](val c: C) {
     def isClass(symbol: Symbol): Boolean =
       symbol.isClass && !symbol.isModule && !symbol.isPackage
 
-    def expandSymbol(symbol: Symbol): Tree = {
-      if (symbol.owner != NoSymbol)
-        Select(expandSymbol(symbol.owner), symbol.name.toTermName)
-      else
+    def expandSymbol(symbol: Symbol): Tree =
+      if (symbol == c.mirror.RootClass)
         Ident(termNames.ROOTPKG)
-    }
+      else if (symbol.owner == NoSymbol)
+        Ident(symbol.name.toTermName)
+      else
+        Select(expandSymbol(symbol.owner), symbol.name.toTermName)
 
     def expandType(tpe: Type): Tree = tpe.dealias match {
       case ThisType(pre) if isClass(pre) =>
@@ -340,9 +341,7 @@ class Typer[C <: Context](val c: C) {
 
   private object typeApplicationCleaner extends Transformer {
     def prependRootPackage(tree: Tree): Tree = tree match {
-      case Ident(termNames.ROOTPKG) =>
-        tree
-      case Ident(name) if tree.symbol.owner.owner == NoSymbol =>
+      case Ident(name) if tree.symbol.owner == c.mirror.RootClass =>
         Select(Ident(termNames.ROOTPKG), name)
       case Select(qualifier, name) =>
         Select(prependRootPackage(qualifier), name)

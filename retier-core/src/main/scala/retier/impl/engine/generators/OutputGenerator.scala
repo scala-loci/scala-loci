@@ -33,12 +33,8 @@ trait OutputGenerator { this: Generation =>
         case NonPlacedStatement(importStat @ Import(_, _), _) =>
           importStat
 
-        case NonPlacedStatement(definition, _)
-            if definition.symbol == NoSymbol ||
-               definition.symbol.isType ||
-               definition.symbol.asTerm.isParamAccessor ||
-               definition.symbol.name == termNames.CONSTRUCTOR  =>
-          definition
+        case stat @ NonPlacedStatement(tree, _) if !stat.isPeerBound =>
+          tree
 
         case NonPlacedStatement(definition @
             ValDef(mods, name, tpt, rhs), _) =>

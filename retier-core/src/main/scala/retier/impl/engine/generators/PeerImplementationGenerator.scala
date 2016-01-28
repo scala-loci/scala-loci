@@ -165,12 +165,8 @@ trait PeerImplementationGenerator { this: Generation =>
           List.empty
         else
           aggregator.all[NonPlacedStatement] collect {
-            case NonPlacedStatement(stat, index)
-                if stat.symbol != NoSymbol &&
-                   !stat.symbol.isType &&
-                   !stat.symbol.asTerm.isParamAccessor &&
-                   stat.symbol.name != termNames.CONSTRUCTOR =>
-              (stat, index)
+            case stat @ NonPlacedStatement(tree, index) if stat.isPeerBound =>
+              (new PlacedReferenceAdapter(peerSymbol) transform tree, index)
           }
 
       if (hasExpandingParent) {

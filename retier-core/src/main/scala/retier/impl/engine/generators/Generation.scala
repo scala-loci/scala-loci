@@ -240,6 +240,20 @@ trait Generation {
   case class OutputStatement(stat: Tree, index: Int) extends Statement
 
 
+  implicit class NonPlacedStatementOps(stat: NonPlacedStatement) {
+    val isPeerBound = stat.tree match {
+      case ValDef(_, _, _, _)
+          if !stat.tree.isRetierSynthetic && stat.tree.symbol == NoSymbol =>
+        true
+      case _ =>
+        stat.tree.symbol != NoSymbol &&
+        !stat.tree.symbol.isType &&
+        !stat.tree.symbol.asTerm.isParamAccessor &&
+        stat.tree.symbol.name != termNames.CONSTRUCTOR
+    }
+  }
+
+
   val echo = Echo(c)
 
   val typer = Typer(c)
