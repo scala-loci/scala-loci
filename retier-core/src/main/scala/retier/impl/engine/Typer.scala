@@ -3,7 +3,7 @@ package impl
 package engine
 
 import org.scalamacros.resetallattrs._
-import scala.collection.mutable.Stack
+import scala.collection.mutable
 import scala.reflect.macros.blackbox.Context
 import scala.reflect.macros.TypecheckException
 
@@ -291,22 +291,30 @@ class Typer[C <: Context](val c: C) {
   }
 
   private object syntheticTreeMarker extends Transformer {
+    val processedMethodTrees = mutable.Set.empty[Tree]
+
     override def transform(tree: Tree) = tree match {
-      case Apply(_, _) =>
-        val hasImplicitParamList =
-          tree.symbol != null &&
-          tree.symbol.isMethod &&
-          (tree.symbol.asMethod.paramLists.lastOption flatMap {
-            _.headOption map { _.isImplicit }
-          } getOrElse false)
+      case Apply(fun, _) =>
+        if (!(processedMethodTrees contains tree)) {
+          val hasImplicitParamList =
+            tree.symbol != null &&
+            tree.symbol.isMethod &&
+            (tree.symbol.asMethod.paramLists.lastOption flatMap {
+              _.headOption map { _.isImplicit }
+            } getOrElse false)
 
-        val isNonSyntheticParamList =
-          (internal attachments tree).get[NonSyntheticTree.type].nonEmpty
+          val isNonSyntheticParamList =
+            (internal attachments tree).get[NonSyntheticTree.type].nonEmpty
 
-        internal removeAttachment[NonSyntheticTree.type] tree
+          internal removeAttachment[NonSyntheticTree.type] tree
 
-        if (hasImplicitParamList && !isNonSyntheticParamList)
-          internal updateAttachment (tree, SyntheticTree)
+          if (hasImplicitParamList && !isNonSyntheticParamList) {
+            internal updateAttachment (tree, SyntheticTree)
+            processedMethodTrees += fun
+          }
+        }
+        else
+          processedMethodTrees += fun
 
         super.transform(tree)
 
@@ -320,7 +328,7 @@ class Typer[C <: Context](val c: C) {
     override def transform(tree: Tree) = tree match {
       case Apply(fun, _) =>
         if ((internal attachments tree).get[SyntheticTree.type].nonEmpty)
-          super.transform(fun)
+          transform(fun)
         else
           super.transform(tree)
 
@@ -353,8 +361,8 @@ class Typer[C <: Context](val c: C) {
 
       case ValDef(mods, name, tpt, rhs) if mods hasFlag ARTIFACT =>
         val valDef = ValDef(
-          super.transformModifiers(mods), name, tpt,
-          super.transform(rhs))
+          transformModifiers(mods), name, tpt,
+          transform(rhs))
         internal setSymbol (valDef, tree.symbol)
         internal setType (valDef, tree.tpe)
         internal setPos (valDef, tree.pos)
@@ -377,7 +385,7 @@ class Typer[C <: Context](val c: C) {
         }
 
         if (hasImplicitParamList && hasNonRepresentableType)
-          super.transform(fun)
+          transform(fun)
         else
           super.transform(tree)
 
@@ -391,7 +399,7 @@ class Typer[C <: Context](val c: C) {
 
 
   private def selfReferenceFixer = new Transformer {
-    val stack = Stack.empty[(TypeName, Set[Name])]
+    val stack = mutable.Stack.empty[(TypeName, Set[Name])]
 
     override def transform(tree: Tree) = tree match {
       case implDef: ImplDef =>
@@ -525,7 +533,7 @@ class Typer[C <: Context](val c: C) {
           val annotations = mods.annotations ++ defAnnotations ++ valAnnotations
           val newValDef = ValDef(
             Modifiers(flags, privateWithin, annotations),
-            name, super.transform(valDef.tpt), super.transform(valDef.rhs))
+            name, transform(valDef.tpt), transform(valDef.rhs))
           internal setType (newValDef, valDef.tpe)
           internal setPos (newValDef, valDef.pos)
 
@@ -565,7 +573,7 @@ class Typer[C <: Context](val c: C) {
           val annotations = mods.annotations ++ defAnnotations ++ valAnnotations
           val newValDef = ValDef(
             Modifiers(flags, privateWithin, annotations),
-            name, super.transform(typeTree), super.transform(assignment))
+            name, transform(typeTree), transform(assignment))
           valDef map { valDef =>
             internal setType (newValDef, valDef.tpe)
             internal setPos (newValDef, valDef.pos)
@@ -593,10 +601,10 @@ class Typer[C <: Context](val c: C) {
               tree.symbol.name == TermName("$init$")) {
             val newDefDef = DefDef(
               Modifiers(flags, privateWithin, annotations), name,
-              super.transformTypeDefs(tparams),
-              super.transformValDefss(vparamss),
-              super.transform(tpt),
-              super.transform(rhs))
+              transformTypeDefs(tparams),
+              transformValDefss(vparamss),
+              transform(tpt),
+              transform(rhs))
             internal setType (newDefDef, defDef.tpe)
             internal setPos (newDefDef, defDef.pos)
           }
