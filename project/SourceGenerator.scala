@@ -2,7 +2,7 @@ import sbt._
 import Keys._
 
 object SourceGenerator {
-  val transmittableTuples = Seq(
+  val transmittableTuples =
     sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
       val members = (1 to 22) map { i =>
         val tuple = s"Tuple$i"
@@ -67,9 +67,8 @@ object SourceGenerator {
       files foreach { case (file, content) => IO write (file, content) }
       files.keys.toSeq
     }
-  )
 
-  val signalDefaultTuples = Seq(
+  val signalDefaultTuples =
     sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
       val tuples = (1 to 22) map { i =>
         val args = (0 until i) map { i => s"default[T$i]" } mkString ", "
@@ -98,5 +97,4 @@ object SourceGenerator {
       files foreach { case (file, content) => IO write (file, content) }
       files.keys.toSeq
     }
-  )
 }
