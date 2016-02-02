@@ -2,6 +2,7 @@ package retier
 package impl
 package engine
 
+import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox.Context
 
 object multitier {
@@ -89,7 +90,7 @@ object multitier {
 
         val state = new ClassWrapper(body)
 
-        val name = state.tree.symbol.fullName
+        val name =  NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")
 
         val result = processor process state
@@ -117,7 +118,7 @@ object multitier {
 
         val state = new ModuleWrapper(body)
 
-        val name = state.tree.symbol.fullName
+        val name =  NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")
 
         val result = processor process state
@@ -163,11 +164,14 @@ object multitier {
         if (peerParentNames.isEmpty)
           peerConstructionExpressionExpected
 
-        val tpname = TypeName(peerParentNames :+ "Instance" mkString "-")
-        val tname = TermName(peerParentNames :+ "Setup" mkString "-")
+        val minus = NameTransformer encode "-"
+        val tpname = TypeName(peerParentNames :+ "Instance" mkString minus)
+        val tname = TermName(peerParentNames :+ "Setup" mkString minus)
+
+        val synthetic = Flag.SYNTHETIC
 
         q"""
-        @${trees.multitierAnnotation} object $tname {
+        @${trees.multitierAnnotation} $synthetic object $tname {
           class $tpname extends { ..$earlydefns } with ..$parents {
             $self => ..$stats
           }
