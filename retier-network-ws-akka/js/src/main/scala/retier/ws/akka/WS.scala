@@ -81,7 +81,7 @@ object WS extends ConnectionFactory {
   def apply(url: Uri): ConnectionRequestor =
     jvmOnly
   def apply(url: String): ConnectionRequestor =
-    jvmOnly
+    new WSConnectionRequestor(url)
 
   def createProtocolInfo(
       url: String, host: Option[String], port: Option[Int],
@@ -91,7 +91,11 @@ object WS extends ConnectionFactory {
   def listener(config: String, attrs: Attributes) =
     None
   def requestor(url: String, attrs: Attributes) =
-    None
+    if ((url substring (0, 5) compareToIgnoreCase "ws://") == 0 ||
+        (url substring (0, 6) compareToIgnoreCase "wss://") == 0)
+      Some(WS(url))
+    else
+      None
 }
 
 object WebSocketListener {

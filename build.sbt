@@ -23,6 +23,9 @@ val upickle = libraryDependencies +=
 val akkaHttp = libraryDependencies +=
   "com.typesafe.akka" %% "akka-http-experimental" % "2.0.2"
 
+val scalajsDom = libraryDependencies +=
+  "org.scala-js" %%%! "scalajs-dom" % "0.8.2"
+
 
 def preventPublication(project: Project) = project settings (
   publish := { },
@@ -118,7 +121,7 @@ lazy val retierNetworkWs = (crossProject
   crossType CrossType.Dummy
   in file("retier-network-ws-akka")
   settings (normalizedName := "retier-network-ws-akka",
-            akkaHttp)
+            akkaHttp, scalajsDom)
   dependsOn retierCore)
 
 lazy val retierNetworkWsJVM = retierNetworkWs.jvm
