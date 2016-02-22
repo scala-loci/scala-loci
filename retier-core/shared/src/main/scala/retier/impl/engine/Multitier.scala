@@ -90,7 +90,7 @@ object multitier {
 
         val state = new ClassWrapper(body)
 
-        val name =  NameTransformer decode state.tree.symbol.fullName
+        val name = NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")
 
         val result = processor process state
@@ -118,7 +118,7 @@ object multitier {
 
         val state = new ModuleWrapper(body)
 
-        val name =  NameTransformer decode state.tree.symbol.fullName
+        val name = NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")
 
         val result = processor process state

@@ -45,24 +45,30 @@ trait SignalDefaultValues extends SignalDefaultTuples {
         implicit cbf: CanBuildFrom[Nothing, T, V[T]]) =
       SignalDefaultValue[V[T]](cbf().result)
 
-    implicit def defaultArray[T: ClassTag] = Array.empty
+    implicit def defaultArray[T: ClassTag] =
+      SignalDefaultValue(Array.empty)
 
-    implicit def defaultMap[T] = Map.empty
+    implicit def defaultMap[T] =
+      SignalDefaultValue(Map.empty)
 
-    implicit def defaultOption[T] = Option.empty
+    implicit def defaultOption[T] =
+      SignalDefaultValue(Option.empty)
 
-    implicit def defaultSome[T: SignalDefaultValue] = Some(default[T])
+    implicit def defaultSome[T: SignalDefaultValue] =
+      SignalDefaultValue(Some(default[T]))
 
     implicit def defaultEitherLeft
       [L: SignalDefaultValue, R] =
-      Left(default[L]): Either[L, R]
+      SignalDefaultValue(Left(default[L])): SignalDefaultValue[Either[L, R]]
 
     implicit def defaultEitherRight
       [L: NoSignalDefaultValue, R: SignalDefaultValue] =
-      Right(default[R]): Either[L, R]
+      SignalDefaultValue(Right(default[R])): SignalDefaultValue[Either[L, R]]
 
-    implicit def defaultLeft[L: SignalDefaultValue, R] = Left(default[L])
+    implicit def defaultLeft[L: SignalDefaultValue, R] =
+      SignalDefaultValue(Left(default[L]))
 
-    implicit def defaultRight[L, R: SignalDefaultValue] = Right(default[R])
+    implicit def defaultRight[L, R: SignalDefaultValue] =
+      SignalDefaultValue(Right(default[R]))
   }
 }

@@ -35,7 +35,7 @@ private object WSConnectionHandler {
 
     // connection interface
 
-    var promises = Queue.empty[Promise[Option[(Unit, Message)]]]
+    val promises = Queue.empty[Promise[Option[(Unit, Message)]]]
     val open = new AtomicBoolean(true)
     val doClosed = Notifier[Unit]
     val doReceive = Notifier[String]

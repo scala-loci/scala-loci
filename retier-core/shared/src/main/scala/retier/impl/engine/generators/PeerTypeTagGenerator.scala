@@ -41,7 +41,7 @@ trait PeerTypeTagGenerator { this: Generation =>
         peerDefinition
 
       val peerName = peerSymbol.name
-      val name = peerName.toString
+      val name = peerName.decodedName.toString
       val wildcardedPeerType = wildcardedTypeTree(tq"$peerName", typeArgs.size)
 
       val bases = parents collect {

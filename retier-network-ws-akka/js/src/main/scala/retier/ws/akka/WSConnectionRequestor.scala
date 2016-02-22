@@ -5,12 +5,11 @@ import network.Connection
 import network.ConnectionRequestor
 import util.Notifier
 import org.scalajs.dom
-import org.scalajs.dom.raw.HTMLAnchorElement
 import scala.concurrent.Promise
 import scala.scalajs.js.timers._
 import scala.concurrent.duration._
 
-private class WSConnectionRequestor(url: String)  extends ConnectionRequestor {
+private class WSConnectionRequestor(url: String) extends ConnectionRequestor {
   def request = {
     val promise = Promise[Connection]
 
@@ -32,7 +31,7 @@ private class WSConnectionRequestor(url: String)  extends ConnectionRequestor {
       val doReceive = Notifier[String]
 
       val (tls, host, port) = dom.document.createElement("a") match {
-        case parser: HTMLAnchorElement =>
+        case parser: dom.html.Anchor =>
           parser.href = url
           val tls = (parser.protocol compareToIgnoreCase "wss:") == 0
           val host = Some(parser.hostname)
