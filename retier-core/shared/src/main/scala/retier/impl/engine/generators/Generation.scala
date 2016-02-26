@@ -334,9 +334,9 @@ trait Generation {
     def typeArgTrees(abortOnFailure: Boolean): List[Tree] = {
       val args = tree.typeTree(abortOnFailure) match {
         case AppliedTypeTree(_, args) => args
-        case _ => tree.tpe.typeArgs map TypeTree
+        case _ => tree.tpe.underlying.typeArgs map TypeTree
       }
-      (args zip tree.tpe.typeArgs) map { case (tree, tpe) =>
+      (args zip tree.tpe.underlying.typeArgs) map { case (tree, tpe) =>
         internal setType (tree.typeTree(abortOnFailure), tpe)
       }
     }
@@ -350,6 +350,13 @@ trait Generation {
     def =:!=(that: Type): Boolean = !(tpe =:= that)
     def <:!<(that: Type): Boolean = !(tpe <:< that)
     def isGeneric: Boolean = tpe exists { _.typeSymbol.isParameter }
+    def underlying: Type =
+      if (tpe ne tpe.dealias)
+        tpe.dealias.underlying
+      else if (tpe ne tpe.widen)
+        tpe.widen.underlying
+      else
+        tpe
   }
 
 

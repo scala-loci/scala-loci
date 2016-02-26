@@ -35,7 +35,7 @@ trait FromExpressionProcessor { this: Generation =>
         exprssPeer: List[List[Tree]], isRetierSynthetic: Boolean) = {
       val value = exprssValue.head.head
 
-      val Seq(valueType, peerType) = value.tpe.widen.typeArgs
+      val Seq(valueType, peerType) = value.tpe.underlying.typeArgs
       val interface = markRetierSynthetic(
         peerInterfaceTree(value, peerType, peerSymbols), value.pos)
 

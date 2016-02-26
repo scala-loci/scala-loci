@@ -52,7 +52,7 @@ trait PeerImplementationGenerator { this: Generation =>
         case q"$_.$name" if !tree.isRetierSynthetic =>
           placedType(tree) match {
             case Some(tpe) =>
-              val Seq(_, peerType) = tpe.widen.typeArgs
+              val Seq(_, peerType) = tpe.underlying.typeArgs
               if (baseClasses contains peerType.typeSymbol)
                 q"$name"
               else
@@ -79,6 +79,23 @@ trait PeerImplementationGenerator { this: Generation =>
 
         case tree if tree.symbol == symbols.terminate =>
           q"$system.$systemTerminate"
+
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    object placedTypeProcessor extends Transformer {
+      override def transform(tree: Tree) = tree match {
+        case tree: TypeTree
+          if !tree.isRetierSynthetic &&
+             tree.tpe != null &&
+             !(types.bottom exists { tree.tpe <:< _ }) &&
+             (tree.tpe <:< types.localOn ||
+              tree.tpe <:< types.from ||
+              tree.tpe <:< types.fromSingle ||
+              tree.tpe <:< types.fromMultiple) =>
+          TypeTree()
 
         case _ =>
           super.transform(tree)
@@ -219,7 +236,9 @@ trait PeerImplementationGenerator { this: Generation =>
           case (stat, _) => stat
         })
 
-      stats map multitierInterfaceProcessor.transform
+      stats map
+        placedTypeProcessor.transform map
+        multitierInterfaceProcessor.transform
     }
 
     def peerImplementationParents(parents: List[Tree]) = parents map {

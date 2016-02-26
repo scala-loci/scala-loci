@@ -15,7 +15,7 @@ trait OverrideBridgeGenerator { this: Generation =>
     echo(verbose = true, " Generating override bridge methods")
 
     def validatePlacedResultTypes(base: Type, sub: Type, pos: Position) =
-      if (sub.widen.typeArgs.head <:!< base.widen.typeArgs.head)
+      if (sub.underlying.typeArgs.head <:!< base.underlying.typeArgs.head)
         c.abort(pos, "overriding abstraction has incompatible type")
 
     val stats = aggregator.all[PlacedStatement] collect {

@@ -108,7 +108,7 @@ trait RemoteExpressionProcessor { this: Generation =>
         }
 
         val TypeRef(pre, sym, List(_, peerType)) =
-          identifier.tpe.widen.dealias
+          identifier.tpe.underlying.dealias
         val tpe =
           internal typeRef (pre, sym, List(definitions.UnitTpe, peerType))
 
@@ -134,9 +134,9 @@ trait RemoteExpressionProcessor { this: Generation =>
         }
 
         // decompose types
-        val peerType = tree.tpe.typeArgs.last
+        val peerType = tree.tpe.underlying.typeArgs.last
         val exprType =
-          if (wrapperType.isEmpty) tree.tpe.typeArgs.head
+          if (wrapperType.isEmpty) tree.tpe.underlying.typeArgs.head
           else definitions.UnitTpe
         val exprTypeTree =
           internal setType (typer createTypeTree exprType, exprType)
@@ -221,7 +221,7 @@ trait RemoteExpressionProcessor { this: Generation =>
               else if ((defs contains tree.symbol) ||
                        (tree.tpe <:< types.localOn &&
                         peerType.typeSymbol.asType.toType <:!<
-                          tree.tpe.typeArgs.last.typeSymbol.asType.toType))
+                          tree.tpe.underlying.typeArgs.last.typeSymbol.asType.toType))
                 c.abort(tree.pos,
                   "remote value is not locally available " +
                   "(remote values can be transferred via `capture` clause)")

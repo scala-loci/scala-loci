@@ -19,7 +19,7 @@ trait StatementCollector { this: Generation =>
     val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
 
     def extractAndValidateType(tree: Tree, tpe: Type) = {
-      val Seq(exprType, peerType) = tpe.widen.typeArgs
+      val Seq(exprType, peerType) = tpe.underlying.typeArgs
 
       if (!(peerSymbols contains peerType.typeSymbol))
         c.abort(tree.pos,
@@ -40,13 +40,13 @@ trait StatementCollector { this: Generation =>
           if isPlacedType(stat.tpt.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpt.tpe)
         val declTypeTree = stat.tpt.typeArgTrees.head
-        PlacedStatement(stat, peerType.typeSymbol.asType, exprType.widen,
+        PlacedStatement(stat, peerType.typeSymbol.asType, exprType,
           Some(declTypeTree), None, stat.rhs, index)
 
       case InputStatement(stat, index)
           if isPlacedType(stat.tpe) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpe)
-        PlacedStatement(stat, peerType.typeSymbol.asType, exprType.widen,
+        PlacedStatement(stat, peerType.typeSymbol.asType, exprType,
           None, None, stat, index)
 
       case InputStatement(stat, index)

@@ -33,7 +33,7 @@ trait TransmissionGenerator { this: Generation =>
 
     def processTransmission(tree: Tree, value: Tree,
         localPeerTypeTag: Option[Tree], remotePeerTypeTag: Tree) = {
-      val Seq(_, peerType) = value.tpe.widen.typeArgs
+      val Seq(_, peerType) = value.tpe.underlying.typeArgs
 
       val messageUnexpectedTree =
         "identifier, selected remote value or remote expression expected"
@@ -108,7 +108,7 @@ trait TransmissionGenerator { this: Generation =>
 
       case q"$expr[..$_](...$exprss)"
           if expr.isRetierSynthetic && expr.symbol == symbols.remoteApply =>
-        val Seq(_, remote) = tree.tpe.widen.typeArgs
+        val Seq(_, remote) = tree.tpe.underlying.typeArgs
         val remotePeerTypeTag = peerTypeTagTree(
           TypeTree(remote).typeTree(abortOnFailure = true), remote, peerSymbols)
 

@@ -73,7 +73,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
           } map {
             case (multiplicity, connection) =>
               val AppliedTypeTree(_, List(arg)) = connection
-              val argType = connection.tpe.typeArgs.head
+              val argType = connection.tpe.underlying.typeArgs.head
 
               if (argType <:!< types.peer || argType =:= definitions.NothingTpe)
                 c.abort(arg.pos, "peer type expected")
