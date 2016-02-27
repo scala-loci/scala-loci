@@ -134,10 +134,17 @@ trait RemoteExpressionProcessor { this: Generation =>
         }
 
         // decompose types
-        val peerType = tree.tpe.underlying.typeArgs.last
+        val Seq(originalExprType, peerType) = tree.tpe.underlying.typeArgs
         val exprType =
-          if (wrapperType.isEmpty) tree.tpe.underlying.typeArgs.head
-          else definitions.UnitTpe
+          if (wrapperType.isEmpty)
+            originalExprType
+          else if (originalExprType <:< types.issued ||
+                   originalExprType <:< types.issuedControlled) {
+            val TypeRef(pre, sym, Seq(peerType, _)) = originalExprType.underlying
+            internal typeRef (pre, sym, List(peerType, definitions.UnitTpe))
+          }
+          else
+            definitions.UnitTpe
         val exprTypeTree =
           internal setType (typer createTypeTree exprType, exprType)
 
