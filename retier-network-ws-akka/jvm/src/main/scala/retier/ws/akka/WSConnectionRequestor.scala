@@ -75,7 +75,7 @@ private object WSConnectionRequestor {
 
           protocolPromise success
             WS.createProtocolInfo(
-              uri.toString, Some(host), Some(port), tls, tls, tls)
+              uri.toString, Some(host), Some(port), this, tls, tls, tls)
 
           promise tryCompleteWith websocketPromise.future
 

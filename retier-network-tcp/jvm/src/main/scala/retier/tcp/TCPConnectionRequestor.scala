@@ -15,7 +15,7 @@ private class TCPConnectionRequestor(host: String, port: Int)
     new Thread() {
       override def run =
         try TCPConnectionHandler handleConnection (
-          new Socket(host, port), { promise success _ })
+          TCPConnectionRequestor.this, new Socket(host, port), { promise success _ })
         catch {
           case exception: IOException =>
             promise failure exception

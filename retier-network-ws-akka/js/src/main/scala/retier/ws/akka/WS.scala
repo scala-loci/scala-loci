@@ -1,6 +1,7 @@
 package retier
 package ws.akka
 
+import network.ConnectionEstablisher
 import network.ConnectionListener
 import network.ConnectionRequestor
 import network.ConnectionFactory
@@ -15,18 +16,19 @@ import akka.stream.Materializer
 
 abstract case class WS private[WS] (
     url: String, host: Option[String], port: Option[Int])(
+    val establisher: ConnectionEstablisher,
     val isEncrypted: Boolean, val isProtected: Boolean, val isAuthenticated: Boolean)
   extends ProtocolInfo {
 
   private def readResolve(): Object =
     WS.createProtocolInfo(
-      url, host, port, isEncrypted, isProtected, isAuthenticated)
+      url, host, port, establisher, isEncrypted, isProtected, isAuthenticated)
   def copy(
       url: String = url,
       host: Option[String] = host,
       port: Option[Int] = port): WS =
     WS.createProtocolInfo(
-      url, host, port, isEncrypted, isProtected, isAuthenticated)
+      url, host, port, establisher, isEncrypted, isProtected, isAuthenticated)
 
   val identification = None
 }
@@ -85,8 +87,9 @@ object WS extends ConnectionFactory {
 
   def createProtocolInfo(
       url: String, host: Option[String], port: Option[Int],
+      establisher: ConnectionEstablisher,
       isEncrypted: Boolean, isProtected: Boolean, isAuthenticated: Boolean) =
-    new WS(url, host, port)(isEncrypted, isProtected, isAuthenticated) { }
+    new WS(url, host, port)(establisher, isEncrypted, isProtected, isAuthenticated) { }
 
   def listener(config: String, attrs: Attributes) =
     None

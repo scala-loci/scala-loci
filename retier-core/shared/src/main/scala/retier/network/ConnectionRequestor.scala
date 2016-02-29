@@ -3,6 +3,6 @@ package network
 
 import scala.concurrent.Future
 
-trait ConnectionRequestor {
+trait ConnectionRequestor extends ConnectionEstablisher {
   def request: Future[Connection]
 }

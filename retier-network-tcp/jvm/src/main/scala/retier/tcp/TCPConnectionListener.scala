@@ -31,7 +31,7 @@ private class TCPConnectionListener(port: Int, interface: String)
               if (connection != null)
                 executor execute new Runnable {
                   def run = TCPConnectionHandler handleConnection (
-                    connection,
+                    TCPConnectionListener.this, connection,
                     { doConnectionEstablished(_) })
                 }
             }

@@ -16,6 +16,7 @@ import scala.concurrent.Future
 
 private object WSConnectionListener {
   private def websocketRoute(
+      establisher: ConnectionListener,
       authenticated: Boolean,
       secured: Boolean)(
       connectionEstablished: Connection => Unit): Route =
@@ -35,7 +36,8 @@ private object WSConnectionListener {
                 WSConnectionHandler handleWebsocket (
                   Future successful
                     WS.createProtocolInfo(
-                      request.uri.toString, host, port, tls, tls, authenticated),
+                      request.uri.toString, host, port,
+                      establisher, tls, tls, authenticated),
                   connectionEstablished, Function const { })))
         }
       }
@@ -57,7 +59,9 @@ private object WSConnectionListener {
   class IntegratedRoute(secured: Boolean)
       extends WebSocketRoute with ConnectionListener {
     def route(authenticated: Boolean) =
-      websocketRoute(authenticated, secured) { doConnectionEstablished(_) }
+      websocketRoute(this, authenticated, secured) {
+        doConnectionEstablished(_)
+      }
 
     def apply(authenticated: Boolean) = route(authenticated)
 
@@ -76,7 +80,9 @@ private object WSConnectionListener {
         materializer: Materializer) =
       if (running == null) {
         running = http bindAndHandle (
-          websocketRoute(authenticated = false, secured)(connectionEstablished),
+          websocketRoute(
+            this, authenticated = false, secured)(
+            connectionEstablished),
           interface, port)
 
         running onFailure PartialFunction { _ => stop }

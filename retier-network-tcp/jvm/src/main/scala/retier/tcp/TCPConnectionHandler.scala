@@ -2,6 +2,7 @@ package retier
 package tcp
 
 import network.Connection
+import network.ConnectionEstablisher
 import util.Notifier
 import java.io.IOException
 import java.io.OutputStreamWriter
@@ -14,6 +15,7 @@ import java.util.concurrent.TimeUnit
 
 private object TCPConnectionHandler {
   def handleConnection(
+      establisher: ConnectionEstablisher,
       socket: Socket,
       connectionEstablished: Connection => Unit) = {
 
@@ -41,8 +43,7 @@ private object TCPConnectionHandler {
 
     val connection = new Connection {
       val protocol = TCP.createProtocolInfo(
-        socket.getInetAddress.getHostName,
-        socket.getPort)
+        socket.getInetAddress.getHostName, socket.getPort, establisher)
       val closed = doClosed.notification
       val receive = doReceive.notification
 

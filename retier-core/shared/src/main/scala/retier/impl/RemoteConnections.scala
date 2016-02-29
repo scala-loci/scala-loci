@@ -103,7 +103,7 @@ class RemoteConnections(peerType: PeerType,
 
           connectionRequestor.request flatMap { connection =>
             val remote = RemoteRef.create(
-              remotePeerType, state.createId, connection.protocol)
+              remotePeerType, state.createId, connection.protocol, this)
 
             val promise = Promise[RemoteRef]
             val future = promise.future
@@ -219,7 +219,7 @@ class RemoteConnections(peerType: PeerType,
                   else new RemoteConnections(peerType, connectionMultiplicities)
 
                 val remote = RemoteRef.create(remotePeerType,
-                  instance.state.createId, connection.protocol)
+                  instance.state.createId, connection.protocol, this)
 
                 val result = addRemoteConnection(instance, remote, connection,
                   sendAcceptMessage = true)
@@ -373,10 +373,8 @@ class RemoteConnections(peerType: PeerType,
   def isTerminated: Boolean = state.isTerminated
 
   def disconnect(remote: RemoteRef): Unit =
-    if (!state.isTerminated) {
-      state.remotes remove remote
-      Option(state.connections remove remote) foreach { _.close }
-    }
+    if (!state.isTerminated)
+      Option(state.connections get remote) foreach { _.close }
 
   def send(remote: RemoteRef, message: Message): Unit =
     if (!state.isTerminated)

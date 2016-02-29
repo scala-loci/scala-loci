@@ -9,29 +9,33 @@ import java.util.concurrent.atomic.AtomicBoolean
 private final case class RemoteRefImpl(peerType: PeerType, id: Long,
     protocol: ProtocolInfo)(
     val connected: AtomicBoolean,
-    val authenticated: AtomicBoolean) extends Remote[Nothing] {
+    val authenticated: AtomicBoolean,
+    val remoteConnections: RemoteConnections) extends Remote[Nothing] {
   val doDisconnected = Notifier[Unit]
 
-  def disconnected = doDisconnected.notification
-  def isConnected = connected.get
   def isAuthenticated = authenticated.get
   def authenticate() = authenticated set true
+  def isConnected = connected.get
+  def disconnect() = remoteConnections disconnect this
+  val disconnected = doDisconnected.notification
 }
 
 object RemoteRef {
   type RemoteRef = transmission.RemoteRef
 
   private[impl] def create[R <: Peer: PeerTypeTag](id: Long,
-      protocol: ProtocolInfo): Remote[R] =
+      protocol: ProtocolInfo, remoteConnections: RemoteConnections): Remote[R] =
     RemoteRefImpl(
       peerTypeOf[R], id, protocol)(
-      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated))
+      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated),
+      remoteConnections)
 
   private[impl] def create(peerType: PeerType, id: Long,
-      protocol: ProtocolInfo): RemoteRef =
+      protocol: ProtocolInfo, remoteConnections: RemoteConnections): RemoteRef =
     RemoteRefImpl(
       peerType, id, protocol)(
-      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated))
+      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated),
+      remoteConnections)
 
   implicit class RemoteRefOps(remote: RemoteRef) {
     def peerType: PeerType = remote match {
@@ -44,7 +48,7 @@ object RemoteRef {
       case _ => throwRetierImplementationError(remote)
     }
 
-    def disconnect(): Unit = remote match {
+    def doDisconnected(): Unit = remote match {
       case remote @ RemoteRefImpl(_, _, _) =>
         remote.connected set false
         remote.doDisconnected()

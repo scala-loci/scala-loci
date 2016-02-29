@@ -295,7 +295,7 @@ class System(
 
   remoteConnections.remoteLeft += { remote =>
     context execute new Runnable {
-      def run = remote.disconnect
+      def run = remote.doDisconnected
     }
     closeChannels(remote)
   }

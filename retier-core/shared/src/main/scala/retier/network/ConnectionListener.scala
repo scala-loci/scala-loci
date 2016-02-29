@@ -4,7 +4,7 @@ package network
 import util.Notification
 import util.Notifier
 
-trait ConnectionListener { self =>
+trait ConnectionListener extends ConnectionEstablisher { self =>
   protected final val doConnectionEstablished = Notifier[Connection]
 
   final val connectionEstablished: Notification[Connection] =
