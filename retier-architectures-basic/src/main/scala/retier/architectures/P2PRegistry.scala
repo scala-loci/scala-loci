@@ -3,14 +3,14 @@ package architectures
 
 @multitier
 object P2PRegistry {
-  abstract class Registry[N <: Node[_, _]: PeerTypeTag] extends Peer {
+  abstract class RegistryPeer[N <: NodePeer[_, _]: PeerTypeTag] extends Peer {
     type Connection <: Multiple[N]
     implicit def connectDefault = Default.Listen[N]
   }
 
-  abstract class Node[
-      N <: Node[_, _]: PeerTypeTag,
-      R <: Registry[_]: PeerTypeTag] extends Peer {
+  abstract class NodePeer[
+      N <: NodePeer[_, _]: PeerTypeTag,
+      R <: RegistryPeer[_]: PeerTypeTag] extends Peer {
     type Connection <: Multiple[N] with Optional[R]
   }
 }

@@ -80,6 +80,11 @@ trait Peer {
     }
   }
 
+  protected[this] final def manually: ConnectionSetup =
+    new ConnectionSetup {
+      def setup(peerType: PeerType, peerTypes: List[PeerType]) = Map.empty
+    }
+
   protected[this] case class FactorySetup(factory: ConnectionFactory)
 
   protected[this] def setup(factory: ConnectionFactory) = FactorySetup(factory)
