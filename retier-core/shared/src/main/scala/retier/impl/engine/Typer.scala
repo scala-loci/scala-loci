@@ -23,8 +23,11 @@ class Typer[C <: Context](val c: C) {
    * Re-type-checks the given tree, i.e., first un-type-checks it and then
    * type-checks it again using [[untypecheck]] and [[typecheck]], respectively.
    */
-  def retypecheck(tree: Tree): Tree =
-    typecheck(untypecheck(tree))
+  def retypecheck(
+      tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
+    typecheck(
+      untypecheck(tree, removeSyntheticImplicitArgs),
+      removeSyntheticImplicitArgs)
 
   /**
    * Re-type-checks the given tree resetting all symbols using the
@@ -32,8 +35,11 @@ class Typer[C <: Context](val c: C) {
    * then type-checks it again using [[untypecheckAll]] and [[typecheck]],
    * respectively.
    */
-  def retypecheckAll(tree: Tree): Tree =
-    typecheck(untypecheckAll(tree))
+  def retypecheckAll(
+      tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
+    typecheck(
+      untypecheckAll(tree, removeSyntheticImplicitArgs),
+      removeSyntheticImplicitArgs)
 
   /**
    * Type-checks the given tree. If type-checking fails, aborts the macro
@@ -47,13 +53,17 @@ class Typer[C <: Context](val c: C) {
    * This method tries to restore the AST to its original form, which can be
    * type-checked again.
    */
-  def typecheck(tree: Tree): Tree = {
+  def typecheck(
+      tree: Tree, identifySyntheticImplicitArgs: Boolean = false): Tree = {
     try
-      fixTypecheck(
-        (syntheticTreeMarker transform
-          (c typecheck
-            (nonSyntheticTreeMarker transform tree))),
-        abortWhenUnfixable = false)
+      if (identifySyntheticImplicitArgs)
+        fixTypecheck(
+          (syntheticTreeMarker transform
+            (c typecheck
+              (nonSyntheticTreeMarker transform tree))),
+          abortWhenUnfixable = false)
+      else
+        fixTypecheck(c typecheck tree, abortWhenUnfixable = false)
     catch {
       case TypecheckException(pos, msg) =>
         c.abort(pos.asInstanceOf[Position], msg)
@@ -71,11 +81,17 @@ class Typer[C <: Context](val c: C) {
    * This method tries to restore the AST to its original form, which can be
    * type-checked again, or abort the macro expansion if this is not possible.
    */
-  def untypecheck(tree: Tree): Tree =
-    c untypecheck
-      (typeApplicationCleaner transform
-        (syntheticImplicitParamListCleaner transform
-          fixTypecheck(tree, abortWhenUnfixable = true)))
+  def untypecheck(
+      tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
+    if (removeSyntheticImplicitArgs)
+      c untypecheck
+        (typeApplicationCleaner transform
+          (syntheticImplicitParamListCleaner transform
+            fixTypecheck(tree, abortWhenUnfixable = true)))
+    else
+      c untypecheck
+        (typeApplicationCleaner transform
+          fixTypecheck(tree, abortWhenUnfixable = true))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -89,12 +105,19 @@ class Typer[C <: Context](val c: C) {
    * This method tries to restore the AST to its original form, which can be
    * type-checked again, or abort the macro expansion if this is not possible.
    */
-  def untypecheckAll(tree: Tree): Tree =
-    c resetAllAttrs
-      (selfReferenceFixer transform
-        (typeApplicationCleaner transform
-          (syntheticImplicitParamListCleaner transform
-            fixTypecheck(tree, abortWhenUnfixable = true))))
+  def untypecheckAll(
+      tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
+    if (removeSyntheticImplicitArgs)
+      c resetAllAttrs
+        (selfReferenceFixer transform
+          (typeApplicationCleaner transform
+            (syntheticImplicitParamListCleaner transform
+              fixTypecheck(tree, abortWhenUnfixable = true))))
+    else
+      c resetAllAttrs
+        (selfReferenceFixer transform
+          (typeApplicationCleaner transform
+              fixTypecheck(tree, abortWhenUnfixable = true)))
 
   /**
    * Cleans the flag set of the given modifiers.
@@ -261,10 +284,52 @@ class Typer[C <: Context](val c: C) {
         if (whereClauses exists { _.isEmpty })
           TypeTree(tpe)
         else
-          ExistentialTypeTree(
-            expandType(underlying),
-            whereClauses collect { case Some(whereClause) => whereClause })
-        
+          ExistentialTypeTree(expandType(underlying), whereClauses.flatten)
+
+      case RefinedType(parents, scope) =>
+        def refiningType(sym: TypeSymbol): TypeDef =
+          TypeDef(
+            Modifiers(),
+            sym.name,
+            sym.typeParams map { param => refiningType(param.asType) },
+            expandType(sym.typeSignature.finalResultType))
+
+        def refiningVal(sym: TermSymbol): ValDef =
+          ValDef(
+            Modifiers(DEFERRED),
+            sym.name,
+            expandType(sym.typeSignature.finalResultType),
+            EmptyTree)
+
+        def refiningDef(sym: MethodSymbol): DefDef =
+          DefDef(
+            Modifiers(DEFERRED),
+            sym.name,
+            sym.typeParams map { param => refiningType(param.asType) },
+            sym.paramLists map { _ map { param => refiningVal(param.asTerm) } },
+            expandType(sym.typeSignature.finalResultType),
+            EmptyTree)
+
+        val body = scope map { symbol =>
+          if (symbol.isMethod) {
+            val method = symbol.asMethod
+            if (method.isStable)
+              Some(refiningVal(method))
+            else
+              Some(refiningDef(method))
+          }
+          else if (symbol.isType)
+            Some(refiningType(symbol.asType))
+          else
+            None
+        }
+
+        if (body exists { _.isEmpty })
+          TypeTree(tpe)
+        else
+          CompoundTypeTree(
+            Template(parents map expandType, noSelfType, body.toList.flatten))
+
       case _ =>
         TypeTree(tpe)
     }
@@ -300,9 +365,9 @@ class Typer[C <: Context](val c: C) {
           val hasImplicitParamList =
             tree.symbol != null &&
             tree.symbol.isMethod &&
-            (tree.symbol.asMethod.paramLists.lastOption flatMap {
-              _.headOption map { _.isImplicit }
-            } getOrElse false)
+            (tree.symbol.asMethod.paramLists.lastOption exists {
+              _.headOption exists { _.isImplicit }
+            })
 
           val isNonSyntheticParamList =
             (internal attachments tree).get[NonSyntheticTree.type].nonEmpty
@@ -340,6 +405,8 @@ class Typer[C <: Context](val c: C) {
 
 
   private object typeApplicationCleaner extends Transformer {
+    val processedMethodTrees = mutable.Set.empty[Tree]
+
     def prependRootPackage(tree: Tree): Tree = tree match {
       case Ident(name) if tree.symbol.owner == c.mirror.RootClass =>
         Select(Ident(termNames.ROOTPKG), name)
@@ -358,21 +425,59 @@ class Typer[C <: Context](val c: C) {
         else
           tree
 
-      case ValDef(mods, name, tpt, rhs) if mods hasFlag ARTIFACT =>
+      case ValDef(mods, name, tpt, rhs) =>
+        val typeTree = tpt match {
+          case tree if mods hasFlag ARTIFACT =>
+            tree
+          case tree if mods hasFlag SYNTHETIC =>
+            transform(tree)
+          case tree: TypeTree if tree.original == null && !rhs.isEmpty =>
+            TypeTree()
+          case tree =>
+            transform(tree)
+        }
+
         val valDef = ValDef(
-          transformModifiers(mods), name, tpt,
+          transformModifiers(mods), name, typeTree,
           transform(rhs))
         internal setSymbol (valDef, tree.symbol)
         internal setType (valDef, tree.tpe)
         internal setPos (valDef, tree.pos)
 
-      case Apply(TypeApply(fun, targs), args) =>
+      case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+        val typeTree = tpt match {
+          case tree: TypeTree if tree.original == null => TypeTree()
+          case tree => transform(tree)
+        }
+
+        val defDef = DefDef(
+          transformModifiers(mods), name, transformTypeDefs(tparams),
+          transformValDefss(vparamss), typeTree, transform(rhs))
+        internal setSymbol (defDef, tree.symbol)
+        internal setType (defDef, tree.tpe)
+        internal setPos (defDef, tree.pos)
+
+      case Apply(fun, _) if !(processedMethodTrees contains tree) =>
+        def processApplications(tree: Tree, count: Int): (List[Tree], Int) =
+          tree match {
+            case Apply(fun, _) =>
+              processedMethodTrees += tree
+              processApplications(fun, count + 1)
+            case TypeApply(_, targs) =>
+              (targs, count)
+            case _ =>
+              (List.empty, count)
+          }
+
+        val (targs, applicationCount) = processApplications(tree, 0)
+
         val hasImplicitParamList =
           tree.symbol != null &&
           tree.symbol.isMethod &&
-          (tree.symbol.asMethod.paramLists.lastOption flatMap {
-            _.headOption map { _.isImplicit }
-          } getOrElse false)
+          tree.symbol.asMethod.paramLists.size == applicationCount &&
+          (tree.symbol.asMethod.paramLists.lastOption exists {
+            _.headOption exists { _.isImplicit }
+          })
 
         val hasNonRepresentableType = targs exists { arg =>
           arg.tpe != null && (arg.tpe exists {
@@ -384,12 +489,49 @@ class Typer[C <: Context](val c: C) {
         }
 
         if (hasImplicitParamList && hasNonRepresentableType)
-          transform(fun)
+          fun match {
+            case TypeApply(fun, _) =>
+              transform(fun)
+            case _ =>
+              transform(fun)
+          }
+        else
+          transform(tree)
+
+      case Apply(TypeApply(fun, targs), args) =>
+        val typeArgsSynthetic = targs forall {
+          case tree: TypeTree if tree.original == null => true
+          case tree => false
+        }
+
+        val typeArgsInferable =
+          if (tree.symbol != null && tree.symbol.isMethod) {
+            val method = tree.symbol.asMethod
+            val implicitParamListCount =
+              if (method.paramLists.lastOption exists {
+                    _.headOption exists { _.isImplicit }
+                 }) 1 else 0
+
+            val typeParams = method.typeParams
+            val argTypes = (method.paramLists dropRight implicitParamListCount)
+              .flatten map { _.typeSignature }
+
+            typeParams forall { typeParam =>
+              argTypes exists { _ contains typeParam }
+            }
+          }
+          else
+            false
+
+        if (typeArgsSynthetic && typeArgsInferable) {
+          val apply = Apply(transform(fun), transformTrees(args))
+          internal setSymbol (apply, tree.symbol)
+          internal setType (apply, tree.tpe)
+          internal setPos (apply, tree.pos)
+          transform(apply)
+        }
         else
           super.transform(tree)
-
-      case DefDef(_, termNames.CONSTRUCTOR, _, _, _, _) =>
-        tree
 
       case _ =>
         super.transform(tree)

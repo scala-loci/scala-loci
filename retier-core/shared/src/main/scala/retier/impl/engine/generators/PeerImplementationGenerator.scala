@@ -85,23 +85,6 @@ trait PeerImplementationGenerator { this: Generation =>
       }
     }
 
-    object placedTypeProcessor extends Transformer {
-      override def transform(tree: Tree) = tree match {
-        case tree: TypeTree
-          if !tree.isRetierSynthetic &&
-             tree.tpe != null &&
-             !(types.bottom exists { tree.tpe <:< _ }) &&
-             (tree.tpe <:< types.localOn ||
-              tree.tpe <:< types.from ||
-              tree.tpe <:< types.fromSingle ||
-              tree.tpe <:< types.fromMultiple) =>
-          TypeTree()
-
-        case _ =>
-          super.transform(tree)
-      }
-    }
-
     def createDeclTypeTree(declTypeTree: Tree, exprType: Type) =
       if (types.bottom exists { exprType <:< _ })
         declTypeTree
@@ -236,9 +219,7 @@ trait PeerImplementationGenerator { this: Generation =>
           case (stat, _) => stat
         })
 
-      stats map
-        placedTypeProcessor.transform map
-        multitierInterfaceProcessor.transform
+      stats map multitierInterfaceProcessor.transform
     }
 
     def peerImplementationParents(parents: List[Tree]) = parents map {
