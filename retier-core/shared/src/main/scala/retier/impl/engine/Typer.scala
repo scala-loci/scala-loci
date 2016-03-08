@@ -60,10 +60,9 @@ class Typer[C <: Context](val c: C) {
         fixTypecheck(
           (syntheticTreeMarker transform
             (c typecheck
-              (nonSyntheticTreeMarker transform tree))),
-          abortWhenUnfixable = false)
+              (nonSyntheticTreeMarker transform tree))))
       else
-        fixTypecheck(c typecheck tree, abortWhenUnfixable = false)
+        fixTypecheck(c typecheck tree)
     catch {
       case TypecheckException(pos, msg) =>
         c.abort(pos.asInstanceOf[Position], msg)
@@ -87,11 +86,13 @@ class Typer[C <: Context](val c: C) {
       c untypecheck
         (typeApplicationCleaner transform
           (syntheticImplicitParamListCleaner transform
-            fixTypecheck(tree, abortWhenUnfixable = true)))
+            fixCaseClasses(
+              fixTypecheck(tree))))
     else
       c untypecheck
         (typeApplicationCleaner transform
-          fixTypecheck(tree, abortWhenUnfixable = true))
+          fixCaseClasses(
+            fixTypecheck(tree)))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -112,12 +113,14 @@ class Typer[C <: Context](val c: C) {
         (selfReferenceFixer transform
           (typeApplicationCleaner transform
             (syntheticImplicitParamListCleaner transform
-              fixTypecheck(tree, abortWhenUnfixable = true))))
+              fixCaseClasses(
+                fixTypecheck(tree)))))
     else
       c resetAllAttrs
         (selfReferenceFixer transform
           (typeApplicationCleaner transform
-              fixTypecheck(tree, abortWhenUnfixable = true)))
+            fixCaseClasses(
+              fixTypecheck(tree))))
 
   /**
    * Cleans the flag set of the given modifiers.
@@ -203,6 +206,9 @@ class Typer[C <: Context](val c: C) {
 
       case ThisType(pre) =>
         expandSymbol(pre)
+
+      case TypeRef(NoPrefix, sym, List()) if sym.isModuleClass =>
+        SingletonTypeTree(Ident(sym.name.toTypeName))
 
       case TypeRef(NoPrefix, sym, args) =>
         val ident = Ident(sym.name.toTypeName)
@@ -539,6 +545,113 @@ class Typer[C <: Context](val c: C) {
   }
 
 
+  private case object CaseClassMarker
+
+  private def fixCaseClasses(tree: Tree): Tree = {
+    val symbols = mutable.Set.empty[Symbol]
+
+    val syntheticMethodNames = Set("apply", "canEqual", "copy", "equals",
+      "hashCode", "productArity", "productElement", "productIterator",
+      "productPrefix", "readResolve", "toString", "unapply")
+
+    def isSyntheticMethodName(name: TermName) =
+      (syntheticMethodNames contains name.toString) ||
+      (name.toString startsWith "copy$")
+
+    object caseClassFixer extends Transformer {
+      def resetCaseImplBody(body: List[Tree]) =
+        body filterNot {
+          case DefDef(mods, name, _, _, _, _) =>
+            (mods hasFlag SYNTHETIC) && isSyntheticMethodName(name)
+          case _ => false
+        }
+
+      def resetCaseImplDef(implDef: ImplDef) = implDef match {
+        case ModuleDef(mods, name, Template(parents, self, body)) =>
+          val moduleDef = ModuleDef(mods, name,
+            Template(parents, self, resetCaseImplBody(body)))
+
+          internal updateAttachment (moduleDef, CaseClassMarker)
+          internal setSymbol (moduleDef, implDef.symbol)
+          internal setType (moduleDef, implDef.tpe)
+          internal setPos (moduleDef, implDef.pos)
+
+        case ClassDef(mods, tpname, tparams, Template(parents, self, body)) =>
+          val classDef = ClassDef(mods, tpname, tparams,
+            Template(parents, self, resetCaseImplBody(body)))
+
+          internal updateAttachment (classDef, CaseClassMarker)
+          internal setSymbol (classDef, implDef.symbol)
+          internal setType (classDef, implDef.tpe)
+          internal setPos (classDef, implDef.pos)
+      }
+
+      def fixCaseClasses(trees: List[Tree]) = {
+        val names = (trees collect {
+          case ClassDef(mods, tpname, _, _) if mods hasFlag CASE =>
+            tpname.toTermName
+        }).toSet
+
+        symbols ++= (trees collect {
+          case tree @ ClassDef(mods, tpname, _, _)
+              if tree.symbol != NoSymbol &&
+                 (mods hasFlag CASE) =>
+            Seq(tree.symbol)
+          case tree @ ModuleDef(mods, name, _)
+              if tree.symbol != NoSymbol &&
+                 ((mods hasFlag CASE) || (names contains name)) =>
+            Seq(tree.symbol, tree.symbol.asModule.moduleClass)
+        }).flatten
+
+        trees map {
+          case tree @ ModuleDef(mods, name, _) if names contains name =>
+            if (mods hasFlag SYNTHETIC)
+              EmptyTree
+            else
+              resetCaseImplDef(tree)
+          case tree @ ModuleDef(mods, _, _) if mods hasFlag CASE =>
+            resetCaseImplDef(tree)
+          case tree @ ClassDef(mods, _, _, _) if mods hasFlag CASE =>
+            resetCaseImplDef(tree)
+          case tree =>
+            tree
+        }
+      }
+
+      override def transform(tree: Tree) = tree match {
+        case Template(parents, self, body) =>
+          super.transform(Template(parents, self, fixCaseClasses(body)))
+        case Block(stats, expr) =>
+          val fixedExpr :: fixedStats = fixCaseClasses(expr :: stats)
+          super.transform(Block(fixedStats, fixedExpr))
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    object caseClassReferenceFixer extends Transformer {
+      def symbolsContains(symbol: Symbol): Boolean =
+        symbol != null && symbol != NoSymbol &&
+        ((symbols contains symbol) || symbolsContains(symbol.owner))
+
+      override def transform(tree: Tree) = tree match {
+        case _
+            if (internal attachments tree).get[CaseClassMarker.type].nonEmpty =>
+          internal removeAttachment[CaseClassMarker.type] tree
+          tree
+        case tree: TypeTree if symbolsContains(tree.symbol) =>
+          createTypeTree(tree.tpe)
+        case _ if symbolsContains(tree.symbol) =>
+          super.transform(internal setSymbol (tree, NoSymbol))
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    caseClassReferenceFixer transform (caseClassFixer transform tree)
+  }
+
+
   private def selfReferenceFixer = new Transformer {
     val stack = mutable.Stack.empty[(TypeName, Set[Name])]
 
@@ -605,7 +718,7 @@ class Typer[C <: Context](val c: C) {
       catch { case _: reflect.internal.Symbols#CyclicReference => NoSymbol }
   }
 
-  private def fixTypecheck(tree: Tree, abortWhenUnfixable: Boolean): Tree = {
+  private def fixTypecheck(tree: Tree): Tree = {
     val rhss = (tree collect {
       case valDef @ ValDef(_, _, _, _) if valDef.symbol.isTerm =>
         val term = valDef.symbol.asTerm
@@ -751,11 +864,6 @@ class Typer[C <: Context](val c: C) {
           }
           else
             super.transform(tree)
-
-        // abort on case class
-        case ClassDef(mods, _, _, _)
-            if (mods hasFlag CASE) && abortWhenUnfixable =>
-          c.abort(tree.pos, "case class not allowed inside macro application")
 
         case _ =>
           super.transform(tree)
