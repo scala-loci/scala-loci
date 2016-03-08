@@ -165,7 +165,7 @@ class Runtime(
         remoteConnections request (requestor, peerType)
     }
 
-    future onSuccess { case requiredRequestedRemotes =>
+    future foreach { requiredRequestedRemotes =>
       val remotes = optionalRequestors map { case (requestor, peerType) =>
         remoteConnections request (requestor, peerType) }
 
@@ -182,7 +182,7 @@ class Runtime(
       }
     }
 
-    future onFailure { case exception =>
+    future.failed foreach { exception =>
       peerExecutionContext reportFailure exception
       remoteConnections.terminate
     }

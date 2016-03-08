@@ -136,9 +136,9 @@ class Typer[C <: Context](val c: C) {
    */
   def cleanModifiers(mods: Modifiers): Modifiers = {
     val possibleFlags = Seq(ABSTRACT, ARTIFACT, BYNAMEPARAM, CASE, CASEACCESSOR,
-      CONTRAVARIANT, COVARIANT, DEFAULTINIT, DEFAULTPARAM, DEFERRED, ENUM,
-      FINAL, IMPLICIT, LAZY, LOCAL, MACRO, MUTABLE, OVERRIDE, PARAM,
-      PARAMACCESSOR, PRESUPER, PRIVATE, PROTECTED, SEALED, SYNTHETIC)
+      CONTRAVARIANT, COVARIANT, DEFAULTINIT, DEFAULTPARAM, DEFERRED, FINAL,
+      IMPLICIT, LAZY, LOCAL, MACRO, MUTABLE, OVERRIDE, PARAM, PARAMACCESSOR,
+      PRESUPER, PRIVATE, PROTECTED, SEALED, SYNTHETIC)
 
     val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
       if (mods hasFlag flag) flags | flag else flags

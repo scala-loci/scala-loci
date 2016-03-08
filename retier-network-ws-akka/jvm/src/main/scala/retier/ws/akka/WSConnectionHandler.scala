@@ -61,7 +61,7 @@ private object WSConnectionHandler {
       }
     }
 
-    protocolInfo onSuccess { case protocolInfo =>
+    protocolInfo foreach { protocolInfo =>
       promises synchronized {
         val connection = new Connection {
           val protocol = protocolInfo
@@ -105,11 +105,10 @@ private object WSConnectionHandler {
         message.textStream.runFold(new StringBuilder) {
           case (builder, data) =>
             builder append data
-        } onSuccess {
-          case builder =>
-            val data = builder.toString
-            if (data startsWith "#")
-              doReceive(data substring 1)
+        } foreach { builder =>
+          val data = builder.toString
+          if (data startsWith "#")
+            doReceive(data substring 1)
         }
 
       case _ =>

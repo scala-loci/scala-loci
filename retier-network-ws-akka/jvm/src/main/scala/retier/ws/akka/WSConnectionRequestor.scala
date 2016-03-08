@@ -47,7 +47,7 @@ private object WSConnectionRequestor {
 
       def connectionEstablished(connection: Connection) = {
         websocketConnectionEstablished(connection)
-        promise.future onFailure PartialFunction { _ => connection.close }
+        promise.future.failed foreach { _ => connection.close }
         websocketPromise success connection
       }
 

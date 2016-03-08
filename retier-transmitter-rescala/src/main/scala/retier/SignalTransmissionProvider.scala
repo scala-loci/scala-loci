@@ -102,8 +102,8 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
     def asLocalOption: Signal[Option[T]] = transmission.memo(asLocalId) {
       val option = Var(Option.empty[Signal[T]])
 
-      transmission.retrieveRemoteValue onSuccess {
-        case signal => option() = Some(signal)
+      transmission.retrieveRemoteValue foreach { signal =>
+        option() = Some(signal)
       }
 
       Signal { option() map { _() } }

@@ -106,9 +106,7 @@ protected[retier] trait EventTransmissionProvider {
 
     def asLocal: Event[T] = transmission.memo(asLocalId) {
       val event = new ImperativeEvent[T]
-      transmission.retrieveRemoteValue onSuccess PartialFunction {
-        _ += event.apply
-      }
+      transmission.retrieveRemoteValue foreach { _ += event.apply }
       event
     }
   }

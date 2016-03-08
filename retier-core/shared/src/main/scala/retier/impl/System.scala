@@ -51,7 +51,7 @@ class System(
   def terminate(): Unit = remoteConnections.terminate
 
   connectingRemotes foreach {
-    _ onFailure { case _ => peerImpl.error }
+    _.failed foreach { _ => peerImpl.error }
   }
 
 
@@ -120,8 +120,8 @@ class System(
 
   def requestRemoteConnection
       [R <: Peer: PeerTypeTag](requestor: ConnectionRequestor): Unit =
-    remoteConnections request (requestor, peerTypeOf[R]) onFailure {
-      case _ => peerImpl.error
+    (remoteConnections request (requestor, peerTypeOf[R])).failed foreach {
+      _ => peerImpl.error
     }
 
   def createMultipleRemoteConnection

@@ -85,7 +85,7 @@ private object WSConnectionListener {
             connectionEstablished),
           interface, port)
 
-        running onFailure PartialFunction { _ => stop }
+        running.failed foreach { _ => stop }
       }
 
     def start() = WSActorSystem synchronized {
@@ -96,7 +96,7 @@ private object WSConnectionListener {
     def stop() = WSActorSystem synchronized {
       if (running != null) {
         stopping
-        running onSuccess PartialFunction { _.unbind }
+        running foreach { _.unbind }
         running = null
       }
     }
