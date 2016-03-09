@@ -24,7 +24,7 @@ val akkaHttp = libraryDependencies +=
   "com.typesafe.akka" %% "akka-http-experimental" % "2.0.2"
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" %%%! "scalajs-dom" % "0.8.2"
+  "org.scala-js" %%%! "scalajs-dom" % "0.9.0"
 
 
 def preventPublication(project: Project) = project settings (
@@ -43,14 +43,14 @@ lazy val retierJVM = preventPublication(project
   aggregate (retierCoreJVM, retierArchitecturesBasicJVM,
              retierSerializableUpickleJVM,
              retierTransmitterBasicJVM, retierTransmitterRescalaJVM,
-             retierNetworkTcpJVM, retierNetworkWsJVM))
+             retierNetworkTcpJVM, retierNetworkWsJVM, retierNetworkWebRtcJVM))
 
 lazy val retierJS = preventPublication(project
   in file(".js")
   aggregate (retierCoreJS, retierArchitecturesBasicJS,
              retierSerializableUpickleJS,
              retierTransmitterBasicJS, retierTransmitterRescalaJS,
-             retierNetworkTcpJS, retierNetworkWsJS))
+             retierNetworkTcpJS, retierNetworkWsJS, retierNetworkWebRtcJS))
 
 
 lazy val retierCore = (crossProject
@@ -126,3 +126,14 @@ lazy val retierNetworkWs = (crossProject
 
 lazy val retierNetworkWsJVM = retierNetworkWs.jvm
 lazy val retierNetworkWsJS = retierNetworkWs.js
+
+
+lazy val retierNetworkWebRtc = (crossProject
+  crossType CrossType.Full
+  in file("retier-network-webrtc")
+  settings (normalizedName := "retier-network-webrtc",
+            scalajsDom)
+  dependsOn retierCore)
+
+lazy val retierNetworkWebRtcJVM = retierNetworkWebRtc.jvm
+lazy val retierNetworkWebRtcJS = retierNetworkWebRtc.js
