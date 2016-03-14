@@ -37,6 +37,8 @@ sealed trait OptionalTransmission[T, R <: Peer, L <: Peer]
     retrieveMappedRemoteValue.toMap
   def retrieveRemoteValues: Seq[Future[T]] =
     retrieveRemoteValue.toSeq
+
+  def multiple: MultipleTransmission[T, R, L]
 }
 
 sealed trait SingleTransmission[T, R <: Peer, L <: Peer]
@@ -52,6 +54,9 @@ sealed trait SingleTransmission[T, R <: Peer, L <: Peer]
     Map(retrieveMappedRemoteValue)
   def retrieveRemoteValues: Seq[Future[T]] =
     Seq(retrieveRemoteValue)
+
+  def optional: OptionalTransmission[T, R, L]
+  def multiple: MultipleTransmission[T, R, L]
 }
 
 

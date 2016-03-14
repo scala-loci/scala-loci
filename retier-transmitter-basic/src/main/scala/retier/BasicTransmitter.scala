@@ -27,6 +27,8 @@ object basicTransmitter extends ide.intellij.BasicTransmitter {
       (transmission: OptionalTransmission[T, R, L])
     extends TransmissionProvider {
 
+    def multiple = BasicMultipleTransmissionProvider(transmission.multiple)
+
     def asLocal: Option[Future[T]] =
       transmission.retrieveRemoteValue
 
@@ -40,6 +42,10 @@ object basicTransmitter extends ide.intellij.BasicTransmitter {
       [T, R <: Peer, L <: Peer]
       (transmission: SingleTransmission[T, R, L])
     extends TransmissionProvider {
+
+    def optional = BasicOptionalTransmissionProvider(transmission.optional)
+
+    def multiple = BasicMultipleTransmissionProvider(transmission.multiple)
 
     def asLocal: Future[T] =
       transmission.retrieveRemoteValue

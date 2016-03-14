@@ -195,20 +195,20 @@ class System(
       (selection: T from R): OptionalTransmission[T, R, L] =
     OptionalTransmissionImpl(this, selection)
 
-  def createOptionalTransmission
-      [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
-      (selection: T fromSingle R): OptionalTransmission[T, R, L] =
-    OptionalTransmissionImpl(this, selection)
-
   def createSingleTransmission
       [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T]): SingleTransmission[T, R, L] =
-    SingleTransmissionImpl(this, props)
+    SingleTransmissionImpl(this, Selection(props, None))
 
   def createSingleTransmission
       [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
       (selection: T from R): SingleTransmission[T, R, L] =
-    SingleTransmissionImpl(this, selection.props)
+    SingleTransmissionImpl(this, selection)
+
+  def createSingleTransmission
+      [T, R <: Peer: PeerTypeTag, L <: Peer: PeerTypeTag]
+      (selection: T fromSingle R): SingleTransmission[T, R, L] =
+    SingleTransmissionImpl(this, selection)
 
 
 
@@ -221,11 +221,11 @@ class System(
 
   def createPeerSelection[T, P <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T], peer: Remote[P]): T fromSingle P =
-    Selection(props, Some(Set(peer)))
+    Selection(props, Some(Seq(peer)))
 
   def createPeerSelection[T, P <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T], peers: Remote[P]*): T fromMultiple P =
-    Selection(props, Some(peers.toSet))
+    Selection(props, Some(peers))
 
 
 
@@ -369,6 +369,11 @@ class System(
 
   def requestRemotes[T](props: TransmissionProperties[T],
       remotes: Seq[RemoteRef]): Seq[Future[T]] = {
+    def channelClosedException =
+      new RemoteConnectionException("channel closed")
+    def remoteNotConnectedException =
+      new RemoteConnectionException("remote not connected")
+
     remotes map { remote =>
       val remoteAbstraction = (remote, props.abstraction)
       Option(pushedValues get remoteAbstraction) map {
@@ -384,24 +389,31 @@ class System(
             future
 
         if (pushValuesFuture eq future) {
-          val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
-          val channel = abstraction.channel
+          if (isConnected(remote)) {
+            val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
+            val channel = abstraction.channel
 
-          channelResponseHandlers put (channel, { response =>
-            promise tryComplete (props unmarshalResponse (response, abstraction))
-          })
+            channelResponseHandlers put (channel, { response =>
+              promise tryComplete (props unmarshalResponse (response, abstraction))
+            })
 
-          channel.closed += { _ =>
-            promise tryFailure new RemoteConnectionException("channel closed")
+            channel.closed += { _ =>
+              promise tryFailure channelClosedException
+            }
+
+            if (!isChannelOpen(channel))
+              promise tryFailure channelClosedException
+            else
+              remoteConnections send (
+                channel.remote,
+                ContentMessage(
+                  "Request",
+                  channel.name,
+                  Some(props.abstraction.name),
+                  props marshalRequest abstraction))
           }
-
-          remoteConnections send (
-            channel.remote,
-            ContentMessage(
-              "Request",
-              channel.name,
-              Some(props.abstraction.name),
-              props marshalRequest abstraction))
+          else
+            promise tryFailure remoteNotConnectedException
 
           future
         }

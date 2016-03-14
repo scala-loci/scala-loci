@@ -66,6 +66,9 @@ protected[retier] trait EventTransmissionProvider {
       (transmission: OptionalTransmission[Evt[T], R, L])
     extends TransmissionProvider {
 
+    def multiple =
+      RescalaEventMultipleTransmissionProvider(transmission.multiple)
+
     def asLocal: Signal[Option[Event[T]]] = transmission.memo(asLocalId) {
       val option = Var(Option.empty[Event[T]])
 
@@ -103,6 +106,12 @@ protected[retier] trait EventTransmissionProvider {
       [Evt[T] <: Event[T], T, R <: Peer, L <: Peer]
       (transmission: SingleTransmission[Evt[T], R, L])
     extends TransmissionProvider {
+
+    def optional =
+      RescalaEventOptionalTransmissionProvider(transmission.optional)
+
+    def multiple =
+      RescalaEventMultipleTransmissionProvider(transmission.multiple)
 
     def asLocal: Event[T] = transmission.memo(asLocalId) {
       val event = new ImperativeEvent[T]

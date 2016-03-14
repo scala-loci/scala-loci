@@ -34,7 +34,7 @@ object TransmissionProperties {
         nonIssued: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M]):
-    TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, SingleConnection] = `#macro`
 
   implicit def transmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -71,7 +71,7 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, SingleConnection] = `#macro`
 
   implicit def controlledIssuedTransmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]
@@ -107,7 +107,7 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         connection: PeerConnection[L#Connection, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, OptionalConnection] = `#macro`
+    TransmissionProperties[V, T, R, L, SingleConnection] = `#macro`
 
   implicit def issuedTransmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: ConnectionMultiplicity]

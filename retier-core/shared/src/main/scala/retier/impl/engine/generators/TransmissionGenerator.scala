@@ -120,11 +120,6 @@ trait TransmissionGenerator { this: Generation =>
             tree, exprss.head.head, None,
             internal setType (remotePeerTypeTag, remotePeerType)))
 
-      case _ if tree.tpe != null &&
-                tree.tpe <:< types.transmissionProvider &&
-                (types.bottom forall { tree.tpe <:!< _ }) =>
-        c.abort(tree.pos, "unexpected value of type TransmissionProvider")
-
       case _ =>
         super.transform(tree)
     }

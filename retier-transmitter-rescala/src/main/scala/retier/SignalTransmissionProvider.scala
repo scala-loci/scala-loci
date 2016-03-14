@@ -55,6 +55,9 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
       (transmission: OptionalTransmission[Sig[T], R, L])
     extends TransmissionProvider {
 
+    def multiple =
+      RescalaSignalMultipleTransmissionProvider(transmission.multiple)
+
     def asLocal: Signal[Option[T]] = transmission.memo(asLocalId) {
       val option = Var(Option.empty[Signal[T]])
 
@@ -90,6 +93,12 @@ protected[retier] trait SignalTransmissionProvider extends SignalDefaultValues {
       [Sig[T] <: Signal[T], T, R <: Peer, L <: Peer]
       (transmission: SingleTransmission[Sig[T], R, L])
     extends TransmissionProvider {
+
+    def optional =
+      RescalaSignalOptionalTransmissionProvider(transmission.optional)
+
+    def multiple =
+      RescalaSignalMultipleTransmissionProvider(transmission.multiple)
 
     def asLocal_?(timeout: Duration): Signal[T] = {
       // if REScala signals could capture the state of not being evaluated yet,

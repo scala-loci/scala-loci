@@ -5,12 +5,15 @@ import RemoteRef._
 import scala.language.implicitConversions
 
 private[impl] final case class Selection[T, P <: Peer](
-  props: TransmissionProperties[T], remotes: Option[Set[RemoteRef]])
+  props: TransmissionProperties[T], remotes: Option[Seq[Remote[P]]])
     extends SelectionImplBase[T, P] with SingleSelectionImplBase[T, P]
     with MultipleSelectionImplBase[T, P] {
-  def filter(remote: RemoteRef): Boolean = remotes match {
+  def filter(remote: Remote[P]): Boolean = remotes match {
     case Some(remotes) => remotes contains remote
     case None => true
+  }
+  def remote: Option[Remote[P]] = remotes collect {
+    case remotes if remotes.size == 1 => remotes.head
   }
 }
 
