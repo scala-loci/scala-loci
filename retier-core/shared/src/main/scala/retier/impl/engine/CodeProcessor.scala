@@ -18,6 +18,7 @@ class CodeProcessor[C <: Context](val c: C) extends
     PlacedExpressionsProcessor with
     RemoteExpressionProcessor with
     FromExpressionProcessor with
+    ToExpressionProcessor with
     TransmissionGenerator with
     RemoteInterfaceGenerator with
     ProxyGenerator with
@@ -38,6 +39,7 @@ class CodeProcessor[C <: Context](val c: C) extends
       processPlacedExpressions aggregate
       processRemoteExpressions aggregate
       processFromExpressions aggregate
+      processToExpressions aggregate
       generateTransmissions aggregate
       generateRemoteInterfaces aggregate
       generateProxies aggregate

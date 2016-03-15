@@ -12,7 +12,7 @@ protected final abstract class SpecialPlacingExpression[P <: Peer] {
   def base[T <: (_ localOn _), U](v: T)
     (implicit
         ev0: LocalPeer[P],
-        ev1: ValueTypes[T, U]): U = `#macro`
+        ev1: ValueTypes[T, _, _, U]): U = `#macro`
   def main(f: CurrentLocalPeer[P] `implicit =>` Unit)
     (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`
   def terminating(f: CurrentLocalPeer[P] `implicit =>` Unit)

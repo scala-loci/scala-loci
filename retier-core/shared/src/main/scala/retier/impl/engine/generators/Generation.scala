@@ -84,6 +84,7 @@ trait Generation {
     val remoteIssuedCapturing = retier | TypeName("RemoteIssuedCapturingExpression")
 
     val fromExpression = retier | retierTypeName("FromExpression")
+    val toExpression = retier | retierTypeName("ToExpression")
   }
 
   object symbols {
@@ -122,6 +123,7 @@ trait Generation {
     val terminate = types.multitier | TermName("terminate")
 
     val fromExpression = types.retier | retierTermName("FromExpression")
+    val toExpression = types.retier | retierTermName("ToExpression")
 
     val transmitMultiple = types.retier | retierTermName("transmitMultiple")
     val transmitOptional = types.retier | retierTermName("transmitOptional")
@@ -154,6 +156,7 @@ trait Generation {
 
   object names {
     val from = TermName("from")
+    val to = TermName("to")
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")
     val connection = TermName("Connection")
