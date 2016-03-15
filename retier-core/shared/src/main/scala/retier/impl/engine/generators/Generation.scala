@@ -399,8 +399,8 @@ trait Generation {
       case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
       case _ =>
         (typer createTypeTree peerType) match {
-          case tq"$expr[..$_]" => expr
-          case tq"$expr[..$_] forSome { ..$_ }" => expr
+          case tq"$expr.$_[..$_]" => expr
+          case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
         }
     }
 

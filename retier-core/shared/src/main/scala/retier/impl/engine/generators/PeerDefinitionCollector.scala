@@ -15,6 +15,20 @@ trait PeerDefinitionCollector { this: Generation =>
 
     echo(verbose = true, " Collecting peer type definitions")
 
+    def cleanParents(parents: List[Tree]) =
+      (parents map {
+        case parent: TypeTree =>
+          if (parent.original != null) {
+            if (parent.original.tpe != null)
+              Some(parent.original)
+            else
+              Some(internal setType (parent.original, parent.tpe))
+          }
+          else
+            None
+        case parent => Some(parent)
+      }).flatten
+
     val peerDefs = aggregator.all[InputStatement] collect {
       case InputStatement(peer @ q"""
            $mods class $tpname[..$tparams] $ctorMods(...$paramss)
@@ -24,8 +38,8 @@ trait PeerDefinitionCollector { this: Generation =>
         val sym = peer.symbol.asClass
         (earlydefns, paramss, parents, stats,
          PeerDefinition(
-          peer, sym, tparams, paramss, parents, typer cleanModifiers mods,
-          stats, isClass = true, None, index))
+          peer, sym, tparams, paramss, cleanParents(parents),
+          typer cleanModifiers mods, stats, isClass = true, None, index))
 
       case InputStatement(peer @ q"""
            $mods trait $tpname[..$tparams]
@@ -35,8 +49,8 @@ trait PeerDefinitionCollector { this: Generation =>
         val sym = peer.symbol.asClass
         (earlydefns, List.empty, parents, stats,
          PeerDefinition(
-          peer, sym, tparams, List.empty, parents, typer cleanModifiers mods,
-          stats, isClass = false, None, index))
+          peer, sym, tparams, List.empty, cleanParents(parents),
+          typer cleanModifiers mods, stats, isClass = false, None, index))
     }
 
     peerDefs foreach { case (earlydefns, params, parents, stats, _) =>
