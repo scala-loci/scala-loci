@@ -6,7 +6,12 @@ import scala.annotation.implicitNotFound
 @implicitNotFound("Expression not placeable on peer")
 protected final abstract class PlacingTypes[P <: Peer, T, U]
 
-protected object PlacingTypes {
+protected trait PlacingTypesFallback {
+  implicit def nothingOrNotInferred[P <: Peer, T, NothingButLessSpecific]:
+    PlacingTypes[P, T, NothingButLessSpecific] = `#macro`
+}
+
+protected object PlacingTypes extends PlacingTypesFallback {
   implicit def localPlacedType[P <: Peer, P0 <: Peer, T, U]
     (implicit
         ev0: T <:< (U localOn P0),
