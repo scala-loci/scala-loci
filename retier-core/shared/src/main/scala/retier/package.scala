@@ -1,6 +1,5 @@
 package object retier extends
-    ImplicitTransmissions with
-    ImplicitConversions with
+    ImplicitConversions.Any with
     ide.intellij.ImplicitConversions {
   type LocalDeclaration = Any
 

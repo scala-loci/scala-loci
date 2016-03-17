@@ -6,7 +6,7 @@ import scala.language.implicitConversions
 
 protected[retier] trait ImplicitConversions {
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  final implicit def $$retier$valuePlacedNonIssued[P <: Peer, T]
+  final implicit def $$retier$intellij$valuePlacedNonIssued[P <: Peer, T]
     (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
@@ -15,7 +15,7 @@ protected[retier] trait ImplicitConversions {
         ev2: T <:!< (_ <-> _)): T = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  final implicit def $$retier$valuePlacedControlledIssued[P <: Peer, R <: Remote[Peer], T, U]
+  final implicit def $$retier$intellij$valuePlacedControlledIssued[P <: Peer, R <: Remote[Peer], T, U]
     (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
@@ -23,7 +23,7 @@ protected[retier] trait ImplicitConversions {
         ev1: T <:< (R <=> U)): R => U = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  final implicit def $$retier$valuePlacedIssued[P <: Peer, T, U]
+  final implicit def $$retier$intellij$valuePlacedIssued[P <: Peer, T, U]
     (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,

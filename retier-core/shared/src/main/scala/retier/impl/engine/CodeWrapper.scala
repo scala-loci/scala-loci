@@ -11,4 +11,6 @@ trait CodeWrapper[C <: Context] {
   val bases: List[context.Tree]
   val body: List[context.Tree]
   def replaceBody(body: List[context.Tree]): CodeWrapper[C]
+  def typechecked: CodeWrapper[C]
+  def untypechecked: CodeWrapper[C]
 }

@@ -7,7 +7,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
     this: rescalaTransmitter.type =>
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$multipleConnectionRescala
+  implicit def $$retier$intellij$multipleConnectionRescala
     [R <: Peer, L <: Peer]
     (v: RemoteConnectionExpression[R])
     (implicit
@@ -18,7 +18,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
     RescalaMultipleRemoteConnectionInterface[R] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$optionalConnectionRescala
+  implicit def $$retier$intellij$optionalConnectionRescala
     [R <: Peer, L <: Peer]
     (v: RemoteConnectionExpression[R])
     (implicit
@@ -29,7 +29,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
     RescalaOptionalRemoteConnectionInterface[R] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$singleConnectionRescala
+  implicit def $$retier$intellij$singleConnectionRescala
     [R <: Peer, L <: Peer]
     (v: RemoteConnectionExpression[R])
     (implicit

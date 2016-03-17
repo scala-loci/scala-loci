@@ -46,6 +46,8 @@ trait Generation {
     val peer = typeOf[Peer]
     val peerTypeTag = typeOf[PeerTypeTag[_]]
 
+    val remoteValue = typeOf[RemoteValue]
+
     val localOn = typeOf[_ localOn _]
     val sharedOn = typeOf[_ sharedOn _]
     val issued = typeOf[_ <-> _]
@@ -83,8 +85,8 @@ trait Generation {
     val remoteCapturing = retier | TypeName("RemoteCapturingExpression")
     val remoteIssuedCapturing = retier | TypeName("RemoteIssuedCapturingExpression")
 
-    val fromExpression = retier | retierTypeName("FromExpression")
-    val toExpression = retier | retierTypeName("ToExpression")
+    val fromExpression = sharedOn.companion | TypeName("FromExpression")
+    val toExpression = localOn.companion | TypeName("ToExpression")
   }
 
   object symbols {
@@ -122,12 +124,12 @@ trait Generation {
     val running = types.multitier | TermName("running")
     val terminate = types.multitier | TermName("terminate")
 
-    val fromExpression = types.retier | retierTermName("FromExpression")
-    val toExpression = types.retier | retierTermName("ToExpression")
+    val fromExpression = types.sharedOn.companion | TermName("FromExpression")
+    val toExpression = types.localOn.companion | TermName("ToExpression")
 
-    val transmitMultiple = types.retier | retierTermName("transmitMultiple")
-    val transmitOptional = types.retier | retierTermName("transmitOptional")
-    val transmitSingle = types.retier | retierTermName("transmitSingle")
+    val transmitMultiple = types.remoteValue.companion | TermName("transmitMultiple")
+    val transmitOptional = types.remoteValue.companion | TermName("transmitOptional")
+    val transmitSingle = types.remoteValue.companion | TermName("transmitSingle")
 
     val transmit = Seq(transmitMultiple, transmitOptional, transmitSingle)
 
@@ -137,20 +139,20 @@ trait Generation {
 
     val connection = Seq(multipleConnection, optionalConnection, singleConnection)
 
-    val value = types.retier | retierTermName("value")
+    val retierLocalPlacedValue = types.retier | TermName("retierLocalPlacedValue")
 
-    val discardValue = types.retier | retierTermName("discardValue")
-    val issueValue = types.retier | retierTermName("issueValue")
-    val issueValueControlled = types.retier | retierTermName("issueValueControlled")
+    val discardValue = types.localOn.companion | TermName("discardValue")
+    val issueValue = types.localOn.companion | TermName("issueValue")
+    val issueValueControlled = types.localOn.companion | TermName("issueValueControlled")
 
-    val liftValueGlobally = types.retier | retierTermName("liftValueGlobally")
-    val liftValueLocally = types.retier | retierTermName("liftValueLocally")
-    val downcastValueGlobally = types.retier | retierTermName("downcastValueGlobally")
-    val downcastValueLocally = types.retier | retierTermName("downcastValueLocally")
+    val retierLiftLocalPlacedValueGlobally = types.retier | TermName("retierLiftLocalPlacedValueGlobally")
+    val retierLiftLocalPlacedValueLocally = types.retier | TermName("retierLiftLocalPlacedValueLocally")
+    val downcastValueGlobally = types.localOn.companion | TermName("downcastValueGlobally")
+    val downcastValueLocally = types.localOn.companion | TermName("downcastValueLocally")
 
     val globalCasts = Seq(discardValue, issueValue, issueValueControlled,
-      liftValueGlobally, downcastValueGlobally)
-    val localCasts = Seq(value, liftValueLocally, downcastValueLocally)
+      retierLiftLocalPlacedValueGlobally, downcastValueGlobally)
+    val localCasts = Seq(retierLocalPlacedValue, retierLiftLocalPlacedValueLocally, downcastValueLocally)
     val casts = globalCasts ++ localCasts
   }
 

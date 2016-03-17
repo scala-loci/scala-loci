@@ -6,7 +6,7 @@ import scala.language.implicitConversions
 protected[retier] trait RemoteConnectionConversions {
   @annotation.compileTimeOnly(
     "Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$multipleConnectionDefault
+  implicit def $$retier$intellij$multipleConnectionDefault
     [R <: Peer, L <: Peer]
     (v: RemoteConnectionExpression[R])
     (implicit
@@ -18,7 +18,7 @@ protected[retier] trait RemoteConnectionConversions {
 
   @annotation.compileTimeOnly(
     "Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$optionalConnectionDefault
+  implicit def $$retier$intellij$optionalConnectionDefault
     [R <: Peer, L <: Peer]
     (v: RemoteConnectionExpression[R])
     (implicit
@@ -30,7 +30,7 @@ protected[retier] trait RemoteConnectionConversions {
 
   @annotation.compileTimeOnly(
     "Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$singleConnectionDefault
+  implicit def $$retier$intellij$singleConnectionDefault
     [R <: Peer, L <: Peer]
     (v: RemoteConnectionExpression[R])
     (implicit

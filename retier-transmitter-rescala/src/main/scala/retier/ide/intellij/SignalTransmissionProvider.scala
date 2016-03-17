@@ -11,7 +11,7 @@ protected[retier] trait SignalTransmissionProvider {
     this: rescalaTransmitter.type =>
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitMultipleRescalaSignal
+  implicit def $$retier$intellij$transmitMultipleRescalaSignal
     [V, T, U, S, P, Sig[U] <: Signal[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -22,7 +22,7 @@ protected[retier] trait SignalTransmissionProvider {
     RescalaSignalMultipleTransmissionProvider[Sig, P, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitOptionalRescalaSignal
+  implicit def $$retier$intellij$transmitOptionalRescalaSignal
     [V, T, U, S, P, Sig[U] <: Signal[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -33,7 +33,7 @@ protected[retier] trait SignalTransmissionProvider {
     RescalaSignalOptionalTransmissionProvider[Sig, P, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitSingleRescalaSignalWithDefault
+  implicit def $$retier$intellij$transmitSingleRescalaSignalWithDefault
     [V, T, U, S, P, Sig[U] <: Signal[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -45,7 +45,7 @@ protected[retier] trait SignalTransmissionProvider {
     RescalaSignalSingleTransmissionProviderWithDefaultValue[Sig, P, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitSingleRescalaSignalWithoutDefault
+  implicit def $$retier$intellij$transmitSingleRescalaSignalWithoutDefault
     [V, T, U, S, P, Sig[U] <: Signal[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,

@@ -9,7 +9,7 @@ protected[retier] trait BasicTransmitter {
     this: basicTransmitter.type =>
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitMultipleBasic
+  implicit def $$retier$intellij$transmitMultipleBasic
     [V, T, S, U, L <: Peer, R <: Peer, Provider <: TransmissionProvider](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -20,7 +20,7 @@ protected[retier] trait BasicTransmitter {
     BasicMultipleTransmissionProvider[U, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitOptionalBasic
+  implicit def $$retier$intellij$transmitOptionalBasic
     [V, T, S, U, L <: Peer, R <: Peer, Provider <: TransmissionProvider](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -31,7 +31,7 @@ protected[retier] trait BasicTransmitter {
     BasicOptionalTransmissionProvider[U, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitSingleBasic
+  implicit def $$retier$intellij$transmitSingleBasic
     [V, T, S, U, L <: Peer, R <: Peer, Provider <: TransmissionProvider]
     (v: V)
     (implicit

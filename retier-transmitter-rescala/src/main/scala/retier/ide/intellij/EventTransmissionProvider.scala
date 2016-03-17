@@ -11,7 +11,7 @@ protected[retier] trait EventTransmissionProvider {
     this: rescalaTransmitter.type =>
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitMultipleRescalaEvent
+  implicit def $$retier$intellij$transmitMultipleRescalaEvent
     [V, T, U, S, P, Evt[U] <: Event[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -22,7 +22,7 @@ protected[retier] trait EventTransmissionProvider {
     RescalaEventMultipleTransmissionProvider[Evt, P, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitOptionalRescalaEvent
+  implicit def $$retier$intellij$transmitOptionalRescalaEvent
     [V, T, U, S, P, Evt[U] <: Event[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,
@@ -33,7 +33,7 @@ protected[retier] trait EventTransmissionProvider {
     RescalaEventOptionalTransmissionProvider[Evt, P, R, L] = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  implicit def $$retier$transmitSingleRescalaEvent
+  implicit def $$retier$intellij$transmitSingleRescalaEvent
     [V, T, U, S, P, Evt[U] <: Event[U], L <: Peer, R <: Peer](v: V)
     (implicit
         dummy: IntelliJDummy,

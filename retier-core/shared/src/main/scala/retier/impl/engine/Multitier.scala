@@ -72,58 +72,64 @@ object multitier {
       // class or trait definition
       case ClassDef(_, originalName, _, _) =>
         val surrogateName = typer surrogateName originalName
+        val renamedClass = renameAnnottee(annottee, surrogateName)
         val ClassDef(mods, tpname, tparams, Template(parents, self, body)) =
-          renameAnnottee(annottee, surrogateName)
+          renamedClass
         val constructors = extractConstructors(body)
 
-        class ClassWrapper(stats: List[c.Tree]) extends CodeWrapper[c.type] {
+        class ClassWrapper(val tree: Tree) extends CodeWrapper[c.type] {
           val context: c.type = c
-          val tree =
-            typer retypecheckAll
-              ClassDef(mods, tpname, tparams, Template(
-                parents, self, constructors ++ extractNonConstructors(stats)))
           val name = surrogateName
-          val  ClassDef(_, _, _, Template(bases, _, body)) = tree
+          val ClassDef(_, _, _, Template(bases, _, body)) = tree
 
-          def replaceBody(body: List[context.Tree]) = new ClassWrapper(body)
+          def replaceBody(body: List[context.Tree]) =
+            new ClassWrapper(
+              ClassDef(mods, tpname, tparams, Template(
+                parents, self, constructors ++ extractNonConstructors(body))))
+
+          def typechecked = new ClassWrapper(typer retypecheckAll tree)
+          def untypechecked = new ClassWrapper(typer untypecheckAll tree)
         }
 
-        val state = new ClassWrapper(body)
+        val state = new ClassWrapper(renamedClass).typechecked
 
         val name = NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")
 
         val result = processor process state
 
-        renameAnnottee(typer untypecheckAll result.tree, originalName)
+        renameAnnottee(result.untypechecked.tree, originalName)
 
       // module definition
       case ModuleDef(_, originalName, _) =>
         val surrogateName = typer surrogateName originalName.toTypeName
+        val renamedModule = renameAnnottee(annottee, surrogateName)
         val ModuleDef(mods, tname, Template(parents, self, body)) =
-          renameAnnottee(annottee, surrogateName)
+          renamedModule
         val constructors = extractConstructors(body)
 
-        class ModuleWrapper(stats: List[c.Tree]) extends CodeWrapper[c.type] {
+        class ModuleWrapper(val tree: Tree) extends CodeWrapper[c.type] {
           val context: c.type = c
-          val tree =
-            typer retypecheckAll
-              ModuleDef(mods, tname, Template(
-                parents, self, constructors ++ extractNonConstructors(stats)))
           val name = surrogateName
           val ModuleDef(_, _, Template(bases, _, body)) = tree
 
-          def replaceBody(body: List[context.Tree]) = new ModuleWrapper(body)
+          def replaceBody(body: List[context.Tree]) =
+            new ModuleWrapper(
+              ModuleDef(mods, tname, Template(
+                parents, self, constructors ++ extractNonConstructors(body))))
+
+          def typechecked = new ModuleWrapper(typer retypecheckAll tree)
+          def untypechecked = new ModuleWrapper(typer untypecheckAll tree)
         }
 
-        val state = new ModuleWrapper(body)
+        val state = new ModuleWrapper(renamedModule).typechecked
 
         val name = NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")
 
         val result = processor process state
 
-        renameAnnottee(typer untypecheckAll result.tree, originalName)
+        renameAnnottee(result.untypechecked.tree, originalName)
 
       case _ =>
         c.abort(
