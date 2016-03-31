@@ -43,6 +43,8 @@ class System(
       }
     }
 
+    remoteConnections.run
+
     this
   }
 
@@ -235,7 +237,7 @@ class System(
   private val channels =
     new ConcurrentHashMap[(String, RemoteRef), Channel]
   private val channelResponseHandlers =
-    new ConcurrentHashMap[Channel, String => Unit]
+    new ConcurrentHashMap[Channel, ConcurrentLinkedQueue[String => Unit]]
   private val pushedValues =
     new ConcurrentHashMap[(RemoteRef, AbstractionId), Future[_]]
   private val channelQueue =
@@ -329,8 +331,9 @@ class System(
       case (remote, ContentMessage(
           "Response", channelName, None, payload)) =>
         val channel = obtainChannel(channelName, remote)
-        Option(channelResponseHandlers remove channel) foreach { handle =>
-          context execute new Runnable {
+        Option(channelResponseHandlers get channel) foreach { handlers =>
+          val handle = handlers.poll
+          contexts.Immediate.global execute new Runnable {
             def run = handle(payload)
           }
         }
@@ -393,9 +396,14 @@ class System(
             val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
             val channel = abstraction.channel
 
-            channelResponseHandlers put (channel, { response =>
+            val handlers = Option(channelResponseHandlers get channel) getOrElse {
+              val handlers = new ConcurrentLinkedQueue[String => Unit]
+              Option(channelResponseHandlers putIfAbsent (channel, handlers)) getOrElse handlers
+            }
+
+            handlers add { response =>
               promise tryComplete (props unmarshalResponse (response, abstraction))
-            })
+            }
 
             channel.closed += { _ =>
               promise tryFailure channelClosedException
@@ -422,11 +430,4 @@ class System(
       }
     }
   }
-
-
-
-
-  // start up system
-
-  remoteConnections.run
 }
