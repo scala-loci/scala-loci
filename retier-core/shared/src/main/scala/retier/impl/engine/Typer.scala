@@ -83,16 +83,16 @@ class Typer[C <: Context](val c: C) {
   def untypecheck(
       tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
     if (removeSyntheticImplicitArgs)
-      c untypecheck
+      fixUntypecheck(c untypecheck
         (typeApplicationCleaner transform
           (syntheticImplicitParamListCleaner transform
             fixCaseClasses(
-              fixTypecheck(tree))))
+              fixTypecheck(tree)))))
     else
-      c untypecheck
+      fixUntypecheck(c untypecheck
         (typeApplicationCleaner transform
           fixCaseClasses(
-            fixTypecheck(tree)))
+            fixTypecheck(tree))))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -109,18 +109,18 @@ class Typer[C <: Context](val c: C) {
   def untypecheckAll(
       tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
     if (removeSyntheticImplicitArgs)
-      c resetAllAttrs
+      fixUntypecheck(c resetAllAttrs
         (selfReferenceFixer transform
           (typeApplicationCleaner transform
             (syntheticImplicitParamListCleaner transform
               fixCaseClasses(
-                fixTypecheck(tree)))))
+                fixTypecheck(tree))))))
     else
-      c resetAllAttrs
+      fixUntypecheck(c resetAllAttrs
         (selfReferenceFixer transform
           (typeApplicationCleaner transform
             fixCaseClasses(
-              fixTypecheck(tree))))
+              fixTypecheck(tree)))))
 
   /**
    * Cleans the flag set of the given modifiers.
@@ -871,5 +871,39 @@ class Typer[C <: Context](val c: C) {
     }
 
     typecheckFixer transform tree
+  }
+
+  private def fixUntypecheck(tree: Tree): Tree = {
+    object untypecheckFixer extends Transformer {
+      override def transform(tree: Tree) = tree match {
+        case Typed(expr, tpt) =>
+          tpt match {
+            case Function(List(), EmptyTree) =>
+              super.transform(tree)
+
+            case Annotated(annot, arg)
+                if expr != null && arg != null && expr.equalsStructure(arg) =>
+              super.transform(tpt)
+
+            case tpt: TypeTree
+                if (tpt.original match {
+                  case Annotated(_, _) => true
+                  case _ => false
+                }) =>
+              super.transform(tpt.original)
+
+            case tpt if !tpt.isType =>
+              super.transform(expr)
+
+            case tpt =>
+              super.transform(tree)
+          }
+
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    untypecheckFixer transform tree
   }
 }
