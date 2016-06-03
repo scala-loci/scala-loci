@@ -83,16 +83,18 @@ class Typer[C <: Context](val c: C) {
   def untypecheck(
       tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
     if (removeSyntheticImplicitArgs)
-      fixUntypecheck(c untypecheck
-        (typeApplicationCleaner transform
-          (syntheticImplicitParamListCleaner transform
-            fixCaseClasses(
-              fixTypecheck(tree)))))
+      fixUntypecheck(
+        c untypecheck
+          (typeApplicationCleaner transform
+            (syntheticImplicitParamListCleaner transform
+              fixCaseClasses(
+                fixTypecheck(tree)))))
     else
-      fixUntypecheck(c untypecheck
-        (typeApplicationCleaner transform
-          fixCaseClasses(
-            fixTypecheck(tree))))
+      fixUntypecheck(
+        c untypecheck
+          (typeApplicationCleaner transform
+            fixCaseClasses(
+              fixTypecheck(tree))))
 
   /**
    * Un-type-checks the given tree resetting all symbols using the
@@ -109,18 +111,20 @@ class Typer[C <: Context](val c: C) {
   def untypecheckAll(
       tree: Tree, removeSyntheticImplicitArgs: Boolean = false): Tree =
     if (removeSyntheticImplicitArgs)
-      fixUntypecheck(c resetAllAttrs
-        (selfReferenceFixer transform
-          (typeApplicationCleaner transform
-            (syntheticImplicitParamListCleaner transform
-              fixCaseClasses(
-                fixTypecheck(tree))))))
+      fixUntypecheck(
+        c resetAllAttrs
+          (selfReferenceFixer transform
+            (typeApplicationCleaner transform
+              (syntheticImplicitParamListCleaner transform
+                fixCaseClasses(
+                  fixTypecheck(tree))))))
     else
-      fixUntypecheck(c resetAllAttrs
-        (selfReferenceFixer transform
-          (typeApplicationCleaner transform
-            fixCaseClasses(
-              fixTypecheck(tree)))))
+      fixUntypecheck(
+        c resetAllAttrs
+          (selfReferenceFixer transform
+            (typeApplicationCleaner transform
+              fixCaseClasses(
+                fixTypecheck(tree)))))
 
   /**
    * Cleans the flag set of the given modifiers.
@@ -143,7 +147,7 @@ class Typer[C <: Context](val c: C) {
     val flags = possibleFlags.fold(NoFlags) { (flags, flag) =>
       if (mods hasFlag flag) flags | flag else flags
     }
-    
+
     Modifiers(flags, mods.privateWithin, mods.annotations)
   }
 
@@ -819,11 +823,6 @@ class Typer[C <: Context](val c: C) {
             if (mods hasFlag PRIVATE | LOCAL | LAZY) &&
               !(mods hasFlag PARAMACCESSOR) =>
           EmptyTree
-        case Ident(name) =>
-          if (tree.symbol.isTerm && tree.symbol.asTerm.isLazy)
-            internal setSymbol (tree, NoSymbol)
-          else
-            tree
         case defDef @ DefDef(mods, name, _, _, tpt, rhs)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
@@ -908,13 +907,17 @@ class Typer[C <: Context](val c: C) {
   private def fixUntypecheck(tree: Tree): Tree = {
     object untypecheckFixer extends Transformer {
       override def transform(tree: Tree) = tree match {
+        case Apply(fun, args) if fun.symbol != null && fun.symbol.isModule =>
+          internal setSymbol (fun, NoSymbol)
+          super.transform(tree)
+
         case Typed(expr, tpt) =>
           tpt match {
             case Function(List(), EmptyTree) =>
               super.transform(tree)
 
             case Annotated(annot, arg)
-                if expr != null && arg != null && expr.equalsStructure(arg) =>
+                if expr != null && arg != null && (expr equalsStructure arg) =>
               super.transform(tpt)
 
             case tpt: TypeTree
@@ -930,6 +933,12 @@ class Typer[C <: Context](val c: C) {
             case tpt =>
               super.transform(tree)
           }
+
+        case Ident(name) =>
+          if (tree.symbol.isTerm && tree.symbol.asTerm.isLazy)
+            internal setSymbol (tree, NoSymbol)
+          else
+            tree
 
         case _ =>
           super.transform(tree)
