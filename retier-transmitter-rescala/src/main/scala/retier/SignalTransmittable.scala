@@ -10,14 +10,14 @@ protected[retier] trait SignalTransmittable {
       transmittable: Transmittable[T, S, U],
       serializable: Serializable[S]) =
     new PushBasedTransmittable[Sig[T], T, S, U, Signal[U]] {
-      def send(value: Sig[T], remote: RemoteRef, sending: Sending[T]) = {
-        value.changed += sending.send
+      def send(value: Sig[T], remote: RemoteRef, enpoint: Endpoint[T, U]) = {
+        value.changed += enpoint.send
         value.get
       }
 
-      def receive(value: U, remote: RemoteRef, receiving: Receiving[U]) = {
+      def receive(value: U, remote: RemoteRef, enpoint: Endpoint[T, U]) = {
         val signal = Var(value)
-        receiving.receive += signal.update
+        enpoint.receive += signal.update
         signal
       }
     }

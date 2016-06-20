@@ -3,9 +3,10 @@ package transmission
 
 import util.Notification
 
-trait Receiving[T] {
+trait Endpoint[T, U] {
   val abstraction: AbstractionRef
   val closed: Notification[Unit] = abstraction.channel.closed
   def close(): Unit = abstraction.channel.close
-  val receive: Notification[T]
+  def send(value: T): Unit
+  val receive: Notification[U]
 }

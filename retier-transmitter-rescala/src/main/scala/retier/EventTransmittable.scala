@@ -10,14 +10,14 @@ protected[retier] trait EventTransmittable {
       transmittable: Transmittable[T, S, U],
       serializable: Serializable[S]) =
     new PushBasedTransmittable[Evt[T], T, S, U, Event[U]] {
-      def send(value: Evt[T], remote: RemoteRef, sending: Sending[T]) = {
-        value += sending.send
+      def send(value: Evt[T], remote: RemoteRef, enpoint: Endpoint[T, U]) = {
+        value += enpoint.send
         null.asInstanceOf[T]
       }
 
-      def receive(value: U, remote: RemoteRef, receiving: Receiving[U]) = {
+      def receive(value: U, remote: RemoteRef, enpoint: Endpoint[T, U]) = {
         val event = new ImperativeEvent[U]
-        receiving.receive += event.apply
+        enpoint.receive += event.apply
         event
       }
     }

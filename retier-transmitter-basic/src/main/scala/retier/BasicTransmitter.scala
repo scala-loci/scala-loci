@@ -1,6 +1,7 @@
 package retier
 
 import transmission._
+import contexts.Immediate.Implicits.global
 import scala.concurrent.Future
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -14,10 +15,10 @@ object basicTransmitter extends ide.intellij.BasicTransmitter {
     def asLocal: Map[Remote[R], Future[T]] =
       transmission.retrieveMappedRemoteValues
 
-    def asLocal_?(timeout: Duration): Map[Remote[R], T] =
-      transmission.retrieveMappedRemoteValues map { case (remote, future) =>
-        remote -> (Await result (future, timeout))
-      }
+    def asLocal_?(timeout: Duration): Map[Remote[R], T] = {
+      val (remotes, values) = transmission.retrieveMappedRemoteValues.unzip
+      (remotes zip (Await result (Future sequence values, timeout))).toMap
+    }
 
     def asLocal_! : Map[Remote[R], T] = asLocal_?(Duration.Inf)
   }
