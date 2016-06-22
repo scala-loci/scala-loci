@@ -19,6 +19,7 @@ import scala.concurrent.ExecutionContext
 import scala.collection.JavaConverters._
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 class System(
@@ -242,6 +243,7 @@ class System(
     new ConcurrentHashMap[(RemoteRef, AbstractionId), Future[_]]
   private val channelQueue =
     new ConcurrentLinkedQueue[(RemoteRef, Message)]
+  private val channelQueueProcessingCount = new AtomicInteger(0)
 
   def allChannels: List[Channel] = channels.values.asScala.toList
 
@@ -316,52 +318,59 @@ class System(
     (mainThread getAndSet None) foreach { _.interrupt }
   }
 
-  remoteConnections.receive += { message =>
-    message match {
-      case (remote, ContentMessage(
-          "Request", channelName, Some(abstraction), payload)) =>
-        val id = AbstractionId.create(abstraction)
-        val ref = AbstractionRef.create(id, channelName, remote, this)
+  remoteConnections.receive += {
+    case (remote, ContentMessage(
+        "Request", channelName, Some(abstraction), payload)) =>
+      val id = AbstractionId.create(abstraction)
+      val ref = AbstractionRef.create(id, channelName, remote, this)
+      context execute new Runnable {
+        def run = peerImpl.dispatch(payload, id, ref) foreach { payload =>
+          ref.channel send ("Response", payload)
+        }
+      }
+
+    case (remote, ContentMessage(
+        "Response", channelName, None, payload)) =>
+      val channel = obtainChannel(channelName, remote)
+      Option(channelResponseHandlers get channel) foreach { handlers =>
+        val handle = handlers.poll
+        contexts.Immediate.global execute new Runnable {
+          def run = handle(payload)
+        }
+      }
+
+    case message =>
+      channelQueue add message
+
+      if (!channelQueue.isEmpty && channelQueueProcessingCount.get < 1) {
+        channelQueueProcessingCount.getAndIncrement
+
         context execute new Runnable {
-          def run = peerImpl.dispatch(payload, id, ref) foreach { payload =>
-            ref.channel send ("Response", payload)
-          }
-        }
+          def run = channelQueue synchronized {
+            @tailrec def processQueue(): Unit =
+              channelQueue.poll match {
+                case (remote, ContentMessage(
+                    messageType, channelName, None, payload)) =>
+                  val channel = obtainChannel(channelName, remote)
+                  channel receive (messageType, payload)
+                  processQueue
 
-      case (remote, ContentMessage(
-          "Response", channelName, None, payload)) =>
-        val channel = obtainChannel(channelName, remote)
-        Option(channelResponseHandlers get channel) foreach { handlers =>
-          val handle = handlers.poll
-          contexts.Immediate.global execute new Runnable {
-            def run = handle(payload)
-          }
-        }
-
-      case message =>
-        val executing = !channelQueue.isEmpty
-        channelQueue add message
-
-        if (!executing && !channelQueue.isEmpty)
-          context execute new Runnable {
-            def run = channelQueue synchronized {
-              @tailrec def processQueue(): Unit =
-                channelQueue.poll match {
-                  case (remote, ContentMessage(
-                      messageType, channelName, None, payload)) =>
-                    val channel = obtainChannel(channelName, remote)
-                    channel receive (messageType, payload)
+                case message =>
+                  if (Option(message).nonEmpty)
                     processQueue
+              }
 
-                  case message =>
-                    if (Option(message).nonEmpty)
-                      processQueue
-                }
+            processQueue
+            channelQueueProcessingCount.getAndDecrement
 
+            while (!channelQueue.isEmpty) {
+              channelQueueProcessingCount.getAndIncrement
               processQueue
+              channelQueueProcessingCount.getAndDecrement
             }
           }
-    }
+        }
+      }
   }
 
 
