@@ -12,11 +12,12 @@ import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import akka.http.scaladsl.model.ws.Message
 import akka.http.scaladsl.model.ws.TextMessage
+import scala.util.Success
+import scala.util.Failure
 import scala.concurrent.duration._
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.collection.mutable.Queue
-import java.lang.StringBuilder
 import java.util.concurrent.atomic.AtomicBoolean
 
 private object WSConnectionHandler {
@@ -27,6 +28,37 @@ private object WSConnectionHandler {
     (implicit
       materializer: Materializer) = {
 
+    new WSAbstractConnectionHandler[Message] {
+      def createMessage(data: String) = TextMessage(data)
+
+      def processMessage(message: Message) = message match {
+        case TextMessage.Strict(data) =>
+          Future successful data
+
+        case message: TextMessage =>
+          message.textStream.runFold(new StringBuilder) {
+            case (builder, data) =>
+              builder append data
+          } map { _.toString }
+
+        case _ =>
+          Future failed new UnsupportedOperationException(
+            s"Unsupported type of message: $message")
+      }
+    } handleWebsocket (protocolInfo, connectionEstablished, connectionFailed)
+  }
+}
+
+private abstract class WSAbstractConnectionHandler[M] {
+  def createMessage(data: String): M
+
+  def processMessage(message: M): Future[String]
+
+  def handleWebsocket(
+      protocolInfo: Future[WS],
+      connectionEstablished: Connection => Unit,
+      connectionFailed: Throwable => Unit) = {
+
     // keep alive
 
     val delay = 20.seconds
@@ -35,7 +67,7 @@ private object WSConnectionHandler {
 
     // connection interface
 
-    val promises = Queue.empty[Promise[Option[(Unit, Message)]]]
+    val promises = Queue.empty[Promise[Option[(Unit, M)]]]
     val open = new AtomicBoolean(true)
     val doClosed = Notifier[Unit]
     val doReceive = Notifier[String]
@@ -44,7 +76,7 @@ private object WSConnectionHandler {
 
     def connectionSend(data: String) = promises synchronized {
       if (connectionOpen) {
-        val message = Some(((), TextMessage("#" + data)))
+        val message = Some(((), createMessage("#" + data)))
         if (!promises.isEmpty && !promises.head.isCompleted)
           promises.dequeue success message
         else
@@ -84,7 +116,7 @@ private object WSConnectionHandler {
       promises synchronized {
         if (connectionOpen) {
           if (promises.isEmpty) {
-            val promise = Promise[Option[(Unit, Message)]]
+            val promise = Promise[Option[(Unit, M)]]
             promises enqueue promise
             promise.future
           }
@@ -96,23 +128,15 @@ private object WSConnectionHandler {
       }
     }
 
-    val sink = Sink foreach[Message] {
-      case TextMessage.Strict(data) =>
-        if (data startsWith "#")
-          doReceive(data substring 1)
-
-      case message: TextMessage =>
-        message.textStream.runFold(new StringBuilder) {
-          case (builder, data) =>
-            builder append data
-        } foreach { builder =>
-          val data = builder.toString
+    val sink = Sink foreach[M] {
+      processMessage(_) onComplete {
+        case Success(data) =>
           if (data startsWith "#")
             doReceive(data substring 1)
-        }
 
-      case _ =>
-        connectionClose
+        case Failure(_) =>
+          connectionClose
+      }
     }
 
 
@@ -132,9 +156,9 @@ private object WSConnectionHandler {
       }
     }
 
-    def keepAliveMessage() = TextMessage("!")
+    def keepAliveMessage() = createMessage("!")
 
-    (Flow[Message]
+    (Flow[M]
       idleTimeout timeout
       transform closeConnectionOnFailure
       via flow

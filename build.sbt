@@ -23,6 +23,9 @@ val upickle = libraryDependencies +=
 val akkaHttp = libraryDependencies +=
   "com.typesafe.akka" %% "akka-http-experimental" % "2.0.2"
 
+val play = libraryDependencies +=
+  "com.typesafe.play" %% "play" % "2.5.4"
+
 val scalajsDom = libraryDependencies +=
   "org.scala-js" %%%! "scalajs-dom" % "0.9.0"
 
@@ -43,14 +46,16 @@ lazy val retierJVM = preventPublication(project
   aggregate (retierCoreJVM, retierArchitecturesBasicJVM,
              retierSerializableUpickleJVM,
              retierTransmitterBasicJVM, retierTransmitterRescalaJVM,
-             retierNetworkTcpJVM, retierNetworkWsJVM, retierNetworkWebRtcJVM))
+             retierNetworkTcpJVM, retierNetworkWsJVM, retierNetworkWsPlayJVM,
+             retierNetworkWebRtcJVM))
 
 lazy val retierJS = preventPublication(project
   in file(".js")
   aggregate (retierCoreJS, retierArchitecturesBasicJS,
              retierSerializableUpickleJS,
              retierTransmitterBasicJS, retierTransmitterRescalaJS,
-             retierNetworkTcpJS, retierNetworkWsJS, retierNetworkWebRtcJS))
+             retierNetworkTcpJS, retierNetworkWsJS, retierNetworkWsPlayJS,
+             retierNetworkWebRtcJS))
 
 
 lazy val retierCore = (crossProject
@@ -126,6 +131,17 @@ lazy val retierNetworkWs = (crossProject
 
 lazy val retierNetworkWsJVM = retierNetworkWs.jvm
 lazy val retierNetworkWsJS = retierNetworkWs.js
+
+
+lazy val retierNetworkWsPlay = (crossProject
+  crossType CrossType.Dummy
+  in file("retier-network-ws-akka-play")
+  settings (normalizedName := "retier-network-ws-akka-play",
+            play)
+  dependsOn retierNetworkWs)
+
+lazy val retierNetworkWsPlayJVM = retierNetworkWsPlay.jvm
+lazy val retierNetworkWsPlayJS = retierNetworkWsPlay.js
 
 
 lazy val retierNetworkWebRtc = (crossProject
