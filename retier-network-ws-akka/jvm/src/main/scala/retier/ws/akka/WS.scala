@@ -11,26 +11,27 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.HttpExt
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.model.Uri
-import akka.http.scaladsl.model.ws.WebsocketRequest
+import akka.http.scaladsl.model.ws.WebSocketRequest
 import akka.stream.Materializer
 
 abstract case class WS private[WS] (
     url: String, host: Option[String], port: Option[Int])(
     val establisher: ConnectionEstablisher,
-    val isEncrypted: Boolean, val isProtected: Boolean, val isAuthenticated: Boolean)
+    val isEncrypted: Boolean, val isProtected: Boolean,
+    val isAuthenticated: Boolean, val identification: Option[Any])
   extends ProtocolInfo {
 
   private def readResolve(): Object =
     WS.createProtocolInfo(
-      url, host, port, establisher, isEncrypted, isProtected, isAuthenticated)
+      url, host, port, establisher,
+      isEncrypted, isProtected, isAuthenticated, identification)
   def copy(
       url: String = url,
       host: Option[String] = host,
       port: Option[Int] = port): WS =
     WS.createProtocolInfo(
-      url, host, port, establisher, isEncrypted, isProtected, isAuthenticated)
-
-  val identification = None
+      url, host, port, establisher,
+      isEncrypted, isProtected, isAuthenticated, identification)
 }
 
 object WS extends ConnectionFactory {
@@ -63,27 +64,30 @@ object WS extends ConnectionFactory {
   def apply(port: Int, interface: String, secured: Boolean): ConnectionListener =
     WSConnectionListener(port, interface, secured)
 
-  def apply(http: HttpExt, websocketRequest: WebsocketRequest)(
+  def apply(http: HttpExt, webSocketRequest: WebSocketRequest)(
       implicit materializer: Materializer): ConnectionRequestor =
-    WSConnectionRequestor(http, websocketRequest)
+    WSConnectionRequestor(http, webSocketRequest)
   def apply(http: HttpExt, url: Uri)(
       implicit materializer: Materializer): ConnectionRequestor =
-    WSConnectionRequestor(http, WebsocketRequest(url))
+    WSConnectionRequestor(http, WebSocketRequest(url))
   def apply(http: HttpExt, url: String)(
       implicit materializer: Materializer): ConnectionRequestor =
-    WSConnectionRequestor(http, WebsocketRequest(url))
-  def apply(websocketRequest: WebsocketRequest): ConnectionRequestor =
-    WSConnectionRequestor(websocketRequest)
+    WSConnectionRequestor(http, WebSocketRequest(url))
+  def apply(webSocketRequest: WebSocketRequest): ConnectionRequestor =
+    WSConnectionRequestor(webSocketRequest)
   def apply(url: Uri): ConnectionRequestor =
-    WSConnectionRequestor(WebsocketRequest(url))
+    WSConnectionRequestor(WebSocketRequest(url))
   def apply(url: String): ConnectionRequestor =
-    WSConnectionRequestor(WebsocketRequest(url))
+    WSConnectionRequestor(WebSocketRequest(url))
 
   def createProtocolInfo(
       url: String, host: Option[String], port: Option[Int],
       establisher: ConnectionEstablisher,
-      isEncrypted: Boolean, isProtected: Boolean, isAuthenticated: Boolean) =
-    new WS(url, host, port)(establisher, isEncrypted, isProtected, isAuthenticated) { }
+      isEncrypted: Boolean, isProtected: Boolean,
+      isAuthenticated: Boolean, identification: Option[Any]) =
+    new WS(
+      url, host, port)(
+      establisher, isEncrypted, isProtected, isAuthenticated, identification) { }
 
   def listener(config: String, attrs: Attributes) =
     WSConnectionFactory listener (config, attrs)

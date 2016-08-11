@@ -7,7 +7,7 @@ import play.api.http.websocket.TextMessage
 import scala.concurrent.Future
 
 private object WSPlayConnectionHandler {
-  def handleWebsocket(
+  def handleWebSocket(
       protocolInfo: Future[WS],
       connectionEstablished: Connection => Unit,
       connectionFailed: Throwable => Unit) = {
@@ -23,6 +23,6 @@ private object WSPlayConnectionHandler {
           Future failed new UnsupportedOperationException(
             s"Unsupported type of message: $message")
       }
-    } handleWebsocket (protocolInfo, connectionEstablished, connectionFailed)
+    } handleWebSocket (protocolInfo, connectionEstablished, connectionFailed)
   }
 }

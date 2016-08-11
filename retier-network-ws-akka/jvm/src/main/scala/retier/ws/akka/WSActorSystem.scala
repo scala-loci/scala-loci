@@ -13,7 +13,12 @@ private object WSActorSystem {
   def retrieve(): (ActorSystem, ActorMaterializer) = synchronized {
     if (count == 0) {
       val config = ConfigFactory parseString
-        "akka.http.server { remote-address-header = on }"
+        """
+        akka.http {
+          server { remote-address-header = on }
+          parsing { tls-session-info-header = on }
+        }
+        """
 
       actorSystem = ActorSystem("websocket-system", config)
       actorMaterializer = ActorMaterializer()
@@ -26,7 +31,7 @@ private object WSActorSystem {
     count -= 1
     if (count == 0) {
       actorMaterializer.shutdown
-      actorSystem.shutdown
+      actorSystem.terminate
       actorMaterializer = null
       actorSystem = null
     }

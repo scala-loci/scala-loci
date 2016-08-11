@@ -11,26 +11,27 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.HttpExt
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.model.Uri
-import akka.http.scaladsl.model.ws.WebsocketRequest
+import akka.http.scaladsl.model.ws.WebSocketRequest
 import akka.stream.Materializer
 
 abstract case class WS private[WS] (
     url: String, host: Option[String], port: Option[Int])(
     val establisher: ConnectionEstablisher,
-    val isEncrypted: Boolean, val isProtected: Boolean, val isAuthenticated: Boolean)
+    val isEncrypted: Boolean, val isProtected: Boolean,
+    val isAuthenticated: Boolean, val identification: Option[Any])
   extends ProtocolInfo {
 
   private def readResolve(): Object =
     WS.createProtocolInfo(
-      url, host, port, establisher, isEncrypted, isProtected, isAuthenticated)
+      url, host, port, establisher,
+      isEncrypted, isProtected, isAuthenticated, identification)
   def copy(
       url: String = url,
       host: Option[String] = host,
       port: Option[Int] = port): WS =
     WS.createProtocolInfo(
-      url, host, port, establisher, isEncrypted, isProtected, isAuthenticated)
-
-  val identification = None
+      url, host, port, establisher,
+      isEncrypted, isProtected, isAuthenticated, identification)
 }
 
 object WS extends ConnectionFactory {
@@ -69,7 +70,7 @@ object WS extends ConnectionFactory {
   def apply(port: Int, interface: String, secured: Boolean): ConnectionListener =
     jvmOnly
 
-  def apply(http: HttpExt, websocketRequest: WebsocketRequest)(
+  def apply(http: HttpExt, webSocketRequest: WebSocketRequest)(
       implicit materializer: Materializer): ConnectionRequestor =
     jvmOnly
   def apply(http: HttpExt, url: Uri)(
@@ -78,7 +79,7 @@ object WS extends ConnectionFactory {
   def apply(http: HttpExt, url: String)(
       implicit materializer: Materializer): ConnectionRequestor =
     jvmOnly
-  def apply(websocketRequest: WebsocketRequest): ConnectionRequestor =
+  def apply(webSocketRequest: WebSocketRequest): ConnectionRequestor =
     jvmOnly
   def apply(url: Uri): ConnectionRequestor =
     jvmOnly
@@ -88,8 +89,11 @@ object WS extends ConnectionFactory {
   def createProtocolInfo(
       url: String, host: Option[String], port: Option[Int],
       establisher: ConnectionEstablisher,
-      isEncrypted: Boolean, isProtected: Boolean, isAuthenticated: Boolean) =
-    new WS(url, host, port)(establisher, isEncrypted, isProtected, isAuthenticated) { }
+      isEncrypted: Boolean, isProtected: Boolean,
+      isAuthenticated: Boolean, identification: Option[Any]) =
+    new WS(
+      url, host, port)(
+      establisher, isEncrypted, isProtected, isAuthenticated, identification) { }
 
   def listener(config: String, attrs: Attributes) =
     None

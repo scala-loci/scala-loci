@@ -5,8 +5,6 @@ import network.Connection
 import util.Notifier
 import contexts.Immediate.Implicits.global
 import akka.stream.Materializer
-import akka.stream.stage.PushStage
-import akka.stream.stage.Context
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
@@ -21,7 +19,7 @@ import scala.collection.mutable.Queue
 import java.util.concurrent.atomic.AtomicBoolean
 
 private object WSConnectionHandler {
-  def handleWebsocket(
+  def handleWebSocket(
       protocolInfo: Future[WS],
       connectionEstablished: Connection => Unit,
       connectionFailed: Throwable => Unit)
@@ -45,7 +43,7 @@ private object WSConnectionHandler {
           Future failed new UnsupportedOperationException(
             s"Unsupported type of message: $message")
       }
-    } handleWebsocket (protocolInfo, connectionEstablished, connectionFailed)
+    } handleWebSocket (protocolInfo, connectionEstablished, connectionFailed)
   }
 }
 
@@ -54,7 +52,7 @@ private abstract class WSAbstractConnectionHandler[M] {
 
   def processMessage(message: M): Future[String]
 
-  def handleWebsocket(
+  def handleWebSocket(
       protocolInfo: Future[WS],
       connectionEstablished: Connection => Unit,
       connectionFailed: Throwable => Unit) = {
@@ -146,21 +144,10 @@ private abstract class WSAbstractConnectionHandler[M] {
       future onComplete { _ => connectionClose }
     }
 
-    def closeConnectionOnFailure[T]() = new PushStage[T, T] {
-      def onPush(elem: T, ctx: Context[T]) = ctx push elem
-
-      override def onUpstreamFailure(cause: Throwable, ctx: Context[T]) = {
-        connectionClose
-        connectionFailed(cause)
-        super.onUpstreamFailure(cause, ctx)
-      }
-    }
-
     def keepAliveMessage() = createMessage("!")
 
     (Flow[M]
       idleTimeout timeout
-      transform closeConnectionOnFailure
       via flow
       keepAlive (delay, keepAliveMessage))
   }

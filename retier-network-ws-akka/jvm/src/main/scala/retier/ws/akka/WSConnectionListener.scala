@@ -15,29 +15,33 @@ import akka.http.scaladsl.model.headers._
 import scala.concurrent.Future
 
 private object WSConnectionListener {
-  private def websocketRoute(
+  private def webSocketRoute(
       establisher: ConnectionListener,
       authenticated: Boolean,
       secured: Boolean)(
       connectionEstablished: Connection => Unit): Route =
-    extractUpgradeToWebsocket { websocket =>
+    extractUpgradeToWebSocket { webSocket =>
       extractRequest { request =>
         extractMaterializer { implicit materializer =>
           val ip = request.header[`Remote-Address`] flatMap { _.address.toIP }
           val host = ip map { _.ip.getHostName }
           val port = ip flatMap { _.port }
-          val tls = request.uri.scheme == "https"
 
-          if (secured && !tls)
+          val SecurityProperties(
+              isAuthenticated, isProtected, isEncrypted, certificates) =
+            SecurityProperties(Right(request), authenticated)
+
+          if (secured && (!isProtected || !isEncrypted))
             reject
           else
             complete (
-              websocket handleMessages (
-                WSConnectionHandler handleWebsocket (
+              webSocket handleMessages (
+                WSConnectionHandler handleWebSocket (
                   Future successful
                     WS.createProtocolInfo(
                       request.uri.toString, host, port,
-                      establisher, tls, tls, authenticated),
+                      establisher, isEncrypted, isProtected, isAuthenticated,
+                      Some((request, certificates))),
                   connectionEstablished, Function const { })))
         }
       }
@@ -59,7 +63,7 @@ private object WSConnectionListener {
   class IntegratedRoute(secured: Boolean)
       extends WebSocketRoute with ConnectionListener {
     def route(authenticated: Boolean) =
-      websocketRoute(this, authenticated, secured) {
+      webSocketRoute(this, authenticated, secured) {
         doConnectionEstablished(_)
       }
 
@@ -80,7 +84,7 @@ private object WSConnectionListener {
         materializer: Materializer) =
       if (running == null) {
         running = http bindAndHandle (
-          websocketRoute(
+          webSocketRoute(
             this, authenticated = false, secured)(
             connectionEstablished),
           interface, port)

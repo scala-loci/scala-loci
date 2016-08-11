@@ -1,10 +1,10 @@
-scalaVersion in ThisBuild := "2.11.7"
+scalaVersion in ThisBuild := "2.11.8"
 
 version in ThisBuild := "0.0.1-SNAPSHOT"
 
 organization in ThisBuild := "de.tuda.stg"
 
-scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked")
+scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint")
 
 
 val macroparadise = addCompilerPlugin(
@@ -18,16 +18,16 @@ val rescala = libraryDependencies +=
   "de.tuda.stg" %%% "rescala" % "0.0.0"
 
 val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "0.3.6"
+  "com.lihaoyi" %%% "upickle" % "0.4.1"
 
 val akkaHttp = libraryDependencies +=
-  "com.typesafe.akka" %% "akka-http-experimental" % "2.0.2"
+  "com.typesafe.akka" %% "akka-http-experimental" % "2.4.8"
 
 val play = libraryDependencies +=
   "com.typesafe.play" %% "play" % "2.5.4"
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" %%%! "scalajs-dom" % "0.9.0"
+  "org.scala-js" %%%! "scalajs-dom" % "0.9.1"
 
 
 def preventPublication(project: Project) = project settings (

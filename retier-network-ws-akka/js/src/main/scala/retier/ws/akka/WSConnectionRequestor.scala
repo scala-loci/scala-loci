@@ -46,7 +46,7 @@ private class WSConnectionRequestor(url: String) extends ConnectionRequestor {
       val connection = new Connection {
         val protocol = WS.createProtocolInfo(url, host, port,
           WSConnectionRequestor.this,
-          isEncrypted = tls, isProtected = tls, isAuthenticated = tls)
+          isEncrypted = tls, isProtected = tls, isAuthenticated = tls, None)
         val closed = doClosed.notification
         val receive = doReceive.notification
 

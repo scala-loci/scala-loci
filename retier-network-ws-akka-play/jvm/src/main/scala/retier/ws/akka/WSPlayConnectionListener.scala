@@ -15,13 +15,19 @@ private object WSPlayConnectionListener {
       val host = uri.getHost
       val port = uri.getPort
 
-      WSPlayConnectionHandler handleWebsocket (
+      val certificates = request.clientCertificateChain.toSeq.flatten
+      val isAuthenticated = authenticated || (request.secure && certificates.nonEmpty)
+      val isProtected = request.secure
+      val isEncrypted = request.secure
+
+      WSPlayConnectionHandler handleWebSocket (
         Future successful
           WS.createProtocolInfo(
             request.uri,
             Option(host),
             if (port < 0) None else Some(port),
-            this, request.secure, request.secure, authenticated),
+            this, isEncrypted, isProtected, isAuthenticated,
+            Some((request, request.clientCertificateChain))),
         { doConnectionEstablished(_) }, Function const { })
     }
 
