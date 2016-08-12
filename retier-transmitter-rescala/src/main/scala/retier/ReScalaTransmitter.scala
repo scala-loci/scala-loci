@@ -8,4 +8,8 @@ object rescalaTransmitter extends
   EventTransmittable with
   ide.intellij.ReactiveRemoteConnectionInterface with
   ide.intellij.SignalTransmissionProvider with
-  ide.intellij.EventTransmissionProvider
+  ide.intellij.EventTransmissionProvider {
+
+  class RemoteReactiveFailure(msg: String)
+    extends IllegalStateException(msg)
+}

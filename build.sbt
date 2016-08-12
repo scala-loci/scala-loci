@@ -14,8 +14,11 @@ val macrodeclaration = libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-reflect" % scalaVersion.value,
   "org.scalamacros" %% "resetallattrs" % "1.0.0")
 
+val rescalaRepo =
+  resolvers += Resolver.bintrayRepo("rmgk", "maven")
+
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.0.0"
+  "de.tuda.stg" %%% "rescala" % "0.18.0"
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "0.4.1"
@@ -106,7 +109,7 @@ lazy val retierTransmitterRescala = (crossProject
   crossType CrossType.Pure
   in file("retier-transmitter-rescala")
   settings (normalizedName := "retier-transmitter-rescala",
-            SourceGenerator.signalDefaultTuples, rescala)
+            rescalaRepo, rescala)
   dependsOn retierCore)
 
 lazy val retierTransmitterRescalaJVM = retierTransmitterRescala.jvm

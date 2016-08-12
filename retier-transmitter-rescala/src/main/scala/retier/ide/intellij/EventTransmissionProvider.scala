@@ -3,8 +3,8 @@ package ide.intellij
 
 import typeconstraints._
 import transmission._
-import rescala.Event
-import rescala.graph.Spores
+import rescala.graph.Struct
+import rescala.reactives.Event
 import scala.language.implicitConversions
 import scala.language.higherKinds
 
@@ -13,7 +13,7 @@ protected[retier] trait EventTransmissionProvider {
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   implicit def $$retier$intellij$transmitMultipleRescalaEvent
-    [V, T, U, S, P, Evt[U, ES <: Spores] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Spores](v: V)
+    [V, T, U, S, P, Evt[U, ES <: Struct] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
         ev0: TransmissionProperties[V, T, R, L, MultipleConnection],
@@ -24,7 +24,7 @@ protected[retier] trait EventTransmissionProvider {
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   implicit def $$retier$intellij$transmitOptionalRescalaEvent
-    [V, T, U, S, P, Evt[U, ES <: Spores] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Spores](v: V)
+    [V, T, U, S, P, Evt[U, ES <: Struct] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
         ev0: TransmissionProperties[V, T, R, L, OptionalConnection],
@@ -35,7 +35,7 @@ protected[retier] trait EventTransmissionProvider {
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   implicit def $$retier$intellij$transmitSingleRescalaEvent
-    [V, T, U, S, P, Evt[U, ES <: Spores] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Spores](v: V)
+    [V, T, U, S, P, Evt[U, ES <: Struct] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
         ev0: TransmissionProperties[V, T, R, L, SingleConnection],

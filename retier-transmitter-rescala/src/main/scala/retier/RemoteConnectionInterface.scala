@@ -1,9 +1,9 @@
 package retier
 
 import network.ConnectionRequestor
-import rescala.turns.Engine
-import rescala.turns.Turn
-import rescala.graph.Spores
+import rescala.graph.Struct
+import rescala.engines.Engine
+import rescala.propagation.Turn
 
 protected[retier] trait ReactiveRemoteConnectionInterface {
   private final val joinedId = 0
@@ -11,7 +11,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
   private final val connectedId = 2
 
 
-  protected class RescalaRemoteConnectionInterface[P <: Peer, S <: Spores]
+  protected class RescalaRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: RemoteConnection[P, _])
       (implicit val engine: Engine[S, Turn[S]]) {
     import engine._
@@ -35,7 +35,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
   }
 
 
-  implicit class RescalaMultipleRemoteConnectionInterface[P <: Peer, S <: Spores]
+  implicit class RescalaMultipleRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: MultipleRemoteConnection[P])
       (implicit override val engine: Engine[S, Turn[S]])
     extends RescalaRemoteConnectionInterface[P, S](connection)
@@ -53,13 +53,13 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
   }
 
   implicit def RescalaMultipleRemoteConnectionInterfaceView
-    [P <: Peer, S <: Spores]
+    [P <: Peer, S <: Struct]
     (implicit engine: Engine[S, Turn[S]]) =
     { connection: MultipleRemoteConnection[P] =>
         new RescalaMultipleRemoteConnectionInterface(connection) }
 
 
-  implicit class RescalaOptionalRemoteConnectionInterface[P <: Peer, S <: Spores]
+  implicit class RescalaOptionalRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: OptionalRemoteConnection[P])
       (implicit override val engine: Engine[S, Turn[S]])
     extends RescalaRemoteConnectionInterface[P, S](connection)
@@ -77,13 +77,13 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
   }
 
   implicit def RescalaOptionalRemoteConnectionInterfaceView
-    [P <: Peer, S <: Spores]
+    [P <: Peer, S <: Struct]
     (implicit engine: Engine[S, Turn[S]]) =
     { connection: OptionalRemoteConnection[P] =>
         new RescalaOptionalRemoteConnectionInterface(connection) }
 
 
-  implicit class RescalaSingleRemoteConnectionInterface[P <: Peer, S <: Spores]
+  implicit class RescalaSingleRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: SingleRemoteConnection[P])
       (implicit override val engine: Engine[S, Turn[S]])
     extends RescalaRemoteConnectionInterface[P, S](connection)
@@ -93,7 +93,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
   }
 
   implicit def RescalaSingleRemoteConnectionInterfaceView
-    [P <: Peer, S <: Spores]
+    [P <: Peer, S <: Struct]
     (implicit engine: Engine[S, Turn[S]]) =
     { connection: SingleRemoteConnection[P] =>
         new RescalaSingleRemoteConnectionInterface(connection) }

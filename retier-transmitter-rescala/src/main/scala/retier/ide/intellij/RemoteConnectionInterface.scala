@@ -1,9 +1,9 @@
 package retier
 package ide.intellij
 
-import rescala.turns.Engine
-import rescala.turns.Turn
-import rescala.graph.Spores
+import rescala.graph.Struct
+import rescala.engines.Engine
+import rescala.propagation.Turn
 import scala.language.implicitConversions
 
 protected[retier] trait ReactiveRemoteConnectionInterface {
@@ -11,7 +11,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   implicit def $$retier$intellij$multipleConnectionRescala
-    [R <: Peer, L <: Peer, S <: Spores]
+    [R <: Peer, L <: Peer, S <: Struct]
     (v: RemoteConnectionExpression[R])
     (implicit
         dummy: IntelliJDummy,
@@ -22,7 +22,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   implicit def $$retier$intellij$optionalConnectionRescala
-    [R <: Peer, L <: Peer, S <: Spores]
+    [R <: Peer, L <: Peer, S <: Struct]
     (v: RemoteConnectionExpression[R])
     (implicit
         dummy: IntelliJDummy,
@@ -33,7 +33,7 @@ protected[retier] trait ReactiveRemoteConnectionInterface {
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   implicit def $$retier$intellij$singleConnectionRescala
-    [R <: Peer, L <: Peer, S <: Spores]
+    [R <: Peer, L <: Peer, S <: Struct]
     (v: RemoteConnectionExpression[R])
     (implicit
         dummy: IntelliJDummy,

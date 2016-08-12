@@ -2,11 +2,13 @@ package retier
 
 import transmission._
 import contexts.Immediate.Implicits.global
-import rescala.turns.Engine
-import rescala.turns.Turn
-import rescala.graph.Spores
-import rescala.{ Event => EngineEvent }
+import rescala.graph.Struct
+import rescala.engines.Engine
+import rescala.propagation.Turn
+import rescala.reactives.Signals
+import rescala.reactives.{ Event => EngineEvent }
 import scala.util.Success
+import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.language.higherKinds
 
@@ -15,115 +17,98 @@ protected[retier] trait EventTransmissionProvider {
   private final val asLocalSeqId = 1
 
   implicit class RescalaEventMultipleTransmissionProvider
-      [Evt[T, ES <: Spores] <: EngineEvent[T, ES], T,
-       R <: Peer, L <: Peer, ES <: Spores]
+      [Evt[T, ES <: Struct] <: EngineEvent[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Struct]
       (transmission: MultipleTransmission[Evt[T, ES], R, L])
       (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
     import engine._
 
-    def asLocal: Signal[Map[Remote[R], Event[T]]] =
+    private lazy val emptyEvent = Evt[Nothing]
+
+    lazy val asLocal: Signal[Map[Remote[R], Event[T]]] =
       transmission.memo(asLocalId) {
-        val mapping = Var(Map.empty[Remote[R], Event[T]])
+        val mapping = plan() { _ => Var(Map.empty[Remote[R], Event[T]]) }
 
-        def update() = {
-          mapping() = transmission.retrieveMappedRemoteValues mapValues {
-            _.value
-          } collect {
-            case (remote, Some(Success(event))) => (remote, event)
-            case (remote, _) => (remote, Evt())
+        def insert(remote: Remote[R], futureEvent: Future[Event[T]]) =
+          mapping transform {
+            _ + (remote -> Signals.fromFuture(futureEvent).flatten)
           }
-        }
 
-        transmission.retrieveRemoteValues foreach {
-          _.onComplete { _ => update }
-        }
+        def remove(remote: Remote[R]) =
+          mapping transform { _ - remote }
 
         transmission.remoteJoined += { remote =>
           transmission.retrieveMappedRemoteValues get remote foreach {
-            _.onComplete { _ => update }
+            insert(remote, _)
           }
-          update
         }
 
-        transmission.remoteLeft += { _ => update }
+        transmission.remoteLeft += remove
+
+        transmission.retrieveMappedRemoteValues foreach { (insert _).tupled(_) }
 
         mapping
       }
 
-    def asLocalSeq: Event[(Remote[R], T)] = transmission.memo(asLocalSeqId) {
-      (Signal {
+    lazy val asLocalSeq: Event[(Remote[R], T)] = transmission.memo(asLocalSeqId) {
+      Signal {
         asLocal() map { case (remote, event) =>
           event map { (remote, _) }
         } reduceOption {
           _ || _
-        } getOrElse Evt()
-      }).unwrap
+        } getOrElse emptyEvent
+      }.flatten
     }
   }
 
   implicit class RescalaEventOptionalTransmissionProvider
-      [Evt[T, ES <: Spores] <: EngineEvent[T, ES], T,
-       R <: Peer, L <: Peer, ES <: Spores]
+      [Evt[T, ES <: Struct] <: EngineEvent[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Struct]
       (transmission: OptionalTransmission[Evt[T, ES], R, L])
       (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
     import engine._
 
-    def multiple =
+    private lazy val emptyEvent = Evt[Nothing]
+
+    lazy val multiple =
       RescalaEventMultipleTransmissionProvider(transmission.multiple)
 
-    def asLocal: Signal[Option[Event[T]]] = transmission.memo(asLocalId) {
-      val option = Var(Option.empty[Event[T]])
+    lazy val asLocal: Signal[Option[Event[T]]] = transmission.memo(asLocalId) {
+      val option = plan() { _ => Var(Option.empty[Event[T]]) }
 
-      def update() = {
-        option() = transmission.retrieveRemoteValue map {
-          _.value match {
-            case Some(Success(event)) => event
-            case _ => Evt()
-          }
-        }
-      }
+      def update() = option set
+        (transmission.retrieveRemoteValue map { Signals.fromFuture(_).flatten })
 
-      transmission.retrieveRemoteValue foreach {
-        _.onComplete { _ => update }
-      }
-
-      transmission.remoteJoined += { _ =>
-        transmission.retrieveRemoteValue foreach {
-          _.onComplete { _ => update }
-        }
-        update
-      }
-
+      transmission.remoteJoined += { _ => update }
       transmission.remoteLeft += { _ => update }
+      update
 
       option
     }
 
-    def asLocalSeq: Event[T] = transmission.memo(asLocalSeqId) {
-      (Signal { asLocal() getOrElse Evt() }).unwrap
+    lazy val asLocalSeq: Event[T] = transmission.memo(asLocalSeqId) {
+      Signal { asLocal() getOrElse emptyEvent }.flatten
     }
   }
 
   implicit class RescalaEventSingleTransmissionProvider
-      [Evt[T, ES <: Spores] <: EngineEvent[T, ES], T,
-       R <: Peer, L <: Peer, ES <: Spores]
+      [Evt[T, ES <: Struct] <: EngineEvent[T, ES], T,
+       R <: Peer, L <: Peer, ES <: Struct]
       (transmission: SingleTransmission[Evt[T, ES], R, L])
       (implicit val engine: Engine[ES, Turn[ES]])
     extends TransmissionProvider {
     import engine._
 
-    def optional =
+    lazy val optional =
       RescalaEventOptionalTransmissionProvider(transmission.optional)
 
-    def multiple =
+    lazy val multiple =
       RescalaEventMultipleTransmissionProvider(transmission.multiple)
 
-    def asLocal: Event[T] = transmission.memo(asLocalId) {
-      val event = Evt[T]
-      transmission.retrieveRemoteValue foreach { _ += event.apply }
-      event
+    lazy val asLocal: Event[T] = transmission.memo(asLocalId) {
+      Signals.fromFuture(transmission.retrieveRemoteValue).flatten
     }
   }
 }
