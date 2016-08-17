@@ -54,20 +54,22 @@ class Typer[C <: Context](val c: C) {
    * type-checked again.
    */
   def typecheck(
-      tree: Tree, identifySyntheticImplicitArgs: Boolean = false): Tree = {
+      tree: Tree, identifySyntheticImplicitArgs: Boolean = false): Tree =
     try
       if (identifySyntheticImplicitArgs)
         fixTypecheck(
-          (syntheticTreeMarker transform
-            (c typecheck
-              (nonSyntheticTreeMarker transform tree))))
+          (definedSymbolMarker transform
+            (syntheticTreeMarker transform
+              (c typecheck
+                (nonSyntheticTreeMarker transform tree)))))
       else
-        fixTypecheck(c typecheck tree)
+        fixTypecheck(
+          (definedSymbolMarker transform
+            (c typecheck tree)))
     catch {
       case TypecheckException(pos, msg) =>
         c.abort(pos.asInstanceOf[Position], msg)
     }
-  }
 
   /**
    * Un-type-checks the given tree.
@@ -392,7 +394,7 @@ class Typer[C <: Context](val c: C) {
             })
 
           val isNonSyntheticParamList =
-            (internal attachments tree).get[NonSyntheticTree.type].nonEmpty
+            (internal attachments tree).contains[NonSyntheticTree.type]
 
           internal removeAttachment[NonSyntheticTree.type] tree
 
@@ -415,10 +417,28 @@ class Typer[C <: Context](val c: C) {
   private object syntheticImplicitParamListCleaner extends Transformer {
     override def transform(tree: Tree) = tree match {
       case Apply(fun, _) =>
-        if ((internal attachments tree).get[SyntheticTree.type].nonEmpty)
+        if ((internal attachments tree).contains[SyntheticTree.type])
           transform(fun)
         else
           super.transform(tree)
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+
+  private case object DefinedTypeSymbol
+
+  private object definedSymbolMarker extends Transformer {
+    override def transform(tree: Tree) = tree match {
+      case TypeDef(_, _, _, _) =>
+        internal updateAttachment (tree.symbol, DefinedTypeSymbol)
+        super.transform(tree)
+
+      case ClassDef(_, _, _, _) =>
+        internal updateAttachment (tree.symbol, DefinedTypeSymbol)
+        super.transform(tree)
 
       case _ =>
         super.transform(tree)
@@ -438,11 +458,19 @@ class Typer[C <: Context](val c: C) {
         tree
     }
 
+    def isTypeUnderExpansion(tpe: Type) =
+      tpe exists {
+        case ThisType(sym) =>
+          sym.name.toString startsWith "$anon"
+        case tpe =>
+          (internal attachments tpe.typeSymbol).contains[DefinedTypeSymbol.type]
+      }
+
     override def transform(tree: Tree) = tree match {
       case tree: TypeTree =>
         if (tree.original != null)
           transform(prependRootPackage(tree.original))
-        else if (tree.tpe != null)
+        else if (tree.tpe != null && isTypeUnderExpansion(tree.tpe))
           createTypeTree(tree.tpe)
         else
           tree
@@ -663,8 +691,7 @@ class Typer[C <: Context](val c: C) {
         ((symbols contains symbol) || symbolsContains(symbol.owner))
 
       override def transform(tree: Tree) = tree match {
-        case _
-            if (internal attachments tree).get[CaseClassMarker.type].nonEmpty =>
+        case _ if (internal attachments tree).contains[CaseClassMarker.type] =>
           internal removeAttachment[CaseClassMarker.type] tree
           tree
         case tree: TypeTree if symbolsContains(tree.symbol) =>
@@ -912,21 +939,18 @@ class Typer[C <: Context](val c: C) {
               mods.annotations exists { _ equalsStructure annotation }
             }
           val annotations = mods.annotations ++ defAnnotations
-          if (defDef.symbol.asTerm.privateWithin != NoSymbol ||
-              defAnnotations.nonEmpty ||
-              mods.flags != flags ||
-              tree.symbol.name == TermName("$init$")) {
-            val newDefDef = DefDef(
-              Modifiers(flags, privateWithin, annotations), name,
-              transformTypeDefs(tparams),
-              transformValDefss(vparamss),
-              transform(tpt),
-              transform(rhs))
-            internal setType (newDefDef, defDef.tpe)
-            internal setPos (newDefDef, defDef.pos)
-          }
+          val newDefDef = DefDef(
+            Modifiers(flags, privateWithin, annotations), name,
+            transformTypeDefs(tparams),
+            transformValDefss(vparamss),
+            transform(tpt),
+            transform(rhs))
+          internal setType (newDefDef, defDef.tpe)
+          internal setPos (newDefDef, defDef.pos)
+          if (tree.symbol.name != TermName("$init$"))
+            internal setSymbol (newDefDef, defDef.symbol)
           else
-            super.transform(tree)
+            newDefDef
 
         case _ =>
           super.transform(tree)
@@ -976,6 +1000,13 @@ class Typer[C <: Context](val c: C) {
             internal setSymbol (tree, NoSymbol)
           else
             tree
+
+        case DefDef(mods, name, _, _, _, _) =>
+          if ((mods hasFlag (SYNTHETIC | DEFAULTPARAM)) &&
+              (name.toString contains "$default$"))
+            EmptyTree
+          else
+            super.transform(tree)
 
         case _ =>
           super.transform(tree)
