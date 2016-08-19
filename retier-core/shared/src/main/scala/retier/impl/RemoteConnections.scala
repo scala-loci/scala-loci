@@ -308,16 +308,20 @@ class RemoteConnections(peerType: PeerType,
     result
   }
 
-  def constraintViolationsConnecting(peerType: PeerType): Option[PeerType] =
-    if (!checkConstraints(peerType, 1 + (connections count { _ == peerType })))
+  def constraintViolationsConnecting(peerType: PeerType): Option[PeerType] = {
+    val peerTypeCounts =
+      connections(includePotentials = true) count { _ == peerType }
+
+    if (!checkConstraints(peerType, 1 + peerTypeCounts))
       Some(peerType)
     else
       None
+  }
 
   def constraintViolations: Set[PeerType] = {
     val peerTypeCounts =
       (multiplicities map { case (peerType, _) => (peerType, 0) }) ++
-      (connections groupBy identity map {
+      (connections(includePotentials = false) groupBy identity map {
         case (peerType, list) => (peerType, list.size)
       })
 
@@ -326,11 +330,16 @@ class RemoteConnections(peerType: PeerType,
     }).toSet
   }
 
-  private def connections: Seq[PeerType] =
-    (state.remotes.asScala map { _.peerType }).toSeq ++
-    (state sync { state.potentials.toSeq }) flatMap { peerType =>
+  private def connections(includePotentials: Boolean): Seq[PeerType] = {
+    val remotePeerTypes = (state.remotes.asScala map { _.peerType }).toSeq
+    val potentialPeerTypes =
+      if (includePotentials) state sync { state.potentials.toSeq }
+      else Seq.empty
+
+    (remotePeerTypes ++ potentialPeerTypes) flatMap { peerType =>
       bases(peerType) + peerType
     }
+  }
 
   private def checkConstraints(peerType: PeerType, count: Int): Boolean =
     (bases(peerType) + peerType).toSeq collect (Function unlift { peerType =>
