@@ -71,7 +71,7 @@ class RemoteConnections(peerType: PeerType,
 
   private val doConstraintsViolated = Notifier[RemoteConnectionException]
 
-  private val doTerminated = Notifier[Unit]
+  private val doTerminated = Notifier[List[RemoteRef]]
 
   private val doReceive = Notifier[(RemoteRef, Message)]
 
@@ -85,7 +85,7 @@ class RemoteConnections(peerType: PeerType,
   def constraintsViolated: Notification[RemoteConnectionException] =
     doConstraintsViolated.notification
 
-  def terminated: Notification[Unit] = doTerminated.notification
+  def terminated: Notification[List[RemoteRef]] = doTerminated.notification
 
   def remotes: List[RemoteRef] = state.remotes.asScala.toList
 
@@ -362,6 +362,8 @@ class RemoteConnections(peerType: PeerType,
   def terminate(): Unit =
     state sync {
       if (!state.isTerminated) {
+        val lastRemotes = remotes
+
         state.terminate
 
         state.remotes.clear
@@ -373,7 +375,7 @@ class RemoteConnections(peerType: PeerType,
         state.listeners foreach { _.stop }
         state.listeners.clear
 
-        doTerminated()
+        doTerminated(lastRemotes)
       }
     }
 

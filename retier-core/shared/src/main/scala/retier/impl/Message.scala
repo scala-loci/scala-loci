@@ -4,7 +4,6 @@ package impl
 import util.Attributes
 import util.Value
 import scala.collection.mutable.ListBuffer
-import scala.collection.mutable.StringBuilder
 import scala.util.Try
 
 case class Message(
@@ -39,7 +38,17 @@ object RequestMessage {
     }
 }
 
-object ContentMessage {
+object StartedMessage {
+  def apply(): Message =
+    Message(Message.Content, Attributes("Type" -> "Started"), "")
+  def unapply(msg: Message): Boolean =
+    (msg.method, msg.properties("Type")) match {
+      case (Message.Content, Value("Started")) => true
+      case _ => false
+    }
+}
+
+object ChannelMessage {
   def apply(messageType: String, channel: String, abstraction: Option[String],
       payload: String): Message = {
     val attrs = Seq("Type" -> messageType, "Channel" -> channel)
