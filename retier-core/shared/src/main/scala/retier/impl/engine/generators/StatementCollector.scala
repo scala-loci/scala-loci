@@ -30,28 +30,46 @@ trait StatementCollector { this: Generation =>
     }
 
     def isPlacedType(tpe: Type) =
-      tpe != null && tpe <:< types.localOn && (types.bottom forall { tpe <:!< _ })
+      tpe <:< types.localOn && (types.bottom forall { tpe <:!< _ })
 
     def isPeerDefinition(symbol: Symbol) =
-      symbol != null && symbol.isClass && symbol.asClass.toType <:< types.peer
+      symbol.isClass && symbol.asClass.toType <:< types.peer
+
+    def isPlacedExpression(tree: Tree) = {
+      val expr =
+        if (symbols.globalCasts contains tree.symbol) {
+          val q"$_(...$exprss)" = tree
+          exprss.head.head
+        }
+        else
+          tree
+
+      symbols.placed contains expr.symbol
+    }
+
+    def isTypeGiven(tree: Tree) = tree match {
+      case tree: TypeTree => tree.original != null
+      case _ => true
+    }
 
     val stats = aggregator.all[InputStatement] collect {
       case InputStatement(stat: ValOrDefDef, index)
-          if isPlacedType(stat.tpt.tpe) =>
+          if stat.tpe != null && isPlacedType(stat.tpt.tpe) &&
+             (isPlacedExpression(stat.rhs) || isTypeGiven(stat.tpt)) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpt.tpe)
         val declTypeTree = stat.tpt.typeArgTrees.head
         PlacedStatement(stat, peerType.typeSymbol.asType, exprType,
           Some(declTypeTree), None, stat.rhs, index)
 
-      case InputStatement(stat, index)
-          if isPlacedType(stat.tpe) =>
+      case InputStatement(stat, index) if isPlacedExpression(stat) =>
         val (peerType, exprType) = extractAndValidateType(stat, stat.tpe)
         PlacedStatement(stat, peerType.typeSymbol.asType, exprType,
           None, None, stat, index)
 
       case InputStatement(stat, index)
-          if !isPeerDefinition(stat.symbol) &&
-             !isPeerDefinition(stat.symbol.companion) =>
+          if stat.symbol == null ||
+             (!isPeerDefinition(stat.symbol) &&
+              !isPeerDefinition(stat.symbol.companion)) =>
         NonPlacedStatement(stat, index)
     }
 

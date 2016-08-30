@@ -34,6 +34,35 @@ trait OutputGenerator { this: Generation =>
     }
   }
 
+  object placedTypeProcessor extends Transformer {
+    override def transform(tree: Tree) = tree match {
+      case tree: TypeTree if tree.original == null && tree.tpe != null =>
+        val tpe = tree.tpe map { tpe =>
+          if (types.bottom forall { tpe <:!< _ }) {
+            if (tpe <:< types.localOn)
+              tpe.underlying.typeArgs.head
+            else if (tpe <:< typeOf[_ <-> _])
+              tpe.typeArgs.last
+            else if (tpe <:< typeOf[_ <=> _]) {
+              val TypeRef(pre, sym, _) = typeOf[Unit => Unit]
+              internal typeRef (pre, sym, tpe.typeArgs)
+            }
+            else if (types.selection exists { tpe <:< _ })
+              definitions.UnitTpe
+            else
+              tpe
+          }
+          else
+            tpe
+        }
+
+        internal setType (tree, tpe)
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
   val generateOutput = AugmentedAggregation[
     NonPlacedStatement with PlacedStatement with PeerDefinition,
     OutputStatement] {
@@ -41,8 +70,12 @@ trait OutputGenerator { this: Generation =>
 
     echo(verbose = true, " Generating output")
 
-    val compileTimeOnlyAnnotation =
-      q"""new $compileTimeOnly("Only usable in `multitier` environment")"""
+    val compileTimeOnlyAnnotation = {
+      val message = "Access to abstraction " +
+        "only allowed on peers on which the abstraction is placed. " +
+        "Remote access must be explicit."
+      q"new $compileTimeOnly($message)"
+    }
 
     def annotate(mods: Modifiers) =
       Modifiers(
@@ -58,7 +91,7 @@ trait OutputGenerator { this: Generation =>
           importStat
 
         case stat @ NonPlacedStatement(tree, _) if !stat.isPeerBound =>
-          tree
+          placedTypeProcessor transform tree
 
         case NonPlacedStatement(definition @
             ValDef(mods, name, tpt, rhs), _) =>
@@ -83,8 +116,9 @@ trait OutputGenerator { this: Generation =>
           DefDef(
             annotate(mods), name, tparams, vparamss, tpt.typeTree, nullValue(tpt))
       }) ++
-      (aggregator.all[PeerDefinition] flatMap { stat =>
-        stat.tree +: stat.companion.toList
+      (aggregator.all[PeerDefinition] flatMap { definition =>
+        definition.tree +: definition.companion.toList map
+          placedTypeProcessor.transform
       }) map
       implicitPeerTypeTagProcessor.transform
 

@@ -192,7 +192,7 @@ trait RemoteExpressionProcessor { this: Generation =>
         val declArgs = capturedArgs map { case (_, _, valDef, _) => valDef }
         val valueArgs = capturedArgs map { case (_, _, _, value) => value }
 
-        val capturedDefs = (capturedArgs map { case (symbol, ref, _, _) =>
+        val capturedRefs = (capturedArgs map { case (symbol, ref, _, _) =>
           symbol -> ref
         }).toMap
 
@@ -219,10 +219,8 @@ trait RemoteExpressionProcessor { this: Generation =>
 
             case tree: RefTree
                 if tree.symbol != NoSymbol && !tree.isRetierSynthetic =>
-              if (capturedDefs contains tree.symbol)
-                internal setPos (
-                  internal setType (q"${capturedDefs(tree.symbol)}", tree.tpe),
-                  tree.pos)
+              if (capturedRefs contains tree.symbol)
+                internal setPos (capturedRefs(tree.symbol).duplicate, tree.pos)
               else if (localDefs contains tree.symbol)
                 super.transform(tree)
               else if ((defs contains tree.symbol) ||

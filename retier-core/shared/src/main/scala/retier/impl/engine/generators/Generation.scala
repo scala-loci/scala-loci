@@ -251,6 +251,7 @@ trait Generation {
           if !stat.tree.isRetierSynthetic && stat.tree.symbol == NoSymbol =>
         true
       case _ =>
+        stat.tree.symbol != null &&
         stat.tree.symbol != NoSymbol &&
         !stat.tree.symbol.isType &&
         !stat.tree.symbol.asTerm.isParamAccessor &&
