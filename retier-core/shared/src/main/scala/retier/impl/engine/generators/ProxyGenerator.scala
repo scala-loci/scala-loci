@@ -47,7 +47,7 @@ trait ProxyGenerator { this: Generation =>
 
     def argumentTypesAsTupleTypeTree(argTypes: List[List[Type]]) = {
       val types = argTypes map { types =>
-        tq"(..${types map typer.createTypeTree })"
+        tq"(..${types map typer.createTypeTree})"
       }
       tq"(..$types)"
     }
@@ -140,15 +140,16 @@ trait ProxyGenerator { this: Generation =>
           val arguments = applyTupleAsArguments(q"args", argTypes)
           val declInvocation =
             if (isControlledIssued)
-              q"""$declTerm(...$arguments)(remote)"""
+              q"""$TryCreate { $declTerm(...$arguments)(remote) }"""
             else
-              q"""$declTerm(...$arguments)"""
+              q"""$TryCreate { $declTerm(...$arguments) }"""
 
           val response =
             if (isMutable) {
               q"""if (request.isEmpty)
-                    $Success(
-                      $localResponseTerm marshal ($declInvocation, ref))
+                    $declInvocation map { response =>
+                      $localResponseTerm marshal (response, ref)
+                    }
                   else
                     $remoteRequestTerm unmarshal (request, ref) map { arg =>
                       $declTerm = arg; ""
@@ -158,18 +159,21 @@ trait ProxyGenerator { this: Generation =>
             else {
               val marshalled =
                 if (hasReturnValue)
-                  q"""$localResponseTerm marshal ($declInvocation, ref)"""
+                  q"""$declInvocation map { response =>
+                        $localResponseTerm marshal (response, ref)
+                      }
+                   """
                 else
-                  q"""$declInvocation; """""
+                  q"""$declInvocation map { response => "" }"""
 
               if (isNullary)
-                q"""$Success($marshalled)"""
+                q"""$marshalled"""
               else
-                q"""$remoteRequestTerm unmarshal (request, ref) map { args =>
+                q"""$remoteRequestTerm unmarshal (request, ref) flatMap { args =>
                       $marshalled
                     }
                  """
-          }
+            }
 
           if (isControlledIssued) {
             val remoteTypeTree = decl.tpt.typeArgTrees.head.typeArgTrees.head
