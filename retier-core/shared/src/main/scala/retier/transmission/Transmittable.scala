@@ -28,21 +28,12 @@ abstract class PullBasedTransmittable[T, S, R] extends Transmittable[T, S, R] {
 
 
 @implicitNotFound("${T} is not identically transmittable")
-trait IdenticallyTransmittable[T] {
-  def apply(): PullBasedTransmittable[T, T, T]
-}
+sealed trait IdenticallyTransmittable[T]
+
 
 object IdenticallyTransmittable {
   def apply[T] = singletonPullBasedIdenticallyTransmittable.asInstanceOf[
     PullBasedIdenticallyTransmittable[T]]
-
-  implicit def transmittable[T, V]
-    (implicit
-        transmittable: AnyTransmittable[T, V],
-        identicallyTransmittable: V <:< PullBasedIdenticallyTransmittable[T]) =
-    new IdenticallyTransmittable[T] {
-      def apply() = identicallyTransmittable(transmittable())
-    }
 
   sealed class PullBasedIdenticallyTransmittable[T]
       extends PullBasedTransmittable[T, T, T] {
@@ -53,15 +44,22 @@ object IdenticallyTransmittable {
   private[this] final val singletonPullBasedIdenticallyTransmittable =
     new PullBasedIdenticallyTransmittable[Any]
 
-  sealed trait AnyTransmittable[T, V] {
-    def apply(): V
-  }
 
-  implicit def anyTransmittable[T, S, R]
-    (implicit transmittable: Transmittable[T, S, R]) =
-    new AnyTransmittable[T, transmittable.type] {
-      def apply() = transmittable
-    }
+  implicit def transmittable[T, V]
+      (implicit
+        transmittable: AnyTransmittable[T, V],
+        identicallyTransmittable: V <:< PullBasedIdenticallyTransmittable[T]) =
+    singletonIdenticallyTransmittable.asInstanceOf[IdenticallyTransmittable[T]]
+
+  private[this] final val singletonIdenticallyTransmittable =
+    new IdenticallyTransmittable[Any] { }
+
+
+  protected sealed trait AnyTransmittable[T, V]
+
+  protected implicit def anyTransmittable[T, S, R]
+      (implicit transmittable: Transmittable[T, S, R]) =
+    null.asInstanceOf[AnyTransmittable[T, transmittable.type]]
 }
 
 
