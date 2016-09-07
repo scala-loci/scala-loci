@@ -191,6 +191,7 @@ trait PeerImplementationGenerator { this: Generation =>
 
             val nonPlacedStats = aggregator.all[NonPlacedStatement] filter {
               case NonPlacedStatement(stat, index) =>
+                stat.symbol != null &&
                 stat.symbol != NoSymbol &&
                 !stat.symbol.isType &&
                 stat.symbol.name != termNames.CONSTRUCTOR &&

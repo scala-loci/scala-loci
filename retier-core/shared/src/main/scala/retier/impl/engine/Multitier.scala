@@ -7,12 +7,14 @@ import scala.reflect.macros.blackbox.Context
 
 object multitier {
   def annotation(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
-    import c.universe._
-
     val echo = Echo(c)
     val typer = Typer(c)
     val processor = CodeProcessor(c)
+    val placedImplicitBridgeCreator = PlacedImplicitBridgeCreator(c)
     val annottee :: companion = annottees map { _.tree }
+
+    import c.universe._
+    import placedImplicitBridgeCreator._
 
     // the current macro expansion always appears twice
     // see: http://stackoverflow.com/a/20466423
@@ -21,6 +23,8 @@ object multitier {
       c.macroApplication.toString == check.macroApplication.toString
     }
     val isRecursiveExpansion = recursionCount > 2
+
+    val treeCopier = newLazyTreeCopier
 
     def extractConstructors(tree: List[c.Tree]): List[c.Tree] =
       tree filter {
@@ -52,10 +56,10 @@ object multitier {
           val ClassDef(mods, tpname, tparams, Template(bases, self, body)) = tree
           val name = tpname
 
-          def replaceBody(body: List[context.Tree]) =
+          def transformBody(f: List[context.Tree] => List[context.Tree]) =
             new ClassWrapper(
-              ClassDef(mods, tpname, tparams, Template(
-                bases, self, constructors ++ extractNonConstructors(body))))
+              treeCopier.ClassDef(tree, mods, tpname, tparams, Template(
+                bases, self, constructors ++ extractNonConstructors(f(body)))))
 
           def typechecked = new ClassWrapper(typer retypecheckAll tree)
           def untypechecked = new ClassWrapper(typer untypecheckAll tree)
@@ -72,10 +76,10 @@ object multitier {
           val ModuleDef(mods, tname, Template(bases, self, body)) = tree
           val name = tname.toTypeName
 
-          def replaceBody(body: List[context.Tree]) =
+          def transformBody(f: List[context.Tree] => List[context.Tree]) =
             new ModuleWrapper(
-              ModuleDef(mods, tname, Template(
-                bases, self, constructors ++ extractNonConstructors(body))))
+              treeCopier.ModuleDef(tree, mods, tname, Template(
+                bases, self, constructors ++ extractNonConstructors(f(body)))))
 
           def typechecked = new ModuleWrapper(typer retypecheckAll tree)
           def untypechecked = new ModuleWrapper(typer untypecheckAll tree)
@@ -94,7 +98,18 @@ object multitier {
         annotteeState
 
       case Right(annotteeState) =>
-        val state = annotteeState.typechecked
+        val noImplicitBridge = typeOf[Feature#NoImplicitConversionBridge]
+        val implicitBridge = (c inferImplicitValue noImplicitBridge).isEmpty
+
+        val state =
+          if (implicitBridge)
+            annotteeState
+            .transformBody { createPlacedImplicitBridges ++ _ }
+            .typechecked
+            .transformBody { removePlacedImplicitBridges _ }
+          else
+            annotteeState
+            .typechecked
 
         val name = NameTransformer decode state.tree.symbol.fullName
         echo(verbose = false, s"Expanding `multitier` environment for $name...")

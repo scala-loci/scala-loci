@@ -58,7 +58,7 @@ protected object IssuingTypes {
 }
 
 @implicitNotFound("Value not accessible remotely")
-protected final abstract class ValueTypes[T, R <: Remote[Peer], U, V]
+final abstract class ValueTypes[T, R <: Remote[Peer], U, V]
 
 protected trait ValueTypesFallback {
   implicit def placedRemoteValue[T, U]
