@@ -14,43 +14,13 @@ object multitier {
     val processor = CodeProcessor(c)
     val annottee :: companion = annottees map { _.tree }
 
-    /*
-     * The language requires class definitions inside the annottee `A`.
-     * References to a nested class `C` in `A` are of type `A.this.C`.
-     * Since `A.this.C` refers to the currently expanding annottee `A`,
-     * we end up with an "illegal cyclic reference".
-     * To work around this issue, we temporarily rename the annottee
-     * while processing.
-     */
-    def renameAnnottee(tree: Tree, name: Name): Tree = {
-      val typeName = name.toTypeName
-      val termName = name.toTermName
-
-      class SelfReferenceChanger(originalName: Name) extends Transformer {
-        val originalTypeName = originalName.toTypeName
-        val originalTermName = originalName.toTermName
-
-        override def transform(tree: Tree) = tree match {
-          case tree: TypeTree if tree.original != null =>
-            internal setOriginal (tree, transform(tree.original))
-          case ClassDef(_, `originalTypeName`, _, _) => tree
-          case ModuleDef(_, `originalTermName`, _) => tree
-          case This(`originalTypeName`) => This(typeName)
-          case _ => super.transform(tree)
-        }
-      }
-
-      tree match {
-        case ClassDef(mods, name, tparams, impl) =>
-          new SelfReferenceChanger(name) transform
-            ClassDef(mods, typeName, tparams, impl)
-        case ModuleDef(mods, name, impl) =>
-          new SelfReferenceChanger(name) transform
-            ModuleDef(mods, termName, impl)
-        case _ =>
-          c.abort(tree.pos, "class, trait or module definition expected")
-      }
+    // the current macro expansion always appears twice
+    // see: http://stackoverflow.com/a/20466423
+    val recursionCount = c.openMacros.count { check =>
+      c.enclosingPosition.toString == check.enclosingPosition.toString &&
+      c.macroApplication.toString == check.macroApplication.toString
     }
+    val isRecursiveExpansion = recursionCount > 2
 
     def extractConstructors(tree: List[c.Tree]): List[c.Tree] =
       tree filter {
@@ -68,73 +38,68 @@ object multitier {
      * Process classes, traits and modules by extracting the statements in the
      * body and wrapping the code into a `CodeWrapper` object.
      */
-    val result = annottee match {
+    val annotteeState = annottee match {
+      case ClassDef(_, _, _, _) | ModuleDef(_, _, _)
+          if c.hasErrors || isRecursiveExpansion =>
+        Left(annottee)
+
       // class or trait definition
-      case ClassDef(_, originalName, _, _) =>
-        val surrogateName = typer surrogateName originalName
-        val renamedClass = renameAnnottee(annottee, surrogateName)
-        val ClassDef(mods, tpname, tparams, Template(parents, self, body)) =
-          renamedClass
+      case ClassDef(_, _, _, Template(_, _, body)) =>
         val constructors = extractConstructors(body)
 
         class ClassWrapper(val tree: Tree) extends CodeWrapper[c.type] {
           val context: c.type = c
-          val name = surrogateName
-          val ClassDef(_, _, _, Template(bases, _, body)) = tree
+          val ClassDef(mods, tpname, tparams, Template(bases, self, body)) = tree
+          val name = tpname
 
           def replaceBody(body: List[context.Tree]) =
             new ClassWrapper(
               ClassDef(mods, tpname, tparams, Template(
-                parents, self, constructors ++ extractNonConstructors(body))))
+                bases, self, constructors ++ extractNonConstructors(body))))
 
           def typechecked = new ClassWrapper(typer retypecheckAll tree)
           def untypechecked = new ClassWrapper(typer untypecheckAll tree)
         }
 
-        val state = new ClassWrapper(renamedClass).typechecked
-
-        val name = NameTransformer decode state.tree.symbol.fullName
-        echo(verbose = false, s"Expanding `multitier` environment for $name...")
-
-        val result = processor process state
-
-        renameAnnottee(result.untypechecked.tree, originalName)
+        Right(new ClassWrapper(annottee))
 
       // module definition
-      case ModuleDef(_, originalName, _) =>
-        val surrogateName = typer surrogateName originalName.toTypeName
-        val renamedModule = renameAnnottee(annottee, surrogateName)
-        val ModuleDef(mods, tname, Template(parents, self, body)) =
-          renamedModule
+      case ModuleDef(_, _, Template(_, _, body)) =>
         val constructors = extractConstructors(body)
 
         class ModuleWrapper(val tree: Tree) extends CodeWrapper[c.type] {
           val context: c.type = c
-          val name = surrogateName
-          val ModuleDef(_, _, Template(bases, _, body)) = tree
+          val ModuleDef(mods, tname, Template(bases, self, body)) = tree
+          val name = tname.toTypeName
 
           def replaceBody(body: List[context.Tree]) =
             new ModuleWrapper(
               ModuleDef(mods, tname, Template(
-                parents, self, constructors ++ extractNonConstructors(body))))
+                bases, self, constructors ++ extractNonConstructors(body))))
 
           def typechecked = new ModuleWrapper(typer retypecheckAll tree)
           def untypechecked = new ModuleWrapper(typer untypecheckAll tree)
         }
 
-        val state = new ModuleWrapper(renamedModule).typechecked
-
-        val name = NameTransformer decode state.tree.symbol.fullName
-        echo(verbose = false, s"Expanding `multitier` environment for $name...")
-
-        val result = processor process state
-
-        renameAnnottee(result.untypechecked.tree, originalName)
+        Right(new ModuleWrapper(annottee))
 
       case _ =>
         c.abort(
           c.enclosingPosition,
           "`multitier` macro only applicable to class, trait or object")
+    }
+
+    val result = annotteeState match {
+      case Left(annotteeState) =>
+        annotteeState
+
+      case Right(annotteeState) =>
+        val state = annotteeState.typechecked
+
+        val name = NameTransformer decode state.tree.symbol.fullName
+        echo(verbose = false, s"Expanding `multitier` environment for $name...")
+
+        (processor process state).untypechecked.tree
     }
 
     if (companion.isEmpty)
@@ -156,35 +121,36 @@ object multitier {
 
     val result = peer.tree match {
       case q"new { ..$earlydefns } with ..$parents { $self => ..$stats }" =>
-        val peerParents = parents collect {
-          case parent if parent.tpe <:< types.peer => parent
+        val parentParents = parents flatMap { _.tpe.baseClasses.tail }
+        val peerParents = parents filter { parent =>
+          parent.tpe <:< types.peer &&
+          !(parentParents contains parent.tpe.typeSymbol)
         }
 
-        val peerParentParents = peerParents flatMap { _.tpe.baseClasses.tail }
+        peerParents match {
+          case Seq() =>
+            peerConstructionExpressionExpected
 
-        val peerParentNames = peerParents collect {
-          case parent if !(peerParentParents contains parent.tpe.typeSymbol) =>
-            parent.symbol.name
+          case Seq(peerParent) =>
+            createRuntimeTree(processor)(peerParent.tpe, peerParent, peer.tree)
+
+          case _ =>
+            val peerParentNames = peerParents map { _.symbol.name }
+
+            val minus = NameTransformer encode "-"
+            val tpname = TypeName(peerParentNames :+ "Instance" mkString minus)
+            val tname = TermName(peerParentNames :+ "Setup" mkString minus)
+
+            q"""
+            @${trees.multitierAnnotation} ${Flag.SYNTHETIC} object $tname {
+              class $tpname extends { ..$earlydefns } with ..$parents {
+                $self => ..$stats
+              }
+            }
+            ${trees.multitier}.run[$tname.$tpname]
+            """
         }
-
-        if (peerParentNames.isEmpty)
-          peerConstructionExpressionExpected
-
-        val minus = NameTransformer encode "-"
-        val tpname = TypeName(peerParentNames :+ "Instance" mkString minus)
-        val tname = TermName(peerParentNames :+ "Setup" mkString minus)
-
-        val synthetic = Flag.SYNTHETIC
-
-        q"""
-        @${trees.multitierAnnotation} $synthetic object $tname {
-          class $tpname extends { ..$earlydefns } with ..$parents {
-            $self => ..$stats
-          }
-        }
-        ${trees.multitier}.run[$tname.$tpname]
-        """
-
+          
       case _ =>
         peerConstructionExpressionExpected
     }
@@ -202,6 +168,17 @@ object multitier {
     val peerTree = markRetierSynthetic(
       typer createTypeTree peerType, processor.c.enclosingPosition)
 
+    processor.c.Expr[Runtime](
+      createRuntimeTree(processor)(peerType, peerTree, q"new $peerTree"))
+  }
+
+  private def createRuntimeTree[C <: Context](processor: CodeProcessor[C])(
+      peerType: processor.c.Type,
+      peerTree: processor.c.Tree,
+      peerConstructionTree: processor.c.Tree): processor.c.Tree = {
+    import processor.c.universe._
+    import processor._
+
     val implementation = peerImplementationTree(peerTree, peerType, List.empty)
     val typeTag = peerTypeTagTree(peerTree, peerType, List.empty)
     val peer = retierTermName("peer")
@@ -209,9 +186,9 @@ object multitier {
     import trees._
     import names._
 
-    val result = markRetierSynthetic(
+    markRetierSynthetic(
       q"""{
-        val $peer = new $peerTree
+        val $peer = $peerConstructionTree
         $Runtime.run(
           $peer.$connection,
           $peer,
@@ -222,7 +199,5 @@ object multitier {
           }.$system.$systemMain)
       }""",
       peerTree.pos)
-
-    processor.c.Expr[Runtime](result)
   }
 }
