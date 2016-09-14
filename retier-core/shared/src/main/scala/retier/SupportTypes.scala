@@ -2,6 +2,7 @@ package retier
 
 import typeconstraints._
 import scala.annotation.implicitNotFound
+import scala.language.experimental.macros
 
 protected trait NotNothing[T]
 
@@ -120,23 +121,52 @@ protected object ValueTypes extends ValueTypesIdentity with ValueTypesHigherKind
 
 final abstract class LocalValueTypes[T, U]
 
-protected trait LocalValueTypesFallback {
-  implicit def nothing: LocalValueTypes[Nothing, Nothing] = `#macro`
+protected trait LocalValueTypesFastMacro {
+  implicit def materializeLocalValueTypes[T, U]
+  : LocalValueTypes[T, U] =
+    macro impl.LocalValueTypes.impl[T, U]
 }
 
-protected object LocalValueTypes extends LocalValueTypesFallback {
-  implicit def localValueTypes[T, U, Dummy]
-    (implicit ev: ValueTypes[T, _, Dummy, U]): LocalValueTypes[T, U] = `#macro`
-}
+protected object LocalValueTypes extends
+  retier.ide.intellij.LocalValueTypes with
+  LocalValueTypesFastMacro
 
 
 final abstract class RemoteValueTypes[T, R <: Remote[Peer], U]
 
-protected trait RemoteValueTypesFallback {
-  implicit def nothing: RemoteValueTypes[Nothing, Nothing, Nothing] = `#macro`
+protected trait RemoteValueTypesFastMacro {
+  implicit def materializeRemoteValueTypes[T, R <: Remote[Peer], U]
+  : RemoteValueTypes[T, R, U] =
+    macro impl.RemoteValueTypes.impl[T, R, U]
 }
 
-protected object RemoteValueTypes extends RemoteValueTypesFallback {
-  implicit def remoteValueTypes[T, R <: Remote[Peer], U, Dummy]
-    (implicit ev: ValueTypes[T, R, U, Dummy]): RemoteValueTypes[T, R, U] = `#macro`
-}
+protected object RemoteValueTypes extends
+  retier.ide.intellij.RemoteValueTypes with
+  RemoteValueTypesFastMacro
+
+
+// type-level implementation for `LocalValueTypes` and `RemoteValueTypes`
+// distinctly slower as compared to the macro implementation
+//
+// final abstract class LocalValueTypes[T, U]
+//
+// protected trait LocalValueTypesFallback {
+//   implicit def nothing: LocalValueTypes[Nothing, Nothing] = `#macro`
+// }
+//
+// protected object LocalValueTypes extends LocalValueTypesFallback {
+//   implicit def localValueTypes[T, U, Dummy]
+//     (implicit ev: ValueTypes[T, _, Dummy, U]): LocalValueTypes[T, U] = `#macro`
+// }
+//
+//
+// final abstract class RemoteValueTypes[T, R <: Remote[Peer], U]
+//
+// protected trait RemoteValueTypesFallback {
+//   implicit def nothing: RemoteValueTypes[Nothing, Nothing, Nothing] = `#macro`
+// }
+//
+// protected object RemoteValueTypes extends RemoteValueTypesFallback {
+//   implicit def remoteValueTypes[T, R <: Remote[Peer], U, Dummy]
+//     (implicit ev: ValueTypes[T, R, U, Dummy]): RemoteValueTypes[T, R, U] = `#macro`
+// }
