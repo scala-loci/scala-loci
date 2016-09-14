@@ -9,10 +9,12 @@ protected final abstract class OverridingExpression[P <: Peer] {
 protected final abstract class SpecialPlacingExpression[P <: Peer] {
   def `abstract`[T]
     (implicit ev: NoLocalPeer[_]): T on P = `#macro`
-  def base[T <: (_ localOn _), U](v: T)
+  def base[T <: (_ localOn _), U, P0 <: Peer](v: T)
     (implicit
         ev0: LocalPeer[P],
-        ev1: ValueTypes[T, _, _, U]): U = `#macro`
+        ev1: T <:< (_ localOn P0),
+        ev2: P <:< P0,
+        ev3: LocalValueTypes[T, U]): U = `#macro`
   def main(f: CurrentLocalPeer[P] `implicit =>` Unit)
     (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`
   def terminating(f: CurrentLocalPeer[P] `implicit =>` Unit)
@@ -24,26 +26,30 @@ protected final abstract class SpecialPlacingExpression[P <: Peer] {
 }
 
 protected final abstract class PlacingExpression[P <: Peer] {
-  def apply[T, U](f: CurrentLocalPeer[P] `implicit =>` T)
+  def apply[T, U, V](f: CurrentLocalPeer[P] `implicit =>` T)
     (implicit
         ev0: NoLocalPeer[_],
-        ev1: PlacingTypes[P, T, U]): U on P
-  def shared[T, U](f: CurrentLocalPeer[P] `implicit =>` T)
+        ev1: PlacingTypes[P, T, U],
+        ev2: LocalValueTypes[U, V]): V on P
+  def shared[T, U, V](f: CurrentLocalPeer[P] `implicit =>` T)
     (implicit
         ev0: NoLocalPeer[_],
-        ev1: PlacingTypes[P, T, U]): U on P
-  def local[T, U](f: CurrentLocalPeer[P] `implicit =>` T)
+        ev1: PlacingTypes[P, T, U],
+        ev2: LocalValueTypes[U, V]): V on P
+  def local[T, U, V](f: CurrentLocalPeer[P] `implicit =>` T)
     (implicit
         ev0: NoLocalPeer[_],
-        ev1: PlacingTypes[P, T, U]): U localOn P
+        ev1: PlacingTypes[P, T, U],
+        ev2: LocalValueTypes[U, V]): V localOn P
   def issued[R <: Peer]: IssuingExpression[P, R]
 }
 
 protected final abstract class IssuingExpression[P <: Peer, R <: Peer] {
-  def apply[T, U, I](f: CurrentLocalPeer[P] `implicit =>` T)
+  def apply[T, U, V, I](f: CurrentLocalPeer[P] `implicit =>` T)
     (implicit
         ev0: NoLocalPeer[_],
         ev1: PlacingTypes[P, T, I],
         ev2: IssuingTypes[R, I, U],
-        ev3: PeerConnection[P#Connection, R, _]): U on P
+        ev3: LocalValueTypes[U, V],
+        ev4: PeerConnection[P#Connection, R, _]): V on P
 }

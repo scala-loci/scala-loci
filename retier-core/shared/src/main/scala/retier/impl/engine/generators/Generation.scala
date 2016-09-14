@@ -139,6 +139,7 @@ trait Generation {
 
     val connection = Seq(multipleConnection, optionalConnection, singleConnection)
 
+    val retierPlacedValue = types.retier | TermName("retierPlacedValue")
     val retierLocalPlacedValue = types.retier | TermName("retierLocalPlacedValue")
 
     val discardValue = types.localOn.companion | TermName("discardValue")
@@ -152,7 +153,7 @@ trait Generation {
 
     val globalCasts = Seq(discardValue, issueValue, issueValueControlled,
       retierLiftLocalPlacedValueGlobally, downcastValueGlobally)
-    val localCasts = Seq(retierLocalPlacedValue, retierLiftLocalPlacedValueLocally, downcastValueLocally)
+    val localCasts = Seq(retierPlacedValue, retierLocalPlacedValue, retierLiftLocalPlacedValueLocally, downcastValueLocally)
     val casts = globalCasts ++ localCasts
   }
 

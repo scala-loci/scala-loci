@@ -5,7 +5,7 @@ import scala.language.implicitConversions
 
 protected object ImplicitConversions {
   trait SharedOn {
-    final implicit class FromExpression[L <: Peer, R <: Peer, T]
+    implicit class FromExpression[L <: Peer, R <: Peer, T]
         (v: T sharedOn R)
         (implicit
           ev0: LocalPeer[L],
@@ -17,9 +17,13 @@ protected object ImplicitConversions {
   }
 
   trait LocalOn {
-    final implicit class ToExpression[R <: Remote[Peer], T <: (_ localOn _), U]
-        (v: T)
-        (implicit ev: ValueTypes[T, R, U, _]) {
+    implicit class ToExpression[L <: Peer, P <: Peer, R <: Remote[Peer], T, U]
+        (v: T sharedOn L)
+        (implicit
+          ev0: LocalPeer[L],
+          ev1: RemoteValueTypes[T sharedOn L, R, U],
+          ev2: R <:< Remote[P],
+          ev3: PeerConnection[L#Connection, P, _]) {
       def to(peer: R): U = `#macro`
     }
 
@@ -33,22 +37,27 @@ protected object ImplicitConversions {
       (implicit ev: T <:< (R => U)): R <=> U on P = `#macro`
 
 
-    final implicit def downcastValueGlobally[P <: Peer, T](v: T localOn P)
+    implicit def downcastValueGlobally[P <: Peer, T](v: T localOn P)
       (implicit ev: NoLocalPeer[_]): T on P = `#macro`
 
-    final implicit def downcastValueLocally[P <: Peer, T](v: T localOn P)
+    implicit def downcastValueLocally[P <: Peer, T](v: T localOn P)
       (implicit ev: LocalPeer[P]): T on P = `#macro`
   }
 
-  trait Any {
-    final implicit def retierLocalPlacedValue[T <: (_ localOn _), U](v: T)
-      (implicit ev: ValueTypes[T, _, _, U]): U = `#macro`
+  trait AnyFallback {
+    implicit def retierPlacedValue[T, U](v: T)
+      (implicit ev0: LocalValueTypes[T, U], ev1: T =:!= U): U = `#macro`
+  }
+
+  trait Any extends AnyFallback {
+    implicit def retierLocalPlacedValue[T <: (_ localOn _), U](v: T)
+      (implicit ev: LocalValueTypes[T, U]): U = `#macro`
 
 
-    final implicit def retierLiftLocalPlacedValueGlobally[P <: Peer, T](v: T)
+    implicit def retierLiftLocalPlacedValueGlobally[P <: Peer, T](v: T)
       (implicit ev0: NoLocalPeer[_], ev1: T <:!< (_ localOn _)): T on P = `#macro`
 
-    final implicit def retierLiftLocalPlacedValueLocally[P <: Peer, T](v: T)
+    implicit def retierLiftLocalPlacedValueLocally[P <: Peer, T](v: T)
       (implicit ev0: LocalPeer[P], ev1: T <:!< (_ localOn _)): T on P = `#macro`
   }
 }

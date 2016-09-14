@@ -63,6 +63,7 @@ lazy val retierCore = (crossProject
   in file("retier-core")
   settings (normalizedName := "retier-core",
             SourceGenerator.transmittableTuples,
+            SourceGenerator.valueTypesHigherKinds,
             macroparadise, macrodeclaration))
 
 lazy val retierCoreJVM = retierCore.jvm

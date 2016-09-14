@@ -202,11 +202,14 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
   private val prefix = "$$implicit$conversion$bridge$"
 
   def createPlacedImplicitBridges: List[Tree] = {
-    val retier = (c.mirror staticPackage "_root_.retier").moduleClass
+    val retierType = (c.mirror staticPackage "_root_.retier").moduleClass.asType
+    val scalaType = (c.mirror staticPackage "_root_.scala").moduleClass.asType
+
+    val byname = scalaType.toType member TypeName("<byname>")
 
     def isInRetierPackage(tpe: Type): Boolean = {
       def isInRetierPackage(symbol: Symbol): Boolean =
-        symbol == retier ||
+        symbol == retierType ||
         (symbol.owner != NoSymbol && isInRetierPackage(symbol.owner))
 
       tpe exists { tpe => isInRetierPackage(tpe.typeSymbol) }
@@ -215,6 +218,7 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
     findImportedImplicitConversions flatMap {
       case ImportedImplicitConversion(method, importing) =>
         val T = TypeName(c freshName "T")
+        val U = TypeName(c freshName "U")
         val ev = TermName(c freshName "ev")
         val name = TermName(c freshName s"$prefix${method.name.toString}")
 
@@ -239,21 +243,6 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
         val param = paramLists.head.head
         val paramName = param.name.toTermName
         val paramType = param typeSignatureIn importing
-
-        val paramDefs =
-          if (paramLists.size > 1)
-            paramLists.last map { symbol =>
-              ValDef(
-                Modifiers(Flag.PARAM),
-                symbol.name.toTermName,
-                TypeTree(symbol typeSignatureIn importing),
-                EmptyTree)
-            }
-          else
-            List.empty
-
-        val extraParamDef =
-          q"${Flag.PARAM} val $ev: _root_.retier.ValueTypes[$T, _, _, $paramType]"
 
         val typeParamsBounds =
           typeParams map { symbol =>
@@ -284,33 +273,60 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
 
         val (typeParamDefs, _) = typeParamsBounds.unzip
 
-        val extraTypeParamDef =
-          q"${Flag.PARAM} type $T <: _root_.retier.localOn[_, _]"
-
-
         val unboundedTypeParams = typeParamsBounds collect {
           case (typeParam, true) => typeParam.name.toTypeName
         }
 
 
+        def isUnbounded(tpe: Type): Boolean = {
+          tpe =:= definitions.AnyTpe ||
+          tpe =:= definitions.AnyRefTpe ||
+          tpe =:= definitions.AnyValTpe ||
+          (unboundedTypeParams contains tpe.typeSymbol.name.toTypeName) ||
+          ((tpe <:< typeOf[_ => _] || tpe.typeSymbol == byname) &&
+            (tpe.typeArgs exists isUnbounded))
+        }
+
+
+        val paramDefsBounds =
+          if (paramLists.size > 1)
+            paramLists.last map { symbol =>
+              val tpe = symbol typeSignatureIn importing
+              ValDef(
+                Modifiers(Flag.PARAM),
+                symbol.name.toTermName,
+                TypeTree(tpe),
+                EmptyTree) -> isUnbounded(tpe)
+            }
+          else
+            List.empty
+
+        val (paramDefs, _) = paramDefsBounds.unzip
+
+        val hasUnboundedParam = paramDefsBounds exists {
+          case (_, unbounded) => unbounded
+        }
+
+
+        val extraParamDef =
+          q"${Flag.PARAM} val $ev: _root_.retier.LocalValueTypes[$T, $U]"
+
         val result =
           q"""${Flag.SYNTHETIC | Flag.ARTIFACT} implicit def $name
-                [..$typeParamDefs, $extraTypeParamDef]
+                [..$typeParamDefs, $T, $U <: $paramType]
                 ($paramName: $T)
                 (implicit ..$paramDefs, $extraParamDef)
                 : $returnType = _root_.retier.`#macro`"""
 
-
         val exclude =
-          paramType =:= definitions.AnyTpe ||
-          paramType =:= definitions.AnyRefTpe ||
-          paramType =:= definitions.AnyValTpe ||
+          hasUnboundedParam ||
+          isUnbounded(paramType) ||
+          isUnbounded(returnType) ||
           isInRetierPackage(paramType) ||
           isInRetierPackage(returnType) ||
           (typeParams exists { symbol =>
             isInRetierPackage(symbol typeSignatureIn importing)
-          }) ||
-          (unboundedTypeParams contains paramType.typeSymbol.name.toTypeName)
+          })
 
         if (exclude) None else Some(result)
     }
@@ -320,8 +336,8 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
     def isPlacedImplicitBridge(name: Name): Boolean =
       name.toString startsWith prefix
 
-    def validArgCount(treess: List[List[Tree]]) =
-      treess.size >= 1 && treess.size <= 2 && treess.head.size == 1
+    def validArgCount(paramss: List[List[Tree]]) =
+      paramss.size >= 1 && paramss.size <= 2 && paramss.head.size == 1
 
     override def transform(tree: Tree) = tree match {
       case q"$_ def $tname[..$_](...$paramss): $_ = $_"
