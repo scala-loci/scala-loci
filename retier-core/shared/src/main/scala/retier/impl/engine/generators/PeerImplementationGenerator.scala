@@ -23,11 +23,12 @@ trait PeerImplementationGenerator { this: Generation =>
       val baseClasses = peerSymbol.toType.baseClasses filter {
         _.asType.toType <:< types.peer
       }
-      val baseOwners = baseClasses map { baseClass =>
-        if (baseClass.owner.isModule)
-          baseClass.owner.asModule.moduleClass
-        else
-          baseClass.owner
+      val baseOwners = baseClasses collect {
+        case baseClass if baseClass != types.peer.typeSymbol =>
+          if (baseClass.owner.isModule)
+            baseClass.owner.asModule.moduleClass
+          else
+            baseClass.owner
       }
 
       def placedType(tpe: Type): Option[Type] =
