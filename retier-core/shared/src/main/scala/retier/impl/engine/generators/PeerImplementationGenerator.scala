@@ -224,16 +224,13 @@ trait PeerImplementationGenerator { this: Generation =>
       stats map multitierInterfaceProcessor.transform
     }
 
-    def peerImplementationParents(parents: List[Tree]) = parents map {
+    def peerImplementationParents(parents: List[Tree]) = parents collect {
       case parent if parent.tpe =:= types.peer =>
         trees.PeerImpl
 
       case parent @ tq"$_[..$tpts]" if parent.tpe <:< types.peer =>
         val impl = peerImplementationTree(parent, parent.tpe, peerSymbols)
         tq"$impl[..$tpts]"
-
-      case parent =>
-        parent
     }
 
     def processPeerCompanion(peerDefinition: PeerDefinition) = {
