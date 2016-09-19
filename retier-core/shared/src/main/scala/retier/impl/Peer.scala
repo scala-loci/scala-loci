@@ -7,8 +7,9 @@ import scala.util.Try
 import scala.util.Failure
 
 trait PeerImpl {
-  def $$retier$system: System =
-    throw new RetierImplementationError("peer instance system not set up")
+  def $$retier$system: System = PeerImpl.throwSystemNotSetUp
+
+  def $$retier$metapeer: Peer = PeerImpl.throwMetaPeerNotSetUp
 
   def $$retier$dispatch(request: String, id: AbstractionId, ref: AbstractionRef)
     : Try[String] = Failure(
@@ -23,6 +24,12 @@ trait PeerImpl {
 
 object PeerImpl {
   val peerTypeTag = PeerTypeTag.create[Peer]("Peer", List.empty)
+
+  def throwSystemNotSetUp =
+    throw new RetierImplementationError("peer instance system not set up")
+
+  def throwMetaPeerNotSetUp =
+    throw new RetierImplementationError("peer meta object not set up")
 
   implicit class Ops(peerImpl: PeerImpl) {
     def dispatch(request: String, id: AbstractionId, ref: AbstractionRef) =

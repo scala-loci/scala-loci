@@ -139,6 +139,7 @@ trait Generation {
 
     val connection = Seq(multipleConnection, optionalConnection, singleConnection)
 
+    val peer = types.retier | TermName("peer")
     val retierPlacedValue = types.retier | TermName("retierPlacedValue")
     val retierLocalPlacedValue = types.retier | TermName("retierLocalPlacedValue")
 
@@ -172,6 +173,7 @@ trait Generation {
     val createOptionalRemoteConnection = TermName("createOptionalRemoteConnection")
     val createSingleRemoteConnection = TermName("createSingleRemoteConnection")
     val system = retierTermName("system")
+    val metapeer = retierTermName("metapeer")
     val systemMain = TermName("main")
     val systemRunning = TermName("running")
     val systemTerminate = TermName("terminate")
@@ -209,6 +211,7 @@ trait Generation {
     val PeerTypeTag = tq"$root.retier.PeerTypeTag"
     val PeerTypeTagCreate = q"$root.retier.impl.PeerTypeTag.create"
     val PeerImpl = tq"$root.retier.impl.PeerImpl"
+    val throwMetaPeerNotSetUp = q"$root.retier.impl.PeerImpl.throwMetaPeerNotSetUp"
     val ConnectionMultiplicity = tq"$root.retier.impl.ConnectionMultiplicity"
     val SingleConnection = q"$root.retier.impl.SingleConnection"
     val OptionalConnection = q"$root.retier.impl.OptionalConnection"
@@ -365,6 +368,23 @@ trait Generation {
       else
         tpe
   }
+
+
+  def wildcardedTypeTree(expr: Tree, typeArgsCount: Int) =
+    if (typeArgsCount == 0)
+      expr
+    else {
+      val wildcards = ((0 until typeArgsCount) map { _ =>
+        TypeName(c freshName "_")
+      }).toList
+
+      ExistentialTypeTree(
+        AppliedTypeTree(expr, wildcards map { Ident(_) }),
+        wildcards map { TypeDef(
+          Modifiers(Flag.DEFERRED | Flag.SYNTHETIC), _, List.empty,
+          TypeBoundsTree(EmptyTree, EmptyTree))
+        })
+    }
 
 
   def peerImplementationTree(baseTree: Tree, peerType: Type,

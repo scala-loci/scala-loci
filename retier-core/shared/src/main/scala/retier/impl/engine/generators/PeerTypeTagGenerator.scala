@@ -17,22 +17,6 @@ trait PeerTypeTagGenerator { this: Generation =>
     val synthetic = Flag.SYNTHETIC
     val peerSymbols = aggregator.all[PeerDefinition] map { _.peerSymbol }
 
-    def wildcardedTypeTree(expr: Tree, typeArgsCount: Int) =
-      if (typeArgsCount == 0)
-        expr
-      else {
-        val wildcards = ((0 until typeArgsCount) map { _ =>
-          TypeName(c freshName "_")
-        }).toList
-
-        ExistentialTypeTree(
-          AppliedTypeTree(expr, wildcards map { Ident(_) }),
-          wildcards map { TypeDef(
-            Modifiers(Flag.DEFERRED | Flag.SYNTHETIC), _, List.empty,
-            TypeBoundsTree(EmptyTree, EmptyTree))
-          })
-      }
-
     def createImplicitPeerTypeTag(peerDefinition: PeerDefinition) = {
       import trees._
       import names._

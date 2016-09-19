@@ -63,28 +63,6 @@ trait PeerDefinitionCollector { this: Generation =>
         c.abort(params.head.head.pos,
           "primary constructors of peer types are not allowed " +
           "to take explicit arguments")
-
-      stats foreach {
-        case DefDef(_, _, _, _, _, _) |
-             TypeDef(_, _, _, _) |
-             ClassDef(_, _, _, _) =>
-        case stat =>
-          c.abort(stat.pos,
-            "only method and type definitions allowed in peer types")
-      }
-
-      parents foreach { parent =>
-        parent.tpe.members foreach { member =>
-          val symbol = member.typeSignature.typeSymbol map { _.owner }
-          val tpe = if (symbol.isType) symbol.asType.toType else NoType
-
-          if (tpe =:!= types.peer &&
-              !member.isType && !member.isMethod && !member.isSynthetic)
-            c.abort(parent.pos,
-              "only method and type definitions " +
-              "allowed in peer type parents: " + member.name)
-        }
-      }
     }
 
     val decls = peerDefs map { case (_, _, _, _, decl) => decl }

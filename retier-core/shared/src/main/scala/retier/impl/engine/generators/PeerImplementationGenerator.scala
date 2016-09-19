@@ -264,6 +264,8 @@ trait PeerImplementationGenerator { this: Generation =>
       val syntheticMods = Modifiers(
         mods.flags | Flag.SYNTHETIC, mods.privateWithin, mods.annotations)
 
+      val wildcardedPeerType = wildcardedTypeTree(tq"$peerName", typeArgs.size)
+
       val dispatchImpl =
         q"""$synthetic override def $dispatch(
                 request: $String,
@@ -278,17 +280,22 @@ trait PeerImplementationGenerator { this: Generation =>
             }
          """
 
+      val metaPeerImpl =
+        q"override def $metapeer: $wildcardedPeerType = $throwMetaPeerNotSetUp"
+
       val peerImpl =
         if (isClass)
           q"""$syntheticMods class $implementation[..$typeArgs](...$args)
                   extends ..$implParents {
                 $dispatchImpl
+                $metaPeerImpl
                 ..$statements
           }"""
         else
           q"""$syntheticMods trait $implementation[..$typeArgs]
                   extends ..$implParents {
                 $dispatchImpl
+                $metaPeerImpl
                 ..$statements
           }"""
 

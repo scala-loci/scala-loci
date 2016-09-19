@@ -209,6 +209,7 @@ object multitier {
           $peer,
           $typeTag.${names.peerType},
           (context, connections, connected, connecting) => new $implementation {
+            override def $metapeer = $peer
             override lazy val $system =
               new $System(context, connections, connected, connecting, this)
           }.$system.$systemMain)
