@@ -289,8 +289,10 @@ class System(
     }
   }
 
-  def isChannelOpen(channel: Channel): Boolean =
-    channels containsValue channel
+  def isChannelOpen(channel: Channel): Boolean = {
+    val channelId = (channel.name, channel.remote)
+    channel == (channels get channelId)
+  }
 
   def sendMessage(channel: Channel, messageType: String, payload: String): Unit =
     if (isChannelOpen(channel))
