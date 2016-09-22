@@ -20,7 +20,7 @@ private final case class MultipleTransmissionImpl[
   }
   def remotes = selection.remotes getOrElse system.remotes[R]
   def retrieveMappedRemoteValues =
-    (remotes zip system.requestRemotes(selection.props, remotes)).toMap
+    (remotes zip system.requestRemotes(selection.props, remotes, true)).toMap
 }
 
 private final case class OptionalTransmissionImpl[
@@ -38,7 +38,7 @@ private final case class OptionalTransmissionImpl[
   }
   def remote = selection.remote map { Some(_) } getOrElse system.optionalRemote[R]
   def retrieveMappedRemoteValue = remote map { remote =>
-    remote -> system.requestRemotes(selection.props, Seq(remote)).head
+    remote -> system.requestRemotes(selection.props, Seq(remote), true).head
   }
 
   def multiple = MultipleTransmissionImpl[T, R, L](system, selection)
@@ -59,7 +59,7 @@ private final case class SingleTransmissionImpl[
   }
   def remote = selection.remote getOrElse system.singleRemote[R]
   def retrieveMappedRemoteValue =
-    remote -> system.requestRemotes(selection.props, Seq(remote)).head
+    remote -> system.requestRemotes(selection.props, Seq(remote), true).head
 
   def optional = OptionalTransmissionImpl[T, R, L](system, selection)
   def multiple = MultipleTransmissionImpl[T, R, L](system, selection)

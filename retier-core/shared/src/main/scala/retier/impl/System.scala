@@ -162,15 +162,15 @@ class System(
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T]): Unit =
-    requestRemotes(props, remotes[R])
+    requestRemotes(props, remotes[R], false)
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
       (selection: T fromMultiple R): Unit =
-    requestRemotes(selection.props, remotes[R] filter selection.filter)
+    requestRemotes(selection.props, remotes[R] filter selection.filter, false)
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
       (selection: T fromSingle R): Unit =
-    requestRemotes(selection.props, remotes[R] filter selection.filter)
+    requestRemotes(selection.props, remotes[R] filter selection.filter, false)
 
 
   def createMultipleTransmission
@@ -243,6 +243,8 @@ class System(
     new ConcurrentHashMap[Channel, ConcurrentLinkedQueue[String => Unit]]
   private val pushedValues =
     new ConcurrentHashMap[(RemoteRef, AbstractionId), Future[_]]
+  private val noResultRequested =
+    Future failed new RetierImplementationError("no result value requested")
 
   private val dispatcher = new Dispatcher[SystemDispatch]
 
@@ -366,11 +368,12 @@ class System(
         if (Option(startedRemotes putIfAbsent (remote, remote)).isEmpty)
           doRemoteJoined(remote)
 
-      case ChannelMessage("Request", channelName, Some(abstraction), payload) =>
+      case ChannelMessage(messageType @ ("Request" | "Call"), channelName, Some(abstraction), payload) =>
         val id = AbstractionId.create(abstraction)
         val ref = AbstractionRef.create(id, channelName, remote, System.this)
         peerImpl.dispatch(payload, id, ref) foreach { payload =>
-          ref.channel send ("Response", payload)
+          if (messageType == "Request")
+            ref.channel send ("Response", payload)
         }
 
       case ChannelMessage("Response", channelName, None, payload) =>
@@ -393,7 +396,7 @@ class System(
       abstraction, java.util.UUID.randomUUID.toString, remote, this)
 
   def requestRemotes[T](props: TransmissionProperties[T],
-      remotes: Seq[RemoteRef]): Seq[Future[T]] = {
+      remotes: Seq[RemoteRef], requestResult: Boolean): Seq[Future[T]] = {
     def channelClosedException =
       new RemoteConnectionException("channel closed")
     def remoteNotConnectedException =
@@ -401,54 +404,63 @@ class System(
 
     remotes map { remote =>
       val remoteAbstraction = (remote, props.abstraction)
-      Option(pushedValues get remoteAbstraction) map {
-        _.asInstanceOf[Future[T]]
-      } getOrElse {
-        val promise = Promise[T]
-        val future = promise.future
-        val pushValuesFuture =
-          if (props.isStable && props.isPushBased)
-            (Option(pushedValues putIfAbsent (remoteAbstraction, future))
-              getOrElse future).asInstanceOf[Future[T]]
-          else
-            future
+      val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
+      val channel = abstraction.channel
 
-        if (pushValuesFuture eq future) {
-          if (isConnected(remote)) {
-            val abstraction = createRemoteAbstractionRef(props.abstraction, remote)
-            val channel = abstraction.channel
+      def sendRequest(messageType: String) =
+        remoteConnections send (
+          channel.remote,
+          ChannelMessage(
+            messageType,
+            channel.name,
+            Some(props.abstraction.name),
+            props marshalRequest abstraction))
 
-            val handlers = Option(channelResponseHandlers get channel) getOrElse {
-              val handlers = new ConcurrentLinkedQueue[String => Unit]
-              Option(channelResponseHandlers putIfAbsent (channel, handlers)) getOrElse handlers
-            }
-
-            handlers add { response =>
-              promise tryComplete (props unmarshalResponse (response, abstraction))
-            }
-
-            channel.closed += { _ =>
-              promise tryFailure channelClosedException
-            }
-
-            if (!isChannelOpen(channel))
-              promise tryFailure channelClosedException
+      if (!requestResult && (!props.isStable || !props.isPushBased)) {
+        sendRequest("Call")
+        noResultRequested
+      }
+      else {
+        Option(pushedValues get remoteAbstraction) map {
+          _.asInstanceOf[Future[T]]
+        } getOrElse {
+          val promise = Promise[T]
+          val future = promise.future
+          val pushValuesFuture =
+            if (props.isStable && props.isPushBased)
+              (Option(pushedValues putIfAbsent (remoteAbstraction, future))
+                getOrElse future).asInstanceOf[Future[T]]
             else
-              remoteConnections send (
-                channel.remote,
-                ChannelMessage(
-                  "Request",
-                  channel.name,
-                  Some(props.abstraction.name),
-                  props marshalRequest abstraction))
+              future
+
+          if (pushValuesFuture eq future) {
+            if (isConnected(remote)) {
+              val handlers = Option(channelResponseHandlers get channel) getOrElse {
+                val handlers = new ConcurrentLinkedQueue[String => Unit]
+                Option(channelResponseHandlers putIfAbsent (channel, handlers)) getOrElse handlers
+              }
+
+              handlers add { response =>
+                promise tryComplete (props unmarshalResponse (response, abstraction))
+              }
+
+              channel.closed += { _ =>
+                promise tryFailure channelClosedException
+              }
+
+              if (!isChannelOpen(channel))
+                promise tryFailure channelClosedException
+              else
+                sendRequest("Request")
+            }
+            else
+              promise tryFailure remoteNotConnectedException
+
+            future
           }
           else
-            promise tryFailure remoteNotConnectedException
-
-          future
+            pushValuesFuture
         }
-        else
-          pushValuesFuture
       }
     }
   }
