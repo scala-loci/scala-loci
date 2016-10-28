@@ -22,7 +22,7 @@ trait Peer {
 
   def connect: ConnectionSetup
 
-  def context: ExecutionContext = contexts.Pooled.global
+  def context: ExecutionContext = contexts.Queued.create
 
 
   sealed trait ConnectionSetup {
