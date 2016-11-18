@@ -11,7 +11,7 @@ protected final abstract class RemoteSelectionExpression[P <: Peer] {
 }
 
 protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]] {
-  def apply[T, U, V, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
+  def apply[T, U, V, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, U],
@@ -38,7 +38,7 @@ protected final abstract class RemoteSettingExpression[T, P <: Peer, L <: Peer, 
 
 protected final abstract class RemoteCapturingExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, V, L <: Peer]
-    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
+    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, U],
@@ -47,7 +47,7 @@ protected final abstract class RemoteCapturingExpression[P <: Peer, placed[_, _ 
 }
 
 protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <: Peer]] {
-  def apply[T, U, V, I, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
+  def apply[T, U, V, I, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, I],
@@ -61,7 +61,7 @@ protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <:
 
 protected final abstract class RemoteIssuedCapturingExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, V, I, L <: Peer]
-    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T)
+    (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, I],
