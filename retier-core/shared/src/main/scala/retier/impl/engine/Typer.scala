@@ -820,21 +820,19 @@ class Typer[C <: Context](val c: C) {
           }
 
         // fix vars, vals and lazy vals
-        case ValDef(_, _, _, _)
+        case ValDef(_, _, TypeTree(), rhs)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
-              term.getterOrNoSymbol != NoSymbol &&
-                (term.isLazy || (rhss contains term.getter))
+              (term.isLazy && term.isImplementationArtifact && rhs.isEmpty) ||
+              (term.isPrivateThis &&
+                (rhss contains term.asTerm.getterOrNoSymbol))
             } =>
+          EmptyTree
+        case DefDef(_, _, _, _, _, _)
+            if tree.symbol.isTerm && tree.symbol.asTerm.isSetter =>
           EmptyTree
 
         // fix vars and vals
-        case DefDef(_, _, _, _, _, _)
-            if tree.symbol.isTerm && {
-              val term = tree.symbol.asTerm
-              term.isSetter && (rhss contains term)
-            } =>
-          EmptyTree
         case defDef @ DefDef(mods, name, _, _, tpt, _)
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
@@ -869,31 +867,28 @@ class Typer[C <: Context](val c: C) {
           internal setPos (newValDef, valDef.pos)
 
         // fix lazy vals
-        case ValDef(mods, _, TypeTree(), EmptyTree)
-            if (mods hasFlag PRIVATE | LOCAL | LAZY) &&
-              !(mods hasFlag PARAMACCESSOR) =>
-          EmptyTree
-        case defDef @ DefDef(mods, name, _, _, tpt, rhs)
+        case valOrDefDef: ValOrDefDef
             if tree.symbol.isTerm && {
               val term = tree.symbol.asTerm
               term.isLazy && term.isGetter
             } =>
-          val assignment = rhs collect {
+          val mods = valOrDefDef.mods
+          val assignment = valOrDefDef.rhs collect {
             case Assign(_, rhs) => rhs
           } match {
             case rhs :: _ => rhs
-            case _ => rhs
+            case _ => valOrDefDef.rhs
           }
           val valDef = rhss get tree.symbol
-          val typeTree = valDef map { _.tpt } getOrElse tpt
+          val typeTree = valDef map { _.tpt } getOrElse valOrDefDef.tpt
           val flags = cleanModifiers(mods).flags
           val privateWithin =
-            if (defDef.symbol.asTerm.privateWithin != NoSymbol)
-              defDef.symbol.asTerm.privateWithin.name
+            if (valOrDefDef.symbol.asTerm.privateWithin != NoSymbol)
+              valOrDefDef.symbol.asTerm.privateWithin.name
             else
               mods.privateWithin
           val defAnnotations =
-            defDef.symbol.annotations map {
+            valOrDefDef.symbol.annotations map {
               annotation => transform(annotation.tree)
             } filterNot { annotation =>
               mods.annotations exists { _ equalsStructure annotation }
@@ -908,7 +903,7 @@ class Typer[C <: Context](val c: C) {
           val annotations = mods.annotations ++ defAnnotations ++ valAnnotations
           val newValDef = ValDef(
             Modifiers(flags, privateWithin, annotations),
-            name, transform(typeTree), transform(assignment))
+            valOrDefDef.name, transform(typeTree), transform(assignment))
           valDef map { valDef =>
             internal setType (newValDef, valDef.tpe)
             internal setPos (newValDef, valDef.pos)
