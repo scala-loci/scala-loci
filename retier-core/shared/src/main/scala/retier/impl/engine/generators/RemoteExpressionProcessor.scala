@@ -138,8 +138,9 @@ trait RemoteExpressionProcessor { this: Generation =>
         val exprType =
           if (wrapperType.isEmpty)
             originalExprType
-          else if (originalExprType <:< types.issued ||
-                   originalExprType <:< types.issuedControlled) {
+          else if ((originalExprType <:< types.issued ||
+                    originalExprType <:< types.issuedControlled) &&
+                   (types.bottom forall { originalExprType <:!< _ })) {
             val TypeRef(pre, sym, Seq(peerType, _)) = originalExprType.underlying
             internal typeRef (pre, sym, List(peerType, definitions.UnitTpe))
           }
@@ -225,6 +226,7 @@ trait RemoteExpressionProcessor { this: Generation =>
                 super.transform(tree)
               else if ((defs contains tree.symbol) ||
                        (tree.tpe <:< types.localOn &&
+                        (types.bottom forall { tree.tpe <:!< _ }) &&
                         peerType.typeSymbol.asType.toType <:!<
                           tree.tpe.underlying.typeArgs.last.typeSymbol.asType.toType))
                 c.abort(tree.pos,
