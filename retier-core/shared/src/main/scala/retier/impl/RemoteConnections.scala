@@ -8,6 +8,7 @@ import network.ConnectionRequestor
 import network.ConnectionListener
 import util.Notifier
 import util.Notification
+import contexts.Immediate.Implicits.global
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
@@ -40,8 +41,6 @@ class RemoteConnections(peerType: PeerType,
 
   private def bases(peerType: PeerType): Set[PeerType] =
     peerType.bases.toSet ++ (peerType.bases flatMap bases)
-
-  private implicit val executionContext = contexts.Immediate.global
 
   private object state {
     private val running = new AtomicBoolean(false)
@@ -108,43 +107,37 @@ class RemoteConnections(peerType: PeerType,
             val promise = Promise[RemoteRef]
             val future = promise.future
 
-            val receive = { data: String =>
-              state sync {
-                if (promise.isCompleted)
-                  Message deserialize data map { doBufferedReceive(remote, _) }
-                else {
-                  val handleAccept =
-                    handleAcceptMessage(connection, remote)
-                  val handleRequest =
-                    handleRequestMessage(connection, remotePeerType) andThen {
-                      _ map { case (remote, _) => remote }
-                    }
-
-                  state.potentials -= remotePeerType
-
-                  val result = Message deserialize data flatMap {
-                    handleAccept orElse handleRequest orElse
-                    handleUnknownMessage
-                  }
-
-                  state.potentials += remotePeerType
-
-                  promise complete result
-                }
-              }
-            }
-
-            val closed = { _: Unit =>
-              state sync {
+            val closed = new (Unit => Unit) {
+              def apply(unit: Unit) = state sync {
                 if (!promise.isCompleted)
                   promise failure terminatedException
               }
             }
 
-            future onComplete { _ =>
-              connection.receive -= receive
-              connection.closed -= closed
-              state sync { state.potentials -= remotePeerType }
+            val receive = new (String => Unit) {
+              def apply(data: String) = state sync {
+                state.potentials -= remotePeerType
+
+                connection.receive -= this
+                connection.closed -= closed
+
+                val handleAccept =
+                  handleAcceptMessage(connection, remote)
+                val handleRequest =
+                  handleRequestMessage(connection, remotePeerType) andThen {
+                    _ map { case (remote, _) => remote }
+                  }
+
+                val result = Message deserialize data flatMap {
+                  handleAccept orElse handleRequest orElse
+                  handleUnknownMessage
+                }
+
+                if (result.isFailure)
+                  connection.close
+
+                promise complete result
+              }
             }
 
             connection.receive += receive
@@ -168,26 +161,22 @@ class RemoteConnections(peerType: PeerType,
     val doNotify = Notifier[Try[(RemoteRef, RemoteConnections)]]
 
     connectionListener.connectionEstablished += { connection =>
-      val doRemoveConnectionListener = Notifier[Unit]
+      val receive = new (String => Unit) {
+        def apply(data: String) = {
+          connection.receive -= this
 
-      val receive = { data: String =>
-        val handleRequest = handleRequestMessage(
-          connection, remotePeerType, createDesignatedInstance)
+          val handleRequest = handleRequestMessage(
+            connection, remotePeerType, createDesignatedInstance)
 
-        val result = Message deserialize data flatMap {
-          handleRequest orElse handleUnknownMessage
+          val result = Message deserialize data flatMap {
+            handleRequest orElse handleUnknownMessage
+          }
+
+          if (result.isFailure)
+            connection.close
+
+          doNotify(result)
         }
-
-        doRemoveConnectionListener()
-
-        if (result.isFailure)
-          connection.close
-
-        doNotify(result)
-      }
-
-      doRemoveConnectionListener.notification += { _ =>
-        connection.receive -= receive
       }
 
       connection.receive += receive
@@ -265,18 +254,27 @@ class RemoteConnections(peerType: PeerType,
 
       instance.doRemoteJoined(remote)
 
-      connection.receive += {
-        Message deserialize _ map { instance.doBufferedReceive(remote, _) }
+      val receive = new (String => Unit) {
+        def apply(data: String) =
+          Message deserialize data map { instance.doBufferedReceive(remote, _) }
       }
 
-      connection.closed += { connection =>
-        state sync {
-          if (state.connections containsKey remote)
+      val closed = new (Unit => Unit) {
+        def apply(unit: Unit) = state sync {
+          if (state.connections containsKey remote) {
+            connection.receive -= receive
+            connection.closed -= this
             removeRemoteConnection(instance, remote)
+          }
         }
       }
 
+      connection.receive += receive
+      connection.closed += closed
+
       if (!connection.isOpen) {
+        connection.receive -= receive
+        connection.closed -= closed
         removeRemoteConnection(instance, remote)
         Failure(terminatedException)
       }
@@ -408,3 +406,4 @@ class RemoteConnections(peerType: PeerType,
         }
     }
 }
+

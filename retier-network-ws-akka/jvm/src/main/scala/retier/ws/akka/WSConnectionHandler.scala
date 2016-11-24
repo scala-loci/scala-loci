@@ -3,7 +3,6 @@ package ws.akka
 
 import network.Connection
 import util.Notifier
-import contexts.Immediate.Implicits.global
 import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Sink
@@ -34,6 +33,8 @@ private object WSConnectionHandler {
           Future successful data
 
         case message: TextMessage =>
+          implicit val context = this.context
+
           message.textStream.runFold(new StringBuilder) {
             case (builder, data) =>
               builder append data
@@ -48,6 +49,8 @@ private object WSConnectionHandler {
 }
 
 private abstract class WSAbstractConnectionHandler[M] {
+  val context = contexts.Queued.create
+
   def createMessage(data: String): M
 
   def processMessage(message: M): Future[String]
@@ -56,6 +59,7 @@ private abstract class WSAbstractConnectionHandler[M] {
       protocolInfo: Future[WS],
       connectionEstablished: Connection => Unit,
       connectionFailed: Throwable => Unit) = {
+    implicit val context = this.context
 
     // keep alive
 
