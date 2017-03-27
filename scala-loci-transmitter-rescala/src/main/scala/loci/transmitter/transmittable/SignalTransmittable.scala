@@ -2,17 +2,17 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.graph.Struct
-import _root_.rescala.graph.Pulse
-import _root_.rescala.engines.Engine
-import _root_.rescala.propagation.Turn
+import _root_.rescala.core.Struct
+import _root_.rescala.core.Pulse
+import _root_.rescala.core.Engine
+import _root_.rescala.core.Turn
 import _root_.rescala.reactives.Signal
 import scala.language.higherKinds
 
 protected[transmitter] trait SignalTransmittable {
   implicit def rescalaSignalTransmittable
       [Sig[T, ES <: Struct] <: Signal[T, ES], T, S, U, ES <: Struct](implicit
-      engine: Engine[ES, Turn[ES]],
+      engine: Engine[ES],
       transmittable: Transmittable[(T, String, Boolean), S, (U, String, Boolean)],
       serializable: Serializable[S]) = {
     type From = (T, String, Boolean)
@@ -26,7 +26,7 @@ protected[transmitter] trait SignalTransmittable {
         val signal =
           (value
             map { (_, ignoredString, false) }
-            recover { throwable => (ignoredValue, throwable.toString, false) }
+            recover { case throwable => (ignoredValue, throwable.toString, false) }
             withDefault { (ignoredValue, ignoredString, true) })
 
         val observer = signal observe endpoint.send
@@ -37,13 +37,13 @@ protected[transmitter] trait SignalTransmittable {
       }
 
       def receive(value: To, remote: RemoteRef, endpoint: Endpoint[From, To]) = {
-        val signal = engine.plan() { _ => engine.Var.empty[U] }
+        val signal = engine.transaction() { _ => engine.Var.empty[U] }
 
         def update(signal: engine.Var[U], value: To) = value match {
           case (value, `ignoredString`, false) =>
             signal set value
           case (_, message, false) =>
-            engine.plan(signal) { implicit turn =>
+            engine.transaction(signal) { implicit turn =>
               signal admitPulse Pulse.Exceptional(
                 new rescala.RemoteReactiveFailure(message))
             }

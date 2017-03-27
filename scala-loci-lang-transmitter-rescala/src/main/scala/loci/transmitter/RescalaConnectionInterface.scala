@@ -4,9 +4,8 @@ package transmitter
 import communicator.ProtocolCommon
 import communicator.Bidirectional
 import communicator.Connector
-import _root_.rescala.graph.Struct
-import _root_.rescala.engines.Engine
-import _root_.rescala.propagation.Turn
+import _root_.rescala.core.Struct
+import _root_.rescala.core.Engine
 
 protected[transmitter] trait RescalaConnectionInterface {
   private final val joinedId = 0
@@ -16,8 +15,8 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   protected class RescalaRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: RemoteConnection[P, _])
-      (implicit val engine: Engine[S, Turn[S]]) {
-    import engine._
+      (implicit val engine: Engine[S]) {
+    import engine.{ Event, Evt }
 
     lazy val joined: Event[Remote[P]] = connection.memo(joinedId) {
       val event = Evt[Remote[P]]
@@ -40,10 +39,10 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit class RescalaMultipleRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: MultipleRemoteConnection[P])
-      (implicit override val engine: Engine[S, Turn[S]])
+      (implicit override val engine: Engine[S])
     extends RescalaRemoteConnectionInterface[P, S](connection)
     with RemoteConnectionInterface {
-    import engine._
+    import engine.{ Signal, Var }
 
     lazy val connected: Signal[Seq[Remote[P]]] =
       connection.memo(connectedId) {
@@ -58,17 +57,17 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit def RescalaMultipleRemoteConnectionInterfaceView
     [P <: Peer, S <: Struct]
-    (implicit engine: Engine[S, Turn[S]]) =
+    (implicit engine: Engine[S]) =
     { connection: MultipleRemoteConnection[P] =>
         new RescalaMultipleRemoteConnectionInterface(connection) }
 
 
   implicit class RescalaOptionalRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: OptionalRemoteConnection[P])
-      (implicit override val engine: Engine[S, Turn[S]])
+      (implicit override val engine: Engine[S])
     extends RescalaRemoteConnectionInterface[P, S](connection)
     with RemoteConnectionInterface {
-    import engine._
+    import engine.{ Signal, Var }
 
     lazy val connected: Signal[Option[Remote[P]]] =
       connection.memo(connectedId) {
@@ -83,14 +82,14 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit def RescalaOptionalRemoteConnectionInterfaceView
     [P <: Peer, S <: Struct]
-    (implicit engine: Engine[S, Turn[S]]) =
+    (implicit engine: Engine[S]) =
     { connection: OptionalRemoteConnection[P] =>
         new RescalaOptionalRemoteConnectionInterface(connection) }
 
 
   implicit class RescalaSingleRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: SingleRemoteConnection[P])
-      (implicit override val engine: Engine[S, Turn[S]])
+      (implicit override val engine: Engine[S])
     extends RescalaRemoteConnectionInterface[P, S](connection)
     with RemoteConnectionInterface {
 
@@ -99,7 +98,7 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit def RescalaSingleRemoteConnectionInterfaceView
     [P <: Peer, S <: Struct]
-    (implicit engine: Engine[S, Turn[S]]) =
+    (implicit engine: Engine[S]) =
     { connection: SingleRemoteConnection[P] =>
         new RescalaSingleRemoteConnectionInterface(connection) }
 }

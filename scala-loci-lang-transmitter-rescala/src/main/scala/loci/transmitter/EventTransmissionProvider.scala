@@ -2,10 +2,8 @@ package loci
 package transmitter
 
 import contexts.Immediate.Implicits.global
-import _root_.rescala.graph.Struct
-import _root_.rescala.engines.Engine
-import _root_.rescala.propagation.Turn
-import _root_.rescala.reactives.Signals
+import _root_.rescala.core.Struct
+import _root_.rescala.core.Engine
 import _root_.rescala.reactives.{ Event => EngineEvent }
 import scala.concurrent.Future
 import scala.language.higherKinds
@@ -18,15 +16,15 @@ protected[transmitter] trait EventTransmissionProvider {
       [Evt[T, ES <: Struct] <: EngineEvent[T, ES], T,
        R <: Peer, L <: Peer, ES <: Struct]
       (transmission: MultipleTransmission[Evt[T, ES], R, L])
-      (implicit val engine: Engine[ES, Turn[ES]])
+      (implicit val engine: Engine[ES])
     extends TransmissionProvider {
-    import engine._
+    import engine.{ Signals, Signal, Var, Event, Evt, transaction }
 
     private lazy val emptyEvent = Evt[Nothing]
 
     lazy val asLocalFromAll: Signal[Map[Remote[R], Event[T]]] =
       transmission.memo(asLocalId) {
-        val mapping = plan() { _ => Var(Map.empty[Remote[R], Event[T]]) }
+        val mapping = transaction() { _ => Var(Map.empty[Remote[R], Event[T]]) }
 
         def insert(remote: Remote[R], futureEvent: Future[Event[T]]) =
           mapping transform {
@@ -64,9 +62,9 @@ protected[transmitter] trait EventTransmissionProvider {
       [Evt[T, ES <: Struct] <: EngineEvent[T, ES], T,
        R <: Peer, L <: Peer, ES <: Struct]
       (transmission: OptionalTransmission[Evt[T, ES], R, L])
-      (implicit val engine: Engine[ES, Turn[ES]])
+      (implicit val engine: Engine[ES])
     extends TransmissionProvider {
-    import engine._
+    import engine.{ Signals, Signal, Var, Event, Evt, transaction }
 
     private lazy val emptyEvent = Evt[Nothing]
 
@@ -74,7 +72,7 @@ protected[transmitter] trait EventTransmissionProvider {
       RescalaEventMultipleTransmissionProvider(transmission.multiple)
 
     lazy val asLocal: Signal[Option[Event[T]]] = transmission.memo(asLocalId) {
-      val option = plan() { _ => Var(Option.empty[Event[T]]) }
+      val option = transaction() { _ => Var(Option.empty[Event[T]]) }
 
       def update() = option set
         (transmission.retrieveRemoteValue map { Signals.fromFuture(_).flatten })
@@ -95,9 +93,9 @@ protected[transmitter] trait EventTransmissionProvider {
       [Evt[T, ES <: Struct] <: EngineEvent[T, ES], T,
        R <: Peer, L <: Peer, ES <: Struct]
       (transmission: SingleTransmission[Evt[T, ES], R, L])
-      (implicit val engine: Engine[ES, Turn[ES]])
+      (implicit val engine: Engine[ES])
     extends TransmissionProvider {
-    import engine._
+    import engine.{ Signals, Event }
 
     lazy val optional =
       RescalaEventOptionalTransmissionProvider(transmission.optional)

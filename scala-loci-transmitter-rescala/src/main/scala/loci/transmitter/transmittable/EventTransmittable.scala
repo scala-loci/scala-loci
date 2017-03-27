@@ -2,17 +2,17 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.graph.Struct
-import _root_.rescala.graph.Pulse
-import _root_.rescala.engines.Engine
-import _root_.rescala.propagation.Turn
+import _root_.rescala.core.Struct
+import _root_.rescala.core.Pulse
+import _root_.rescala.core.Engine
+import _root_.rescala.core.Turn
 import _root_.rescala.reactives.Event
 import scala.language.higherKinds
 
 protected[transmitter] trait EventTransmittable {
   implicit def rescalaEventTransmittable
       [Evt[T, ES <: Struct] <: Event[T, ES], T, S, U, ES <: Struct](implicit
-      engine: Engine[ES, Turn[ES]],
+      engine: Engine[ES],
       transmittable: Transmittable[(T, String), S, (U, String)],
       serializable: Serializable[S]) = {
     type From = (T, String)
@@ -26,7 +26,7 @@ protected[transmitter] trait EventTransmittable {
         val observer =
           (value
             map { (_, ignoredString) }
-            recover { throwable => (ignoredValue, throwable.toString) }
+            recover { case throwable => Some((ignoredValue, throwable.toString)) }
             observe endpoint.send)
 
         endpoint.closed notify { _ => observer.remove }
@@ -42,7 +42,7 @@ protected[transmitter] trait EventTransmittable {
             case (value, `ignoredString`) =>
               event fire value
             case (_, message) =>
-              engine.plan(event) { implicit turn =>
+              engine.transaction(event) { implicit turn =>
                 event admitPulse Pulse.Exceptional(
                   new rescala.RemoteReactiveFailure(message))
               }

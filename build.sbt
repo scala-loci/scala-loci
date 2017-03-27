@@ -21,16 +21,16 @@ val scalatest = libraryDependencies +=
   "org.scalatest" %%% "scalatest" % "3.0.4" % "test"
 
 val retypecheckRepo =
-  resolvers += Resolver.bintrayRepo("pweisenburger", "maven")
+  resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val retypecheck = libraryDependencies +=
-  "de.tuda.stg" %% "retypecheck" % "0.1.0"
+  "de.tuda.stg" %% "retypecheck" % "0.4.0"
 
 val rescalaRepo =
-  resolvers += Resolver.bintrayRepo("rmgk", "maven")
+  resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.19.0"
+  "de.tuda.stg" %%% "rescala" % "0.20.0"
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "0.4.4"
