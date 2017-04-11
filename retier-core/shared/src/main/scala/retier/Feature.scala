@@ -1,9 +1,5 @@
 package retier
 
-trait Feature {
-  sealed class NoImplicitConversionBridge
-}
-
-object feature extends Feature {
+object feature extends impl.Feature {
   implicit val noImplicitConversionBridge = new NoImplicitConversionBridge
 }
