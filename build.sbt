@@ -8,26 +8,31 @@ scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-X
 
 
 val macroparadise = addCompilerPlugin(
-  "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.full)
+  "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.patch)
 
-val macrodeclaration = libraryDependencies ++= Seq(
-  "org.scala-lang" % "scala-reflect" % scalaVersion.value,
-  "org.scalamacros" %% "resetallattrs" % "1.0.0")
+val macrodeclaration = libraryDependencies +=
+  scalaOrganization.value % "scala-reflect" % scalaVersion.value % "provided"
+
+val retypecheckRepo =
+  resolvers += Resolver.bintrayRepo("pweisenburger", "maven")
+
+val retypecheck = libraryDependencies +=
+  "de.tuda.stg" %% "retypecheck" % "0.1.0"
 
 val rescalaRepo =
   resolvers += Resolver.bintrayRepo("rmgk", "maven")
 
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.18.0"
+  "de.tuda.stg" %%% "rescala" % "0.19.0"
 
 val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "0.4.1"
+  "com.lihaoyi" %%% "upickle" % "0.4.4"
 
 val akkaHttp = libraryDependencies +=
-  "com.typesafe.akka" %% "akka-http-experimental" % "2.4.8"
+  "com.typesafe.akka" %% "akka-http" % "10.0.5"
 
 val play = libraryDependencies +=
-  "com.typesafe.play" %% "play" % "2.5.4"
+  "com.typesafe.play" %% "play" % "2.5.14"
 
 val scalajsDom = libraryDependencies +=
   "org.scala-js" %%%! "scalajs-dom" % "0.9.1"
@@ -67,6 +72,7 @@ lazy val retierCore = (crossProject
   settings (normalizedName := "retier-core",
             SourceGenerator.transmittableTuples,
             SourceGenerator.valueTypesHigherKinds,
+            retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration))
 
 lazy val retierCoreJVM = retierCore.jvm

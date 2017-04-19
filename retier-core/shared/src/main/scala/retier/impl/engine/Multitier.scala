@@ -2,13 +2,14 @@ package retier
 package impl
 package engine
 
+import retypecheck.ReTyper
 import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox.Context
 
 object multitier {
   def annotation(c: Context)(annottees: c.Expr[Any]*): c.Expr[Any] = {
     val echo = Echo(c)
-    val typer = Typer(c)
+    val typer = ReTyper(c)
     val processor = CodeProcessor(c)
     val placedImplicitBridgeCreator = PlacedImplicitBridgeCreator(c)
     val annottee :: companion = annottees map { _.tree }

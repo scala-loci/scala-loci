@@ -3,6 +3,7 @@ package impl
 package engine.generators
 
 import engine._
+import retypecheck.ReTyper
 import scala.reflect.macros.blackbox.Context
 
 trait Generation {
@@ -266,7 +267,7 @@ trait Generation {
 
   val echo = Echo(c)
 
-  val typer = Typer(c)
+  val typer = ReTyper(c)
 
 
   def retierTermName(name: String) = TermName(s"$$$$retier$$$name")

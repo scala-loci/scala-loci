@@ -205,6 +205,8 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
     val retierType = (c.mirror staticPackage "_root_.retier").moduleClass.asType
     val scalaType = (c.mirror staticPackage "_root_.scala").moduleClass.asType
 
+    val function1 = c.mirror staticClass "_root_.scala.Function1"
+
     val byname = scalaType.toType member TypeName("<byname>")
 
     def isInRetierPackage(tpe: Type): Boolean = {
@@ -283,7 +285,7 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
           tpe =:= definitions.AnyRefTpe ||
           tpe =:= definitions.AnyValTpe ||
           (unboundedTypeParams contains tpe.typeSymbol.name.toTypeName) ||
-          ((tpe <:< typeOf[_ => _] || tpe.typeSymbol == byname) &&
+          (((tpe.baseClasses contains function1) || tpe.typeSymbol == byname) &&
             (tpe.typeArgs exists isUnbounded))
         }
 

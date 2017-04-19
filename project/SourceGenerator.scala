@@ -3,7 +3,7 @@ import Keys._
 
 object SourceGenerator {
   val transmittableTuples =
-    sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
+    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
       val members = (1 to 22) map { i =>
         val tuple = s"Tuple$i"
         val tupleArgsT = (0 until i) map { i => s"T$i" } mkString ", "
@@ -73,7 +73,7 @@ object SourceGenerator {
     }
 
   val valueTypesHigherKinds =
-    sourceGenerators in Compile <+= sourceManaged in Compile map { dir =>
+    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
       val higherKinds = (1 to 8) map { i =>
         val typeArgsT = (0 until i) map { i => "_" } mkString ", "
         val typeArgsU = (0 until i) map { i => s"U$i" } mkString ", "
