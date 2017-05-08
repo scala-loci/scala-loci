@@ -9,7 +9,7 @@ object Echo {
     new Echo[c.type](c)
 }
 
-class Echo[C <: Context](val c: C) {
+class Echo[C <: Context](protected val c: C) {
   import c.universe._
 
   val verboseEcho =

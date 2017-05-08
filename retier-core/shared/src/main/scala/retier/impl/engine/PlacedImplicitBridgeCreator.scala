@@ -261,7 +261,7 @@ class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
                 }
 
               TypeDef(
-                Modifiers(Flag.PARAM),
+                mods,
                 symbol.name.toTypeName,
                 typeParams map { symbol =>
                   val (typeDef, _) = createTypeDef(Modifiers(), symbol)

@@ -81,7 +81,7 @@ private object WSConnectionListener {
         http: HttpExt, port: Int, interface: String)(
         connectionEstablished: Connection => Unit)(implicit
         actorRefFactory: ActorSystem,
-        materializer: Materializer) =
+        materializer: Materializer) = WSActorSystem synchronized {
       if (running == null) {
         running = http bindAndHandle (
           webSocketRoute(
@@ -91,6 +91,7 @@ private object WSConnectionListener {
 
         running.failed foreach { _ => stop }
       }
+    }
 
     def start() = WSActorSystem synchronized {
       if (running == null)

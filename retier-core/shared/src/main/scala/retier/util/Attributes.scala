@@ -16,6 +16,10 @@ final class Attributes(attributes: TraversableOnce[(String, String)]) {
   def toSeq: Seq[(String, String)] = attrs.toSeq flatMap { case (key, value) =>
     value.values map { (key, _) }
   }
+
+  override def toString = (toSeq
+    map { case (key, value) => s"$key -> $value" }
+    mkString ("Attributes(", ", ", ")"))
 }
 
 final class Value(val values: List[String]) extends AnyVal
@@ -30,6 +34,8 @@ object Attributes {
 
 object Value {
   def empty: Value = new Value(List.empty)
+  def apply(value: String): Value =
+    new Value(List(value))
   def apply(values: TraversableOnce[String]): Value =
     new Value(values.toList)
   def unapply(attribute: Value): Option[String] =

@@ -52,9 +52,7 @@ object ChannelMessage {
   def apply(messageType: String, channel: String, abstraction: Option[String],
       payload: String): Message = {
     val attrs = Seq("Type" -> messageType, "Channel" -> channel)
-    val attrsAbstraction = (abstraction map { abstraction =>
-      "Abstraction" -> abstraction
-    }).toSeq
+    val attrsAbstraction = (abstraction map { "Abstraction" -> _ }).toSeq
     Message(Message.Content, Attributes(attrs ++ attrsAbstraction), payload)
   }
   def unapply(msg: Message): Option[(String, String, Option[String], String)] =

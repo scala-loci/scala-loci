@@ -7,7 +7,7 @@ sealed trait SingleConnection extends ConnectionMultiplicity
 sealed trait OptionalConnection extends ConnectionMultiplicity
 sealed trait MultipleConnection extends ConnectionMultiplicity
 
-@implicitNotFound("No connection to ${P}.")
+@implicitNotFound("No connection to peer.")
 protected final abstract class PeerConnection
   [CS <: Peer#ConnectionSpec, P <: Peer, M <: ConnectionMultiplicity]
 
