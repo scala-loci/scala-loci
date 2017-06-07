@@ -86,6 +86,15 @@ lazy val lociCoreJVM = lociCore.jvm
 lazy val lociCoreJS = lociCore.js
 
 
+lazy val lociCommunication = (crossProject
+  crossType CrossType.Full
+  in file("scala-loci-communication")
+  settings (normalizedName := "scala-loci-communication"))
+
+lazy val lociCommunicationJVM = lociCommunication.jvm
+lazy val lociCommunicationJS = lociCommunication.js
+
+
 lazy val lociArchitecturesBasic = (crossProject
   crossType CrossType.Pure
   in file("scala-loci-architectures-basic")
