@@ -61,16 +61,16 @@ lazy val lociJVM = preventPublication(project
   aggregate (lociCoreJVM, lociArchitecturesBasicJVM,
              lociSerializableUpickleJVM,
              lociTransmitterBasicJVM, lociTransmitterRescalaJVM,
-             lociNetworkTcpJVM, lociNetworkWsJVM, lociNetworkWsPlayJVM,
-             lociNetworkWebRtcJVM))
+             lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
+             lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = preventPublication(project
   in file(".js")
   aggregate (lociCoreJS, lociArchitecturesBasicJS,
              lociSerializableUpickleJS,
              lociTransmitterBasicJS, lociTransmitterRescalaJS,
-             lociNetworkTcpJS, lociNetworkWsJS, lociNetworkWsPlayJS,
-             lociNetworkWebRtcJS))
+             lociCommunicatorTcpJS, lociCommunicatorWsJS,
+             lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS))
 
 
 lazy val lociCore = (crossProject
@@ -138,44 +138,45 @@ lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 
 
-lazy val lociNetworkTcp = (crossProject
+lazy val lociCommunicatorTcp = (crossProject
   crossType CrossType.Dummy
-  in file("scala-loci-network-tcp")
-  settings (normalizedName := "scala-loci-network-tcp")
-  dependsOn lociCore)
+  in file("scala-loci-communicator-tcp")
+  settings (normalizedName := "scala-loci-communicator-tcp")
+  dependsOn lociCommunication)
 
-lazy val lociNetworkTcpJVM = lociNetworkTcp.jvm
-lazy val lociNetworkTcpJS = lociNetworkTcp.js
+lazy val lociCommunicatorTcpJVM = lociCommunicatorTcp.jvm
+lazy val lociCommunicatorTcpJS = lociCommunicatorTcp.js
 
 
-lazy val lociNetworkWs = (crossProject
+lazy val lociCommunicatorWs = (crossProject
   crossType CrossType.Dummy
-  in file("scala-loci-network-ws-akka")
-  settings (normalizedName := "scala-loci-network-ws-akka",
+  in file("scala-loci-communicator-ws-akka")
+  settings (normalizedName := "scala-loci-communicator-ws-akka",
             akkaHttp, scalajsDom)
-  dependsOn lociCore)
+  dependsOn lociCommunication)
 
-lazy val lociNetworkWsJVM = lociNetworkWs.jvm
-lazy val lociNetworkWsJS = lociNetworkWs.js
+lazy val lociCommunicatorWsJVM = lociCommunicatorWs.jvm
+lazy val lociCommunicatorWsJS = lociCommunicatorWs.js
 
 
-lazy val lociNetworkWsPlay = (crossProject
+lazy val lociCommunicatorWsPlay = (crossProject
   crossType CrossType.Dummy
-  in file("scala-loci-network-ws-akka-play")
-  settings (normalizedName := "scala-loci-network-ws-akka-play",
+  in file("scala-loci-communicator-ws-akka-play")
+  settings (normalizedName := "scala-loci-communicator-ws-akka-play",
             play)
-  dependsOn lociNetworkWs)
+  dependsOn lociCommunicatorWs)
 
-lazy val lociNetworkWsPlayJVM = lociNetworkWsPlay.jvm
-lazy val lociNetworkWsPlayJS = lociNetworkWsPlay.js
+lazy val lociCommunicatorWsPlayJVM = lociCommunicatorWsPlay.jvm
+lazy val lociCommunicatorWsPlayJS = lociCommunicatorWsPlay.js
 
 
-lazy val lociNetworkWebRtc = (crossProject
+lazy val lociCommunicatorWebRtc = (crossProject
   crossType CrossType.Full
-  in file("scala-loci-network-webrtc")
-  settings (normalizedName := "scala-loci-network-webrtc",
+  in file("scala-loci-communicator-webrtc")
+  settings (normalizedName := "scala-loci-communicator-webrtc",
             scalajsDom)
-  dependsOn lociCore)
+  dependsOn lociCommunication)
 
-lazy val lociNetworkWebRtcJVM = lociNetworkWebRtc.jvm
-lazy val lociNetworkWebRtcJS = lociNetworkWebRtc.js
+lazy val lociCommunicatorWebRtcJVM = lociCommunicatorWebRtc.jvm
+lazy val lociCommunicatorWebRtcJS = lociCommunicatorWebRtc.js
+
