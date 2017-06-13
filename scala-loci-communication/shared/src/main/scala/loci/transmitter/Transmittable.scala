@@ -1,5 +1,5 @@
 package loci
-package transmission
+package transmitter
 
 import scala.annotation.implicitNotFound
 
@@ -67,4 +67,4 @@ trait TransmittableIdentity {
   implicit def identical[T] = IdenticallyTransmittable[T]
 }
 
-object Transmittable extends TransmittableCollections
+object Transmittable extends TransmittableCollections with TransmittableTuples

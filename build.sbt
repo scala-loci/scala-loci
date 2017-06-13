@@ -77,7 +77,6 @@ lazy val lociCore = (crossProject
   crossType CrossType.Full
   in file("scala-loci-core")
   settings (normalizedName := "scala-loci-core",
-            SourceGenerator.transmittableTuples,
             SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scalatest))
@@ -89,7 +88,8 @@ lazy val lociCoreJS = lociCore.js
 lazy val lociCommunication = (crossProject
   crossType CrossType.Full
   in file("scala-loci-communication")
-  settings (normalizedName := "scala-loci-communication"))
+  settings (normalizedName := "scala-loci-communication",
+            SourceGenerator.transmittableTuples))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js
