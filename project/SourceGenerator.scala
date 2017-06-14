@@ -72,6 +72,81 @@ object SourceGenerator {
       files.keys.toSeq
     }
 
+  val functionsBindingBuilder =
+    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+      val builders = (0 to 22) map { i =>
+        val argTypes = (0 until i) map { i => s"T$i" } mkString ", "
+        val typedArgs = (0 until i) map { i => s"v$i: T$i" } mkString ", "
+        val args = (0 until i) map { i => s"v$i" } mkString ", "
+
+        val function =
+          if (i == 0) s"function$i[T, R]"
+          else s"function$i[T, $argTypes, R]"
+
+        val marshallables =
+          if (i == 0) s"""
+            |      res: Marshallable[R]"""
+          else s"""
+            |      arg: MarshallableArgument[($argTypes)],
+            |      res: Marshallable[R]"""
+
+        val marshalling =
+          if (i == 0) "MessageBuffer.empty"
+          else s"arg marshal (($args), abstraction)"
+
+        val tupledFunction =
+          if (i == 1) "function"
+          else "function.tupled"
+
+        val dispatch =
+          if (i == 0) s"""
+            |          Try { res marshal (function(), abstraction) }"""
+          else s"""
+            |          arg unmarshal (message, abstraction) map { arg =>
+            |            res marshal ($tupledFunction(arg), abstraction) }"""
+
+        s"""
+          |  implicit def $function(implicit
+          |      ev: T <:< (($argTypes) => R), $marshallables) =
+          |    new BindingBuilder[T] {
+          |      type RemoteCall = ($argTypes) => Future[res.Result]
+          |      def apply(bindingName: String) = new Binding[T] {
+          |        type RemoteCall = ($argTypes) => Future[res.Result]
+          |        val name = bindingName
+          |        def dispatch(
+          |            function: T, message: MessageBuffer,
+          |            abstraction: AbstractionRef) = $dispatch
+          |        def call(
+          |            abstraction: AbstractionRef)(
+          |            handler: Binding.Handler) =
+          |          ($typedArgs) =>
+          |            createCall(handler, $marshalling, res, abstraction)
+          |      }
+          |    }
+          |"""
+      }
+
+      val files = Map(
+        dir / "loci" / "registry" / "FunctionsBindingBuilder.scala" ->
+        s"""package loci
+           |package registry
+           |
+           |import transmitter.AbstractionRef
+           |import transmitter.Marshallable
+           |import transmitter.MarshallableArgument
+           |import scala.util.Try
+           |import scala.concurrent.Future
+           |
+           |trait FunctionsBindingBuilder extends ValueBindingBuilder {
+           |${builders.mkString}
+           |}
+           |""".stripMargin
+      )
+
+      files foreach { case (file, content) => IO write (file, content) }
+      files.keys.toSeq
+    }
+
   val valueTypesHigherKinds =
     sourceGenerators in Compile += sourceManaged in Compile map { dir =>
       val higherKinds = (1 to 8) map { i =>

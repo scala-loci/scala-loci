@@ -89,7 +89,8 @@ lazy val lociCommunication = (crossProject
   crossType CrossType.Full
   in file("scala-loci-communication")
   settings (normalizedName := "scala-loci-communication",
-            SourceGenerator.transmittableTuples))
+            SourceGenerator.transmittableTuples,
+            SourceGenerator.functionsBindingBuilder))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js
