@@ -1,16 +1,16 @@
 package loci
+package transmitter
 
-import transmission._
-import rescala.graph.Struct
-import rescala.graph.Pulse
-import rescala.engines.Engine
-import rescala.propagation.Turn
-import rescala.reactives.Signal
+import _root_.rescala.graph.Struct
+import _root_.rescala.graph.Pulse
+import _root_.rescala.engines.Engine
+import _root_.rescala.propagation.Turn
+import _root_.rescala.reactives.Signal
 import scala.util.Success
 import scala.util.Failure
 import scala.language.higherKinds
 
-protected[loci] trait SignalTransmittable {
+protected[transmitter] trait SignalTransmittable {
   implicit def rescalaSignalTransmittable
       [Sig[T, ES <: Struct] <: Signal[T, ES], T, S, U, ES <: Struct](implicit
       engine: Engine[ES, Turn[ES]],
@@ -32,7 +32,7 @@ protected[loci] trait SignalTransmittable {
 
         val observer = signal observe endpoint.send
 
-        endpoint.closed += { _ => observer.remove }
+        endpoint.closed notify { _ => observer.remove }
 
         signal.now
       }
@@ -46,19 +46,19 @@ protected[loci] trait SignalTransmittable {
           case (_, message, false) =>
             engine.plan(signal) { implicit turn =>
               signal admitPulse Pulse.Exceptional(
-                new rescalaTransmitter.RemoteReactiveFailure(message))
+                new rescala.RemoteReactiveFailure(message))
             }
           case _  =>
             signal.setEmpty
         }
 
-        endpoint.closed += { _ =>
+        endpoint.closed notify { _ =>
           signal.setEmpty
           signal.disconnect
         }
 
         update(signal, value)
-        endpoint.receive += { update(signal, _) }
+        endpoint.receive notify { update(signal, _) }
 
         signal
       }

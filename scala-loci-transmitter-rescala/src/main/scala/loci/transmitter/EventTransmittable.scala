@@ -1,16 +1,16 @@
 package loci
+package transmitter
 
-import transmission._
-import rescala.graph.Struct
-import rescala.graph.Pulse
-import rescala.engines.Engine
-import rescala.propagation.Turn
-import rescala.reactives.Event
+import _root_.rescala.graph.Struct
+import _root_.rescala.graph.Pulse
+import _root_.rescala.engines.Engine
+import _root_.rescala.propagation.Turn
+import _root_.rescala.reactives.Event
 import scala.util.Success
 import scala.util.Failure
 import scala.language.higherKinds
 
-protected[loci] trait EventTransmittable {
+protected[transmitter] trait EventTransmittable {
   implicit def rescalaEventTransmittable
       [Evt[T, ES <: Struct] <: Event[T, ES], T, S, U, ES <: Struct](implicit
       engine: Engine[ES, Turn[ES]],
@@ -30,7 +30,7 @@ protected[loci] trait EventTransmittable {
             recover { throwable => (ignoredValue, throwable.toString) }
             observe endpoint.send)
 
-        endpoint.closed += { _ => observer.remove }
+        endpoint.closed notify { _ => observer.remove }
 
         null
       }
@@ -38,17 +38,19 @@ protected[loci] trait EventTransmittable {
       def receive(value: To, remote: RemoteRef, endpoint: Endpoint[From, To]) = {
         val event = engine.Evt[U]
 
-        endpoint.receive += {
-          case (value, `ignoredString`) =>
-            event fire value
-          case (_, message) =>
-            engine.plan(event) { implicit turn =>
-              event admitPulse Pulse.Exceptional(
-                new rescalaTransmitter.RemoteReactiveFailure(message))
-            }
+        endpoint.receive notify {
+          _ match {
+            case (value, `ignoredString`) =>
+              event fire value
+            case (_, message) =>
+              engine.plan(event) { implicit turn =>
+                event admitPulse Pulse.Exceptional(
+                  new rescala.RemoteReactiveFailure(message))
+              }
+          }
         }
 
-        endpoint.closed += { _ => event.disconnect }
+        endpoint.closed notify { _ => event.disconnect }
 
         event
       }

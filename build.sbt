@@ -59,16 +59,16 @@ lazy val loci = preventPublication(project
 lazy val lociJVM = preventPublication(project
   in file(".jvm")
   aggregate (lociCoreJVM, lociArchitecturesBasicJVM,
-             lociSerializableUpickleJVM,
-             lociTransmitterBasicJVM, lociTransmitterRescalaJVM,
+             lociSerializerUpickleJVM,
+             lociTransmitterRescalaJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = preventPublication(project
   in file(".js")
   aggregate (lociCoreJS, lociArchitecturesBasicJS,
-             lociSerializableUpickleJS,
-             lociTransmitterBasicJS, lociTransmitterRescalaJS,
+             lociSerializerUpickleJS,
+             lociTransmitterRescalaJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
              lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS))
 
@@ -106,25 +106,15 @@ lazy val lociArchitecturesBasicJVM = lociArchitecturesBasic.jvm
 lazy val lociArchitecturesBasicJS = lociArchitecturesBasic.js
 
 
-lazy val lociSerializableUpickle = (crossProject
+lazy val lociSerializerUpickle = (crossProject
   crossType CrossType.Pure
-  in file("scala-loci-serializable-upickle")
-  settings (normalizedName := "scala-loci-serializable-upickle",
+  in file("scala-loci-serializer-upickle")
+  settings (normalizedName := "scala-loci-serializer-upickle",
             upickle)
-  dependsOn lociCore)
+  dependsOn lociCommunication)
 
-lazy val lociSerializableUpickleJVM = lociSerializableUpickle.jvm
-lazy val lociSerializableUpickleJS = lociSerializableUpickle.js
-
-
-lazy val lociTransmitterBasic = (crossProject
-  crossType CrossType.Pure
-  in file("scala-loci-transmitter-basic")
-  settings (normalizedName := "scala-loci-transmitter-basic")
-  dependsOn lociCore)
-
-lazy val lociTransmitterBasicJVM = lociTransmitterBasic.jvm
-lazy val lociTransmitterBasicJS = lociTransmitterBasic.js
+lazy val lociSerializerUpickleJVM = lociSerializerUpickle.jvm
+lazy val lociSerializerUpickleJS = lociSerializerUpickle.js
 
 
 lazy val lociTransmitterRescala = (crossProject
@@ -132,7 +122,7 @@ lazy val lociTransmitterRescala = (crossProject
   in file("scala-loci-transmitter-rescala")
   settings (normalizedName := "scala-loci-transmitter-rescala",
             rescalaRepo, rescala)
-  dependsOn lociCore)
+  dependsOn lociCommunication)
 
 lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
