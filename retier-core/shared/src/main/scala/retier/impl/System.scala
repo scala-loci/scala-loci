@@ -371,9 +371,11 @@ class System(
       case ChannelMessage(messageType @ ("Request" | "Call"), channelName, Some(abstraction), payload) =>
         val id = AbstractionId.create(abstraction)
         val ref = AbstractionRef.create(id, channelName, remote, System.this)
-        peerImpl.dispatch(payload, id, ref) foreach { payload =>
-          if (messageType == "Request")
-            ref.channel send ("Response", payload)
+        context execute new Runnable {
+          def run = peerImpl.dispatch(payload, id, ref) foreach { payload =>
+            if (messageType == "Request")
+              ref.channel send ("Response", payload)
+          }
         }
 
       case ChannelMessage("Response", channelName, None, payload) =>
