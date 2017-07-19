@@ -38,7 +38,10 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
     val array = new Array[Char](size)
     val charBuffer = CharBuffer wrap array
 
-    var result = decoder decode (asByteBuffer, charBuffer, true)
+    val byteBuffer = asByteBuffer
+    byteBuffer position offset
+    byteBuffer limit (offset + length)
+    var result = decoder decode (byteBuffer, charBuffer, true)
 
     if (!result.isUnderflow)
       result.throwException
