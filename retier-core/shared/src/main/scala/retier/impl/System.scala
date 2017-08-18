@@ -68,9 +68,12 @@ class System(
 
   private val doRemoteLeft = Notifier[RemoteRef]
 
-  private val singleRemotes = (singleConnectedRemotes map { remote =>
-    remote.peerType -> remote
+  private val singleRemotes = (singleConnectedRemotes flatMap { remote =>
+    (bases(remote.peerType) + remote.peerType) map { _ -> remote }
   }).toMap
+
+  private def bases(peerType: PeerType): Set[PeerType] =
+    peerType.bases.toSet ++ (peerType.bases flatMap bases)
 
 
   def remotes(peerType: PeerType): List[RemoteRef] =
