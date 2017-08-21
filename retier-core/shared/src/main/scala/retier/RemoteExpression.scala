@@ -4,10 +4,8 @@ import dslparadise._
 import scala.language.higherKinds
 
 protected final abstract class RemoteSelectionExpression[P <: Peer] {
-  def on[P0 <: P, `P'` <: Peer](peer: Remote[P0])
-    (implicit ev: FirstIfNotEmptyElseSecond[P, P0, `P'`]): RemoteExpression[`P'`, fromSingle]
-  def on[P0 <: P, `P'` <: Peer](peers: Remote[P0]*)
-    (implicit ev: FirstIfNotEmptyElseSecond[P, P0, `P'`]): RemoteExpression[`P'`, fromMultiple]
+  def on[P0 <: P](peer: Remote[P0]): RemoteExpression[P, fromSingle]
+  def on[P0 <: P](peers: Remote[P0]*): RemoteExpression[P, fromMultiple]
 }
 
 protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]] {
