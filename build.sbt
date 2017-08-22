@@ -62,7 +62,8 @@ lazy val lociJVM = preventPublication(project
              lociSerializerUpickleJVM,
              lociTransmitterRescalaJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
-             lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM))
+             lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
+             lociCommunicationJVM))
 
 lazy val lociJS = preventPublication(project
   in file(".js")
@@ -70,7 +71,8 @@ lazy val lociJS = preventPublication(project
              lociSerializerUpickleJS,
              lociTransmitterRescalaJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
-             lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS))
+             lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
+             lociCommunicationJS))
 
 
 lazy val lociCore = (crossProject
@@ -79,7 +81,8 @@ lazy val lociCore = (crossProject
   settings (normalizedName := "scala-loci-core",
             SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration, scalatest))
+            macroparadise, macrodeclaration, scalatest)
+  dependsOn lociCommunication)
 
 lazy val lociCoreJVM = lociCore.jvm
 lazy val lociCoreJS = lociCore.js
@@ -90,7 +93,8 @@ lazy val lociCommunication = (crossProject
   in file("scala-loci-communication")
   settings (normalizedName := "scala-loci-communication",
             SourceGenerator.transmittableTuples,
-            SourceGenerator.functionsBindingBuilder))
+            SourceGenerator.functionsBindingBuilder,
+            scalatest))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js

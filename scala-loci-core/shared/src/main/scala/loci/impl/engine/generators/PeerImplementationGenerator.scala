@@ -261,9 +261,9 @@ trait PeerImplementationGenerator { this: Generation =>
 
       val dispatchImpl =
         q"""$synthetic override def $dispatch(
-                request: $String,
+                request: $MessageBuffer,
                 id: $AbstractionId,
-                ref: $AbstractionRef): $Try[$String] = {
+                ref: $AbstractionRef): $Try[$MessageBuffer] = {
               import _root_.loci.impl.AbstractionRef._
               import _root_.loci.impl.RemoteRef._
               id match {

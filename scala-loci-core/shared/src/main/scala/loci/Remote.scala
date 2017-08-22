@@ -1,13 +1,8 @@
 package loci
 
-import network.ProtocolInfo
-import util.Notification
+import transmitter.RemoteRef
 
-trait Remote[+P <: Peer] extends Equals {
-  def protocol: ProtocolInfo
-  def isAuthenticated: Boolean
+trait Remote[+P <: Peer] extends RemoteRef {
+  def authenticated: Boolean
   def authenticate(): Unit
-  def isConnected: Boolean
-  def disconnect(): Unit
-  val disconnected: Notification[Unit]
 }

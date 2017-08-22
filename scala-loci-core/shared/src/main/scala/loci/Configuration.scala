@@ -1,10 +1,10 @@
 package loci
 
-import util.Attributes
+import communicator.ConnectionSetupFactory
 
 case class Configuration(
-  listeners: List[(PeerType, String, Attributes)],
-  requestors: List[(PeerType, String, Attributes)])
+  listeners: List[(PeerType, String, ConnectionSetupFactory.Properties)],
+  connectors: List[(PeerType, String, ConnectionSetupFactory.Properties)])
 
 trait ConfigurationParser {
   def load(configfile: String, peerType: PeerType, peerTypes: List[PeerType]):

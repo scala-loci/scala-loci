@@ -4,7 +4,7 @@ import transmission.MultipleTransmission
 import transmission.OptionalTransmission
 import transmission.SingleTransmission
 import transmission.TransmissionProvider
-import transmission.Transmittable
+import transmitter.Transmittable
 import scala.language.implicitConversions
 
 protected object ImplicitTransmissions {

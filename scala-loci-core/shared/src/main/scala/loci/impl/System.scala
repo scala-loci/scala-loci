@@ -9,9 +9,9 @@ import Selection._
 import transmission.MultipleTransmission
 import transmission.OptionalTransmission
 import transmission.SingleTransmission
-import network.ConnectionRequestor
-import util.Notifier
-import util.Notification
+import communicator.ProtocolCommon
+import communicator.Connector
+import messaging.Message
 import scala.ref.WeakReference
 import scala.concurrent.Promise
 import scala.concurrent.Future
@@ -139,42 +139,42 @@ class System(
 
 
   def remoteJoined(peerType: PeerType): Notification[RemoteRef] =
-    doRemoteJoined.notification transform {
+    doRemoteJoined.notification collect {
       Function unlift { _ asRemote peerType }
     }
 
   def remotePreJoined(peerType: PeerType): Notification[RemoteRef] =
-    doRemotePreJoined.notification transform {
+    doRemotePreJoined.notification collect {
       Function unlift { _ asRemote peerType }
     }
 
   def remoteLeft(peerType: PeerType): Notification[RemoteRef] =
-    doRemoteLeft.notification transform {
+    doRemoteLeft.notification collect {
       Function unlift { _ asRemote peerType }
     }
 
   def remotePreLeft(peerType: PeerType): Notification[RemoteRef] =
-    doRemotePreLeft.notification transform {
+    doRemotePreLeft.notification collect {
       Function unlift { _ asRemote peerType }
     }
 
   def remoteJoined[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
-    doRemoteJoined.notification transform {
+    doRemoteJoined.notification collect {
       Function unlift { _.asRemote[R] }
     }
 
   def remotePreJoined[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
-    doRemotePreJoined.notification transform {
+    doRemotePreJoined.notification collect {
       Function unlift { _.asRemote[R] }
     }
 
   def remoteLeft[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
-    doRemoteLeft.notification transform {
+    doRemoteLeft.notification collect {
       Function unlift { _.asRemote[R] }
     }
 
   def remotePreLeft[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
-    doRemotePreLeft.notification transform {
+    doRemotePreLeft.notification collect {
       Function unlift { _.asRemote[R] }
     }
 
@@ -182,22 +182,22 @@ class System(
 
   // connections
 
-  def requestRemoteConnection
-      [R <: Peer: PeerTypeTag](requestor: ConnectionRequestor): Unit =
-    (remoteConnections request (requestor, peerTypeOf[R])).failed foreach {
+  def connect[R <: Peer: PeerTypeTag](
+      connector: Connector[messaging.ConnectionsBase.Protocol]): Unit =
+    (remoteConnections connect (connector, peerTypeOf[R])).failed foreach {
       _ => peerImpl.error
     }
 
-  def createMultipleRemoteConnection
-      [R <: Peer: PeerTypeTag]: MultipleRemoteConnection[R] =
+  def createMultipleRemoteConnection[R <: Peer: PeerTypeTag]
+    : MultipleRemoteConnection[R] =
     MultipleRemoteConnectionImpl(this)
 
-  def createOptionalRemoteConnection
-      [R <: Peer: PeerTypeTag]: OptionalRemoteConnection[R] =
+  def createOptionalRemoteConnection[R <: Peer: PeerTypeTag]
+    : OptionalRemoteConnection[R] =
     OptionalRemoteConnectionImpl(this)
 
-  def createSingleRemoteConnection
-      [R <: Peer: PeerTypeTag]: SingleRemoteConnection[R] =
+  def createSingleRemoteConnection[R <: Peer: PeerTypeTag]
+    : SingleRemoteConnection[R] =
     SingleRemoteConnectionImpl(this)
 
 
@@ -301,7 +301,7 @@ class System(
   private val channels =
     new ConcurrentHashMap[(String, RemoteRef), Channel]
   private val channelResponseHandlers =
-    new ConcurrentHashMap[Channel, ConcurrentLinkedQueue[String => Unit]]
+    new ConcurrentHashMap[Channel, ConcurrentLinkedQueue[MessageBuffer => Unit]]
   private val pushedValues =
     new ConcurrentHashMap[(RemoteRef, AbstractionId), Future[_]]
   private val noResultRequested =
@@ -357,11 +357,11 @@ class System(
     channel == (channels get channelId)
   }
 
-  def sendMessage(channel: Channel, messageType: String, payload: String): Unit =
+  def sendMessage(channel: Channel, payload: MessageBuffer): Unit =
     if (isChannelOpen(channel))
       remoteConnections send (
         channel.remote,
-        ChannelMessage(messageType, channel.name, None, payload))
+        ChannelMessage("Update", channel.name, None, payload))
 
 
   remoteConnections.remotes foreach { remote =>
@@ -369,12 +369,12 @@ class System(
     dispatcher dispatch StartedMessageDispatch(remote)
   }
 
-  remoteConnections.remoteJoined += { remote =>
+  remoteConnections.remoteJoined notify { remote =>
     doRemotePreJoined(remote)
     dispatcher dispatch StartedMessageDispatch(remote)
   }
 
-  remoteConnections.remoteLeft += { remote =>
+  remoteConnections.remoteLeft notify { remote =>
     doRemotePreLeft(remote)
     context execute new Runnable {
       def run = {
@@ -385,21 +385,22 @@ class System(
     closeChannels(remote)
   }
 
-  remoteConnections.constraintsViolated += { _ =>
+  remoteConnections.constraintsViolated notify { _ =>
     context execute new Runnable {
       def run = peerImpl.fatal
     }
     remoteConnections.terminate
   }
 
-  remoteConnections.terminated += { _ =>
+  remoteConnections.terminated notify { _ =>
     context execute new Runnable {
       def run = peerImpl.terminating
     }
     (mainThread getAndSet None) foreach { _.interrupt }
   }
 
-  remoteConnections.receive += { case (remote, message) =>
+  remoteConnections.receive notify { remoteMessage =>
+    val (remote, message) = remoteMessage
     dispatcher dispatch MessageDispatch(remote, message)
   }
 
@@ -417,7 +418,7 @@ class System(
     def run = remoteConnections send (remote, StartedMessage())
   }
 
-  case class MessageDispatch(remote: RemoteRef, message: Message)
+  case class MessageDispatch(remote: RemoteRef, message: Message[Method])
       extends SystemDispatch {
 
     def blockedBy(dispatch: SystemDispatch) = dispatch match {
@@ -439,13 +440,19 @@ class System(
               doMain()
           }
 
-      case ChannelMessage(messageType @ ("Request" | "Call"), channelName, Some(abstraction), payload) =>
+      case ChannelMessage(
+          messageType @ ("Request" | "Call"),
+          channelName,
+          Some(abstraction),
+          payload) =>
         val id = AbstractionId.create(abstraction)
         val ref = AbstractionRef.create(id, channelName, remote, System.this)
         context execute new Runnable {
           def run = peerImpl.dispatch(payload, id, ref) foreach { payload =>
             if (messageType == "Request")
-              ref.channel send ("Response", payload)
+              remoteConnections send (
+                remote,
+                ChannelMessage("Response", channelName, None, payload))
           }
         }
 
@@ -455,9 +462,9 @@ class System(
           Option(handlers.poll) foreach { _(payload) }
         }
 
-      case ChannelMessage(messageType, channelName, None, payload) =>
+      case ChannelMessage("Update", channelName, None, payload) =>
         val channel = obtainChannel(channelName, remote)
-        channel receive (messageType, payload)
+        channel receive payload
 
       case _ =>
     }
@@ -509,7 +516,7 @@ class System(
           if (pushValuesFuture eq future) {
             if (isConnected(remote)) {
               val handlers = Option(channelResponseHandlers get channel) getOrElse {
-                val handlers = new ConcurrentLinkedQueue[String => Unit]
+                val handlers = new ConcurrentLinkedQueue[MessageBuffer => Unit]
                 Option(channelResponseHandlers putIfAbsent (channel, handlers)) getOrElse handlers
               }
 
@@ -517,7 +524,7 @@ class System(
                 promise tryComplete (props unmarshalResponse (response, abstraction))
               }
 
-              channel.closed += { _ =>
+              channel.closed notify { _ =>
                 promise tryFailure channelClosedException
               }
 

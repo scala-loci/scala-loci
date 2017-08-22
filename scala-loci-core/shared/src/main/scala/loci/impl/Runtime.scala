@@ -2,8 +2,9 @@ package loci
 package impl
 
 import RemoteRef._
-import network.ConnectionListener
-import network.ConnectionRequestor
+import communicator.ProtocolCommon
+import communicator.Listener
+import communicator.Connector
 import scala.util.Try
 import scala.util.Success
 import scala.collection.mutable.ListBuffer
@@ -62,17 +63,17 @@ class Runtime(
         val metaInstance = tieMultiplicities.toSeq.foldLeft(false) {
           case (metaInstance, (peerType, multiplicity)) =>
             val peerSubTypeSetups = setup collect {
-              case (peerSubType, (listeners, requestors))
+              case (peerSubType, (listeners, connectors))
                   if peerSubType <= peerType =>
-                (listeners, requestors)
+                (listeners, connectors)
             }
 
-            val (listeners, requestors) = peerSubTypeSetups.unzip match {
-              case (listeners, requestors) =>
-                (listeners.flatten, requestors.flatten)
+            val (listeners, connectors) = peerSubTypeSetups.unzip match {
+              case (listeners, connectors) =>
+                (listeners.flatten, connectors.flatten)
             }
 
-            val setupCount = listeners.size + requestors.size
+            val setupCount = listeners.size + connectors.size
 
             if (multiplicity == SingleTie && setupCount < 1)
               throw new RemoteConnectionException("no connection " +
@@ -91,14 +92,14 @@ class Runtime(
               (multiplicity == SingleTie || multiplicity == OptionalTie))
         }
 
-        val listenersRequestors =
-          setup.toSeq map { case (peerType, (listeners, requestors)) =>
-            (listeners map { _ -> peerType }, requestors map { _ -> peerType })
+        val listenersConnectors =
+          setup.toSeq map { case (peerType, (listeners, connectors)) =>
+            (listeners map { _ -> peerType }, connectors map { _ -> peerType })
           }
 
-        val (listeners, requestors) =
-          listenersRequestors.unzip match { case (listeners, requestors) =>
-            (listeners.flatten, requestors.flatten)
+        val (listeners, connectors) =
+          listenersConnectors.unzip match { case (listeners, connectors) =>
+            (listeners.flatten, connectors.flatten)
           }
 
         if (metaInstance) {
@@ -107,22 +108,20 @@ class Runtime(
               "of single or optional type can be listened to")
 
           val (listener, peerType) = listeners.head
-          val notification = remoteConnections listen
-            (listener, peerType, createDesignatedInstance = true)
 
-          notification += { connection =>
+          remoteConnections.listenWithCallback(listener, peerType, createDesignatedInstance = true) { connection =>
             connection map { case (remote, remoteConnections) =>
-              runPeer(remoteConnections, Seq(remote), Seq.empty, requestors)
+              runPeer(remoteConnections, Seq(remote), Seq.empty, connectors)
             }
           }
         }
         else {
-          remoteConnections.terminated += { _ => terminate }
+          remoteConnections.terminated notify { _ => terminate }
 
           if (remoteConnections.isTerminated)
             terminate
           else
-            runPeer(remoteConnections, Seq.empty, listeners, requestors)
+            runPeer(remoteConnections, Seq.empty, listeners, connectors)
         }
       }
       catch {
@@ -137,36 +136,36 @@ class Runtime(
 
   private def runPeer(remoteConnections: RemoteConnections,
       requiredListenedRemotes: Seq[RemoteRef],
-      listeners: Seq[(ConnectionListener, PeerType)],
-      requestors: Seq[(ConnectionRequestor, PeerType)]): Unit = {
-    val requiredAndOptionalRequestors =
-      requestors map { case requestorPeerType @ (requestor, peerType) =>
+      listeners: Seq[(Listener[RemoteConnections.Protocol], PeerType)],
+      connectors: Seq[(Connector[RemoteConnections.Protocol], PeerType)]): Unit = {
+    val requiredAndOptionalConnectors =
+      connectors map { case connectorPeerType @ (connector, peerType) =>
         val singleTie = (bases(peerType) + peerType) exists { peerType =>
           (tieMultiplicities get peerType) == Some(SingleTie)
         }
 
         if (singleTie)
-          Left(requestorPeerType)
+          Left(connectorPeerType)
         else
-          Right(requestorPeerType)
+          Right(connectorPeerType)
       }
 
-    val requiredRequestors = requiredAndOptionalRequestors collect {
-      case Left(requestor) => requestor
+    val requiredConnectors = requiredAndOptionalConnectors collect {
+      case Left(connector) => connector
     }
 
-    val optionalRequestors = requiredAndOptionalRequestors collect {
-      case Right(requestor) => requestor
+    val optionalConnectors = requiredAndOptionalConnectors collect {
+      case Right(connector) => connector
     }
 
-    val future = Future.traverse(requiredRequestors) {
-      case (requestor, peerType) =>
-        remoteConnections request (requestor, peerType)
+    val future = Future.traverse(requiredConnectors) {
+      case (connector, peerType) =>
+        remoteConnections connect (connector, peerType)
     }
 
-    future foreach { requiredRequestedRemotes =>
-      val remotes = optionalRequestors map { case (requestor, peerType) =>
-        remoteConnections request (requestor, peerType) }
+    future foreach { requiredConnectedRemotes =>
+      val remotes = optionalConnectors map { case (connector, peerType) =>
+        remoteConnections connect (connector, peerType) }
 
       listeners foreach { case (listener, peerType) =>
         remoteConnections listen (listener, peerType) }
@@ -176,7 +175,7 @@ class Runtime(
           if (!state.isTerminated &&
               remoteConnections.constraintViolations.isEmpty)
             state.systems += peerSystem(peerExecutionContext, remoteConnections,
-              requiredListenedRemotes ++ requiredRequestedRemotes, remotes)
+              requiredListenedRemotes ++ requiredConnectedRemotes, remotes)
         }
       }
     }

@@ -2,39 +2,38 @@ package loci
 package impl
 
 import RemoteRef._
-import network.ProtocolInfo
-import util.Notifier
+import communicator.ProtocolCommon
 import java.util.concurrent.atomic.AtomicBoolean
 
 private final case class RemoteRefImpl(peerType: PeerType, id: Long,
-    protocol: ProtocolInfo)(
-    val connected: AtomicBoolean,
-    val authenticated: AtomicBoolean,
+    protocol: ProtocolCommon)(
+    val isConnected: AtomicBoolean,
+    val isAuthenticated: AtomicBoolean,
     val remoteConnections: RemoteConnections) extends Remote[Nothing] {
   val doDisconnected = Notifier[Unit]
 
-  def isAuthenticated = authenticated.get
-  def authenticate() = authenticated set true
-  def isConnected = connected.get
+  def authenticated = isAuthenticated.get
+  def authenticate() = isAuthenticated set true
+  def connected = isConnected.get
   def disconnect() = remoteConnections disconnect this
   val disconnected = doDisconnected.notification
 }
 
 object RemoteRef {
-  type RemoteRef = transmission.RemoteRef
+  type RemoteRef = transmitter.RemoteRef
 
   private[impl] def create[R <: Peer: PeerTypeTag](id: Long,
-      protocol: ProtocolInfo, remoteConnections: RemoteConnections): Remote[R] =
+      protocol: ProtocolCommon, remoteConnections: RemoteConnections): Remote[R] =
     RemoteRefImpl(
       peerTypeOf[R], id, protocol)(
-      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated),
+      new AtomicBoolean(true), new AtomicBoolean(protocol.authenticated),
       remoteConnections)
 
   private[impl] def create(peerType: PeerType, id: Long,
-      protocol: ProtocolInfo, remoteConnections: RemoteConnections): RemoteRef =
+      protocol: ProtocolCommon, remoteConnections: RemoteConnections): RemoteRef =
     RemoteRefImpl(
       peerType, id, protocol)(
-      new AtomicBoolean(true), new AtomicBoolean(protocol.isAuthenticated),
+      new AtomicBoolean(true), new AtomicBoolean(protocol.authenticated),
       remoteConnections)
 
   implicit class RemoteRefOps(remote: RemoteRef) {
@@ -50,7 +49,7 @@ object RemoteRef {
 
     def doDisconnected(): Unit = remote match {
       case remote @ RemoteRefImpl(_, _, _) =>
-        remote.connected set false
+        remote.isConnected set false
         remote.doDisconnected()
       case _ => throwLociImplementationError(remote)
     }

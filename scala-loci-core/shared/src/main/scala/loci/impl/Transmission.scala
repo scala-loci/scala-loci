@@ -12,10 +12,10 @@ private final case class MultipleTransmissionImpl[
   val id = (peerTypeOf[R], system, selection)
   def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
 
-  val remoteJoined = system.remotePreJoined[R] transform {
+  val remoteJoined = system.remotePreJoined[R] collect {
     case remote if selection filter remote => remote
   }
-  val remoteLeft = system.remotePreLeft[R] transform {
+  val remoteLeft = system.remotePreLeft[R] collect {
     case remote if selection filter remote => remote
   }
   def remotes = selection.remotes getOrElse system.preRemotes[R]
@@ -30,10 +30,10 @@ private final case class OptionalTransmissionImpl[
   val id = (peerTypeOf[R], system, selection)
   def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
 
-  val remoteJoined = system.remotePreJoined[R] transform {
+  val remoteJoined = system.remotePreJoined[R] collect {
     case remote if selection filter remote => remote
   }
-  val remoteLeft = system.remotePreLeft[R] transform {
+  val remoteLeft = system.remotePreLeft[R] collect {
     case remote if selection filter remote => remote
   }
   def remote = selection.remote map { Some(_) } getOrElse system.optionalPreRemote[R]
@@ -51,10 +51,10 @@ private final case class SingleTransmissionImpl[
   val id = (peerTypeOf[R], system, selection)
   def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
 
-  val remoteJoined = system.remotePreJoined[R] transform {
+  val remoteJoined = system.remotePreJoined[R] collect {
     case remote if selection filter remote => remote
   }
-  val remoteLeft = system.remotePreLeft[R] transform {
+  val remoteLeft = system.remotePreLeft[R] collect {
     case remote if selection filter remote => remote
   }
   def remote = selection.remote getOrElse system.singlePreRemote[R]

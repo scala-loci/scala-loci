@@ -10,6 +10,6 @@ object MultiClientServer {
 
   abstract class ClientPeer[S <: ServerPeer[_]: PeerTypeTag] extends Peer {
     type Tie <: Single[S]
-    implicit def connectDefault = Default.Request[S]
+    implicit def connectDefault = Default.Connect[S]
   }
 }

@@ -204,7 +204,7 @@ trait ConnectionsBase[R, M] {
         Failure(terminatedException)
     }
 
-  private def removeConnection(remote: R): Unit =
+  protected def removeConnection(remote: R): Unit =
     sync {
       if (state.connections containsKey remote) {
         state.remotes remove remote

@@ -1,7 +1,7 @@
 package loci
 
-import network.ConnectionRequestor
-import util.Notification
+import communicator.Connector
+import messaging.ConnectionsBase.Protocol
 
 sealed trait RemoteConnection[R <: Peer, M <: TieMultiplicity] {
   val id: Any
@@ -10,7 +10,7 @@ sealed trait RemoteConnection[R <: Peer, M <: TieMultiplicity] {
   val remoteJoined: Notification[Remote[R]]
   val remoteLeft: Notification[Remote[R]]
   def remotes: Seq[Remote[R]]
-  def request(requestor: ConnectionRequestor): Unit
+  def connect(connector: Connector[Protocol]): Unit
 }
 
 sealed trait MultipleRemoteConnection[R <: Peer]
@@ -48,7 +48,7 @@ object MultipleRemoteConnection {
     val joined = connection.remoteJoined
     val left = connection.remoteLeft
     def connected = connection.remotes
-    def connect(requestor: ConnectionRequestor) = connection.request(requestor)
+    def connect(connector: Connector[Protocol]) = connection connect connector
   }
 }
 
@@ -59,7 +59,7 @@ object OptionalRemoteConnection {
     val joined = connection.remoteJoined
     val left = connection.remoteLeft
     def connected = connection.remote
-    def connect(requestor: ConnectionRequestor) = connection.request(requestor)
+    def connect(connector: Connector[Protocol]) = connection connect connector
   }
 }
 

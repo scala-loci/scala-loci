@@ -1,6 +1,7 @@
 package loci
 package impl
 
+import messaging.Message
 import org.scalatest._
 import scala.collection.mutable.ListBuffer
 
@@ -38,11 +39,14 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
         client0 -> Client0.apply _, client1 -> Client1.apply _,
         node0 -> Node.apply _, node1 -> Node.apply _) foreach {
       case (peer, event) =>
-        peer.remoteJoined += { _ => events += event(Joined) }
-        peer.remoteLeft += { _ => events += event(Left) }
-        peer.constraintsSatisfied += { _ => events += event(ConstraintsSatisfied) }
-        peer.constraintsViolated += { _ => events += event(ConstraintsViolated) }
-        peer.receive += { case (_, Message(_, _, payload)) => events += event(Receive(payload)) }
+        peer.remoteJoined notify { _ => events += event(Joined) }
+        peer.remoteLeft notify { _ => events += event(Left) }
+        peer.constraintsSatisfied notify { _ => events += event(ConstraintsSatisfied) }
+        peer.constraintsViolated notify { _ => events += event(ConstraintsViolated) }
+        peer.receive notify { remoteMessage =>
+          val (_, Message(_, _, payload)) = remoteMessage
+          events += event(Receive(payload toString (0, payload.length)))
+        }
     }
 
     (events, dummy, server, client0, client1, node0, node1)
@@ -56,7 +60,7 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
     val listener = new NetworkListener
 
     server.listen(listener, clientType)
-    client0.request(listener.createRequestor, serverType)
+    client0.connect(listener.createConnector, serverType)
     client0.terminate
 
 
@@ -76,7 +80,7 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
     val listener = new NetworkListener
 
     server.listen(listener, clientType)
-    client0.request(listener.createRequestor, serverType)
+    client0.connect(listener.createConnector, serverType)
     server.terminate
 
     events should have size 6
@@ -93,12 +97,12 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
   it should "handle connections correctly for terminating node" in {
     for (seed <- 0 to 5) {
       val (events, _, _, _, _, node0, node1) = setup
-      val requestor = new NetworkRequestor(deferred = seed != 0, seed)
+      val connector = new NetworkConnector(deferred = seed != 0, seed)
 
-      node0.request(requestor.first, nodeType)
-      node1.request(requestor.second, nodeType)
+      node0.connect(connector.first, nodeType)
+      node1.connect(connector.second, nodeType)
 
-      requestor.run
+      connector.run
 
       node0.terminate
 
@@ -124,19 +128,19 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
 
       server.listen(listener, clientType)
       dummy.listen(dummyListener, clientType)
-      client0.request(listener.createRequestor, superServerType)
-      client1.request(listener.createRequestor, serverType)
-      client1.request(listener.createRequestor, superServerType)
-      client1.request(dummyListener.createRequestor, dummyType)
+      client0.connect(listener.createConnector, superServerType)
+      client1.connect(listener.createConnector, serverType)
+      client1.connect(listener.createConnector, superServerType)
+      client1.connect(dummyListener.createConnector, dummyType)
 
       listener.run
       dummyListener.run
 
-      client0.send(client0.remotes(0), ChannelMessage("dummyChannel", "Test", None, "just a test"))
+      client0.send(client0.remotes(0), ChannelMessage("dummyChannel", "Test", None, MessageBuffer fromString "just a test"))
 
       server.run
 
-      client1.send(client1.remotes(1), ChannelMessage("dummyChannel", "Test", None, "another test"))
+      client1.send(client1.remotes(1), ChannelMessage("dummyChannel", "Test", None, MessageBuffer fromString "another test"))
 
 
       events should have size 11

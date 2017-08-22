@@ -152,7 +152,7 @@ trait ProxyGenerator { this: Generation =>
                     }
                   else
                     $remoteRequestTerm unmarshal (request, ref) map { arg =>
-                      $declTerm = arg; ""
+                      $declTerm = arg; $MessageBufferEmpty
                     }
                """
             }
@@ -164,7 +164,7 @@ trait ProxyGenerator { this: Generation =>
                       }
                    """
                 else
-                  q"""$declInvocation map { response => "" }"""
+                  q"""$declInvocation map { response => $MessageBufferEmpty }"""
 
               if (isNullary)
                 q"""$marshalled"""

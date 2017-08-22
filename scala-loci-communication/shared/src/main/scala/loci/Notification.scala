@@ -5,7 +5,25 @@ import scala.util.control.NonFatal
 import java.util.concurrent.ConcurrentLinkedQueue
 
 trait Notification[+T] {
-  def notify[U >: T](notifiable: U => Unit): Notifiable[U]
+  def notify[U >: T](notifiable: U => Unit): Notifiable[U] =
+    foreach(notifiable)
+
+  def foreach[U >: T](notifiable: U => Unit): Notifiable[U]
+
+  def filter(
+    predicate: T => Boolean,
+    failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
+    : Notification[T]
+
+  def map[U](
+    function: T => U,
+    failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
+    : Notification[U]
+
+  def collect[U](
+    function: PartialFunction[T, U],
+    failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
+    : Notification[U]
 }
 
 trait Notifiable[-T] extends Function1[T, Unit] {
@@ -36,12 +54,40 @@ object Notifier {
         catch { case NonFatal(exception) => failureReporter(exception) }
     }
 
-    def notify[U >: T](notifiable: U => Unit): Notifiable[U] = {
+    def foreach[U >: T](notifiable: U => Unit): Notifiable[U] = {
       notifiables add notifiable
       new Notifiable[U] {
         def apply(v: U) = notifiable(v)
         def remove() = notifiables remove notifiable
       }
+    }
+
+    def filter(
+        predicate: T => Boolean,
+        failureReporter: Throwable => Unit): Notification[T] = {
+      val notification = new NotifierNotification[T](failureReporter)
+      foreach { value =>
+        if (predicate(value))
+          notification notify value
+      }
+      notification
+    }
+
+    def map[U](
+        function: T => U,
+        failureReporter: Throwable => Unit): Notification[U] = {
+      val notification = new NotifierNotification[U](failureReporter)
+      foreach { notification notify function(_) }
+      notification
+    }
+
+    def collect[U](
+        function: PartialFunction[T, U],
+        failureReporter: Throwable => Unit): Notification[U] = {
+      val notification = new NotifierNotification[U](failureReporter)
+      val notify = function runWith { notification notify _ }
+      foreach { notify(_) }
+      notification
     }
   }
 

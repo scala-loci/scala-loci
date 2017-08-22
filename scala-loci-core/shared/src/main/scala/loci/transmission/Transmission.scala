@@ -1,7 +1,6 @@
 package loci
 package transmission
 
-import util.Notification
 import scala.concurrent.Future
 
 sealed trait Transmission

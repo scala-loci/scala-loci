@@ -11,10 +11,12 @@ trait PeerImpl {
 
   def $$loci$metapeer: Peer = PeerImpl.throwMetaPeerNotSetUp
 
-  def $$loci$dispatch(request: String, id: AbstractionId, ref: AbstractionRef)
-    : Try[String] = Failure(
-        new LociImplementationError(
-          s"request for ${id.name} could not be dispatched"))
+  def $$loci$dispatch(
+      request: MessageBuffer, 
+      id: AbstractionId, 
+      ref: AbstractionRef): Try[MessageBuffer] = Failure(
+    new LociImplementationError(
+      s"request for ${id.name} could not be dispatched"))
 
   def $$loci$main(): Unit = { }
   def $$loci$terminating(): Unit = { }
@@ -32,7 +34,10 @@ object PeerImpl {
     throw new LociImplementationError("peer meta object not set up")
 
   implicit class Ops(peerImpl: PeerImpl) {
-    def dispatch(request: String, id: AbstractionId, ref: AbstractionRef) =
+    def dispatch(
+        request: MessageBuffer, 
+        id: AbstractionId, 
+        ref: AbstractionRef) =
       peerImpl.$$loci$dispatch(request, id, ref)
     def main() =
       peerImpl.$$loci$main

@@ -1,5 +1,6 @@
 package loci
 
+import transmitter._
 import transmission._
 import org.scalatest._
 

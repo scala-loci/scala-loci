@@ -1,16 +1,15 @@
 package loci
 package impl
 
+import transmitter._
 import scala.util.Try
 import Marshallable.Int
 
 object Marshallable {
-  implicit object Int extends transmission.MarshallableArgument[Int] {
-    def marshal(value: Int, abstraction: transmission.AbstractionRef) =
-      value.toString
-    def unmarshal(value: String, abstraction: transmission.AbstractionRef) =
-      Try { value.toInt }
-    val isPushBased = false
+  implicit object Int extends MarshallableArgument[Int] {
+    def marshal(value: Int, abstraction: AbstractionRef) = MessageBuffer fromString value.toString
+    def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) = Try { (value toString (0, value.length)).toInt }
+    def isPushBased = false
   }
 }
 
@@ -24,7 +23,7 @@ class ServerClientApp(listener: NetworkListener) {
 
   class Client extends Peer {
     type Tie = Single[Server]
-    def connect = request[Server] { listener.createRequestor }
+    def connect = connect[Server] { listener.createConnector }
     override def context = contexts.Immediate.global
   }
 

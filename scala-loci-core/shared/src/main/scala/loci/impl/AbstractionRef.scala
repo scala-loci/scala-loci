@@ -14,7 +14,7 @@ private final case class AbstractionRefImpl(abstraction: AbstractionId,
 }
 
 object AbstractionRef {
-  type AbstractionRef = transmission.AbstractionRef
+  type AbstractionRef = transmitter.AbstractionRef
 
   private[impl] def create(abstraction: AbstractionId, link: String,
       remote: RemoteRef, system: System): AbstractionRef =

@@ -3,33 +3,32 @@ package impl
 
 import Channel._
 import RemoteRef._
-import util.Notifier
 
 private final case class ChannelImpl(name: String, remote: RemoteRef,
     system: System) extends Channel {
-  val doReceive = Notifier[(String, String)]
+  val doReceive = Notifier[MessageBuffer]
   val doClosed = Notifier[Unit]
 
   val receive = doReceive.notification
   val closed = doClosed.notification
 
-  def send(messageType: String, payload: String) =
-    system.sendMessage(this, messageType, payload)
+  def send(message: MessageBuffer) =
+    system.sendMessage(this, message)
   def close() = system.closeChannel(this)
-  def isOpen = system.isChannelOpen(this)
+  def open = system.isChannelOpen(this)
 }
 
 object Channel {
-  type Channel = transmission.Channel
+  type Channel = transmitter.Channel
 
   private[impl] def create(name: String, remote: RemoteRef, system: System)
       : Channel =
     ChannelImpl(name, remote, system)
 
   implicit class ChannelOps(channel: Channel) {
-    def receive(messageType: String, payload: String): Unit = channel match {
+    def receive(message: MessageBuffer): Unit = channel match {
       case channel @ ChannelImpl(_, _, _) =>
-        channel.doReceive((messageType, payload))
+        channel.doReceive(message)
       case _ => throwLociImplementationError(channel)
     }
 
