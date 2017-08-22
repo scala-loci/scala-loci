@@ -152,55 +152,56 @@ trait ConnectionsBase[R, M] {
       syncHandlers.get += handler _
 
 
-  def connect(
-      connector: Connector[ConnectionsBase.Protocol])(
-      handler: Try[R] => Unit): Unit
-
-  def listen(
-      listener: Listener[ConnectionsBase.Protocol])(
-      handler: Try[R] => Unit): Try[Unit]
-
   protected def deserializeMessage(message: MessageBuffer): Try[M]
 
   protected def serializeMessage(message: M): MessageBuffer
 
 
-  protected def addListening(listening: Listening): Unit =
+  protected def addListening(listening: Listening): Try[Unit] =
     sync {
-      state.listeners += listening
+      if (!isTerminated) {
+        state.listeners += listening
+        Success(())
+      }
+      else
+        Failure(terminatedException)
     }
 
   protected def addConnection(
       remote: R, connection: Connection[ConnectionsBase.Protocol]): Try[Unit] =
     sync {
-      state.connections put (remote, connection)
-      state.remotes add remote
+      if (!isTerminated) {
+        state.connections put (remote, connection)
+        state.remotes add remote
 
-      afterSync { doRemoteJoined(remote) }
+        afterSync { doRemoteJoined(remote) }
 
-      var receiveHandler: Notifiable[_] = null
-      var closedHandler: Notifiable[_] = null
+        var receiveHandler: Notifiable[_] = null
+        var closedHandler: Notifiable[_] = null
 
-      receiveHandler = connection.receive notify {
-        deserializeMessage(_) map { doBufferedReceive(remote, _) }
-      }
+        receiveHandler = connection.receive notify {
+          deserializeMessage(_) map { doBufferedReceive(remote, _) }
+        }
 
-      closedHandler = connection.closed notify { _ =>
-        if (receiveHandler != null)
+        closedHandler = connection.closed notify { _ =>
+          if (receiveHandler != null)
+            receiveHandler.remove
+          if (closedHandler != null)
+            closedHandler.remove
+          removeConnection(remote)
+        }
+
+        if (!connection.open) {
           receiveHandler.remove
-        if (closedHandler != null)
           closedHandler.remove
-        removeConnection(remote)
-      }
-
-      if (!connection.open) {
-        receiveHandler.remove
-        closedHandler.remove
-        removeConnection(remote)
-        Failure(terminatedException)
+          removeConnection(remote)
+          Failure(terminatedException)
+        }
+        else
+          Success(())
       }
       else
-        Success(())
+        Failure(terminatedException)
     }
 
   private def removeConnection(remote: R): Unit =

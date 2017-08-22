@@ -3,7 +3,6 @@ package registry
 
 import transmitter.AbstractionRef
 import transmitter.Marshallable
-import transmitter.MarshallableArgument
 import scala.util.Try
 import scala.concurrent.Promise
 import scala.concurrent.Future

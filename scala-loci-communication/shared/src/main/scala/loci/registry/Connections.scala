@@ -35,7 +35,7 @@ class Connections[M: Message.Method]
   protected def serializeMessage(message: Message[M]) =
     Message serialize message
 
-  class State extends BaseState {
+  protected class State extends BaseState {
     private val counter = new AtomicLong(1)
     def createId = counter.getAndIncrement
   }
@@ -52,7 +52,6 @@ class Connections[M: Message.Method]
     listener.startListening() { addConnection(_, handler) } match {
       case Success(listening) =>
         addListening(listening)
-        Success(())
       case Failure(exception) =>
         Failure(exception)
     }
@@ -64,8 +63,7 @@ class Connections[M: Message.Method]
       case Success(connection) =>
         val remote = Connections.RemoteRef(
           state.createId, connection.protocol)(this)
-        addConnection(remote, connection)
-        handler(Success(remote))
+        handler(addConnection(remote, connection) map { _ => remote })
 
       case Failure(exception) =>
         handler(Failure(exception))
