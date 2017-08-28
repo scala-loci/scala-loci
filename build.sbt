@@ -58,34 +58,36 @@ lazy val loci = preventPublication(project
 
 lazy val lociJVM = preventPublication(project
   in file(".jvm")
-  aggregate (lociCoreJVM, lociArchitecturesBasicJVM,
+  aggregate (lociLangJVM, lociArchitecturesBasicJVM,
              lociSerializerUpickleJVM,
-             lociTransmitterRescalaJVM,
+             lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
+             lociLangTransmitterBasicJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
              lociCommunicationJVM))
 
 lazy val lociJS = preventPublication(project
   in file(".js")
-  aggregate (lociCoreJS, lociArchitecturesBasicJS,
+  aggregate (lociLangJS, lociArchitecturesBasicJS,
              lociSerializerUpickleJS,
-             lociTransmitterRescalaJS,
+             lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
+             lociLangTransmitterBasicJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
              lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
              lociCommunicationJS))
 
 
-lazy val lociCore = (crossProject
+lazy val lociLang = (crossProject
   crossType CrossType.Full
-  in file("scala-loci-core")
-  settings (normalizedName := "scala-loci-core",
+  in file("scala-loci-lang")
+  settings (normalizedName := "scala-loci-lang",
             SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scalatest)
   dependsOn lociCommunication)
 
-lazy val lociCoreJVM = lociCore.jvm
-lazy val lociCoreJS = lociCore.js
+lazy val lociLangJVM = lociLang.jvm
+lazy val lociLangJS = lociLang.js
 
 
 lazy val lociCommunication = (crossProject
@@ -105,7 +107,7 @@ lazy val lociArchitecturesBasic = (crossProject
   in file("scala-loci-architectures-basic")
   settings (normalizedName := "scala-loci-architectures-basic",
             macroparadise)
-  dependsOn lociCore)
+  dependsOn lociLang)
 
 lazy val lociArchitecturesBasicJVM = lociArchitecturesBasic.jvm
 lazy val lociArchitecturesBasicJS = lociArchitecturesBasic.js
@@ -131,6 +133,26 @@ lazy val lociTransmitterRescala = (crossProject
 
 lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
+
+
+lazy val lociLangTransmitterRescala = (crossProject
+  crossType CrossType.Pure
+  in file("scala-loci-lang-transmitter-rescala")
+  settings (normalizedName := "scala-loci-lang-transmitter-rescala")
+  dependsOn (lociLang, lociTransmitterRescala))
+
+lazy val lociLangTransmitterRescalaJVM = lociLangTransmitterRescala.jvm
+lazy val lociLangTransmitterRescalaJS = lociLangTransmitterRescala.js
+
+
+lazy val lociLangTransmitterBasic = (crossProject
+  crossType CrossType.Pure
+  in file("scala-loci-lang-transmitter-basic")
+  settings (normalizedName := "scala-loci-lang-transmitter-basic")
+  dependsOn lociLang)
+
+lazy val lociLangTransmitterBasicJVM = lociLangTransmitterBasic.jvm
+lazy val lociLangTransmitterBasicJS = lociLangTransmitterBasic.js
 
 
 lazy val lociCommunicatorTcp = (crossProject
