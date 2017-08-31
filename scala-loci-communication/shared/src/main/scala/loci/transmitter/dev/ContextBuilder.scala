@@ -13,24 +13,23 @@ object ContextBuilder {
     extends SendingContext[T, M] with ReceivingContext[T, M]
 
   implicit def message[
-      T <: Transmittables,
-      MB, MI, MR, MT <: Transmittables, MM <: Message.Transmittable](
+      B, I, R, T <: Transmittables, M <: Message.Transmittable,
+      S <: Transmittables](
     implicit
-      contextBuilders: ContextBuilders[T],
-      selector: Selector[Transmittable.Aux[MB, MI, MR, MT, MM], T],
-      serializerMessage: Serializable[MI]) =
-    new ContextBuilder[T, Transmittable.Aux[MB, MI, MR, MT, MM]] {
+      contextBuilders: ContextBuilders[S],
+      selector: Selector[B, I, R, T, M, S],
+      serializerMessage: Serializable[I]) =
+    new ContextBuilder[S, Transmittable.Aux[B, I, R, T, M]] {
       def apply(abstraction: AbstractionRef) =
-        new Context[T, Transmittable.Aux[MB, MI, MR, MT, MM]] {
+        new Context[S, Transmittable.Aux[B, I, R, T, M]] {
           val contexts = contextBuilders(abstraction)
 
           val sendingTurn = new AtomicLong(0)
           val receivingTurn = new AtomicLong(0)
 
           def endpoint(implicit
-              transmittable: Transmittable.Aux[MB, MI, MR, MT, MM]) = {
-            val contextBuilder =
-              selector contextBuilder (transmittable, contextBuilders)
+              transmittable: Transmittable.Aux[B, I, R, T, M]) = {
+            val contextBuilder = selector contextBuilder contextBuilders
 
             new Endpoint[transmittable.Base, transmittable.Result] {
               val receive = abstraction.channel.receive map
@@ -50,32 +49,32 @@ object ContextBuilder {
             }
           }
 
-          def send[U, V](transmittable: Transmittable[U], v: V)(
+          def send[B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              transmittable: Transmittable.Aux[B0, I0, R0, T0, M0], v: B0)(
             implicit
-              ev: V <:< transmittable.Base,
-              selector: Selector[transmittable.Type, T])
+              selector: Selector[B0, I0, R0, T0, M0, S])
           : transmittable.Intermediate = {
-            implicit val context = selector context (transmittable, contexts)
+            implicit val context = selector context contexts
             transmittable send v
           }
 
-          def receive[U, V](transmittable: Transmittable[U], v: V)(
+          def receive[B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              transmittable: Transmittable.Aux[B0, I0, R0, T0, M0], v: I0)(
             implicit
-              ev: V <:< transmittable.Intermediate,
-              selector: Selector[transmittable.Type, T])
+              selector: Selector[B0, I0, R0, T0, M0, S])
           : transmittable.Result = {
-            implicit val context = selector context (transmittable, contexts)
+            implicit val context = selector context contexts
             transmittable receive v
           }
         }
     }
 
-  implicit def nomessage[T <: Transmittables](
+  implicit def nomessage[S <: Transmittables](
     implicit
-      contextBuilders: ContextBuilders[T]) =
-    new ContextBuilder[T, NoMessage] {
+      contextBuilders: ContextBuilders[S]) =
+    new ContextBuilder[S, NoMessage] {
       def apply(abstraction: AbstractionRef) =
-        new Context[T, NoMessage] {
+        new Context[S, NoMessage] {
           val contexts = contextBuilders(abstraction)
 
           def endpoint(implicit transmittable: NoMessage) =
@@ -83,21 +82,21 @@ object ContextBuilder {
               "MessageTransmittable",
               "Transmittable")
 
-          def send[U, V](transmittable: Transmittable[U], v: V)(
+          def send[B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              transmittable: Transmittable.Aux[B0, I0, R0, T0, M0], v: B0)(
             implicit
-              ev: V <:< transmittable.Base,
-              selector: Selector[transmittable.Type, T])
+              selector: Selector[B0, I0, R0, T0, M0, S])
           : transmittable.Intermediate = {
-            implicit val context = selector context (transmittable, contexts)
+            implicit val context = selector context contexts
             transmittable send v
           }
 
-          def receive[U, V](transmittable: Transmittable[U], v: V)(
+          def receive[B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              transmittable: Transmittable.Aux[B0, I0, R0, T0, M0], v: I0)(
             implicit
-              ev: V <:< transmittable.Intermediate,
-              selector: Selector[transmittable.Type, T])
+              selector: Selector[B0, I0, R0, T0, M0, S])
           : transmittable.Result = {
-            implicit val context = selector context (transmittable, contexts)
+            implicit val context = selector context contexts
             transmittable receive v
           }
         }

@@ -10,18 +10,18 @@ trait Context[T <: Transmittables, M <: Message.Transmittable] {
 
 trait SendingContext[T <: Transmittables, M <: Message.Transmittable]
     extends Context[T, M] { this: ContextBuilder.Context[T, M] =>
-  def send[U, V](transmittable: Transmittable[U], v: V)(
+  def send[B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+      transmittable: Transmittable.Aux[B0, I0, R0, T0, M0], v: B0)(
     implicit
-      ev: V <:< transmittable.Base,
-      selector: Selector[transmittable.Type, T])
+      selector: Selector[B0, I0, R0, T0, M0, T])
     : transmittable.Intermediate
 }
 
 trait ReceivingContext[T <: Transmittables, M <: Message.Transmittable]
     extends Context[T, M] { this: ContextBuilder.Context[T, M] =>
-  def receive[U, V](transmittable: Transmittable[U], v: V)(
+  def receive[B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+      transmittable: Transmittable.Aux[B0, I0, R0, T0, M0], v: I0)(
     implicit
-      ev: V <:< transmittable.Intermediate,
-      selector: Selector[transmittable.Type, T])
+      selector: Selector[B0, I0, R0, T0, M0, T])
     : transmittable.Result
 }

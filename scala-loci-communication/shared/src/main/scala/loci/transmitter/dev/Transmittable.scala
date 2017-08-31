@@ -68,7 +68,7 @@ trait Transmittable[T] extends Transmittables {
         context: C,
         sending: ContextType[C, SendingContext]) {
     def pass(v: TB)(
-        implicit selector: Selector[transmittable.Type, Transmittables]): TI =
+        implicit selector: Selector[TB, TI, TR, TT, TM, Transmittables]): TI =
       context send (transmittable, v)
   }
 
@@ -80,7 +80,7 @@ trait Transmittable[T] extends Transmittables {
         context: C,
         receiving: ContextType[C, ReceivingContext]) {
     def pass(v: TI)(
-        implicit selector: Selector[transmittable.Type, Transmittables]): TR =
+        implicit selector: Selector[TB, TI, TR, TT, TM, Transmittables]): TR =
       context receive (transmittable, v)
   }
 
