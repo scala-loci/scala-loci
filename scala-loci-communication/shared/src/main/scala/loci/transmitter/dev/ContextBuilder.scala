@@ -5,7 +5,8 @@ package dev
 import java.util.concurrent.atomic.AtomicLong
 
 trait ContextBuilder[T <: Transmittables, M <: Message.Transmittable] {
-  def apply(abstraction: AbstractionRef): ContextBuilder.Context[T, M]
+  def apply(transmittables: T, abstraction: AbstractionRef)
+    : ContextBuilder.Context[T, M]
 }
 
 object ContextBuilder {
@@ -20,9 +21,9 @@ object ContextBuilder {
       selector: Selector[B, I, R, T, M, S],
       serializerMessage: Serializable[I]) =
     new ContextBuilder[S, Transmittable.Aux[B, I, R, T, M]] {
-      def apply(abstraction: AbstractionRef) =
+      def apply(transmittables: S, abstraction: AbstractionRef) =
         new Context[S, Transmittable.Aux[B, I, R, T, M]] {
-          val contexts = contextBuilders(abstraction)
+          val contexts = contextBuilders(transmittables, abstraction)
 
           val sendingTurn = new AtomicLong(0)
           val receivingTurn = new AtomicLong(0)
@@ -37,6 +38,7 @@ object ContextBuilder {
               val receive = abstraction.channel.receive map
                 (Function unlift { message =>
                   implicit val context = contextBuilder(
+                    transmittable.transmittables,
                     abstraction derive receivingTurn.getAndIncrement.toString)
                   (serializerMessage deserialize message).toOption map
                     transmittable.receive
@@ -44,6 +46,7 @@ object ContextBuilder {
 
               def send(value: transmittable.Base) = {
                 implicit val context = contextBuilder(
+                  transmittable.transmittables,
                   abstraction derive sendingTurn.getAndIncrement.toString)
                 abstraction.channel send (
                   serializerMessage serialize (transmittable send value))
@@ -52,19 +55,15 @@ object ContextBuilder {
           }
 
           def send[
-            B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
-              transmittables: S, value: B0)(
-            implicit
-              selector: Selector[B0, I0, R0, T0, M0, S]) = {
+              B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              value: B0)(implicit selector: Selector[B0, I0, R0, T0, M0, S]) = {
             implicit val context = selector context contexts
             (selector transmittable transmittables) send value
           }
 
           def receive[
-            B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
-              transmittables: S, value: I0)(
-            implicit
-              selector: Selector[B0, I0, R0, T0, M0, S]) = {
+              B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              value: I0)(implicit selector: Selector[B0, I0, R0, T0, M0, S]) = {
             implicit val context = selector context contexts
             (selector transmittable transmittables) receive value
           }
@@ -75,9 +74,9 @@ object ContextBuilder {
     implicit
       contextBuilders: ContextBuilders[S]) =
     new ContextBuilder[S, NoMessage] {
-      def apply(abstraction: AbstractionRef) =
+      def apply(transmittables: S, abstraction: AbstractionRef) =
         new Context[S, NoMessage] {
-          val contexts = contextBuilders(abstraction)
+          val contexts = contextBuilders(transmittables, abstraction)
 
           def endpoint(
               transmittable: NoMessage)(
@@ -88,19 +87,15 @@ object ContextBuilder {
               "Transmittable")
 
           def send[
-            B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
-              transmittables: S, value: B0)(
-            implicit
-              selector: Selector[B0, I0, R0, T0, M0, S]) = {
+              B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              value: B0)(implicit selector: Selector[B0, I0, R0, T0, M0, S]) = {
             implicit val context = selector context contexts
             (selector transmittable transmittables) send value
           }
 
           def receive[
-            B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
-              transmittables: S, value: I0)(
-            implicit
-              selector: Selector[B0, I0, R0, T0, M0, S]) = {
+              B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable](
+              value: I0)(implicit selector: Selector[B0, I0, R0, T0, M0, S]) = {
             implicit val context = selector context contexts
             (selector transmittable transmittables) receive value
           }

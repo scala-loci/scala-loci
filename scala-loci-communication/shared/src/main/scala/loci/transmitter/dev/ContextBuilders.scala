@@ -9,12 +9,13 @@ sealed trait ContextBuilders[CT <: Transmittables] {
   def tail[CR <: Transmittables]
     (implicit tail: ContextBuildersTail[CT, CR]) = tail(this)
 
-  def apply(abstraction: AbstractionRef): Contexts[CT]
+  def apply(transmittables: CT, abstraction: AbstractionRef): Contexts[CT]
 }
 
 object ContextBuilders {
   implicit object empty extends ContextBuilders[NoTransmittables] {
-    def apply(abstraction: AbstractionRef) = Contexts.Empty
+    def apply(transmittables: NoTransmittables, abstraction: AbstractionRef) =
+      Contexts.Empty
   }
 
   implicit def single[
@@ -36,8 +37,11 @@ object ContextBuilders {
     ] private[dev] (
       val contextBuilder: ContextBuilder[T, M])
     extends ContextBuilders[Transmittable.Aux[B, I, R, T, M]] {
-      def apply(abstraction: AbstractionRef) =
-        new Contexts.Single(contextBuilder(abstraction))
+      def apply(
+          transmittables: Transmittable.Aux[B, I, R, T, M],
+          abstraction: AbstractionRef) =
+        new Contexts.Single(
+          contextBuilder(transmittables.transmittables, abstraction))
   }
 
   class List[
@@ -47,10 +51,12 @@ object ContextBuilders {
       val contextBuilder: ContextBuilder[T, M],
       val contextBuilders: ContextBuilders[CR])
     extends ContextBuilders[CR / Transmittable.Aux[B, I, R, T, M]] {
-      def apply(abstraction: AbstractionRef) =
+      def apply(
+          transmittables: CR / Transmittable.Aux[B, I, R, T, M],
+          abstraction: AbstractionRef) =
         new Contexts.List(
-          contextBuilder(abstraction),
-          contextBuilders(abstraction))
+          contextBuilder(transmittables.transmittable.transmittables, abstraction),
+          contextBuilders(transmittables.rest, abstraction))
   }
 }
 
