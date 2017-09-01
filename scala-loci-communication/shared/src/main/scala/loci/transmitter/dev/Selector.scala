@@ -8,6 +8,7 @@ import scala.annotation.implicitNotFound
 sealed trait Selector[
     B, I, R, T <: Transmittables, M <: Message.Transmittable,
     S <: Transmittables] {
+  def transmittable(transmittables: S): Transmittable.Aux[B, I, R, T, M]
   def context(contexts: Contexts[S]): ContextBuilder.Context[T, M]
   def contextBuilder(contextBuilders: ContextBuilders[S]): ContextBuilder[T, M]
 }
@@ -18,6 +19,8 @@ object Selector {
     new Selector[
         B, I, R, T, M,
         Transmittable.Aux[B, I, R, T, M]] {
+      def transmittable(transmittables: Transmittable.Aux[B, I, R, T, M]) =
+        transmittables
       def context(
           contexts: Contexts[Transmittable.Aux[B, I, R, T, M]]) =
         contexts.head
@@ -32,6 +35,8 @@ object Selector {
     new Selector[
         B, I, R, T, M,
         CR / Transmittable.Aux[B, I, R, T, M]] {
+      def transmittable(transmittables: CR / Transmittable.Aux[B, I, R, T, M]) =
+        transmittables.transmittable
       def context(
           contexts: Contexts[CR / Transmittable.Aux[B, I, R, T, M]]) =
         contexts.head
@@ -49,6 +54,8 @@ object Selector {
     new Selector[
         B, I, R, T, M,
         CR / Transmittable.Aux[B0, I0, R0, T0, M0]] {
+      def transmittable(transmittables: CR / Transmittable.Aux[B0, I0, R0, T0, M0]) =
+        selector transmittable transmittables.rest
       def context(
           contexts: Contexts[CR / Transmittable.Aux[B0, I0, R0, T0, M0]]) =
         selector context contexts.tail

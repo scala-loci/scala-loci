@@ -10,6 +10,8 @@ sealed trait Transmittables
 
 sealed trait NoTransmittables extends Transmittables
 
+object NoTransmittables extends NoTransmittables
+
 
 object Message {
   type Transmittable = { type Base; type Intermediate; type Result }
@@ -18,9 +20,15 @@ object Message {
 
 sealed trait NoMessage { type Base; type Intermediate; type Result }
 
+object NoMessage extends NoMessage
 
-sealed trait /[R <: Transmittables, T <: Transmittable[_]]
-  extends Transmittables
+
+final case class /[R <: Transmittables, T <: Transmittable[_]] private[dev] (
+    rest: R, transmittable: T) extends Transmittables {
+  type Type = R / T
+  def /[U](transmittable: Transmittable[U]): R / T / transmittable.Type =
+    new / (this, transmittable)
+}
 
 
 object Transmittable {
@@ -39,7 +47,7 @@ object Transmittable {
 
 
 @implicitNotFound("${T} is not transmittable")
-trait Transmittable[T] extends Transmittables {
+sealed trait Transmittable[T] extends Transmittables {
   type Base = T
   type Intermediate
   type Result
@@ -53,6 +61,13 @@ trait Transmittable[T] extends Transmittables {
     type Message = Transmittable.this.Message
   }
 
+  def /[U](transmittable: Transmittable[U]): Type / transmittable.Type =
+    new / (this, transmittable)
+
+  def transmittables: Transmittables
+
+  def message: Message
+
   protected type Context =
     dev.Context[Transmittables, Message]
   protected type SendingContext =
@@ -60,34 +75,43 @@ trait Transmittable[T] extends Transmittables {
   protected type ReceivingContext =
     dev.ReceivingContext[Transmittables, Message]
 
-  protected implicit class TransmittableSendingOp[
-      C <: Context, TB, TI, TR,
-      TT <: dev.Transmittables, TM <: Message.Transmittable](
-        transmittable: Transmittable.Aux[TB, TI, TR, TT, TM])(
-      implicit
-        context: C,
-        sending: ContextType[C, SendingContext]) {
-    def pass(v: TB)(
-        implicit selector: Selector[TB, TI, TR, TT, TM, Transmittables]): TI =
-      context send (transmittable, v)
+  private sealed trait TransmittableOp[A, B] {
+    def apply(value: A): B
   }
 
-  protected implicit class TransmittableReceivingOp[
-      C <: Context, TB, TI, TR,
-      TT <: dev.Transmittables, TM <: Message.Transmittable](
-        transmittable: Transmittable.Aux[TB, TI, TR, TT, TM])(
-      implicit
+  private object TransmittableOp {
+    implicit def sending[
+      B0, I0, R0, T0 <: dev.Transmittables, M0 <: Message.Transmittable,
+      C <: Context](implicit
         context: C,
-        receiving: ContextType[C, ReceivingContext]) {
-    def pass(v: TI)(
-        implicit selector: Selector[TB, TI, TR, TT, TM, Transmittables]): TR =
-      context receive (transmittable, v)
+        sending: ContextType[C, SendingContext],
+        selector: Selector[B0, I0, R0, T0, M0, Transmittables]) =
+      new TransmittableOp[B0, I0] {
+        def apply(value: B0) = context send (transmittables, value)
+      }
+
+    implicit def receiving[
+      B0, I0, R0, T0 <: dev.Transmittables, M0 <: Message.Transmittable,
+      C <: Context](implicit
+        context: C,
+        receiving: ContextType[C, ReceivingContext],
+        selector: Selector[B0, I0, R0, T0, M0, Transmittables]) =
+      new TransmittableOp[I0, R0] {
+        def apply(value: I0) = context receive (transmittables, value)
+      }
   }
 
-  protected implicit class MessageEndpointOp(val transmittable: Message) {
-    def endpoint[C <: Context](implicit context: C) =
-      context.endpoint(transmittable)
-  }
+  final protected def process[A, B](value: A)(implicit op: TransmittableOp[A, B]) =
+    op(value)
+
+  final protected def endpoint[
+    B0, I0, R0, T0 <: dev.Transmittables, M0 <: Message.Transmittable,
+    C <: Context](implicit
+      context: Context,
+      ev0: Message <:< Transmittable.Aux[B0, I0, R0, T0, M0],
+      ev1: dev.Context[Transmittables, Message] <:<
+           dev.Context[Transmittables, Transmittable.Aux[B0, I0, R0, T0, M0]]) =
+    ev1(context) endpoint ev0(message)
 
   def send(value: Base)(implicit context: SendingContext): Intermediate
 
@@ -95,11 +119,22 @@ trait Transmittable[T] extends Transmittables {
 }
 
 
-trait DetachedTransmittable[T] extends Transmittable[T] {
+trait DelegatingTransmittable[B, I, R, T <: Transmittables]
+    extends Transmittable[B] {
+  type Intermediate = I
+  type Result = R
+  type Transmittables = T
   type Message = NoMessage
+
+  final def message = NoMessage
 }
 
+trait ConnectedTransmittable[B, I, R, T <: Transmittable[_]]
+    extends Transmittable[B] {
+  type Intermediate = I
+  type Result = R
+  type Transmittables = T
+  type Message = T
 
-trait IsoTransmittable[T] extends DetachedTransmittable[T] {
-  type Transmittables = NoTransmittables
+  final def transmittables = message
 }
