@@ -16,20 +16,20 @@ sealed trait Contexts[T <: Transmittables] {
 object Contexts {
   object Empty extends Contexts[Delegates[NoDelegates]]
 
-  final class SingleDelegating[
+  final case class SingleDelegating[
       B, I, R, T <: Transmittables] private[dev] (
-      val context: ContextBuilder.Context[T])
+      context: ContextBuilder.Context[T])
     extends Contexts[Delegates[Transmittable.Aux[B, I, R, T]]]
 
-  final class SingleMessage[
+  final case class SingleMessage[
       B, I, R, T <: Transmittables] private[dev] (
-      val context: ContextBuilder.Context[T])
+      context: ContextBuilder.Context[T])
     extends Contexts[Message[Transmittable.Aux[B, I, R, T]]]
 
-  final class List[
+  final case class List[
       B, I, R, T <: Transmittables, TT <: Delegating] private[dev] (
-      val context: ContextBuilder.Context[T],
-      val contexts: Contexts[Delegates[TT]])
+      contextHead: ContextBuilder.Context[T],
+      contextTail: Contexts[Delegates[TT]])
     extends Contexts[Delegates[TT / Transmittable.Aux[B, I, R, T]]]
 }
 
@@ -45,11 +45,9 @@ object ContextsHead {
         Contexts[Delegates[Transmittable.Aux[B, I, R, T]]])
   : ContextsHead[Delegates[T0], T] =
     new ContextsHead[Delegates[T0], T] {
-      def apply(contexts: Contexts[Delegates[T0]]) = ev(contexts) match {
-        case contexts: Contexts.SingleDelegating[B, I, R, T] => contexts.context
-        case _ => throw new TransmitterResolutionException(
-          "Contexts[Delegates[T0]] <:< Contexts[Delegates[Transmittable[T]]]",
-          "Delegates[Transmittable[T]]")
+      def apply(contexts: Contexts[Delegates[T0]]) = {
+        val Contexts.SingleDelegating(context) = ev(contexts)
+        context
       }
     }
 
@@ -59,11 +57,9 @@ object ContextsHead {
         Contexts[Message[Transmittable.Aux[B, I, R, T]]])
   : ContextsHead[Message[T0], T] =
     new ContextsHead[Message[T0], T] {
-      def apply(contexts: Contexts[Message[T0]]) = ev(contexts) match {
-        case contexts: Contexts.SingleMessage[B, I, R, T] => contexts.context
-        case _ => throw new TransmitterResolutionException(
-          "Contexts[Message[T0]] <:< Contexts[Message[Transmittable[T]]]",
-          "Message[Transmittable[T]]")
+      def apply(contexts: Contexts[Message[T0]]) = {
+        val Contexts.SingleMessage(context) = ev(contexts)
+        context
       }
     }
 
@@ -73,11 +69,9 @@ object ContextsHead {
         Contexts[Delegates[TT / Transmittable.Aux[B, I, R, T]]])
   : ContextsHead[Delegates[T0], T] =
     new ContextsHead[Delegates[T0], T] {
-      def apply(contexts: Contexts[Delegates[T0]]) = ev(contexts) match {
-        case contexts: Contexts.List[B, I, R, T, TT] => contexts.context
-        case _ => throw new TransmitterResolutionException(
-          "Contexts[Delegates[T0]] <:< Contexts[Delegates[TT / Transmittable[T]]]",
-          "Delegates[TT / Transmittable[T]]")
+      def apply(contexts: Contexts[Delegates[T0]]) = {
+        val Contexts.List(contextHead, _) = ev(contexts)
+        contextHead
       }
     }
 }
@@ -94,11 +88,9 @@ object ContextsTail {
         Contexts[Delegates[TT / Transmittable.Aux[B, I, R, T]]])
   : ContextsTail[Delegates[T0], Delegates[TT]] =
     new ContextsTail[Delegates[T0], Delegates[TT]] {
-      def apply(contexts: Contexts[Delegates[T0]]) = ev(contexts) match {
-        case contexts: Contexts.List[B, I, R, T, TT] => contexts.contexts
-        case _ => throw new TransmitterResolutionException(
-          "Contexts[Delegates[T0]] <:< Contexts[Delegates[TT / Transmittable[T]]]",
-          "Delegates[TT / Transmittable[T]]")
+      def apply(contexts: Contexts[Delegates[T0]]) = {
+        val Contexts.List(_, contextTail) = ev(contexts)
+        contextTail
       }
     }
 }

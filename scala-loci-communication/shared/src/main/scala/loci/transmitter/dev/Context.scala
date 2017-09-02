@@ -2,22 +2,22 @@ package loci
 package transmitter
 package dev
 
-trait Context[T <: Transmittables] {
-    this: ContextBuilder.Context[T] =>
-  def endpoint[B0, I0, R0, T0 <: Transmittables](implicit
-    ev: ContextBuilder.Equiv[T] <:<
-        ContextBuilder.Equiv[Transmittables.Message[Transmittable.Aux[B0, I0, R0, T0]]])
-  : Endpoint[B0, R0]
+trait Context[S <: Transmittables] {
+    this: ContextBuilder.Context[S] =>
+  def endpoint[B, I, R, T <: Transmittables](implicit
+    ev: ContextBuilder.Equiv[S] <:<
+        ContextBuilder.Equiv[Transmittables.Message[Transmittable.Aux[B, I, R, T]]])
+  : Endpoint[B, R]
 }
 
-trait SendingContext[T <: Transmittables]
-    extends Context[T] { this: ContextBuilder.Context[T] =>
-  def send[B0, I0, R0, T0 <: Transmittables](
-    value: B0)(implicit selector: Selector[B0, I0, R0, T0, T]): I0
+trait SendingContext[S <: Transmittables]
+    extends Context[S] { this: ContextBuilder.Context[S] =>
+  def send[B, I, R, T <: Transmittables](
+    value: B)(implicit selector: Selector[B, I, R, T, S]): I
 }
 
-trait ReceivingContext[T <: Transmittables]
-    extends Context[T] { this: ContextBuilder.Context[T] =>
-  def receive[B0, I0, R0, T0 <: Transmittables](
-    value: I0)(implicit selector: Selector[B0, I0, R0, T0, T]): R0
+trait ReceivingContext[S <: Transmittables]
+    extends Context[S] { this: ContextBuilder.Context[S] =>
+  def receive[B, I, R, T <: Transmittables](
+    value: I)(implicit selector: Selector[B, I, R, T, S]): R
 }

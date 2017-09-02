@@ -92,18 +92,13 @@ sealed trait Transmittable[T] extends
   final def /[U](transmittable: Transmittable[U]): Type / transmittable.Type =
     new / (this, transmittable)
 
-  def transmittables: Transmittables
+  val transmittables: Transmittables
 
-  protected type Context =
-    dev.Context[Transmittables]
-  protected type SendingContext =
-    dev.SendingContext[Transmittables]
-  protected type ReceivingContext =
-    dev.ReceivingContext[Transmittables]
+  def send(value: Base)(
+    implicit context: SendingContext[Transmittables]): Intermediate
 
-  def send(value: Base)(implicit context: SendingContext): Intermediate
-
-  def receive(value: Intermediate)(implicit context: ReceivingContext): Result
+  def receive(value: Intermediate)(
+    implicit context: ReceivingContext[Transmittables]): Result
 }
 
 
@@ -136,11 +131,13 @@ object DelegatingTransmittable {
     new DelegatingTransmittable[B, I, R, T] {
       val transmittables = Transmittables.Delegates(delegates)
 
-      def send(value: Base)(implicit context: SendingContext) = {
+      def send(value: Base)(
+          implicit context: dev.SendingContext[Transmittables]) = {
         _send(value, new DelegatingTransmittable.SendingContext(context))
       }
 
-      def receive(value: Intermediate)(implicit context: ReceivingContext) = {
+      def receive(value: Intermediate)(
+          implicit context: dev.ReceivingContext[Transmittables]) = {
         _receive(value, new DelegatingTransmittable.ReceivingContext(context))
       }
     }
@@ -181,11 +178,13 @@ object ConnectedTransmittable {
     new ConnectedTransmittable[B, I, R, Transmittable.Aux[B0, I0, R0, T0]] {
       val transmittables = Transmittables.Message(message)
 
-      def send(value: Base)(implicit context: SendingContext) = {
+      def send(value: Base)(
+          implicit context: dev.SendingContext[Transmittables]) = {
         _send(value, new ConnectedTransmittable.SendingContext(context))
       }
 
-      def receive(value: Intermediate)(implicit context: ReceivingContext) = {
+      def receive(value: Intermediate)(
+          implicit context: dev.ReceivingContext[Transmittables]) = {
         _receive(value, new ConnectedTransmittable.ReceivingContext(context))
       }
     }
