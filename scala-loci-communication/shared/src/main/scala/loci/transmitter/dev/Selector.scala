@@ -2,65 +2,75 @@ package loci
 package transmitter
 package dev
 
+import Transmittable.Delegating
+import Transmittables.{ Delegates, Message }
 import scala.annotation.implicitNotFound
 
 @implicitNotFound("Transmittable[${B}] not specified in: ${S}")
 sealed trait Selector[
-    B, I, R, T <: Transmittables, M <: Message.Transmittable,
-    S <: Transmittables] {
-  def transmittable(transmittables: S): Transmittable.Aux[B, I, R, T, M]
-  def context(contexts: Contexts[S]): ContextBuilder.Context[T, M]
-  def contextBuilder(contextBuilders: ContextBuilders[S]): ContextBuilder[T, M]
+    B, I, R, T <: Transmittables, S <: Transmittables] {
+  def transmittable(transmittables: S): Transmittable.Aux[B, I, R, T]
+  def context(contexts: Contexts[S]): ContextBuilder.Context[T]
+  def contextBuilder(contextBuilders: ContextBuilders[S]): ContextBuilder[T]
 }
 
 object Selector {
-  implicit def single[
-      B, I, R, T <: Transmittables, M <: Message.Transmittable] =
-    new Selector[
-        B, I, R, T, M,
-        Transmittable.Aux[B, I, R, T, M]] {
-      def transmittable(transmittables: Transmittable.Aux[B, I, R, T, M]) =
-        transmittables
-      def context(
-          contexts: Contexts[Transmittable.Aux[B, I, R, T, M]]) =
+  implicit def singleDelegating[B, I, R, T <: Transmittables]
+  : Selector[B, I, R, T, Delegates[Transmittable.Aux[B, I, R, T]]] = {
+    type D = Delegates[Transmittable.Aux[B, I, R, T]]
+    
+    new Selector[B, I, R, T, D] {
+      def transmittable(transmittables: D) =
+        transmittables.delegates
+      def context(contexts: Contexts[D]) =
         contexts.head
-      def contextBuilder(
-          contextBuilders: ContextBuilders[Transmittable.Aux[B, I, R, T, M]]) =
+      def contextBuilder(contextBuilders: ContextBuilders[D]) =
         contextBuilders.head
     }
+  }
 
-  implicit def head[
-      B, I, R, T <: Transmittables, M <: Message.Transmittable,
-      CR <: Transmittables] =
-    new Selector[
-        B, I, R, T, M,
-        CR / Transmittable.Aux[B, I, R, T, M]] {
-      def transmittable(transmittables: CR / Transmittable.Aux[B, I, R, T, M]) =
-        transmittables.transmittable
-      def context(
-          contexts: Contexts[CR / Transmittable.Aux[B, I, R, T, M]]) =
+  implicit def singleMessage[B, I, R, T <: Transmittables]
+  : Selector[B, I, R, T, Message[Transmittable.Aux[B, I, R, T]]] = {
+    type M = Message[Transmittable.Aux[B, I, R, T]]
+    
+    new Selector[B, I, R, T, M] {
+      def transmittable(transmittables: M) =
+        transmittables.message
+      def context(contexts: Contexts[M]) =
         contexts.head
-      def contextBuilder(
-          contextBuilders: ContextBuilders[CR / Transmittable.Aux[B, I, R, T, M]]) =
+      def contextBuilder(contextBuilders: ContextBuilders[M]) =
         contextBuilders.head
     }
+  }
+
+  implicit def head[B, I, R, T <: Transmittables, TT <: Delegating]
+  : Selector[B, I, R, T, Delegates[TT / Transmittable.Aux[B, I, R, T]]] = {
+    type D = Delegates[TT / Transmittable.Aux[B, I, R, T]]
+    
+    new Selector[B, I, R, T, D] {
+      def transmittable(transmittables: D) =
+        transmittables.delegates.head
+      def context(contexts: Contexts[D]) =
+        contexts.head
+      def contextBuilder(contextBuilders: ContextBuilders[D]) =
+        contextBuilders.head
+    }
+  }
 
   implicit def tail[
-      B, I, R, T <: Transmittables, M <: Message.Transmittable,
-      B0, I0, R0, T0 <: Transmittables, M0 <: Message.Transmittable,
-      CR <: Transmittables](
-    implicit
-      selector: Selector[B, I, R, T, M, CR]) =
-    new Selector[
-        B, I, R, T, M,
-        CR / Transmittable.Aux[B0, I0, R0, T0, M0]] {
-      def transmittable(transmittables: CR / Transmittable.Aux[B0, I0, R0, T0, M0]) =
-        selector transmittable transmittables.rest
-      def context(
-          contexts: Contexts[CR / Transmittable.Aux[B0, I0, R0, T0, M0]]) =
+      B, I, R, T <: Transmittables,
+      B0, I0, R0, T0 <: Transmittables, TT <: Delegating](implicit
+      selector: Selector[B, I, R, T, Delegates[TT]])
+  : Selector[B, I, R, T, Delegates[TT / Transmittable.Aux[B0, I0, R0, T0]]] = {
+    type D = Delegates[TT / Transmittable.Aux[B0, I0, R0, T0]]
+    
+    new Selector[B, I, R, T, D] {
+      def transmittable(transmittables: D) =
+        selector transmittable transmittables.delegates.tailDelegates
+      def context(contexts: Contexts[D]) =
         selector context contexts.tail
-      def contextBuilder(
-          contextBuilders: ContextBuilders[CR / Transmittable.Aux[B0, I0, R0, T0, M0]]) =
+      def contextBuilder(contextBuilders: ContextBuilders[D]) =
         selector contextBuilder contextBuilders.tail
     }
+  }
 }
