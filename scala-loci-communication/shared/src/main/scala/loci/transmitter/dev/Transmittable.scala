@@ -3,6 +3,7 @@ package transmitter
 package dev
 
 import scala.annotation.implicitNotFound
+import scala.concurrent.Future
 
 
 sealed trait NoDelegates extends Transmittable.Delegating
@@ -36,41 +37,19 @@ object Transmittables {
 
 
 object Transmittable {
-  type Aux[B, I, R, T <: Transmittables] = Transmittable[B] {
+  type Aux[B, I, R, P, T <: Transmittables] = Transmittable[B] {
     type Intermediate = I
     type Result = R
+    type Proxy = P
     type Transmittables = T
   }
 
   def apply[T](implicit transmittable: Transmittable[T]): transmittable.Type =
     transmittable
 
-
   sealed trait Delegating
 
-  sealed trait Messaging
-
-
-  sealed trait SendingContext[S <: Transmittables] {
-    val context: dev.SendingContext[S]
-    def send[B, I, R, T <: dev.Transmittables](
-        value: B)(implicit selector: Selector[B, I, R, T, S]): I =
-      context send value
-  }
-
-  sealed trait ReceivingContext[S <: Transmittables] {
-    val context: dev.ReceivingContext[S]
-    def receive[B, I, R, T <: dev.Transmittables](
-        value: I)(implicit selector: Selector[B, I, R, T, S]): R =
-      context receive value
-  }
-
-  sealed trait ConnectedContext[
-      B, I, R, T <: Transmittables,
-      S <: Transmittables.Message[Transmittable.Aux[B, I, R, T]]] {
-    val context: dev.Context[S]
-    val endpoint: Endpoint[B, R] = context.endpoint
-  }
+  sealed trait Messaging { type Intermediate }
 }
 
 
@@ -81,11 +60,13 @@ sealed trait Transmittable[T] extends
   type Base = T
   type Intermediate
   type Result
+  type Proxy
   type Transmittables <: dev.Transmittables
 
   type Type = Transmittable[T] {
     type Intermediate = Transmittable.this.Intermediate
     type Result = Transmittable.this.Result
+    type Proxy = Transmittable.this.Proxy
     type Transmittables = Transmittable.this.Transmittables
   }
 
@@ -102,91 +83,98 @@ sealed trait Transmittable[T] extends
 }
 
 
-sealed trait DelegatingTransmittable[B, I, R, T <: Transmittable.Delegating]
-    extends Transmittable[B] {
-  type Intermediate = I
-  type Result = R
-  type Transmittables = Transmittables.Delegates[T]
+sealed trait DelegatingTransmittable[T] extends Transmittable[T] {
+  type Proxy = Future[Result]
+  type Transmittables = Transmittables.Delegates[Delegates]
+
+  type Intermediate
+  type Result
+  type Delegates <: Transmittable.Delegating
 }
 
 object DelegatingTransmittable {
-  type Delegates[T <: Transmittable.Delegating] =
-    Transmittables.Delegates[T]
+  type Delegates[D <: Transmittable.Delegating] = Transmittables.Delegates[D]
 
-  class SendingContext[T <: Transmittable.Delegating](
-      val context: dev.SendingContext[Delegates[T]]) extends
-    Transmittable.SendingContext[Delegates[T]]
+  class SendingContext[D <: Transmittable.Delegating](
+      val context: dev.SendingContext[Delegates[D]]) {
+    def send[B, I, R, P, T <: Transmittables](
+        value: B)(implicit selector: Selector[B, I, R, P, T, Delegates[D]]): I =
+      context send value
+  }
 
-  class ReceivingContext[T <: Transmittable.Delegating](
-      val context: dev.ReceivingContext[Delegates[T]]) extends
-    Transmittable.ReceivingContext[Delegates[T]]
+  class ReceivingContext[D <: Transmittable.Delegating](
+      val context: dev.ReceivingContext[Delegates[D]]) {
+    def receive[B, I, R, P, T <: Transmittables](
+        value: I)(implicit selector: Selector[B, I, R, P, T, Delegates[D]]): R =
+      context receive value
+  }
 
-  def apply[B, I, R, T <: Transmittable.Delegating](
-      delegates: T,
-      send: (B, SendingContext[T]) => I,
-      receive: (I, ReceivingContext[T]) => R) = {
+  def apply[B, I, R, D <: Transmittable.Delegating](
+      delegates: D,
+      send: (B, SendingContext[D]) => I,
+      receive: (I, ReceivingContext[D]) => R) = {
     val _send = send
     val _receive = receive
 
-    new DelegatingTransmittable[B, I, R, T] {
+    new DelegatingTransmittable[B] {
+      type Intermediate = I
+      type Result = R
+      type Delegates = D
+
       val transmittables = Transmittables.Delegates(delegates)
 
       def send(value: Base)(
-          implicit context: dev.SendingContext[Transmittables]) = {
+          implicit context: dev.SendingContext[Transmittables]) =
         _send(value, new DelegatingTransmittable.SendingContext(context))
-      }
 
       def receive(value: Intermediate)(
-          implicit context: dev.ReceivingContext[Transmittables]) = {
+          implicit context: dev.ReceivingContext[Transmittables]) =
         _receive(value, new DelegatingTransmittable.ReceivingContext(context))
-      }
     }
   }
 }
 
 
-sealed trait ConnectedTransmittable[B, I, R, T <: Transmittable.Messaging]
-    extends Transmittable[B] {
-  type Intermediate = I
-  type Result = R
-  type Transmittables = Transmittables.Message[T]
+sealed trait ConnectedTransmittable[T] extends Transmittable[T] {
+  type Intermediate = transmittables.message.Intermediate
+  type Proxy = Future[Result]
+  type Transmittables = Transmittables.Message[Message]
+
+  type Result
+  type Message <: Transmittable.Messaging
 }
 
 object ConnectedTransmittable {
-  type Message[B, I, R, T <: Transmittables] =
-    Transmittables.Message[Transmittable.Aux[B, I, R, T]]
+  type Message[B, I, R, P, T <: Transmittables] =
+    Transmittables.Message[Transmittable.Aux[B, I, R, P, T]]
 
-  class SendingContext[B, I, R, T <: Transmittables](
-      val context: dev.SendingContext[Message[B, I, R, T]]) extends
-    Transmittable.SendingContext[Message[B, I, R, T]] with
-    Transmittable.ConnectedContext[B, I, R, T, Message[B, I, R, T]]
+  final class ConnectedContext[B, I, R, P, T <: Transmittables](
+    val context: Context[Message[B, I, R, P, T]]) {
+    val endpoint: Endpoint[B, R] = context.endpoint
+  }
 
-  class ReceivingContext[B, I, R, T <: Transmittables](
-      val context: dev.ReceivingContext[Message[B, I, R, T]]) extends
-    Transmittable.ReceivingContext[Message[B, I, R, T]] with
-    Transmittable.ConnectedContext[B, I, R, T, Message[B, I, R, T]]
-
-  def apply[B, I, R, B0, I0, R0, T0 <: dev.Transmittables](
-      message: Transmittable.Aux[B0, I0, R0, T0],
-      send: (B, SendingContext[B0, I0, R0, T0]) => I,
-      receive: (I, ReceivingContext[B0, I0, R0, T0]) => R) = {
+  def apply[B, R, B0, I0, R0, P0, T0 <: Transmittables](
+      message: Transmittable.Aux[B0, I0, R0, P0, T0],
+      send: (B, ConnectedContext[B0, I0, R0, P0, T0]) => B0,
+      receive: (R0, ConnectedContext[B0, I0, R0, P0, T0]) => R) = {
     val _send = send
     val _receive = receive
 
-    type T = Transmittable.Aux[B0, I0, R0, T0]
+    type T = Transmittable.Aux[B0, I0, R0, P0, T0]
 
-    new ConnectedTransmittable[B, I, R, Transmittable.Aux[B0, I0, R0, T0]] {
+    new ConnectedTransmittable[B] {
+      type Result = R
+      type Message = Transmittable.Aux[B0, I0, R0, P0, T0]
+
       val transmittables = Transmittables.Message(message)
 
       def send(value: Base)(
-          implicit context: dev.SendingContext[Transmittables]) = {
-        _send(value, new ConnectedTransmittable.SendingContext(context))
-      }
+          implicit context: dev.SendingContext[Transmittables]) =
+        context send _send(value, new ConnectedTransmittable.ConnectedContext(context))
 
       def receive(value: Intermediate)(
-          implicit context: dev.ReceivingContext[Transmittables]) = {
-        _receive(value, new ConnectedTransmittable.ReceivingContext(context))
-      }
+          implicit context: dev.ReceivingContext[Transmittables]) =
+        _receive(context receive value, new ConnectedTransmittable.ConnectedContext(context))
     }
   }
 }

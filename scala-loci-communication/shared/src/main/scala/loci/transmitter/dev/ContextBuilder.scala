@@ -14,9 +14,9 @@ trait ContextBuilder[T <: Transmittables] {
 object ContextBuilder {
   sealed trait Equiv[+T <: Transmittables]
 
-  final case class EndpointEquiv[B, I, R, T <: Transmittables](
+  final case class EndpointEquiv[B, I, R, P, T <: Transmittables](
       endpoint: Endpoint[B, R])
-    extends Equiv[Message[Transmittable.Aux[B, I, R, T]]]
+    extends Equiv[Message[Transmittable.Aux[B, I, R, P, T]]]
 
 
   sealed abstract class Context[S <: Transmittables](
@@ -24,26 +24,26 @@ object ContextBuilder {
       contexts: Contexts[S])
     extends SendingContext[S] with ReceivingContext[S] {
 
-    def send[B, I, R, T <: Transmittables](
-        value: B)(implicit selector: Selector[B, I, R, T, S]) = {
+    def send[B, I, R, P, T <: Transmittables](
+        value: B)(implicit selector: Selector[B, I, R, P, T, S]) = {
       implicit val context = selector context contexts
       (selector transmittable transmittables) send value
     }
 
-    def receive[B, I, R, T <: Transmittables](
-        value: I)(implicit selector: Selector[B, I, R, T, S]) = {
+    def receive[B, I, R, P, T <: Transmittables](
+        value: I)(implicit selector: Selector[B, I, R, P, T, S]) = {
       implicit val context = selector context contexts
       (selector transmittable transmittables) receive value
     }
   }
 
 
-  implicit def messaging[B, I, R, T <: Transmittables](implicit
-      contextBuilders: ContextBuilders[Message[Transmittable.Aux[B, I, R, T]]],
-      selector: Selector[B, I, R, T, Message[Transmittable.Aux[B, I, R, T]]],
+  implicit def messaging[B, I, R, P, T <: Transmittables](implicit
+      contextBuilders: ContextBuilders[Message[Transmittable.Aux[B, I, R, P, T]]],
+      selector: Selector[B, I, R, P, T, Message[Transmittable.Aux[B, I, R, P, T]]],
       serializerMessage: Serializable[I])
-  : ContextBuilder[Message[Transmittable.Aux[B, I, R, T]]] = {
-    type M = Message[Transmittable.Aux[B, I, R, T]]
+  : ContextBuilder[Message[Transmittable.Aux[B, I, R, P, T]]] = {
+    type M = Message[Transmittable.Aux[B, I, R, P, T]]
 
     new ContextBuilder[M] {
       def apply(transmittables: M, abstraction: AbstractionRef) =
@@ -53,9 +53,9 @@ object ContextBuilder {
           val sendingTurn = new AtomicLong(0)
           val receivingTurn = new AtomicLong(0)
 
-          def endpoint[B0, I0, R0, T0 <: Transmittables](implicit
+          def endpoint[B0, I0, R0, C0, T0 <: Transmittables](implicit
               ev: Equiv[M] <:<
-                  Equiv[Message[Transmittable.Aux[B0, I0, R0, T0]]]) = {
+                  Equiv[Message[Transmittable.Aux[B0, I0, R0, C0, T0]]]) = {
             val contextBuilder = selector contextBuilder contextBuilders
             val transmittable = transmittables.message
 
@@ -94,8 +94,8 @@ object ContextBuilder {
         new Context[D](
             transmittables,
             contextBuilders(transmittables, abstraction)) {
-          def endpoint[B, I, R, T <: Transmittables](implicit
-            ev: Equiv[D] <:< Equiv[Message[Transmittable.Aux[B, I, R, T]]]) = ???
+          def endpoint[B, I, R, P, T <: Transmittables](implicit
+            ev: Equiv[D] <:< Equiv[Message[Transmittable.Aux[B, I, R, P, T]]]) = ???
         }
     }
   }

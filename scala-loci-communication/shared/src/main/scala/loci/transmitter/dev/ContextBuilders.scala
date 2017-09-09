@@ -21,49 +21,49 @@ object ContextBuilders {
       Contexts.Empty
   }
 
-  implicit def singleDelegating[B, I, R, T <: Transmittables](implicit
-      contextBuilder: ContextBuilder[T]): SingleDelegating[B, I, R, T] =
-    SingleDelegating[B, I, R, T](contextBuilder)
+  implicit def singleDelegating[B, I, R, P, T <: Transmittables](implicit
+      contextBuilder: ContextBuilder[T]): SingleDelegating[B, I, R, P, T] =
+    SingleDelegating[B, I, R, P, T](contextBuilder)
 
-  implicit def singleMessage[B, I, R, T <: Transmittables](implicit
-      contextBuilder: ContextBuilder[T]): SingleMessage[B, I, R, T] =
-    SingleMessage[B, I, R, T](contextBuilder)
+  implicit def singleMessage[B, I, R, P, T <: Transmittables](implicit
+      contextBuilder: ContextBuilder[T]): SingleMessage[B, I, R, P, T] =
+    SingleMessage[B, I, R, P, T](contextBuilder)
 
-  implicit def list[B, I, R, T <: Transmittables, TT <: Delegating](implicit
+  implicit def list[B, I, R, P, T <: Transmittables, TT <: Delegating](implicit
       contextBuilderHead: ContextBuilder[T],
-      contextBuilderTail: ContextBuilders[Delegates[TT]]): List[B, I, R, T, TT] =
-    List[B, I, R, T, TT](contextBuilderHead, contextBuilderTail)
+      contextBuilderTail: ContextBuilders[Delegates[TT]]): List[B, I, R, P, T, TT] =
+    List[B, I, R, P, T, TT](contextBuilderHead, contextBuilderTail)
 
 
   final case class SingleDelegating[
-      B, I, R, T <: Transmittables] private[dev] (
+      B, I, R, P, T <: Transmittables] private[dev] (
       contextBuilder: ContextBuilder[T])
-    extends ContextBuilders[Delegates[Transmittable.Aux[B, I, R, T]]] {
+    extends ContextBuilders[Delegates[Transmittable.Aux[B, I, R, P, T]]] {
       def apply(
-          transmittables: Delegates[Transmittable.Aux[B, I, R, T]],
+          transmittables: Delegates[Transmittable.Aux[B, I, R, P, T]],
           abstraction: AbstractionRef) =
         Contexts.SingleDelegating(
           contextBuilder(transmittables.delegates.transmittables, abstraction))
   }
 
   final case class SingleMessage[
-      B, I, R, T <: Transmittables] private[dev] (
+      B, I, R, P, T <: Transmittables] private[dev] (
       contextBuilder: ContextBuilder[T])
-    extends ContextBuilders[Message[Transmittable.Aux[B, I, R, T]]] {
+    extends ContextBuilders[Message[Transmittable.Aux[B, I, R, P, T]]] {
       def apply(
-          transmittables: Message[Transmittable.Aux[B, I, R, T]],
+          transmittables: Message[Transmittable.Aux[B, I, R, P, T]],
           abstraction: AbstractionRef) =
         Contexts.SingleMessage(
           contextBuilder(transmittables.message.transmittables, abstraction))
   }
 
   final case class List[
-      B, I, R, T <: Transmittables, TT <: Delegating] private[dev] (
+      B, I, R, P, T <: Transmittables, TT <: Delegating] private[dev] (
       contextBuilder: ContextBuilder[T],
       contextBuilders: ContextBuilders[Delegates[TT]])
-    extends ContextBuilders[Delegates[TT / Transmittable.Aux[B, I, R, T]]] {
+    extends ContextBuilders[Delegates[TT / Transmittable.Aux[B, I, R, P, T]]] {
       def apply(
-          transmittables: Delegates[TT / Transmittable.Aux[B, I, R, T]],
+          transmittables: Delegates[TT / Transmittable.Aux[B, I, R, P, T]],
           abstraction: AbstractionRef) =
         Contexts.List(
           contextBuilder(transmittables.delegates.head.transmittables, abstraction),
@@ -78,9 +78,9 @@ sealed trait ContextBuildersHead[T <: Transmittables, TH <: Transmittables] {
 
 object ContextBuildersHead {
   implicit def singleDelegating[
-    B, I, R, T <: Transmittables, T0 <: Delegating](implicit
+    B, I, R, P, T <: Transmittables, T0 <: Delegating](implicit
     ev: ContextBuilders[Delegates[T0]] <:<
-        ContextBuilders[Delegates[Transmittable.Aux[B, I, R, T]]])
+        ContextBuilders[Delegates[Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuildersHead[Delegates[T0], T] =
     new ContextBuildersHead[Delegates[T0], T] {
       def apply(contextBuilders: ContextBuilders[Delegates[T0]]) = {
@@ -90,9 +90,9 @@ object ContextBuildersHead {
     }
 
   implicit def singleMessage[
-    B, I, R, T <: Transmittables, T0 <: Messaging](implicit
+    B, I, R, P, T <: Transmittables, T0 <: Messaging](implicit
     ev: ContextBuilders[Message[T0]] <:<
-        ContextBuilders[Message[Transmittable.Aux[B, I, R, T]]])
+        ContextBuilders[Message[Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuildersHead[Message[T0], T] =
     new ContextBuildersHead[Message[T0], T] {
       def apply(contextBuilders: ContextBuilders[Message[T0]]) = {
@@ -102,9 +102,9 @@ object ContextBuildersHead {
     }
 
   implicit def list[
-    B, I, R, T <: Transmittables, T0 <: Delegating, TT <: Delegating](implicit
+    B, I, R, P, T <: Transmittables, T0 <: Delegating, TT <: Delegating](implicit
     ev: ContextBuilders[Delegates[T0]] <:<
-        ContextBuilders[Delegates[TT / Transmittable.Aux[B, I, R, T]]])
+        ContextBuilders[Delegates[TT / Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuildersHead[Delegates[T0], T] =
     new ContextBuildersHead[Delegates[T0], T] {
       def apply(contextBuilders: ContextBuilders[Delegates[T0]]) = {
@@ -121,9 +121,9 @@ sealed trait ContextBuildersTail[T <: Transmittables, TT <: Transmittables] {
 
 object ContextBuildersTail {
   implicit def list[
-    B, I, R, T <: Transmittables, T0 <: Delegating, TT <: Delegating](implicit
+    B, I, R, P, T <: Transmittables, T0 <: Delegating, TT <: Delegating](implicit
     ev: ContextBuilders[Delegates[T0]] <:<
-        ContextBuilders[Delegates[TT / Transmittable.Aux[B, I, R, T]]])
+        ContextBuilders[Delegates[TT / Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuildersTail[Delegates[T0], Delegates[TT]] =
     new ContextBuildersTail[Delegates[T0], Delegates[TT]] {
       def apply(contextBuilders: ContextBuilders[Delegates[T0]]) = {
