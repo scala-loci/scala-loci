@@ -38,20 +38,14 @@ trait OutputGenerator { this: Generation =>
     override def transform(tree: Tree) = tree match {
       case tree: TypeTree if tree.original == null && tree.tpe != null =>
         val tpe = tree.tpe map { tpe =>
-          if (types.bottom forall { tpe <:!< _ }) {
-            if (tpe <:< types.localOn)
-              tpe.underlying.typeArgs.head
-            else if (tpe <:< typeOf[_ <-> _])
-              tpe.typeArgs.last
-            else if (tpe <:< typeOf[_ <=> _]) {
-              val TypeRef(pre, sym, _) = typeOf[Unit => Unit]
-              internal typeRef (pre, sym, tpe.typeArgs)
-            }
-            else if (types.selection exists { tpe <:< _ })
-              definitions.UnitTpe
-            else
-              tpe
-          }
+          if (types.bottom exists { tpe <:< _ })
+            tpe
+          else if ((tpe <:< types.issued) ||
+                   (tpe <:< types.issuedControlled) ||
+                   (types.selection exists { tpe <:< _ }))
+            definitions.UnitTpe
+          else if (tpe <:< types.localOn)
+            tpe.underlying.typeArgs.head
           else
             tpe
         }
