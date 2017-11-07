@@ -83,7 +83,11 @@ class System(
 
   private val doRemoteJoined = Notifier[RemoteRef]
 
+  private val doRemotePreJoined = Notifier[RemoteRef]
+
   private val doRemoteLeft = Notifier[RemoteRef]
+
+  private val doRemotePreLeft = Notifier[RemoteRef]
 
   private val singleRemotes = (singleConnectedRemotes flatMap { remote =>
     (bases(remote.peerType) + remote.peerType) map { _ -> remote }
@@ -98,26 +102,49 @@ class System(
       filter startedRemotes.containsKey
       map { _.asRemote(peerType) }).flatten
 
+  def preRemotes(peerType: PeerType): List[RemoteRef] =
+    (remoteConnections.remotes map { _.asRemote(peerType) }).flatten
+
   def remotes[R <: Peer: PeerTypeTag]: List[Remote[R]] =
     (remoteConnections.remotes
       filter startedRemotes.containsKey
       map { _.asRemote[R] }).flatten
 
+  def preRemotes[R <: Peer: PeerTypeTag]: List[Remote[R]] =
+    (remoteConnections.remotes map { _.asRemote[R] }).flatten
+
   def singleRemote(peerType: PeerType): RemoteRef =
     singleRemotes(peerType)
+
+  def singlePreRemote(peerType: PeerType): RemoteRef =
+    singleRemote(peerType)
 
   def singleRemote[R <: Peer: PeerTypeTag]: Remote[R] =
     singleRemotes(peerTypeOf[R]).asRemote[R].get
 
+  def singlePreRemote[R <: Peer: PeerTypeTag]: Remote[R] =
+    singleRemote[R]
+
   def optionalRemote(peerType: PeerType): Option[RemoteRef] =
     remotes(peerType).headOption
+
+  def optionalPreRemote(peerType: PeerType): Option[RemoteRef] =
+    preRemotes(peerType).headOption
 
   def optionalRemote[R <: Peer: PeerTypeTag]: Option[Remote[R]] =
     remotes(peerTypeOf[R]).headOption flatMap { _.asRemote[R] }
 
+  def optionalPreRemote[R <: Peer: PeerTypeTag]: Option[Remote[R]] =
+    preRemotes(peerTypeOf[R]).headOption flatMap { _.asRemote[R] }
+
 
   def remoteJoined(peerType: PeerType): Notification[RemoteRef] =
     doRemoteJoined.notification transform {
+      Function unlift { _ asRemote peerType }
+    }
+
+  def remotePreJoined(peerType: PeerType): Notification[RemoteRef] =
+    doRemotePreJoined.notification transform {
       Function unlift { _ asRemote peerType }
     }
 
@@ -126,8 +153,18 @@ class System(
       Function unlift { _ asRemote peerType }
     }
 
+  def remotePreLeft(peerType: PeerType): Notification[RemoteRef] =
+    doRemotePreLeft.notification transform {
+      Function unlift { _ asRemote peerType }
+    }
+
   def remoteJoined[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
     doRemoteJoined.notification transform {
+      Function unlift { _.asRemote[R] }
+    }
+
+  def remotePreJoined[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
+    doRemotePreJoined.notification transform {
       Function unlift { _.asRemote[R] }
     }
 
@@ -136,6 +173,10 @@ class System(
       Function unlift { _.asRemote[R] }
     }
 
+  def remotePreLeft[R <: Peer: PeerTypeTag]: Notification[Remote[R]] =
+    doRemotePreLeft.notification transform {
+      Function unlift { _.asRemote[R] }
+    }
 
 
 
@@ -182,15 +223,15 @@ class System(
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
       (props: TransmissionProperties[T]): Unit =
-    requestRemotes(props, remotes[R], false)
+    requestRemotes(props, preRemotes[R], false)
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
       (selection: T fromMultiple R): Unit =
-    requestRemotes(selection.props, remotes[R] filter selection.filter, false)
+    requestRemotes(selection.props, preRemotes[R] filter selection.filter, false)
 
   def executeTransmission[T, R <: Peer: PeerTypeTag]
       (selection: T fromSingle R): Unit =
-    requestRemotes(selection.props, remotes[R] filter selection.filter, false)
+    requestRemotes(selection.props, preRemotes[R] filter selection.filter, false)
 
 
   def createMultipleTransmission
@@ -329,10 +370,12 @@ class System(
   }
 
   remoteConnections.remoteJoined += { remote =>
+    doRemotePreJoined(remote)
     dispatcher dispatch StartedMessageDispatch(remote)
   }
 
   remoteConnections.remoteLeft += { remote =>
+    doRemotePreLeft(remote)
     context execute new Runnable {
       def run = {
         doRemoteLeft(remote)

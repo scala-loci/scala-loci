@@ -12,13 +12,13 @@ private final case class MultipleTransmissionImpl[
   val id = (peerTypeOf[R], system, selection)
   def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
 
-  val remoteJoined = system.remoteJoined[R] transform {
+  val remoteJoined = system.remotePreJoined[R] transform {
     case remote if selection filter remote => remote
   }
-  val remoteLeft = system.remoteLeft[R] transform {
+  val remoteLeft = system.remotePreLeft[R] transform {
     case remote if selection filter remote => remote
   }
-  def remotes = selection.remotes getOrElse system.remotes[R]
+  def remotes = selection.remotes getOrElse system.preRemotes[R]
   def retrieveMappedRemoteValues =
     (remotes zip system.requestRemotes(selection.props, remotes, true)).toMap
 }
@@ -30,13 +30,13 @@ private final case class OptionalTransmissionImpl[
   val id = (peerTypeOf[R], system, selection)
   def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
 
-  val remoteJoined = system.remoteJoined[R] transform {
+  val remoteJoined = system.remotePreJoined[R] transform {
     case remote if selection filter remote => remote
   }
-  val remoteLeft = system.remoteLeft[R] transform {
+  val remoteLeft = system.remotePreLeft[R] transform {
     case remote if selection filter remote => remote
   }
-  def remote = selection.remote map { Some(_) } getOrElse system.optionalRemote[R]
+  def remote = selection.remote map { Some(_) } getOrElse system.optionalPreRemote[R]
   def retrieveMappedRemoteValue = remote map { remote =>
     remote -> system.requestRemotes(selection.props, Seq(remote), true).head
   }
@@ -51,13 +51,13 @@ private final case class SingleTransmissionImpl[
   val id = (peerTypeOf[R], system, selection)
   def memo[U <: AnyRef](id: Any)(body: => U) = system memo ((this.id, id), body)
 
-  val remoteJoined = system.remoteJoined[R] transform {
+  val remoteJoined = system.remotePreJoined[R] transform {
     case remote if selection filter remote => remote
   }
-  val remoteLeft = system.remoteLeft[R] transform {
+  val remoteLeft = system.remotePreLeft[R] transform {
     case remote if selection filter remote => remote
   }
-  def remote = selection.remote getOrElse system.singleRemote[R]
+  def remote = selection.remote getOrElse system.singlePreRemote[R]
   def retrieveMappedRemoteValue =
     remote -> system.requestRemotes(selection.props, Seq(remote), true).head
 
