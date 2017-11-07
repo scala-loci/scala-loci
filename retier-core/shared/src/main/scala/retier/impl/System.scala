@@ -32,18 +32,35 @@ class System(
 
   private val mainThread = new AtomicReference(Option.empty[Thread])
 
+  private val pendingSingleConnectedRemotes =
+    new ConcurrentHashMap[RemoteRef, Any]
+  
+  private var doneMain = false
+  
+  singleConnectedRemotes foreach { remote =>
+    pendingSingleConnectedRemotes put (remote, remote)
+  }
+
+  private def doMain() = mainThread synchronized {
+    if (!doneMain) {
+      implicit val context = contexts.Queued.create
+      doneMain = true
+
+      Future {
+        mainThread set Some(Thread.currentThread)
+        try peerImpl.main
+        catch {
+          case _: InterruptedException if remoteConnections.isTerminated =>
+        }
+      }
+    }
+  }
+
   def main(): this.type = {
     dispatcher ignoreDispatched PendingConstruction
 
-    implicit val context = contexts.Queued.create
-
-    Future {
-      mainThread set Some(Thread.currentThread)
-      try peerImpl.main
-      catch {
-        case _: InterruptedException if remoteConnections.isTerminated =>
-      }
-    }
+    if (singleConnectedRemotes.isEmpty)
+      doMain()
 
     this
   }
@@ -369,7 +386,15 @@ class System(
     def run = message match {
       case StartedMessage() =>
         if (Option(startedRemotes putIfAbsent (remote, remote)).isEmpty)
-          doRemoteJoined(remote)
+          context execute new Runnable {
+            def run = doRemoteJoined(remote)
+          }
+
+          if (singleConnectedRemotes.nonEmpty) {
+            pendingSingleConnectedRemotes remove remote
+            if (pendingSingleConnectedRemotes.isEmpty)
+              doMain()
+          }
 
       case ChannelMessage(messageType @ ("Request" | "Call"), channelName, Some(abstraction), payload) =>
         val id = AbstractionId.create(abstraction)
