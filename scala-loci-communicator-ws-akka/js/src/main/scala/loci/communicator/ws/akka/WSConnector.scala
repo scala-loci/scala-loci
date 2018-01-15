@@ -125,9 +125,9 @@ private class WSConnector[P <: WS: WSProtocolFactory](
       }
     }
 
-    socket.onerror = { event: dom.ErrorEvent =>
+    socket.onerror = { event: dom.Event =>
       handler notify Failure(
-        new ConnectionException("connection closed: " + event.message))
+        new ConnectionException("connection closed: connection error"))
 
       socket.close()
     }

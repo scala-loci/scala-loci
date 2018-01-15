@@ -2,7 +2,7 @@ enablePlugins(GitVersioning)
 
 git.useGitDescribe in ThisBuild := true
 
-scalaVersion in ThisBuild := "2.11.8"
+scalaVersion in ThisBuild := "2.12.4"
 
 organization in ThisBuild := "de.tuda.stg"
 
@@ -12,13 +12,13 @@ scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-X
 
 
 val macroparadise = addCompilerPlugin(
-  "org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.patch)
+  "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
 
 val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % "provided"
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.0.0" % "test"
+  "org.scalatest" %%% "scalatest" % "3.0.4" % "test"
 
 val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("pweisenburger", "maven")
@@ -36,13 +36,13 @@ val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "0.4.4"
 
 val akkaHttp = libraryDependencies +=
-  "com.typesafe.akka" %% "akka-http" % "10.0.5"
+  "com.typesafe.akka" %% "akka-http" % "10.0.11"
 
 val play = libraryDependencies +=
-  "com.typesafe.play" %% "play" % "2.5.14"
+  "com.typesafe.play" %% "play" % "2.6.11"
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" %%%! "scalajs-dom" % "0.9.1"
+  "org.scala-js" %%%! "scalajs-dom" % "0.9.4"
 
 
 def preventPublication(project: Project) = project settings (

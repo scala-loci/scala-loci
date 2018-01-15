@@ -1,1 +1,1 @@
-scalacOptions := Seq("-feature", "-deprecation", "-unchecked", "-Xlint")
+scalacOptions := Seq("-feature", "-deprecation", "-unchecked", "-Xlint:_,-unused")
