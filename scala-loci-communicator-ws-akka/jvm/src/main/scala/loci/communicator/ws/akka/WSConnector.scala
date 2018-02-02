@@ -18,6 +18,8 @@ import scala.util.Failure
 import scala.util.Success
 
 private object WSConnector {
+  locally(WSConnector)
+
   def apply[P <: WS: WSProtocolFactory](
       http: HttpExt,
       webSocketRequest: WebSocketRequest,

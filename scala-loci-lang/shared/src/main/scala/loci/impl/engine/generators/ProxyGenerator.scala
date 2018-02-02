@@ -180,7 +180,9 @@ trait ProxyGenerator { this: Generation =>
             val peerTypeTree = remoteTypeTree.typeArgTrees.head
 
             q"""$TryCreate {
-                  ref.remote.asRemote[$peerTypeTree].get
+                  new $RemoteRefOps(
+                    new $AbstractionRefOps(ref).remote
+                  ).asRemote[$peerTypeTree].get
                 } flatMap { remote =>
                   $response
                 }

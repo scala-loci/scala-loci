@@ -4,8 +4,6 @@ package messaging
 import communicator.ProtocolCommon
 import communicator.Bidirectional
 import communicator.Connection
-import communicator.Connector
-import communicator.Listener
 import communicator.Listening
 import communicator.ConnectionException
 import scala.collection.JavaConverters._

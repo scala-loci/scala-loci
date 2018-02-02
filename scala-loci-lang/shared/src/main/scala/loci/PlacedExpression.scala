@@ -8,21 +8,21 @@ protected final abstract class OverridingExpression[P <: Peer] {
 
 protected final abstract class SpecialPlacingExpression[P <: Peer] {
   def `abstract`[T]
-    (implicit ev: NoLocalPeer[_]): T on P = `#macro`
+    (implicit ev: NoLocalPeer[_]): T on P = `#macro`(ev)
   def base[T <: (_ localOn _), U, P0 <: Peer](v: T)
     (implicit
         ev0: LocalPeer[P],
         ev1: T <:< (_ localOn P0),
         ev2: P <:< P0,
-        ev3: LocalValueTypes[T, U]): U = `#macro`
+        ev3: LocalValueTypes[T, U]): U = `#macro`(ev0, ev1, ev2, ev3)
   def main(f: CurrentLocalPeer[P] `implicit =>` Unit `argument name` { type ! })
-    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`
+    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`(ev)
   def terminating(f: CurrentLocalPeer[P] `implicit =>` Unit `argument name` { type ! })
-    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`
+    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`(ev)
   def error(f: CurrentLocalPeer[P] `implicit =>` Unit `argument name` { type ! })
-    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`
+    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`(ev)
   def fatal(f: CurrentLocalPeer[P] `implicit =>` Unit `argument name` { type ! })
-    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`
+    (implicit ev: NoLocalPeer[_]): Unit on P = `#macro`(ev)
 }
 
 protected final abstract class PlacingExpression[P <: Peer] {

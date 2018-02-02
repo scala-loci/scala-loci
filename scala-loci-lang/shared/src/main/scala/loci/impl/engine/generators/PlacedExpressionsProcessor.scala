@@ -74,8 +74,6 @@ trait PlacedExpressionsProcessor { this: Generation =>
 
     def processPlacedExpression
         (stat: PlacedStatement): PlacedStatement = {
-      import trees._
-
       val PlacedStatement(tree, peerSymbol, exprType, declTypeTree,
         overridingDecl, expr, index) = stat
 

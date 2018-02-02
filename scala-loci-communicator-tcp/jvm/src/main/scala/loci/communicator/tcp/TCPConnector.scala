@@ -2,11 +2,9 @@ package loci
 package communicator
 package tcp
 
-import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 import scala.util.control.NonFatal
-import java.io.IOException
 import java.net.Socket
 
 private class TCPConnector(

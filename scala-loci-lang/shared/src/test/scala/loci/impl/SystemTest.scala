@@ -22,7 +22,7 @@ class SystemSpec extends FlatSpec with Matchers {
       var client0System: System = null
       var client1System: System = null
 
-      val serverRuntime = Runtime.run(
+      Runtime.run(
         server.Tie,
         server,
         peerTypeOf[app.Server],

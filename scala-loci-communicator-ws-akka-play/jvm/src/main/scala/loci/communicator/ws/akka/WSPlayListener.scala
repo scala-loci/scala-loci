@@ -14,6 +14,8 @@ import scala.util.Success
 import scala.util.Failure
 
 private object WSPlayListener {
+  locally(WSPlayListener)
+
   def apply[P <: WS: WSProtocolFactory](properties: WS.Properties) =
     new Listener[P] with WebSocketHandler {
       private def webSocket(authenticated: Either[Option[String], Any]) =

@@ -7,6 +7,8 @@ import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 
 private object WSActorSystem {
+  locally(WSActorSystem)
+
   private var count = 0
   @volatile private implicit var actorSystem: ActorSystem = _
   @volatile private implicit var actorMaterializer: ActorMaterializer = _

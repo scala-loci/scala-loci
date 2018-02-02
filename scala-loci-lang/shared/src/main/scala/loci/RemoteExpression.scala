@@ -80,11 +80,11 @@ protected sealed trait FirstIfNotEmptyElseSecondSecondFallback {
 protected sealed trait FirstIfNotEmptyElseSecondFirstFallback
     extends FirstIfNotEmptyElseSecondSecondFallback {
   implicit def inferred[N, O]
-    (implicit ev: N =:= N): FirstIfNotEmptyElseSecond[N, O, N] = `#macro`
+    (implicit ev: N =:= N): FirstIfNotEmptyElseSecond[N, O, N] = `#macro`(ev)
 }
 
 protected object FirstIfNotEmptyElseSecond
     extends FirstIfNotEmptyElseSecondFirstFallback {
   implicit def nothing[N, O]
-    (implicit ev: N =:= Nothing): FirstIfNotEmptyElseSecond[N, O, O] = `#macro`
+    (implicit ev: N =:= Nothing): FirstIfNotEmptyElseSecond[N, O, O] = `#macro`(ev)
 }

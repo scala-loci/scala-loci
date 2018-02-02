@@ -20,6 +20,8 @@ import scala.collection.mutable.Queue
 import java.util.concurrent.atomic.AtomicBoolean
 
 private object WSHandler {
+  locally(WSHandler)
+
   def handleWebSocket[P <: WS](
       ws: Future[P],
       properties: WS.Properties,
@@ -144,6 +146,6 @@ private abstract class WSAbstractHandler[M] {
     (Flow[M]
       idleTimeout properties.heartbeatTimeout
       via flow
-      keepAlive (properties.heartbeatDelay, heartbeatMessage))
+      keepAlive (properties.heartbeatDelay, heartbeatMessage _))
   }
 }

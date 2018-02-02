@@ -16,17 +16,17 @@ protected object PeerTie {
     [CS <: Peer#TieSpec, P <: Peer, M <: TieMultiplicity]
     (implicit
         ev0: PeerTieHelper[CS, P, M],
-        ev1: M =:= MultipleTie): PeerTie[CS, P, MultipleTie] = `#macro`
+        ev1: M =:= MultipleTie): PeerTie[CS, P, MultipleTie] = `#macro`(ev0, ev1)
   implicit def optional
     [CS <: Peer#TieSpec, P <: Peer, M <: TieMultiplicity]
     (implicit
         ev0: PeerTieHelper[CS, P, M],
-        ev1: M =:= OptionalTie): PeerTie[CS, P, OptionalTie] = `#macro`
+        ev1: M =:= OptionalTie): PeerTie[CS, P, OptionalTie] = `#macro`(ev0, ev1)
   implicit def single
     [CS <: Peer#TieSpec, P <: Peer, M <: TieMultiplicity]
     (implicit
         ev0: PeerTieHelper[CS, P, M],
-        ev1: M =:= SingleTie): PeerTie[CS, P, SingleTie] = `#macro`
+        ev1: M =:= SingleTie): PeerTie[CS, P, SingleTie] = `#macro`(ev0, ev1)
 
 
   sealed trait PeerTieHelperSecondFallback {

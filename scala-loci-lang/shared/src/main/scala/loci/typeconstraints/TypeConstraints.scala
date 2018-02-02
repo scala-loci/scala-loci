@@ -7,7 +7,10 @@ import scala.annotation.implicitNotFound
 final abstract class =:!=[A, B]
 
 protected object =:!= {
-  implicit def unequal[A, B](implicit ev: Unequal[A, B]): A =:!= B = null
+  implicit def unequal[A, B](implicit ev: Unequal[A, B]): A =:!= B = {
+    locally(ev)
+    null
+  }
 
   final abstract class Unequal[A, B]
   implicit def unequalEvidence[A, B]: Unequal[A, B] = null
@@ -19,7 +22,10 @@ protected object =:!= {
 final abstract class <:!<[A, B]
 
 protected object <:!< {
-  implicit def nonSubtype[A, B](implicit ev: NonSubtype[A, B]): A <:!< B = null
+  implicit def nonSubtype[A, B](implicit ev: NonSubtype[A, B]): A <:!< B = {
+    locally(ev)
+    null
+  }
 
   final abstract class NonSubtype[A, B]
   implicit def nonSubtypeEvidence[A, B]: NonSubtype[A, B] = null

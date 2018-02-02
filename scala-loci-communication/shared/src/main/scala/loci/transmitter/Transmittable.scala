@@ -48,8 +48,11 @@ object IdenticallyTransmittable {
   implicit def transmittable[T, V]
       (implicit
         transmittable: AnyTransmittable[T, V],
-        identicallyTransmittable: V <:< PullBasedIdenticallyTransmittable[T]) =
+        identicallyTransmittable: V <:< PullBasedIdenticallyTransmittable[T]) = {
+    locally(transmittable)
+    locally(identicallyTransmittable)
     singletonIdenticallyTransmittable.asInstanceOf[IdenticallyTransmittable[T]]
+  }
 
   private[this] final val singletonIdenticallyTransmittable =
     new IdenticallyTransmittable[Any] { }

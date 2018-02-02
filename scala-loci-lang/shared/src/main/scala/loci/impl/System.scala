@@ -9,7 +9,6 @@ import Selection._
 import transmitter.MultipleTransmission
 import transmitter.OptionalTransmission
 import transmitter.SingleTransmission
-import communicator.ProtocolCommon
 import communicator.Connector
 import messaging.Message
 import scala.ref.WeakReference

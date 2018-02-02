@@ -9,10 +9,10 @@ protected trait NotNothing[T]
 protected object NotNothing {
   implicit def nothing[T]
     (implicit
-        ev: T =:= Nothing): NotNothing[T] = `#macro`
+        ev: T =:= Nothing): NotNothing[T] = `#macro`(ev)
   implicit def nothingAmbiguousEvidence[T]
     (implicit
-        ev: T =:= T): NotNothing[T] = `#macro`
+        ev: T =:= T): NotNothing[T] = `#macro`(ev)
 }
 
 
@@ -28,14 +28,14 @@ protected object PlacingTypes extends PlacingTypesFallback {
   implicit def localPlacedType[P <: Peer, P0 <: Peer, T, U]
     (implicit
         ev0: T <:< (U localOn P0),
-        ev1: P <:< P0): PlacingTypes[P, T, U] = `#macro`
+        ev1: P <:< P0): PlacingTypes[P, T, U] = `#macro`(ev0, ev1)
   implicit def remotePlacedType[P <: Peer, P0 <: Peer, T, U]
     (implicit
         ev0: T <:< (U localOn P0),
-        ev1: P <:!< P0): PlacingTypes[P, T, Unit] = `#macro`
+        ev1: P <:!< P0): PlacingTypes[P, T, Unit] = `#macro`(ev0, ev1)
   implicit def nonPlacedType[P <: Peer, T]
     (implicit
-        ev: T <:!< (_ localOn _)): PlacingTypes[P, T, T] = `#macro`
+        ev: T <:!< (_ localOn _)): PlacingTypes[P, T, T] = `#macro`(ev)
 }
 
 
@@ -45,10 +45,10 @@ final abstract class RemotePlacingTypes[T, +U]
 protected object RemotePlacingTypes {
   implicit def placedType[T, U]
     (implicit
-        ev: T <:< (U localOn _)): RemotePlacingTypes[T, U] = `#macro`
+        ev: T <:< (U localOn _)): RemotePlacingTypes[T, U] = `#macro`(ev)
   implicit def nonPlacedType[T]
     (implicit
-        ev: T <:!< (_ localOn _)): RemotePlacingTypes[T, T] = `#macro`
+        ev: T <:!< (_ localOn _)): RemotePlacingTypes[T, T] = `#macro`(ev)
 }
 
 
@@ -60,16 +60,16 @@ protected object SubjectiveTypes {
     (implicit
         ev0: T <:!< (Remote[R] <=> _),
         ev1: T <:!< (Remote[R] <-> _),
-        ev2: T <:!< (Remote[R] => _)): SubjectiveTypes[R, T, Remote[R] <-> T] = `#macro`
+        ev2: T <:!< (Remote[R] => _)): SubjectiveTypes[R, T, Remote[R] <-> T] = `#macro`(ev0, ev1, ev2)
   implicit def controlledSubjectiveType[R <: Peer, T, U]
     (implicit
-        ev: T <:< (Remote[R] => U)): SubjectiveTypes[R, T, Remote[R] <=> U] = `#macro`
+        ev: T <:< (Remote[R] => U)): SubjectiveTypes[R, T, Remote[R] <=> U] = `#macro`(ev)
   implicit def subjectiveTypePassed[R <: Peer, T, U]
     (implicit
-        ev: T <:< (Remote[R] <-> U)): SubjectiveTypes[R, T, Remote[R] <-> U] = `#macro`
+        ev: T <:< (Remote[R] <-> U)): SubjectiveTypes[R, T, Remote[R] <-> U] = `#macro`(ev)
   implicit def controlledSubjectiveTypePassed[R <: Peer, T, U]
     (implicit
-        ev: T <:< (Remote[R] <=> U)): SubjectiveTypes[R, T, Remote[R] <=> U] = `#macro`
+        ev: T <:< (Remote[R] <=> U)): SubjectiveTypes[R, T, Remote[R] <=> U] = `#macro`(ev)
 }
 
 
@@ -77,12 +77,12 @@ protected final abstract class ValueTypes[T, R <: Remote[Peer], U, V]
 
 protected trait ValueTypesNothingOrNotInferred {
   implicit def nothingOrNotInferred[T, U]
-    (implicit ev: DummyImplicit): ValueTypes[T, Nothing, U, T] = `#macro`
+    (implicit ev: DummyImplicit): ValueTypes[T, Nothing, U, T] = `#macro`(ev)
 }
 
 protected trait ValueTypesIdentity extends ValueTypesNothingOrNotInferred {
   implicit def identity[T, U]
-    (implicit ev: T =:= U): ValueTypes[T, Nothing, U, U] = `#macro`
+    (implicit ev: T =:= U): ValueTypes[T, Nothing, U, U] = `#macro`(ev)
 }
 
 protected object ValueTypes extends ValueTypesIdentity with ValueTypesHigherKinds {
@@ -91,31 +91,31 @@ protected object ValueTypes extends ValueTypesIdentity with ValueTypesHigherKind
         ev0: T <:< (U localOn _),
         ev1: U <:!< (_ <=> _),
         ev2: U <:!< (_ <-> _),
-        ev3: ValueTypes[U, _, Dummy, V]): ValueTypes[T, Remote[Peer], V, V] = `#macro`
+        ev3: ValueTypes[U, _, Dummy, V]): ValueTypes[T, Remote[Peer], V, V] = `#macro`(ev0, ev1, ev2, ev3)
   implicit def placedValueControlledSubjective[R <: Remote[Peer], T, U, V, I, Dummy]
     (implicit
         ev0: NotNothing[T],
         ev1: T <:< (U localOn _),
         ev2: U <:< (R <=> I),
-        ev3: ValueTypes[I, _, Dummy, V]): ValueTypes[T, R, V, R => V] = `#macro`
+        ev3: ValueTypes[I, _, Dummy, V]): ValueTypes[T, R, V, R => V] = `#macro`(ev0, ev1, ev2, ev3)
   implicit def placedValueSubjective[R <: Remote[Peer], T, U, V, I, Dummy]
     (implicit
         ev0: NotNothing[T],
         ev1: T <:< (U localOn _),
         ev2: U <:< (R <-> I),
-        ev3: ValueTypes[I, _, Dummy, V]): ValueTypes[T, R, V, V] = `#macro`
+        ev3: ValueTypes[I, _, Dummy, V]): ValueTypes[T, R, V, V] = `#macro`(ev0, ev1, ev2, ev3)
   implicit def selectedValue[T]
     (implicit
         ev0: NotNothing[T],
-        ev1: T <:< (_ from _)): ValueTypes[T, Nothing, Unit, Unit] = `#macro`
+        ev1: T <:< (_ from _)): ValueTypes[T, Nothing, Unit, Unit] = `#macro`(ev0, ev1)
   implicit def selectedSingleValue[T]
     (implicit
         ev0: NotNothing[T],
-        ev1: T <:< (_ fromSingle _)): ValueTypes[T, Nothing, Unit, Unit] = `#macro`
+        ev1: T <:< (_ fromSingle _)): ValueTypes[T, Nothing, Unit, Unit] = `#macro`(ev0, ev1)
   implicit def selectedMultipleValue[T]
     (implicit
         ev0: NotNothing[T],
-        ev1: T <:< (_ fromMultiple _)): ValueTypes[T, Nothing, Unit, Unit] = `#macro`
+        ev1: T <:< (_ fromMultiple _)): ValueTypes[T, Nothing, Unit, Unit] = `#macro`(ev0, ev1)
 }
 
 

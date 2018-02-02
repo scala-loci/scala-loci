@@ -28,7 +28,6 @@ class CodeProcessor[C <: Context](val c: C) extends
     PeerTieMultiplicityGenerator with
     PeerImplementationGenerator with
     OutputGenerator {
-  import c.universe._
 
   def process(state: CodeWrapper[c.type]): CodeWrapper[c.type] = {
     val aggregator =

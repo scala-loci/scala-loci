@@ -11,7 +11,6 @@ object PlacedImplicitBridgeCreator {
 
 class PlacedImplicitBridgeCreator[C <: Context](protected val c: C) {
   import c.universe._
-  import Flag._
 
   case class ImportedSymbol(symbol: Symbol, importing: Type)
 

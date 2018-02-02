@@ -7,7 +7,7 @@ protected[loci] trait LocalValueTypes extends LocalValueTypesFastMacro {
   implicit def $$loci$intellij$localValueTypes[T, U, Dummy]
     (implicit
         ev0: IntelliJDummy,
-        ev1: ValueTypes[T, _, Dummy, U]): loci.LocalValueTypes[T, U] = ???
+        ev1: ValueTypes[T, _, Dummy, U]): loci.LocalValueTypes[T, U] = `#macro`(ev0, ev1)
 }
 
 protected[loci] trait RemoteValueTypes extends RemoteValueTypesFastMacro {
@@ -16,5 +16,5 @@ protected[loci] trait RemoteValueTypes extends RemoteValueTypesFastMacro {
   implicit def $$loci$intellij$remoteValueTypes[T, R <: Remote[Peer], U, Dummy]
     (implicit
         ev0: IntelliJDummy,
-        ev1: ValueTypes[T, R, U, Dummy]): loci.RemoteValueTypes[T, R, U] = ???
+        ev1: ValueTypes[T, R, U, Dummy]): loci.RemoteValueTypes[T, R, U] = `#macro`(ev0, ev1)
 }

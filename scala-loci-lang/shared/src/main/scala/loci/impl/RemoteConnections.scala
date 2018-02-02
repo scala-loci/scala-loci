@@ -7,20 +7,13 @@ import RemoteRef._
 import communicator.Connection
 import communicator.Connector
 import communicator.Listener
-import communicator.Listening
-import contexts.Immediate.Implicits.global
-import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import scala.concurrent.Promise
-import scala.concurrent.ExecutionContext
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.atomic.AtomicBoolean
 
 object RemoteConnections {
   type Protocol = ConnectionsBase.Protocol

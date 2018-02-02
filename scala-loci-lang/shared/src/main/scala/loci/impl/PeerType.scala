@@ -18,7 +18,7 @@ object PeerTypeTag {
   def create[P](name: String, bases: List[PeerType]): PeerTypeTag[P] =
     PeerTypeTagImpl(PeerTypeImpl(name, bases))
 
-  @annotation.compileTimeOnly(
+  @compileTimeOnly(
     "peer type tag should have been eliminated " +
     "while expanding `multitier` environment")
   def dummy[P]: PeerTypeTag[P] = ???

@@ -1,7 +1,6 @@
 package loci
 package impl
 
-import RemoteRef._
 import communicator.ProtocolCommon
 import java.util.concurrent.atomic.AtomicBoolean
 

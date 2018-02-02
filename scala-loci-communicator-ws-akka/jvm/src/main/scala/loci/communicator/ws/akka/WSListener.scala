@@ -18,6 +18,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import java.util.concurrent.ConcurrentLinkedQueue
 
 private object WSListener {
+  locally(WSListener)
+
   private def webSocketRoute[P <: WS: WSProtocolFactory](
       listener: Listener[P],
       authenticatedName: Option[String],

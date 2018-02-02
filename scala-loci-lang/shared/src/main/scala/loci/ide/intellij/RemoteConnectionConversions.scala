@@ -14,7 +14,7 @@ protected[loci] trait RemoteConnectionConversions {
         ev0: LocalPeer[L],
         ev1: PeerTie[L#Tie, R, MultipleTie],
         ev2: MultipleRemoteConnection[R] => MultipleRemoteConnection.DefaultMultipleRemoteConnection[R]):
-    MultipleRemoteConnection.DefaultMultipleRemoteConnection[R] = ???
+    MultipleRemoteConnection.DefaultMultipleRemoteConnection[R] = `#macro`(dummy, ev0, ev1, ev2)
 
   @annotation.compileTimeOnly(
     "Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
@@ -26,7 +26,7 @@ protected[loci] trait RemoteConnectionConversions {
         ev0: LocalPeer[L],
         ev1: PeerTie[L#Tie, R, OptionalTie],
         ev2: OptionalRemoteConnection[R] => OptionalRemoteConnection.DefaultOptionalRemoteConnection[R]):
-    OptionalRemoteConnection.DefaultOptionalRemoteConnection[R] = ???
+    OptionalRemoteConnection.DefaultOptionalRemoteConnection[R] = `#macro`(dummy, ev0, ev1, ev2)
 
   @annotation.compileTimeOnly(
     "Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
@@ -38,5 +38,5 @@ protected[loci] trait RemoteConnectionConversions {
         ev0: LocalPeer[L],
         ev1: PeerTie[L#Tie, R, SingleTie],
         ev2: SingleRemoteConnection[R] => SingleRemoteConnection.DefaultSingleRemoteConnection[R]):
-    SingleRemoteConnection.DefaultSingleRemoteConnection[R] = ???
+    SingleRemoteConnection.DefaultSingleRemoteConnection[R] = `#macro`(dummy, ev0, ev1, ev2)
 }

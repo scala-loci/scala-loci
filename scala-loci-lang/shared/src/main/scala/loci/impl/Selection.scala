@@ -1,7 +1,6 @@
 package loci
 package impl
 
-import RemoteRef._
 import scala.language.implicitConversions
 
 private[impl] final case class Selection[T, P <: Peer](

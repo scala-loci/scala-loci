@@ -1,7 +1,6 @@
 package loci
 
 import communicator.ProtocolCommon
-import communicator.Bidirectional
 import communicator.ConnectionSetupFactory
 import communicator.Listener
 import communicator.Connector
@@ -46,21 +45,29 @@ trait Peer {
       (implicit
           ev0: Default.Default[D],
           ev1: D <:< Default.Listen[P],
-          ev2: PeerTypeTag[P]): ConnectionSetup =
+          ev2: PeerTypeTag[P]): ConnectionSetup = {
+      locally(ev0)
+      locally(ev1)
+      locally(ev2)
       new ConnectionSetup {
         def setup(peerType: PeerType, peerTypes: List[PeerType]) =
           Map(peerTypeOf[P] -> ((List(listener), List.empty)))
       }
+    }
 
     final implicit def connectorToSetup[D, P](connector: Connector[Protocol])
       (implicit
           ev0: Default.Default[D],
           ev1: D <:< Default.Connect[P],
-          ev2: PeerTypeTag[P]): ConnectionSetup =
+          ev2: PeerTypeTag[P]): ConnectionSetup = {
+      locally(ev0)
+      locally(ev1)
+      locally(ev2)
       new ConnectionSetup {
         def setup(peerType: PeerType, peerTypes: List[PeerType]) =
           Map(peerTypeOf[P] -> ((List.empty, List(connector))))
       }
+    }
 
     implicit class Composition(self: ConnectionSetup) {
       def and(other: ConnectionSetup): ConnectionSetup =
@@ -131,6 +138,9 @@ trait Peer {
           ev0: Default.Default[D],
           ev1: D <:< Default.Listen[P],
           ev2: PeerTypeTag[P]) {
+    locally(ev0)
+    locally(ev1)
+    locally(ev2)
     def apply(config: String) =
       listen[P] (factorySetup.factory) (config, Map.empty)
     def apply(config: String, props: ConnectionSetupFactory.Properties) =
@@ -143,6 +153,9 @@ trait Peer {
           ev0: Default.Default[D],
           ev1: D <:< Default.Connect[P],
           ev2: PeerTypeTag[P]) {
+    locally(ev0)
+    locally(ev1)
+    locally(ev2)
     def apply(url: String) =
       connect[P] (factorySetup.factory) (url, Map.empty)
     def apply(url: String, props: ConnectionSetupFactory.Properties) =

@@ -10,6 +10,8 @@ import scala.concurrent.Future
 import scala.util.Try
 
 private object WSPlayHandler {
+  locally(WSPlayHandler)
+
   def handleWebSocket[P <: WS](
       ws: Future[P],
       properties: WS.Properties,

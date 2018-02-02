@@ -5,7 +5,6 @@ package transmittable
 import _root_.rescala.core.Struct
 import _root_.rescala.core.Pulse
 import _root_.rescala.core.Engine
-import _root_.rescala.core.Turn
 import _root_.rescala.reactives.Signal
 import scala.language.higherKinds
 

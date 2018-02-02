@@ -16,6 +16,8 @@ private sealed trait WSProtocolFactory[P <: WS] {
 }
 
 private object WSProtocolFactory {
+  locally(WSProtocolFactory)
+
   implicit object ws extends WSProtocolFactory[WS] {
     def make(url: String, host: Option[String], port: Option[Int],
         setup: ConnectionSetup[WS], authenticated: Boolean,

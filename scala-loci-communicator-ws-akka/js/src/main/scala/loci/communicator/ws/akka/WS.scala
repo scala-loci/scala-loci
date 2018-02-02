@@ -35,20 +35,24 @@ object WS extends WSSetupFactory {
   def apply(
     http: HttpExt, port: Int)(implicit
     actorRefFactory: ActorSystem,
-    materializer: Materializer): Listener[WS] = ???
+    materializer: Materializer): Listener[WS] =
+      { locally(actorRefFactory); locally(materializer); ??? }
   def apply(
     http: HttpExt, port: Int, interface: String)(implicit
     actorRefFactory: ActorSystem,
-    materializer: Materializer): Listener[WS] = ???
+    materializer: Materializer): Listener[WS] =
+      { locally(actorRefFactory); locally(materializer); ??? }
   def apply(
     http: HttpExt, port: Int, properties: Properties)(implicit
     actorRefFactory: ActorSystem,
-    materializer: Materializer): Listener[WS] = ???
+    materializer: Materializer): Listener[WS] =
+      { locally(actorRefFactory); locally(materializer); ??? }
   def apply(
     http: HttpExt, port: Int, interface: String,
     properties: Properties)(implicit
     actorRefFactory: ActorSystem,
-    materializer: Materializer): Listener[WS] = ???
+    materializer: Materializer): Listener[WS] =
+      { locally(actorRefFactory); locally(materializer); ??? }
   def apply(port: Int): Listener[WS] = ???
   def apply(port: Int, interface: String): Listener[WS] = ???
   def apply(port: Int, properties: Properties): Listener[WS] = ???
@@ -56,20 +60,26 @@ object WS extends WSSetupFactory {
     properties: Properties): Listener[WS] = ???
 
   def apply(http: HttpExt, webSocketRequest: WebSocketRequest)(
-    implicit materializer: Materializer): Connector[WS] = ???
+    implicit materializer: Materializer): Connector[WS] =
+      { locally(materializer); ??? }
   def apply(http: HttpExt, url: Uri)(
-    implicit materializer: Materializer): Connector[WS] = ???
+    implicit materializer: Materializer): Connector[WS] =
+      { locally(materializer); ??? }
   def apply(http: HttpExt, url: String)(
-    implicit materializer: Materializer): Connector[WS] = ???
+    implicit materializer: Materializer): Connector[WS] =
+      { locally(materializer); ??? }
   def apply(webSocketRequest: WebSocketRequest): Connector[WS] = ???
   def apply(url: Uri): Connector[WS] = ???
   def apply(http: HttpExt, webSocketRequest: WebSocketRequest,
       properties: Properties)(
-    implicit materializer: Materializer): Connector[WS] = ???
+    implicit materializer: Materializer): Connector[WS] =
+      { locally(materializer); ??? }
   def apply(http: HttpExt, url: Uri, properties: Properties)(
-    implicit materializer: Materializer): Connector[WS] = ???
+    implicit materializer: Materializer): Connector[WS] =
+      { locally(materializer); ??? }
   def apply(http: HttpExt, url: String, properties: Properties)(
-    implicit materializer: Materializer): Connector[WS] = ???
+    implicit materializer: Materializer): Connector[WS] =
+      { locally(materializer); ??? }
   def apply(webSocketRequest: WebSocketRequest,
     properties: Properties): Connector[WS] = ???
   def apply(url: Uri, properties: Properties): Connector[WS] = ???
@@ -89,20 +99,24 @@ object WS extends WSSetupFactory {
     def apply(
       http: HttpExt, port: Int)(implicit
       actorRefFactory: ActorSystem,
-      materializer: Materializer): Listener[WS.Secure] = ???
+      materializer: Materializer): Listener[WS.Secure] =
+        { locally(actorRefFactory); locally(materializer); ??? }
     def apply(
       http: HttpExt, port: Int, interface: String)(implicit
       actorRefFactory: ActorSystem,
-      materializer: Materializer): Listener[WS.Secure] = ???
+      materializer: Materializer): Listener[WS.Secure] =
+        { locally(actorRefFactory); locally(materializer); ??? }
     def apply(
       http: HttpExt, port: Int, properties: Properties)(implicit
       actorRefFactory: ActorSystem,
-      materializer: Materializer): Listener[WS.Secure] = ???
+      materializer: Materializer): Listener[WS.Secure] =
+        { locally(actorRefFactory); locally(materializer); ??? }
     def apply(
       http: HttpExt, port: Int, interface: String,
       properties: Properties)(implicit
       actorRefFactory: ActorSystem,
-      materializer: Materializer): Listener[WS.Secure] = ???
+      materializer: Materializer): Listener[WS.Secure] =
+        { locally(actorRefFactory); locally(materializer); ??? }
     def apply(port: Int): Listener[WS.Secure] = ???
     def apply(port: Int, interface: String): Listener[WS.Secure] = ???
     def apply(port: Int, properties: Properties): Listener[WS.Secure] = ???
@@ -110,20 +124,26 @@ object WS extends WSSetupFactory {
       properties: Properties): Listener[WS.Secure] = ???
 
     def apply(http: HttpExt, webSocketRequest: WebSocketRequest)(
-      implicit materializer: Materializer): Connector[WS.Secure] = ???
+      implicit materializer: Materializer): Connector[WS.Secure] =
+        { locally(materializer); ??? }
     def apply(http: HttpExt, url: Uri)(
-      implicit materializer: Materializer): Connector[WS.Secure] = ???
+      implicit materializer: Materializer): Connector[WS.Secure] =
+        { locally(materializer); ??? }
     def apply(http: HttpExt, url: String)(
-      implicit materializer: Materializer): Connector[WS.Secure] = ???
+      implicit materializer: Materializer): Connector[WS.Secure] =
+        { locally(materializer); ??? }
     def apply(webSocketRequest: WebSocketRequest): Connector[WS.Secure] = ???
     def apply(url: Uri): Connector[WS.Secure] = ???
     def apply(http: HttpExt, webSocketRequest: WebSocketRequest,
         properties: Properties)(
-      implicit materializer: Materializer): Connector[WS.Secure] = ???
+      implicit materializer: Materializer): Connector[WS.Secure] =
+        { locally(materializer); ??? }
     def apply(http: HttpExt, url: Uri, properties: Properties)(
-      implicit materializer: Materializer): Connector[WS.Secure] = ???
+      implicit materializer: Materializer): Connector[WS.Secure] =
+        { locally(materializer); ??? }
     def apply(http: HttpExt, url: String, properties: Properties)(
-      implicit materializer: Materializer): Connector[WS.Secure] = ???
+      implicit materializer: Materializer): Connector[WS.Secure] =
+        { locally(materializer); ??? }
     def apply(webSocketRequest: WebSocketRequest,
       properties: Properties): Connector[WS.Secure] = ???
     def apply(url: Uri, properties: Properties): Connector[WS.Secure] = ???

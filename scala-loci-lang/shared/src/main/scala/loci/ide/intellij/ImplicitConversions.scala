@@ -12,7 +12,7 @@ protected[loci] trait ImplicitConversions {
         dummy: IntelliJDummy,
         ev0: LocalPeer[P],
         ev1: T <:!< (_ <=> _),
-        ev2: T <:!< (_ <-> _)): T = ???
+        ev2: T <:!< (_ <-> _)): T = `#macro`(dummy, ev0, ev1, ev2)
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   final implicit def $$loci$intellij$valuePlacedControlledSubjective[P <: Peer, R <: Remote[Peer], T, U]
@@ -20,7 +20,7 @@ protected[loci] trait ImplicitConversions {
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[P],
-        ev1: T <:< (R <=> U)): R => U = ???
+        ev1: T <:< (R <=> U)): R => U = `#macro`(dummy, ev0, ev1)
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
   final implicit def $$loci$intellij$valuePlacedSubjective[P <: Peer, T, U]
@@ -28,5 +28,5 @@ protected[loci] trait ImplicitConversions {
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[P],
-        ev1: T <:< (_ <-> U)): U = ???
+        ev1: T <:< (_ <-> U)): U = `#macro`(dummy, ev0, ev1)
 }

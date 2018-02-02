@@ -155,6 +155,8 @@ object SourceGenerator {
         val typeArgsV = (0 until i) map { i => s"V$i" } mkString ", "
         val typeArgsDummy = (0 until i) map { i => s"Dummy$i" } mkString ", "
 
+        val higherKindEvidences = (0 to i) map { i => s"ev$i" } mkString ", "
+
         val higherKindArgs = (0 until i) map { i => s"""
           |        ev${i+1}: ValueTypes[U$i, _, Dummy$i, V$i]""" } mkString ","
 
@@ -168,7 +170,7 @@ object SourceGenerator {
           |  implicit def higherKind$i[$typeArgs]
           |    (implicit
           |        ev0: NotNothing[T[$typeArgsU]], $higherKindArgs)
-          |    : $resultType = `#macro`
+          |    : $resultType = `#macro`($higherKindEvidences)
           |"""
 
         higherKind

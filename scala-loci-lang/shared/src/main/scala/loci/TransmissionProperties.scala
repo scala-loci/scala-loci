@@ -14,7 +14,8 @@ object TransmissionProperties {
         nonSubjective: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M]):
-    TransmissionProperties[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] =
+      `#macro`(transmittable, nonControlledSubjective, nonSubjective, localPeer, tie)
 
   implicit def transmissionFromSelected
     [V, L <: Peer, R <: Peer, T, U, M <: TieMultiplicity]
@@ -24,7 +25,8 @@ object TransmissionProperties {
         nonSubjective: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M]):
-    TransmissionProperties[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] =
+      `#macro`(transmittable, nonControlledSubjective, nonSubjective, localPeer, tie)
 
   implicit def transmissionFromSelectedSingle
     [V, L <: Peer, R <: Peer, T, U, M <: TieMultiplicity]
@@ -34,7 +36,8 @@ object TransmissionProperties {
         nonSubjective: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M]):
-    TransmissionProperties[V, T, R, L, SingleTie] = `#macro`
+    TransmissionProperties[V, T, R, L, SingleTie] =
+      `#macro`(transmittable, nonControlledSubjective, nonSubjective, localPeer, tie)
 
   implicit def transmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, T, U, M <: TieMultiplicity]
@@ -44,7 +47,8 @@ object TransmissionProperties {
         nonSubjective: T <:!< (_ <-> _),
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M]):
-    TransmissionProperties[V, T, R, L, MultipleTie] = `#macro`
+    TransmissionProperties[V, T, R, L, MultipleTie] =
+      `#macro`(transmittable, nonControlledSubjective, nonSubjective, localPeer, tie)
 
   implicit def controlledSubjectiveTransmission
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -53,7 +57,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def controlledSubjectiveTransmissionFromSelected
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -62,7 +67,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def controlledSubjectiveTransmissionFromSelectedSingle
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -71,7 +77,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, SingleTie] = `#macro`
+    TransmissionProperties[V, T, R, L, SingleTie] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def controlledSubjectiveTransmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -80,7 +87,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, MultipleTie] = `#macro`
+    TransmissionProperties[V, T, R, L, MultipleTie] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def subjectiveTransmission
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -89,7 +97,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def subjectiveTransmissionFromSelected
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -98,7 +107,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, M] = `#macro`
+    TransmissionProperties[V, T, R, L, M] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def subjectiveTransmissionFromSelectedSingle
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -107,7 +117,8 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, SingleTie] = `#macro`
+    TransmissionProperties[V, T, R, L, SingleTie] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 
   implicit def subjectiveTransmissionFromSelectedMultiple
     [V, L <: Peer, R <: Peer, P <: Peer, T, U, M <: TieMultiplicity]
@@ -116,5 +127,6 @@ object TransmissionProperties {
         localPeer: LocalPeer[L],
         tie: PeerTie[L#Tie, R, M],
         dispatched: L <:< P):
-    TransmissionProperties[V, T, R, L, MultipleTie] = `#macro`
+    TransmissionProperties[V, T, R, L, MultipleTie] =
+      `#macro`(transmittable, localPeer, tie, dispatched)
 }

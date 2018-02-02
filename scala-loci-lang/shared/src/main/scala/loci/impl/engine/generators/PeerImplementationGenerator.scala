@@ -264,8 +264,6 @@ trait PeerImplementationGenerator { this: Generation =>
                 request: $MessageBuffer,
                 id: $AbstractionId,
                 ref: $AbstractionRef): $Try[$MessageBuffer] = {
-              import _root_.loci.impl.AbstractionRef._
-              import _root_.loci.impl.RemoteRef._
               id match {
                 case ..${abstractions map { _.dispatchClause } }
                 case _ => super.$dispatch(request, id, ref)

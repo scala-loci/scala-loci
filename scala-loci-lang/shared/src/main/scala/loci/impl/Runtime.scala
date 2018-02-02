@@ -2,16 +2,12 @@ package loci
 package impl
 
 import RemoteRef._
-import communicator.ProtocolCommon
 import communicator.Listener
 import communicator.Connector
-import scala.util.Try
-import scala.util.Success
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.Future
 import scala.concurrent.Promise
 import scala.concurrent.ExecutionContext
-import scala.concurrent.Awaitable
 import scala.concurrent.CanAwait
 import scala.concurrent.duration.Duration
 

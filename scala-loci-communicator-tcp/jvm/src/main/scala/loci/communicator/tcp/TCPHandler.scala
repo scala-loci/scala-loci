@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit
 import scala.collection.mutable.ArrayBuilder
 
 private object TCPHandler {
+  locally(TCPHandler)
+
   def handleConnection(
       socket: Socket,
       properties: TCP.Properties,

@@ -204,6 +204,8 @@ trait Generation {
     val AbstractionId = tq"$root.loci.transmitter.AbstractionId"
     val AbstractionIdCreate = q"$root.loci.impl.AbstractionId.create"
     val AbstractionRef = tq"$root.loci.transmitter.AbstractionRef"
+    val AbstractionRefOps = tq"$root.loci.impl.AbstractionRef.AbstractionRefOps"
+    val RemoteRefOps = tq"$root.loci.impl.RemoteRef.RemoteRefOps"
     val Marshallable = q"$root.loci.transmitter.Marshallable"
     val MarshallableArgument = q"$root.loci.transmitter.MarshallableArgument"
     val UnitMarshallable = q"$root.loci.impl.UnitMarshallable"

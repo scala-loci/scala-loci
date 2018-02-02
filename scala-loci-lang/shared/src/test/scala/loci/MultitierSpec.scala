@@ -35,7 +35,7 @@ class MultitierSpec extends FlatSpec with Matchers {
   }
 
   implicit class StaticTypeAssertion[T](v: T) {
-    def staticAssertType[U](implicit ev: T =:= U) = { }
+    def staticAssertType[U](implicit ev: T =:= U) = locally(ev)
   }
 
   it should "typecheck local unzipping for connected remote list" in {

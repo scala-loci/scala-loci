@@ -3,7 +3,6 @@ package impl
 package engine.generators
 
 import engine._
-import scala.collection.mutable.ListBuffer
 import scala.reflect.macros.blackbox.Context
 
 trait FromExpressionProcessor { this: Generation =>

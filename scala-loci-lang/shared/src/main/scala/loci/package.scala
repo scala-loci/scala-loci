@@ -19,7 +19,7 @@ package object loci extends
     RemoteExpression[P, on] with RemoteSelectionExpression[P] with
     RemoteConnectionExpression[P] = `#macro`
 
-  def peer[P <: Peer](implicit ev: LocalPeer[P]): P = `#macro`
+  def peer[P <: Peer](implicit ev: LocalPeer[P]): P = `#macro`(ev)
 
 
   def peerTypeOf[P](implicit tag: PeerTypeTag[P]): PeerType = tag.peerType
@@ -27,4 +27,6 @@ package object loci extends
 
   def `#macro`: Nothing =
     throw new NotImplementedError("only usable in `multitier` environment")
+
+  def `#macro`(args: Any*): Nothing = `#macro`
 }

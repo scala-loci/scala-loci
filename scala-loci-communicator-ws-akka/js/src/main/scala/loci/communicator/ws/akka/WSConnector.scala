@@ -3,7 +3,6 @@ package communicator
 package ws.akka
 
 import org.scalajs.dom
-import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 import scala.scalajs.js
