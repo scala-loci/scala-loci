@@ -4,6 +4,8 @@ git.useGitDescribe in ThisBuild := true
 
 scalaVersion in ThisBuild := "2.12.4"
 
+crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.4")
+
 organization in ThisBuild := "de.tuda.stg"
 
 licenses in ThisBuild += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
@@ -35,11 +37,19 @@ val rescala = libraryDependencies +=
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "0.4.4"
 
-val akkaHttp = libraryDependencies +=
-  "com.typesafe.akka" %% "akka-http" % "10.0.11"
+val akkaHttp = libraryDependencies ++= Seq(
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
+  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % "provided")
 
-val play = libraryDependencies +=
-  "com.typesafe.play" %% "play" % "2.6.11"
+val play = libraryDependencies ++= Seq(
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
+  "com.typesafe.play" %% "play" % "[2.5,2.7)" % "provided")
+
+val playDependencyOverrides = dependencyOverrides ++= Seq(
+  "org.scala-lang.modules" %% "scala-java8-compat" % "[0.7,0.9)" % "provided",
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
+  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % "provided",
+  "com.typesafe.akka" %% "akka-actor" % "[2.4,3.0)" % "provided")
 
 val scalajsDom = libraryDependencies +=
   "org.scala-js" %%%! "scalajs-dom" % "0.9.4"
