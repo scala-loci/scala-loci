@@ -35,14 +35,12 @@ object Registry {
   }
 
   private final case class AbstractionRef(name: String, remote: RemoteRef,
-    channel: Channel, registry: Registry)
+    channelName: String, registry: Registry)
       extends transmitter.AbstractionRef {
     def derive(name: String) =
-      AbstractionRef(
-        this.name,
-        remote,
-        registry.channels obtain (channel.name + ":" + name, remote),
-        registry)
+      AbstractionRef(this.name, remote, s"$channelName:$name", registry)
+
+    lazy val channel = registry.channels obtain (channelName, remote)
   }
 }
 
@@ -96,11 +94,11 @@ class Registry {
      properties get Registry.Message.Channel) match {
       case (Some(Seq(name)), None, Some(Seq(channelName))) =>
         bindings processRequest (
-          message, name, createAbstractionRef(name, channelName, remote))
+          message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, Some(Seq(name)), Some(Seq(channelName))) =>
         bindings processResponse (
-          message, name, createAbstractionRef(name, channelName, remote))
+          message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, None, Some(Seq(channelName))) =>
         channels obtain (channelName, remote) doReceive message
@@ -120,14 +118,6 @@ class Registry {
           method -> Seq(abstraction.name),
           Registry.Message.Channel -> Seq(abstraction.channel.name)),
         message))
-
-  private def createAbstractionRef(
-      abstractionName: String, channelName: String, remote: RemoteRef) =
-    Registry.AbstractionRef(
-      abstractionName,
-      remote,
-      channels obtain (channelName, remote),
-      this)
 
 
   def bindValue[T](name: String)(function: T)(
@@ -152,10 +142,11 @@ class Registry {
   def lookup[T](binding: Binding[T], remote: RemoteRef): binding.RemoteCall =
     bindings.lookup(
       binding,
-      createAbstractionRef(
+      Registry.AbstractionRef(
         binding.name,
+        remote,
         java.util.UUID.randomUUID.toString,
-        remote))
+        this))
 
 
   def connect(connector: Connector[Connections.Protocol]): Future[RemoteRef] = {
