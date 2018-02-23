@@ -2,15 +2,15 @@ package retier
 
 import scala.annotation.implicitNotFound
 
-protected sealed abstract class CurrentLocalPeer[+P <: Peer]
+sealed abstract class CurrentLocalPeer[+P <: Peer]
 
-protected sealed abstract class CurrentLocalPeerRemoteComputation[+P <: Peer]
+sealed abstract class CurrentLocalPeerRemoteComputation[+P <: Peer]
   extends CurrentLocalPeer[P]
 
 @implicitNotFound("Expression must be placed on a peer.")
-protected final abstract class LocalPeer[+P <: Peer]
+final abstract class LocalPeer[+P <: Peer]
 
-protected object LocalPeer {
+object LocalPeer {
   implicit def localPeer[P <: Peer]
     (implicit
         ev0: CurrentLocalPeer[P],
@@ -18,9 +18,9 @@ protected object LocalPeer {
 }
 
 @implicitNotFound("Expression must not be placed on a peer.")
-protected final abstract class NoLocalPeer[P <: Peer]
+final abstract class NoLocalPeer[P <: Peer]
 
-protected object NoLocalPeer {
+object NoLocalPeer {
   implicit def noLocalPeer[P <: Peer]: NoLocalPeer[P] = `#macro`
   implicit def noLocalPeerAmbiguousEvidence[P <: Peer]
     (implicit ev: LocalPeer[P]): NoLocalPeer[P] = `#macro`
