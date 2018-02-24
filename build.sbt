@@ -37,6 +37,10 @@ val rescala = libraryDependencies +=
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "0.4.4"
 
+val circe = libraryDependencies ++= Seq(
+  "io.circe" %%% "circe-core" % "0.9.1",
+  "io.circe" %%% "circe-parser" % "0.9.1")
+
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
   "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % "provided")
@@ -70,6 +74,7 @@ lazy val lociJVM = preventPublication(project
   in file(".jvm")
   aggregate (lociLangJVM, lociArchitecturesBasicJVM,
              lociSerializerUpickleJVM,
+             lociSerializerCirceJVM,
              lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
              lociLangTransmitterBasicJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
@@ -80,6 +85,7 @@ lazy val lociJS = preventPublication(project
   in file(".js")
   aggregate (lociLangJS, lociArchitecturesBasicJS,
              lociSerializerUpickleJS,
+             lociSerializerCirceJS,
              lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
              lociLangTransmitterBasicJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
@@ -132,6 +138,17 @@ lazy val lociSerializerUpickle = (crossProject
 
 lazy val lociSerializerUpickleJVM = lociSerializerUpickle.jvm
 lazy val lociSerializerUpickleJS = lociSerializerUpickle.js
+
+
+lazy val lociSerializerCirce = (crossProject
+  crossType CrossType.Pure
+  in file("scala-loci-serializer-circe")
+  settings (normalizedName := "scala-loci-serializer-circe",
+            circe)
+  dependsOn lociCommunication)
+
+lazy val lociSerializerCirceJVM = lociSerializerCirce.jvm
+lazy val lociSerializerCirceJS = lociSerializerCirce.js
 
 
 lazy val lociTransmitterRescala = (crossProject
