@@ -94,20 +94,23 @@ object SourceGenerator {
           if (i == 0) "MessageBuffer.empty"
           else s"arg marshal (($args), abstraction)"
 
+        val castedFunction = s"function.asInstanceOf[($argTypes) => R]"
+
         val tupledFunction =
-          if (i == 1) "function"
-          else "function.tupled"
+          if (i == 1) s"$castedFunction"
+          else s"$castedFunction.tupled"
 
         val dispatch =
           if (i == 0) s"""
-            |          Try { res marshal (function(), abstraction) }"""
+            |          Try { res marshal ($castedFunction(), abstraction) }"""
           else s"""
             |          arg unmarshal (message, abstraction) map { arg =>
             |            res marshal ($tupledFunction(arg), abstraction) }"""
 
         s"""
           |  implicit def $function(implicit
-          |      ev: T <:< (($argTypes) => R), $marshallables) =
+          |      ev: (($argTypes) => R) =:= T, $marshallables) = {
+          |    locally(ev)
           |    new BindingBuilder[T] {
           |      type RemoteCall = ($argTypes) => Future[res.Result]
           |      def apply(bindingName: String) = new Binding[T] {
@@ -123,6 +126,7 @@ object SourceGenerator {
           |            createCall(handler, $marshalling, res, abstraction)
           |      }
           |    }
+          |  }
           |"""
       }
 
