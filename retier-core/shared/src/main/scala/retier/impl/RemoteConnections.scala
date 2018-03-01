@@ -108,10 +108,8 @@ class RemoteConnections(peerType: PeerType,
             val future = promise.future
 
             val closed = new (Unit => Unit) {
-              def apply(unit: Unit) = state sync {
-                if (!promise.isCompleted)
-                  promise failure terminatedException
-              }
+              def apply(unit: Unit) =
+                promise tryFailure terminatedException
             }
 
             val receive = new (String => Unit) {
@@ -136,7 +134,7 @@ class RemoteConnections(peerType: PeerType,
                 if (result.isFailure)
                   connection.close
 
-                promise complete result
+                promise tryComplete result
               }
             }
 
@@ -244,8 +242,8 @@ class RemoteConnections(peerType: PeerType,
 
   private def addRemoteConnection(instance: RemoteConnections,
       remote: RemoteRef, connection: Connection,
-      sendAcceptMessage: Boolean): Try[Unit] =
-    handleConstraintChanges(instance) {
+      sendAcceptMessage: Boolean): Try[Unit] = {
+    val (result, satisfied, violated) = handleConstraintChanges(instance) {
       instance.state.connections put (remote, connection)
       instance.state.remotes add remote
 
@@ -260,12 +258,10 @@ class RemoteConnections(peerType: PeerType,
       }
 
       val closed = new (Unit => Unit) {
-        def apply(unit: Unit) = state sync {
-          if (state.connections containsKey remote) {
-            connection.receive -= receive
-            connection.closed -= this
-            removeRemoteConnection(instance, remote)
-          }
+        def apply(unit: Unit) = {
+          connection.receive -= receive
+          connection.closed -= this
+          removeRemoteConnection(instance, remote)
         }
       }
 
@@ -282,29 +278,63 @@ class RemoteConnections(peerType: PeerType,
         Success(())
     }
 
-  private def removeRemoteConnection(instance: RemoteConnections,
-      remote: RemoteRef): Unit =
-    handleConstraintChanges(instance) {
-      instance.state.remotes remove remote
-      instance.state.connections remove remote
-      instance.doRemoteLeft(remote)
-    }
-
-  private def handleConstraintChanges[T]
-      (instance: RemoteConnections)(changeConnection: => T): T = {
-    val constraintsSatisfiedBefore = instance.constraintViolations.isEmpty
-
-    val result = changeConnection
-
-    val constraintsSatisfiedAfter = instance.constraintViolations.isEmpty
-
-    if (!constraintsSatisfiedBefore && constraintsSatisfiedAfter)
+    if (satisfied)
       instance.doConstraintsSatisfied()
-    if (constraintsSatisfiedBefore && !constraintsSatisfiedAfter)
-      instance.doConstraintsViolated(violationException)
+
+    violated foreach {
+      instance.doConstraintsViolated(_)
+    }
 
     result
   }
+
+  private def removeRemoteConnection(instance: RemoteConnections,
+      remote: RemoteRef): Unit = {
+    val (left, satisfied, violated) = state sync {
+      if (state.connections containsKey remote) {
+        handleConstraintChanges(instance) {
+          instance.state.remotes remove remote
+          instance.state.connections remove remote
+          true
+        }
+      }
+      else
+        (false, false, None)
+    }
+
+    if (left)
+      instance.doRemoteLeft(remote)
+
+    if (satisfied)
+      instance.doConstraintsSatisfied()
+
+    violated foreach {
+      instance.doConstraintsViolated(_)
+    }
+  }
+
+  private def handleConstraintChanges[T](instance: RemoteConnections)(
+      changeConnection: => T): (T, Boolean, Option[RemoteConnectionException]) =
+    if (!state.isTerminated) {
+      val constraintsSatisfiedBefore = instance.constraintViolations.isEmpty
+
+      val result = changeConnection
+
+      val constraintsSatisfiedAfter = instance.constraintViolations.isEmpty
+
+      val satisfied =
+        !constraintsSatisfiedBefore && constraintsSatisfiedAfter
+
+      val violated =
+        if (constraintsSatisfiedBefore && !constraintsSatisfiedAfter)
+          Some(violationException)
+        else
+          None
+
+      (result, satisfied, violated)
+    }
+    else
+      (changeConnection, false, None)
 
   def constraintViolationsConnecting(peerType: PeerType): Option[PeerType] = {
     val peerTypeCounts =
@@ -360,21 +390,24 @@ class RemoteConnections(peerType: PeerType,
   def terminate(): Unit =
     state sync {
       if (!state.isTerminated) {
-        val lastRemotes = remotes
+        val remotes = state.remotes.asScala.toList
+        val connections = state.connections.asScala.toSeq
+        val listeners = state.listeners.toSeq
 
         state.terminate
 
-        state.remotes.clear
-        state.connections.asScala foreach { case (remote, connection) =>
-          connection.close
-        }
-        state.connections.clear
-
-        state.listeners foreach { _.stop }
-        state.listeners.clear
-
-        doTerminated(lastRemotes)
+        Some((remotes, connections, listeners))
       }
+      else
+        None
+    } foreach { case (remotes, connections, listeners) =>
+      connections foreach { case (_, connection) => connection.close }
+      listeners foreach { _.stop }
+      doTerminated(remotes)
+
+      state.remotes.clear
+      state.connections.clear
+      state.listeners.clear
     }
 
   def isRunning: Boolean = state.isRunning
