@@ -4,6 +4,8 @@ package network
 import util.Notification
 import util.Notifier
 
+import scala.concurrent.Promise
+
 trait ConnectionListener extends ConnectionEstablisher { self =>
   protected final val doConnectionEstablished = Notifier[Connection]
 
@@ -23,6 +25,32 @@ trait ConnectionListener extends ConnectionEstablisher { self =>
       def stop = {
         self.stop()
         listener.stop()
+      }
+    }
+
+  final def firstRequest: ConnectionRequestor =
+    new ConnectionRequestor {
+      private val lock = new Object
+
+      def request = {
+        val promise = Promise[Connection]
+
+        connectionEstablished += { connection =>
+          lock synchronized {
+            if (!promise.isCompleted) {
+              connection.closed += { _ => self.stop() }
+              if (!connection.isOpen)
+                self.stop()
+              promise success connection
+            }
+            else
+              connection.close()
+          }
+        }
+
+        self.start()
+
+        promise.future
       }
     }
 
