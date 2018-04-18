@@ -100,9 +100,13 @@ object PeerType {
         if (depth < 0)
           throwIllegalArgumentException
       }
-      else if (ch == ',' && depth == 1) {
-        bases += deserialize(string substring (pos, index)).get
-        pos = index + 1
+      else if (ch == ',') {
+        if (depth == 1) {
+          bases += deserialize(string substring (pos, index)).get
+          pos = index + 1
+        }
+        if (depth == 0)
+          throwIllegalArgumentException
       }
 
     if (depth != 0)

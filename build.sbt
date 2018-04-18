@@ -13,6 +13,9 @@ val macroparadise = addCompilerPlugin(
 val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % "provided"
 
+val scalatest = libraryDependencies +=
+  "org.scalatest" %%% "scalatest" % "3.0.0" % "test"
+
 val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("pweisenburger", "maven")
 
@@ -73,7 +76,7 @@ lazy val retierCore = (crossProject
             SourceGenerator.transmittableTuples,
             SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration))
+            macroparadise, macrodeclaration, scalatest))
 
 lazy val retierCoreJVM = retierCore.jvm
 lazy val retierCoreJS = retierCore.js
