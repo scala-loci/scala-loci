@@ -48,121 +48,121 @@ def preventPublication(project: Project) = project settings (
   packagedArtifacts := Map.empty)
 
 
-lazy val retier = preventPublication(project
+lazy val loci = preventPublication(project
   in file(".")
-  aggregate (retierJVM, retierJS))
+  aggregate (lociJVM, lociJS))
 
-lazy val retierJVM = preventPublication(project
+lazy val lociJVM = preventPublication(project
   in file(".jvm")
-  aggregate (retierCoreJVM, retierArchitecturesBasicJVM,
-             retierSerializableUpickleJVM,
-             retierTransmitterBasicJVM, retierTransmitterRescalaJVM,
-             retierNetworkTcpJVM, retierNetworkWsJVM, retierNetworkWsPlayJVM,
-             retierNetworkWebRtcJVM))
+  aggregate (lociCoreJVM, lociArchitecturesBasicJVM,
+             lociSerializableUpickleJVM,
+             lociTransmitterBasicJVM, lociTransmitterRescalaJVM,
+             lociNetworkTcpJVM, lociNetworkWsJVM, lociNetworkWsPlayJVM,
+             lociNetworkWebRtcJVM))
 
-lazy val retierJS = preventPublication(project
+lazy val lociJS = preventPublication(project
   in file(".js")
-  aggregate (retierCoreJS, retierArchitecturesBasicJS,
-             retierSerializableUpickleJS,
-             retierTransmitterBasicJS, retierTransmitterRescalaJS,
-             retierNetworkTcpJS, retierNetworkWsJS, retierNetworkWsPlayJS,
-             retierNetworkWebRtcJS))
+  aggregate (lociCoreJS, lociArchitecturesBasicJS,
+             lociSerializableUpickleJS,
+             lociTransmitterBasicJS, lociTransmitterRescalaJS,
+             lociNetworkTcpJS, lociNetworkWsJS, lociNetworkWsPlayJS,
+             lociNetworkWebRtcJS))
 
 
-lazy val retierCore = (crossProject
+lazy val lociCore = (crossProject
   crossType CrossType.Full
-  in file("retier-core")
-  settings (normalizedName := "retier-core",
+  in file("scala-loci-core")
+  settings (normalizedName := "scala-loci-core",
             SourceGenerator.transmittableTuples,
             SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scalatest))
 
-lazy val retierCoreJVM = retierCore.jvm
-lazy val retierCoreJS = retierCore.js
+lazy val lociCoreJVM = lociCore.jvm
+lazy val lociCoreJS = lociCore.js
 
 
-lazy val retierArchitecturesBasic = (crossProject
+lazy val lociArchitecturesBasic = (crossProject
   crossType CrossType.Pure
-  in file("retier-architectures-basic")
-  settings (normalizedName := "retier-architectures-basic",
+  in file("scala-loci-architectures-basic")
+  settings (normalizedName := "scala-loci-architectures-basic",
             macroparadise)
-  dependsOn retierCore)
+  dependsOn lociCore)
 
-lazy val retierArchitecturesBasicJVM = retierArchitecturesBasic.jvm
-lazy val retierArchitecturesBasicJS = retierArchitecturesBasic.js
+lazy val lociArchitecturesBasicJVM = lociArchitecturesBasic.jvm
+lazy val lociArchitecturesBasicJS = lociArchitecturesBasic.js
 
 
-lazy val retierSerializableUpickle = (crossProject
+lazy val lociSerializableUpickle = (crossProject
   crossType CrossType.Pure
-  in file("retier-serializable-upickle")
-  settings (normalizedName := "retier-serializable-upickle",
+  in file("scala-loci-serializable-upickle")
+  settings (normalizedName := "scala-loci-serializable-upickle",
             upickle)
-  dependsOn retierCore)
+  dependsOn lociCore)
 
-lazy val retierSerializableUpickleJVM = retierSerializableUpickle.jvm
-lazy val retierSerializableUpickleJS = retierSerializableUpickle.js
+lazy val lociSerializableUpickleJVM = lociSerializableUpickle.jvm
+lazy val lociSerializableUpickleJS = lociSerializableUpickle.js
 
 
-lazy val retierTransmitterBasic = (crossProject
+lazy val lociTransmitterBasic = (crossProject
   crossType CrossType.Pure
-  in file("retier-transmitter-basic")
-  settings (normalizedName := "retier-transmitter-basic")
-  dependsOn retierCore)
+  in file("scala-loci-transmitter-basic")
+  settings (normalizedName := "scala-loci-transmitter-basic")
+  dependsOn lociCore)
 
-lazy val retierTransmitterBasicJVM = retierTransmitterBasic.jvm
-lazy val retierTransmitterBasicJS = retierTransmitterBasic.js
+lazy val lociTransmitterBasicJVM = lociTransmitterBasic.jvm
+lazy val lociTransmitterBasicJS = lociTransmitterBasic.js
 
 
-lazy val retierTransmitterRescala = (crossProject
+lazy val lociTransmitterRescala = (crossProject
   crossType CrossType.Pure
-  in file("retier-transmitter-rescala")
-  settings (normalizedName := "retier-transmitter-rescala",
+  in file("scala-loci-transmitter-rescala")
+  settings (normalizedName := "scala-loci-transmitter-rescala",
             rescalaRepo, rescala)
-  dependsOn retierCore)
+  dependsOn lociCore)
 
-lazy val retierTransmitterRescalaJVM = retierTransmitterRescala.jvm
-lazy val retierTransmitterRescalaJS = retierTransmitterRescala.js
+lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
+lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 
 
-lazy val retierNetworkTcp = (crossProject
+lazy val lociNetworkTcp = (crossProject
   crossType CrossType.Dummy
-  in file("retier-network-tcp")
-  settings (normalizedName := "retier-network-tcp")
-  dependsOn retierCore)
+  in file("scala-loci-network-tcp")
+  settings (normalizedName := "scala-loci-network-tcp")
+  dependsOn lociCore)
 
-lazy val retierNetworkTcpJVM = retierNetworkTcp.jvm
-lazy val retierNetworkTcpJS = retierNetworkTcp.js
+lazy val lociNetworkTcpJVM = lociNetworkTcp.jvm
+lazy val lociNetworkTcpJS = lociNetworkTcp.js
 
 
-lazy val retierNetworkWs = (crossProject
+lazy val lociNetworkWs = (crossProject
   crossType CrossType.Dummy
-  in file("retier-network-ws-akka")
-  settings (normalizedName := "retier-network-ws-akka",
+  in file("scala-loci-network-ws-akka")
+  settings (normalizedName := "scala-loci-network-ws-akka",
             akkaHttp, scalajsDom)
-  dependsOn retierCore)
+  dependsOn lociCore)
 
-lazy val retierNetworkWsJVM = retierNetworkWs.jvm
-lazy val retierNetworkWsJS = retierNetworkWs.js
+lazy val lociNetworkWsJVM = lociNetworkWs.jvm
+lazy val lociNetworkWsJS = lociNetworkWs.js
 
 
-lazy val retierNetworkWsPlay = (crossProject
+lazy val lociNetworkWsPlay = (crossProject
   crossType CrossType.Dummy
-  in file("retier-network-ws-akka-play")
-  settings (normalizedName := "retier-network-ws-akka-play",
+  in file("scala-loci-network-ws-akka-play")
+  settings (normalizedName := "scala-loci-network-ws-akka-play",
             play)
-  dependsOn retierNetworkWs)
+  dependsOn lociNetworkWs)
 
-lazy val retierNetworkWsPlayJVM = retierNetworkWsPlay.jvm
-lazy val retierNetworkWsPlayJS = retierNetworkWsPlay.js
+lazy val lociNetworkWsPlayJVM = lociNetworkWsPlay.jvm
+lazy val lociNetworkWsPlayJS = lociNetworkWsPlay.js
 
 
-lazy val retierNetworkWebRtc = (crossProject
+lazy val lociNetworkWebRtc = (crossProject
   crossType CrossType.Full
-  in file("retier-network-webrtc")
-  settings (normalizedName := "retier-network-webrtc",
+  in file("scala-loci-network-webrtc")
+  settings (normalizedName := "scala-loci-network-webrtc",
             scalajsDom)
-  dependsOn retierCore)
+  dependsOn lociCore)
 
-lazy val retierNetworkWebRtcJVM = retierNetworkWebRtc.jvm
-lazy val retierNetworkWebRtcJS = retierNetworkWebRtc.js
+lazy val lociNetworkWebRtcJVM = lociNetworkWebRtc.jvm
+lazy val lociNetworkWebRtcJS = lociNetworkWebRtc.js

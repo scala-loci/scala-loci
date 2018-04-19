@@ -54,8 +54,8 @@ object SourceGenerator {
       val (tupleMembers, identicalTupleMembers) = members.unzip
 
       val files = Map(
-        dir / "retier" / "transmission" / "TransmittableTuples.scala" ->
-        s"""package retier
+        dir / "loci" / "transmission" / "TransmittableTuples.scala" ->
+        s"""package loci
            |package transmission
            |
            |trait TransmittableGeneralTuples extends TransmittableIdentity {
@@ -100,8 +100,8 @@ object SourceGenerator {
       }
 
       val files = Map(
-        dir / "retier" / "ValueTypesHigherKinds.scala" ->
-        s"""package retier
+        dir / "loci" / "ValueTypesHigherKinds.scala" ->
+        s"""package loci
            |
            |import scala.language.higherKinds
            |
