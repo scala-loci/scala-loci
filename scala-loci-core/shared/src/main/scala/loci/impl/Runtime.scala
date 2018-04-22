@@ -15,14 +15,14 @@ import scala.concurrent.CanAwait
 import scala.concurrent.duration.Duration
 
 class Runtime(
-    connectionMultiplicities: Map[PeerType, ConnectionMultiplicity],
+    tieMultiplicities: Map[PeerType, TieMultiplicity],
     peer: Peer,
     peerType: PeerType,
     peerSystem: Runtime.SystemFactory)
   extends loci.Runtime {
 
   private val remoteConnections =
-    new RemoteConnections(peerType, connectionMultiplicities)
+    new RemoteConnections(peerType, tieMultiplicities)
 
   private val peerConnectionSetup = peer.connect
 
@@ -46,20 +46,20 @@ class Runtime(
   private implicit val executionContext = contexts.Immediate.global
 
   @throws[RemoteConnectionException](
-    "if the connection setup does not respect the connection specification")
+    "if the connection setup does not respect the tie specification")
   private def run(): Unit = state.synchronized {
     if (!state.isTerminated && !state.isRunning)
       try {
-        val peerTypes = connectionMultiplicities.keys flatMap { peerType =>
+        val peerTypes = tieMultiplicities.keys flatMap { peerType =>
           bases(peerType) + peerType
         }
 
         val setup = peerConnectionSetup setup (peerType, peerTypes.toList)
 
-        if (connectionMultiplicities.isEmpty && setup.nonEmpty)
-          throw new RemoteConnectionException("no connections specified")
+        if (tieMultiplicities.isEmpty && setup.nonEmpty)
+          throw new RemoteConnectionException("no ties specified")
 
-        val metaInstance = connectionMultiplicities.toSeq.foldLeft(false) {
+        val metaInstance = tieMultiplicities.toSeq.foldLeft(false) {
           case (metaInstance, (peerType, multiplicity)) =>
             val peerSubTypeSetups = setup collect {
               case (peerSubType, (listeners, requestors))
@@ -74,22 +74,21 @@ class Runtime(
 
             val setupCount = listeners.size + requestors.size
 
-            if (multiplicity == SingleConnection && setupCount < 1)
+            if (multiplicity == SingleTie && setupCount < 1)
               throw new RemoteConnectionException("no connection " +
-                s"setup for single connection to ${peerType.name}")
+                s"setup for single tie to ${peerType.name}")
 
-            if (multiplicity == SingleConnection && setupCount > 1)
+            if (multiplicity == SingleTie && setupCount > 1)
               throw new RemoteConnectionException("more than one connection " +
-                s"setup for single connection to ${peerType.name}")
+                s"setup for single tie to ${peerType.name}")
 
-            if (multiplicity == OptionalConnection && setupCount > 1)
+            if (multiplicity == OptionalTie && setupCount > 1)
               throw new RemoteConnectionException("more than one connection " +
-                s"setup for optional connection to ${peerType.name}")
+                s"setup for optional tie to ${peerType.name}")
 
             metaInstance ||
             (listeners.nonEmpty &&
-              (multiplicity == SingleConnection ||
-               multiplicity == OptionalConnection))
+              (multiplicity == SingleTie || multiplicity == OptionalTie))
         }
 
         val listenersRequestors =
@@ -104,7 +103,7 @@ class Runtime(
 
         if (metaInstance) {
           if (listeners.size != 1)
-            throw new RemoteConnectionException("only one connection " +
+            throw new RemoteConnectionException("only one tie " +
               "of single or optional type can be listened to")
 
           val (listener, peerType) = listeners.head
@@ -142,11 +141,11 @@ class Runtime(
       requestors: Seq[(ConnectionRequestor, PeerType)]): Unit = {
     val requiredAndOptionalRequestors =
       requestors map { case requestorPeerType @ (requestor, peerType) =>
-        val singleConnection = (bases(peerType) + peerType) exists { peerType =>
-          (connectionMultiplicities get peerType) == Some(SingleConnection)
+        val singleTie = (bases(peerType) + peerType) exists { peerType =>
+          (tieMultiplicities get peerType) == Some(SingleTie)
         }
 
-        if (singleConnection)
+        if (singleTie)
           Left(requestorPeerType)
         else
           Right(requestorPeerType)
@@ -218,14 +217,14 @@ object Runtime {
      Seq[RemoteRef], Seq[Future[RemoteRef]]) => System
 
   @throws[RemoteConnectionException](
-    "if the connection setup does not respect the connection specification")
+    "if the connection setup does not respect the tie specification")
   def run(
-      connectionMultiplicities: Map[PeerType, ConnectionMultiplicity],
+      tieMultiplicities: Map[PeerType, TieMultiplicity],
       peer: Peer,
       peerType: PeerType,
       peerSystem: SystemFactory): Runtime = {
     val runtime =
-      new Runtime(connectionMultiplicities, peer, peerType, peerSystem)
+      new Runtime(tieMultiplicities, peer, peerType, peerSystem)
     runtime.run
     runtime
   }

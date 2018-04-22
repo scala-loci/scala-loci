@@ -17,13 +17,13 @@ object Marshallable {
 @multitier
 class ServerClientApp(listener: NetworkListener) {
   class Server extends Peer {
-    type Connection = Multiple[Client]
+    type Tie = Multiple[Client]
     def connect = listen[Client] { listener }
     override def context = contexts.Immediate.global
   }
 
   class Client extends Peer {
-    type Connection = Single[Server]
+    type Tie = Single[Server]
     def connect = request[Server] { listener.createRequestor }
     override def context = contexts.Immediate.global
   }

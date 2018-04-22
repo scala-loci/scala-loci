@@ -6,7 +6,7 @@ import scala.language.implicitConversions
 
 protected[loci] trait ImplicitConversions {
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  final implicit def $$loci$intellij$valuePlacedNonIssued[P <: Peer, T]
+  final implicit def $$loci$intellij$valuePlacedNonSubjective[P <: Peer, T]
     (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
@@ -15,7 +15,7 @@ protected[loci] trait ImplicitConversions {
         ev2: T <:!< (_ <-> _)): T = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  final implicit def $$loci$intellij$valuePlacedControlledIssued[P <: Peer, R <: Remote[Peer], T, U]
+  final implicit def $$loci$intellij$valuePlacedControlledSubjective[P <: Peer, R <: Remote[Peer], T, U]
     (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,
@@ -23,7 +23,7 @@ protected[loci] trait ImplicitConversions {
         ev1: T <:< (R <=> U)): R => U = ???
 
   @annotation.compileTimeOnly("Used to guide IntelliJ IDEA Scala Plugin type inference. Do not use directly.")
-  final implicit def $$loci$intellij$valuePlacedIssued[P <: Peer, T, U]
+  final implicit def $$loci$intellij$valuePlacedSubjective[P <: Peer, T, U]
     (v: T localOn P)
     (implicit
         dummy: IntelliJDummy,

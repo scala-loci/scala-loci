@@ -16,7 +16,7 @@ protected[loci] trait ReactiveRemoteConnectionInterface {
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[L],
-        ev1: PeerConnection[L#Connection, R, MultipleConnection],
+        ev1: PeerTie[L#Tie, R, MultipleTie],
         ev2: Engine[S, Turn[S]]):
     RescalaMultipleRemoteConnectionInterface[R, S] = ???
 
@@ -27,7 +27,7 @@ protected[loci] trait ReactiveRemoteConnectionInterface {
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[L],
-        ev1: PeerConnection[L#Connection, R, OptionalConnection],
+        ev1: PeerTie[L#Tie, R, OptionalTie],
         ev2: Engine[S, Turn[S]]):
     RescalaOptionalRemoteConnectionInterface[R, S] = ???
 
@@ -38,7 +38,7 @@ protected[loci] trait ReactiveRemoteConnectionInterface {
     (implicit
         dummy: IntelliJDummy,
         ev0: LocalPeer[L],
-        ev1: PeerConnection[L#Connection, R, SingleConnection],
+        ev1: PeerTie[L#Tie, R, SingleTie],
         ev2: Engine[S, Turn[S]]):
     RescalaSingleRemoteConnectionInterface[R, S] = ???
 }

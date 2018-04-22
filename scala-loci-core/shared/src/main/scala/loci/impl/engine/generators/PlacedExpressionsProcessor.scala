@@ -84,7 +84,7 @@ trait PlacedExpressionsProcessor { this: Generation =>
         if (symbols.placed contains expr.symbol) {
           val (exprBase, exprss) = expr match {
             case q"$exprBase.$_[..$_].$_[..$_](...$exprss)"
-                if expr.symbol == symbols.placedIssuedApply =>
+                if expr.symbol == symbols.placedSubjectiveApply =>
               (exprBase, exprss)
             case q"$exprBase.$_[..$_](...$exprss)" =>
               (exprBase, exprss)
@@ -110,8 +110,9 @@ trait PlacedExpressionsProcessor { this: Generation =>
           (overridingDecl, expr)
 
         if (declTypeTree.isEmpty &&
-            expr.symbol == symbols.placedIssuedApply)
-          c.abort(tree.pos, "issuing must be part of a declaration")
+            expr.symbol == symbols.placedSubjectiveApply)
+          c.abort(tree.pos,
+            "subjective values must be part of a value declaration")
 
         if (declTypeTree.nonEmpty &&
             (symbols.specialPlaced contains expr.symbol))

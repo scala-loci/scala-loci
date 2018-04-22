@@ -38,7 +38,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
       val client = new app.Client
 
       val serverRuntime = Runtime.run(
-        server.Connection,
+        server.Tie,
         server,
         peerTypeOf[app.Server],
         { (ec, connections, remotes, futureRemotes) =>
@@ -60,7 +60,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
         })
 
       Runtime.run(
-        client.Connection,
+        client.Tie,
         client,
         peerTypeOf[app.Client],
         { (ec, connections, remotes, futureRemotes) =>
@@ -80,7 +80,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
         })
 
       Runtime.run(
-        client.Connection,
+        client.Tie,
         client,
         peerTypeOf[app.Client],
         { (ec, connections, remotes, futureRemotes) =>

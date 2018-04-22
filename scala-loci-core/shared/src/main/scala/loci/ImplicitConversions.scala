@@ -9,7 +9,7 @@ protected object ImplicitConversions {
         (v: T sharedOn R)
         (implicit
           ev0: LocalPeer[L],
-          ev1: PeerConnection[L#Connection, R, _]) {
+          ev1: PeerTie[L#Tie, R, _]) {
       def from[P <: R]: T from P = `#macro`
       def from[P <: R](peer: Remote[P]): T fromSingle P = `#macro`
       def from[P <: R](peers: Remote[P]*): T fromMultiple P = `#macro`
@@ -23,17 +23,17 @@ protected object ImplicitConversions {
           ev0: LocalPeer[L],
           ev1: RemoteValueTypes[T sharedOn L, R, U],
           ev2: R <:< Remote[P],
-          ev3: PeerConnection[L#Connection, P, _]) {
+          ev3: PeerTie[L#Tie, P, _]) {
       def to(peer: R): U = `#macro`
     }
 
 
     implicit def discardValue[P <: Peer](v: _ localOn P): Unit on P = `#macro`
 
-    implicit def issueValue[P <: Peer, R <: Remote[Peer], T](v: T localOn P)
+    implicit def subjectivizeValue[P <: Peer, R <: Remote[Peer], T](v: T localOn P)
       (implicit ev0: T <:!< (_ <=> _), ev1: T <:!< (_ <-> _)): R <-> T on P = `#macro`
 
-    implicit def issueValueControlled[P <: Peer, R <: Remote[Peer], T, U](v: T localOn P)
+    implicit def subjectivizeValueControlled[P <: Peer, R <: Remote[Peer], T, U](v: T localOn P)
       (implicit ev: T <:< (R => U)): R <=> U on P = `#macro`
 
 

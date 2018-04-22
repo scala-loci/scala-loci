@@ -23,7 +23,7 @@ class SystemSpec extends FlatSpec with Matchers {
       var client1System: System = null
 
       val serverRuntime = Runtime.run(
-        server.Connection,
+        server.Tie,
         server,
         peerTypeOf[app.Server],
         { (ec, connections, remotes, futureRemotes) =>
@@ -35,7 +35,7 @@ class SystemSpec extends FlatSpec with Matchers {
         })
 
       Runtime.run(
-        client.Connection,
+        client.Tie,
         client,
         peerTypeOf[app.Client],
         { (ec, connections, remotes, futureRemotes) =>
@@ -48,7 +48,7 @@ class SystemSpec extends FlatSpec with Matchers {
         })
 
       Runtime.run(
-        client.Connection,
+        client.Tie,
         client,
         peerTypeOf[app.Client],
         { (ec, connections, remotes, futureRemotes) =>

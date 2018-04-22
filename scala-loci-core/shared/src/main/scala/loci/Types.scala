@@ -20,7 +20,7 @@ object localOn extends ImplicitConversions.LocalOn
 object sharedOn extends ImplicitConversions.SharedOn
 
 
-// issued types
+// subjective types
 
 sealed trait <=>[-P <: Remote[Peer], +T] extends Any
 

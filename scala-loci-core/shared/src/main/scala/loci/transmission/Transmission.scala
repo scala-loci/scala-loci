@@ -5,7 +5,7 @@ import util.Notification
 import scala.concurrent.Future
 
 sealed trait Transmission
-    [T, R <: Peer, L <: Peer, M <: ConnectionMultiplicity] {
+    [T, R <: Peer, L <: Peer, M <: TieMultiplicity] {
   val id: Any
   def memo[U <: AnyRef](id: Any)(body: => U): U
 
@@ -17,7 +17,7 @@ sealed trait Transmission
 }
 
 sealed trait MultipleTransmission[T, R <: Peer, L <: Peer]
-    extends Transmission[T, R, L, MultipleConnection] {
+    extends Transmission[T, R, L, MultipleTie] {
   def remotes: Seq[Remote[R]]
   def retrieveMappedRemoteValues: Map[Remote[R], Future[T]]
   def retrieveRemoteValues: Seq[Future[T]] =
@@ -25,7 +25,7 @@ sealed trait MultipleTransmission[T, R <: Peer, L <: Peer]
 }
 
 sealed trait OptionalTransmission[T, R <: Peer, L <: Peer]
-    extends Transmission[T, R, L, OptionalConnection] {
+    extends Transmission[T, R, L, OptionalTie] {
   def remote: Option[Remote[R]]
   def retrieveMappedRemoteValue: Option[(Remote[R], Future[T])]
   def retrieveRemoteValue: Option[Future[T]] =
@@ -42,7 +42,7 @@ sealed trait OptionalTransmission[T, R <: Peer, L <: Peer]
 }
 
 sealed trait SingleTransmission[T, R <: Peer, L <: Peer]
-    extends Transmission[T, R, L, SingleConnection] {
+    extends Transmission[T, R, L, SingleTie] {
   def remote: Remote[R]
   def retrieveMappedRemoteValue: (Remote[R], Future[T])
   def retrieveRemoteValue: Future[T] =

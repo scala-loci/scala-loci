@@ -12,15 +12,15 @@ object basicTransmitter extends ide.intellij.BasicTransmitter {
       (transmission: MultipleTransmission[T, R, L])
     extends TransmissionProvider {
 
-    def asLocal: Map[Remote[R], Future[T]] =
+    def asLocalFromAll: Map[Remote[R], Future[T]] =
       transmission.retrieveMappedRemoteValues
 
-    def asLocal_?(timeout: Duration): Map[Remote[R], T] = {
+    def asLocalFromAll_?(timeout: Duration): Map[Remote[R], T] = {
       val (remotes, values) = transmission.retrieveMappedRemoteValues.unzip
       (remotes zip (Await result (Future sequence values, timeout))).toMap
     }
 
-    def asLocal_! : Map[Remote[R], T] = asLocal_?(Duration.Inf)
+    def asLocalFromAll_! : Map[Remote[R], T] = asLocalFromAll_?(Duration.Inf)
   }
 
   implicit class BasicOptionalTransmissionProvider

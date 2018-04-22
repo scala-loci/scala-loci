@@ -1,7 +1,0 @@
-package loci
-package impl
-
-sealed trait ConnectionMultiplicity
-case object SingleConnection extends ConnectionMultiplicity
-case object OptionalConnection extends ConnectionMultiplicity
-case object MultipleConnection extends ConnectionMultiplicity

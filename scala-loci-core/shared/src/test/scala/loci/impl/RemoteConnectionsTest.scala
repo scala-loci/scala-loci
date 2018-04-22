@@ -25,12 +25,12 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
   case class Node(event: Any)
 
   def setup = {
-    val dummy = new RemoteConnections(dummyType, Map(peerType -> MultipleConnection))
-    val server = new RemoteConnections(serverType, Map(clientType -> MultipleConnection))
-    val client0 = new RemoteConnections(clientType, Map(superServerType -> SingleConnection))
-    val client1 = new RemoteConnections(clientType, Map(serverType -> SingleConnection, dummyType -> SingleConnection))
-    val node0 = new RemoteConnections(nodeType, Map(nodeType -> SingleConnection))
-    val node1 = new RemoteConnections(nodeType, Map(nodeType -> SingleConnection))
+    val dummy = new RemoteConnections(dummyType, Map(peerType -> MultipleTie))
+    val server = new RemoteConnections(serverType, Map(clientType -> MultipleTie))
+    val client0 = new RemoteConnections(clientType, Map(superServerType -> SingleTie))
+    val client1 = new RemoteConnections(clientType, Map(serverType -> SingleTie, dummyType -> SingleTie))
+    val node0 = new RemoteConnections(nodeType, Map(nodeType -> SingleTie))
+    val node1 = new RemoteConnections(nodeType, Map(nodeType -> SingleTie))
 
     val events = ListBuffer.empty[Any]
 

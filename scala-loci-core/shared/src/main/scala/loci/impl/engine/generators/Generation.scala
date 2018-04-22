@@ -51,12 +51,12 @@ trait Generation {
 
     val localOn = typeOf[_ localOn _]
     val sharedOn = typeOf[_ sharedOn _]
-    val issued = typeOf[_ <-> _]
-    val issuedControlled = typeOf[_ <=> _]
+    val subjective = typeOf[_ <-> _]
+    val subjectiveControlled = typeOf[_ <=> _]
 
     val functionPlacing = Seq(typeOf[_ => _], typeOf[(_ => _) localOn _])
-    val controlledIssuedPlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
-    val issuedPlacing = Seq(typeOf[_ <-> _], typeOf[(_ <-> _) localOn _])
+    val controlledSubjectivePlacing = Seq(typeOf[_ <=> _], typeOf[(_ <=> _) localOn _])
+    val subjectivePlacing = Seq(typeOf[_ <-> _], typeOf[(_ <-> _) localOn _])
 
     val from = typeOf[_ from _]
     val fromSingle = typeOf[_ fromSingle _]
@@ -76,15 +76,15 @@ trait Generation {
 
     val placing = loci | TypeName("PlacingExpression")
     val specialPlacing = loci | TypeName("SpecialPlacingExpression")
-    val issuing = loci | TypeName("IssuingExpression")
+    val subjectivization = loci | TypeName("SubjectiveExpression")
     val overriding = loci | TypeName("OverridingExpression")
 
     val remote = loci | TypeName("RemoteExpression")
     val remoteSelection = loci | TypeName("RemoteSelectionExpression")
     val remoteSetting = loci | TypeName("RemoteSettingExpression")
-    val remoteIssuing = loci | TypeName("RemoteIssuingExpression")
+    val remoteSubjectivization = loci | TypeName("RemoteSubjectiveExpression")
     val remoteCapturing = loci | TypeName("RemoteCapturingExpression")
-    val remoteIssuedCapturing = loci | TypeName("RemoteIssuedCapturingExpression")
+    val remoteSubjectivizationCapturing = loci | TypeName("RemoteSubjectiveCapturingExpression")
 
     val fromExpression = sharedOn.companion | TypeName("FromExpression")
     val toExpression = localOn.companion | TypeName("ToExpression")
@@ -100,11 +100,11 @@ trait Generation {
     val placedApply = types.placing | TermName("apply")
     val placedShared = types.placing | TermName("shared")
     val placedLocal = types.placing | TermName("local")
-    val placedIssuedApply = types.issuing | TermName("apply")
+    val placedSubjectiveApply = types.subjectivization | TermName("apply")
     val placedOverriding = types.overriding | TermName("overriding")
 
     val placed = Seq(placedAbstract, placedMain, placedTerminating, placedError,
-      placedFatal, placedApply, placedShared, placedLocal, placedIssuedApply)
+      placedFatal, placedApply, placedShared, placedLocal, placedSubjectiveApply)
 
     val specialPlaced = Map(
       placedMain -> names.main,
@@ -116,11 +116,11 @@ trait Generation {
     val remoteCall = types.remote | TermName("call")
     val remoteOn = (types.remoteSelection | TermName("on")).alternatives
     val remoteSet = types.remoteSetting | TermName(":=").encodedName
-    val remoteIssuedApply = types.remoteIssuing | TermName("apply")
+    val remoteSubjectiveApply = types.remoteSubjectivization | TermName("apply")
     val remoteCaptureApply = types.remoteCapturing | TermName("apply")
-    val remoteIssuedCaptureApply = types.remoteIssuedCapturing | TermName("apply")
+    val remoteSubjectiveCaptureApply = types.remoteSubjectivizationCapturing | TermName("apply")
 
-    val remote = Seq(remoteIssuedApply, remoteIssuedCaptureApply, remoteApply, remoteCaptureApply)
+    val remote = Seq(remoteSubjectiveApply, remoteSubjectiveCaptureApply, remoteApply, remoteCaptureApply)
 
     val running = types.multitier | TermName("running")
     val terminate = types.multitier | TermName("terminate")
@@ -145,15 +145,15 @@ trait Generation {
     val localPlacedValue = types.loci | TermName("lociLocalPlacedValue")
 
     val discardValue = types.localOn.companion | TermName("discardValue")
-    val issueValue = types.localOn.companion | TermName("issueValue")
-    val issueValueControlled = types.localOn.companion | TermName("issueValueControlled")
+    val subjectivizeValue = types.localOn.companion | TermName("subjectivizeValue")
+    val subjectivizeValueControlled = types.localOn.companion | TermName("subjectivizeValueControlled")
 
     val lociLiftLocalPlacedValueGlobally = types.loci | TermName("lociLiftLocalPlacedValueGlobally")
     val lociLiftLocalPlacedValueLocally = types.loci | TermName("lociLiftLocalPlacedValueLocally")
     val downcastValueGlobally = types.localOn.companion | TermName("downcastValueGlobally")
     val downcastValueLocally = types.localOn.companion | TermName("downcastValueLocally")
 
-    val globalCasts = Seq(discardValue, issueValue, issueValueControlled,
+    val globalCasts = Seq(discardValue, subjectivizeValue, subjectivizeValueControlled,
       lociLiftLocalPlacedValueGlobally, downcastValueGlobally)
     val localCasts = Seq(placedValue, localPlacedValue, lociLiftLocalPlacedValueLocally, downcastValueLocally)
     val casts = globalCasts ++ localCasts
@@ -164,7 +164,7 @@ trait Generation {
     val to = TermName("to")
     val peerTypeTag = TermName("peerTypeTag")
     val peerType = TermName("peerType")
-    val connection = TermName("Connection")
+    val Tie = TermName("Tie")
     val createPeerSelection = TermName("createPeerSelection")
     val createMultipleTransmission = TermName("createMultipleTransmission")
     val createOptionalTransmission = TermName("createOptionalTransmission")
@@ -213,10 +213,10 @@ trait Generation {
     val PeerTypeTagCreate = q"$root.loci.impl.PeerTypeTag.create"
     val PeerImpl = tq"$root.loci.impl.PeerImpl"
     val throwMetaPeerNotSetUp = q"$root.loci.impl.PeerImpl.throwMetaPeerNotSetUp"
-    val ConnectionMultiplicity = tq"$root.loci.impl.ConnectionMultiplicity"
-    val SingleConnection = q"$root.loci.impl.SingleConnection"
-    val OptionalConnection = q"$root.loci.impl.OptionalConnection"
-    val MultipleConnection = q"$root.loci.impl.MultipleConnection"
+    val TieMultiplicity = tq"$root.loci.impl.TieMultiplicity"
+    val SingleTie = q"$root.loci.impl.SingleTie"
+    val OptionalTie = q"$root.loci.impl.OptionalTie"
+    val MultipleTie = q"$root.loci.impl.MultipleTie"
     val TransmissionProperties = tq"$root.loci.impl.TransmissionProperties"
     val TransmissionPropertiesCreate = q"$root.loci.impl.TransmissionProperties.create"
     val System = tq"$root.loci.impl.System"
@@ -244,8 +244,8 @@ trait Generation {
   case class PlacedAbstraction(peerSymbol: TypeSymbol,
     interfaceDefinitions: List[Tree], dispatchClause: CaseDef)
 
-  case class PeerConnectionMultiplicity(peerSymbol: TypeSymbol,
-    connectedPeer: Tree, connectionMultiplicity: Tree)
+  case class PeerTieMultiplicity(peerSymbol: TypeSymbol, tiedPeer: Tree,
+    tieMultiplicity: Tree)
 
   case class OutputStatement(stat: Tree, index: Int) extends Statement
 

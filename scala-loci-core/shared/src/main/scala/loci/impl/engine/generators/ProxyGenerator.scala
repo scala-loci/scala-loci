@@ -97,13 +97,13 @@ trait ProxyGenerator { this: Generation =>
         val argNames = extractArgumentNames(args)
 
         val isBottomType = types.bottom exists { exprType <:< _ }
-        val isIssued = !isBottomType &&
-          (types.issuedPlacing exists { exprType <:< _ })
-        val isControlledIssued = !isBottomType &&
-          (types.controlledIssuedPlacing exists { exprType <:< _ })
+        val isSubjective = !isBottomType &&
+          (types.subjectivePlacing exists { exprType <:< _ })
+        val isControlledSubjective = !isBottomType &&
+          (types.controlledSubjectivePlacing exists { exprType <:< _ })
 
         val (valueType, valueTypeTree) =
-          if (isIssued || isControlledIssued)
+          if (isSubjective || isControlledSubjective)
             (exprType.typeArgs.last, declTypeTree.typeArgTrees.last)
           else
             (exprType, declTypeTree)
@@ -139,7 +139,7 @@ trait ProxyGenerator { this: Generation =>
         val response = {
           val arguments = applyTupleAsArguments(q"args", argTypes)
           val declInvocation =
-            if (isControlledIssued)
+            if (isControlledSubjective)
               q"""$TryCreate { $declTerm(...$arguments)(remote) }"""
             else
               q"""$TryCreate { $declTerm(...$arguments) }"""
@@ -175,7 +175,7 @@ trait ProxyGenerator { this: Generation =>
                  """
             }
 
-          if (isControlledIssued) {
+          if (isControlledSubjective) {
             val remoteTypeTree = decl.tpt.typeArgTrees.head.typeArgTrees.head
             val peerTypeTree = remoteTypeTree.typeArgTrees.head
 

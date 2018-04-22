@@ -43,10 +43,10 @@ class MultitierSpec extends FlatSpec with Matchers {
     @multitier
     object test {
       trait Registry extends Peer {
-        type Connection = Multiple[Node]
+        type Tie <: Multiple[Node]
       }
       trait Node extends Peer {
-        type Connection = Multiple[Node] with Optional[Registry]
+        type Tie <: Multiple[Node] with Optional[Registry]
       }
 
       placed[Registry] { implicit! =>
@@ -63,10 +63,10 @@ class MultitierSpec extends FlatSpec with Matchers {
     @multitier
     object test {
       trait Registry extends Peer {
-        type Connection = Multiple[Node]
+        type Tie <: Multiple[Node]
       }
       trait Node extends Peer {
-        type Connection = Multiple[Node] with Optional[Registry]
+        type Tie <: Multiple[Node] with Optional[Registry]
       }
 
       placed[Registry] { implicit! =>
@@ -80,16 +80,16 @@ class MultitierSpec extends FlatSpec with Matchers {
     @multitier
     object test {
       trait Registry extends Peer {
-        type Connection = Multiple[Node]
+        type Tie <: Multiple[Node]
       }
       trait Node extends Peer {
-        type Connection = Multiple[Node] with Optional[Registry]
+        type Tie <: Multiple[Node] with Optional[Registry]
       }
 
       val remotes = placed[Registry].local { implicit! => Map.empty[Int, Remote[Node]] }
 
       def update(remoteId: Int, update: String) = placed[Node].local { implicit! =>
-        remote[Registry].issued.capture(remoteId, update) { implicit! => node: Remote[Node] =>
+        remote[Registry].sbj.capture(remoteId, update) { implicit! => node: Remote[Node] =>
           (remotes get remoteId) foreach { requested =>
             remote.on(requested).capture(update) { implicit! =>
               def fortytwo = 42
@@ -106,10 +106,10 @@ class MultitierSpec extends FlatSpec with Matchers {
     @multitier
     object test {
       trait Registry extends Peer {
-        type Connection = Multiple[Node]
+        type Tie <: Multiple[Node]
       }
       trait Node extends Peer {
-        type Connection = Multiple[Node] with Optional[Registry]
+        type Tie <: Multiple[Node] with Optional[Registry]
       }
 
       trait Stuff
@@ -142,10 +142,10 @@ class MultitierSpec extends FlatSpec with Matchers {
     @multitier
     class test {
       trait Registry extends Peer {
-        type Connection = Multiple[Node]
+        type Tie <: Multiple[Node]
       }
       trait Node extends Peer {
-        type Connection = Multiple[Node] with Optional[Registry]
+        type Tie <: Multiple[Node] with Optional[Registry]
       }
 
       val id = placed[Node] { implicit! => 0 }
@@ -215,11 +215,11 @@ class MultitierSpec extends FlatSpec with Matchers {
     @multitier
     class Test {
       trait Server extends Peer {
-        type Connection = Multiple[Client] with Single[SubClient1[_]] with Single[SubClient2]
+        type Tie <: Multiple[Client] with Single[SubClient1[_]] with Single[SubClient2]
       }
 
       trait Client extends Peer {
-        type Connection <: Single[Server]
+        type Tie <: Single[Server]
       }
 
       trait SubClient1[T] extends Client
@@ -281,9 +281,9 @@ class MultitierSpec extends FlatSpec with Matchers {
         val m = remote[Client] { implicit! => 8 + 9 }.asLocal
         val n = remote[SubClient2].capture(l) { implicit! => l + 8 }.asLocal
         val o = remote.on(subClient1).capture(l, string, clazz) { implicit! => string + l }.asLocal
-        val p = remote[Client].issued { implicit! => 8 + 9 }.asLocal
-        val q = remote[Client].issued.capture(l) { implicit! => l + 8 }.asLocal
-        val r = remote.on(subClient1).issued.capture(l, serverValue) { implicit! => server: Remote[Server] => l + serverValue }.asLocal
+        val p = remote[Client].sbj { implicit! => 8 + 9 }.asLocal
+        val q = remote[Client].sbj.capture(l) { implicit! => l + 8 }.asLocal
+        val r = remote.on(subClient1).sbj.capture(l, serverValue) { implicit! => server: Remote[Server] => l + serverValue }.asLocal
 
         l.staticAssertType[Int]
         m.staticAssertType[List[Int]]
@@ -294,7 +294,7 @@ class MultitierSpec extends FlatSpec with Matchers {
         r.staticAssertType[Int]
 
 
-        val s = issuedFun("")(client)
+        val s = subjectiveFun("")(client)
         val t = remote[Client] { implicit! => remote[Server] { implicit! => serverValue }.asLocal }.asLocal
         val u = remote[Client] { implicit! =>
           val serverValue = ""
@@ -325,10 +325,10 @@ class MultitierSpec extends FlatSpec with Matchers {
         vari = 42
         val a = 42 + vari
 
-        val b = issuedB.asLocal
-        val c = issuedC.asLocal
-        val d = issuedValue.asLocal
-        val e = (remote call issuedFun("")).asLocal
+        val b = subjectiveB.asLocal
+        val c = subjectiveC.asLocal
+        val d = subjectiveValue.asLocal
+        val e = (remote call subjectiveFun("")).asLocal
 
         a.staticAssertType[Int]
         b.staticAssertType[Int]
@@ -349,24 +349,24 @@ class MultitierSpec extends FlatSpec with Matchers {
       def fun1(d: Double)(s: String, i: Int): Int on Client = 5
 
 
-      val issuedValue = placed[Server].issued { implicit! => x: Remote[Client] => 8 }
+      val subjectiveValue = placed[Server].sbj { implicit! => x: Remote[Client] => 8 }
 
-      def issuedFun(s: String) = placed[Server].issued { implicit! => x: Remote[Client] => 8 }
+      def subjectiveFun(s: String) = placed[Server].sbj { implicit! => x: Remote[Client] => 8 }
 
 
-      val issuedA = placed[Server].local { implicit! => x: Remote[Client] => 8 }
+      val subjectiveA = placed[Server].local { implicit! => x: Remote[Client] => 8 }
 
-      val issuedB = placed[Server].issued { implicit! => x: Remote[Client] => 8 }
+      val subjectiveB = placed[Server].sbj { implicit! => x: Remote[Client] => 8 }
 
-      val issuedC = placed[Server].issued[Client] { implicit! => 8 }
+      val subjectiveC = placed[Server].sbj[Client] { implicit! => 8 }
 
-      val issuedD: Remote[Client] <-> (Remote[Client] => Int) localOn Server = placed { implicit! => x: Remote[Client] => 8 }
+      val subjectiveD: Remote[Client] <-> (Remote[Client] => Int) localOn Server = placed { implicit! => x: Remote[Client] => 8 }
 
-      val assertIssuedA: (Remote[Client] => Int) localOn Server = issuedA
+      val assertSubjectiveA: (Remote[Client] => Int) localOn Server = subjectiveA
 
-      val assertIssuedB: Remote[Client] <=> Int on Server = issuedB
+      val assertSubjectiveB: Remote[Client] <=> Int on Server = subjectiveB
 
-      val assertIssuedC: Remote[Client] <-> Int on Server = issuedC
+      val assertSubjectiveC: Remote[Client] <-> Int on Server = subjectiveC
 
 
       val clientVal = placed[Client] { implicit! => 5 }

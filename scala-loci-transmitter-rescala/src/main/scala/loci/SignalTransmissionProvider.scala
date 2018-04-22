@@ -21,7 +21,7 @@ protected[loci] trait SignalTransmissionProvider {
     extends TransmissionProvider {
     import engine._
 
-    lazy val asLocal: Signal[Map[Remote[R], Signal[T]]] =
+    lazy val asLocalFromAll: Signal[Map[Remote[R], Signal[T]]] =
       transmission.memo(asLocalId) {
         val mapping = plan() { _ => Var(Map.empty[Remote[R], Signal[T]]) }
 

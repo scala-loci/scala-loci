@@ -10,15 +10,15 @@ import scala.language.implicitConversions
 trait Peer {
   // `Single` and `Optional` are invariant in `P`, while `Multiple` is covariant.
   // This is because type inference may infer a super-type `S` of `P` and it is
-  // possible that other sub-types of S are part of the connection spec compound.
+  // possible that other sub-types of S are part of the tie spec compound.
   // Therefore, when inferring a super-type of `P`, `Multiple` must be inferred.
-  sealed trait ConnectionSpec
+  sealed trait TieSpec
   sealed trait Single[P] extends Optional[P]
   sealed trait Optional[P] extends Multiple[P]
-  sealed trait Multiple[+P] extends ConnectionSpec
+  sealed trait Multiple[+P] extends TieSpec
 
 
-  type Connection <: ConnectionSpec
+  type Tie <: TieSpec
 
   def connect: ConnectionSetup
 

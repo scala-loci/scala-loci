@@ -14,20 +14,20 @@ protected final abstract class RemoteExpression[P <: Peer, placed[_, _ <: Peer]]
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, U],
         ev2: LocalValueTypes[U, V],
-        ev3: PeerConnection[L#Connection, P, _]): V placed P
+        ev3: PeerTie[L#Tie, P, _]): V placed P
   def capture
     (v: LocalDeclaration*): RemoteCapturingExpression[P, placed]
   def call[T, L <: Peer, P0 >: P <: Peer, `P'` <: Peer](method: RemoteMethod[T, P0])
     (implicit
         ev0: LocalPeer[L],
         ev1: FirstIfNotEmptyElseSecond[P, P0, `P'`],
-        ev2: PeerConnection[L#Connection, `P'`, _]): T placed `P'`
+        ev2: PeerTie[L#Tie, `P'`, _]): T placed `P'`
   def set[T, L <: Peer, P0 >: P <: Peer, `P'` <: Peer](property: RemoteProperty[T, P0])
     (implicit
         ev0: LocalPeer[L],
         ev1: FirstIfNotEmptyElseSecond[P, P0, `P'`],
-        ev2: PeerConnection[L#Connection, `P'`, _]): RemoteSettingExpression[T, `P'`, L, placed]
-  def issued: RemoteIssuingExpression[P, placed]
+        ev2: PeerTie[L#Tie, `P'`, _]): RemoteSettingExpression[T, `P'`, L, placed]
+  def sbj: RemoteSubjectiveExpression[P, placed]
 }
 
 protected final abstract class RemoteSettingExpression[T, P <: Peer, L <: Peer, placed[_, _ <: Peer]] {
@@ -41,32 +41,32 @@ protected final abstract class RemoteCapturingExpression[P <: Peer, placed[_, _ 
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, U],
         ev2: LocalValueTypes[U, V],
-        ev3: PeerConnection[L#Connection, P, _]): V placed P
+        ev3: PeerTie[L#Tie, P, _]): V placed P
 }
 
-protected final abstract class RemoteIssuingExpression[P <: Peer, placed[_, _ <: Peer]] {
+protected final abstract class RemoteSubjectiveExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, V, I, L <: Peer](f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, I],
-        ev2: IssuingTypes[L, I, U],
+        ev2: SubjectiveTypes[L, I, U],
         ev3: LocalValueTypes[U, V],
-        ev4: PeerConnection[L#Connection, P, _],
-        ev5: PeerConnection[P#Connection, L, _]): V placed P
+        ev4: PeerTie[L#Tie, P, _],
+        ev5: PeerTie[P#Tie, L, _]): V placed P
   def capture[T, U, I, L <: Peer]
-    (v: LocalDeclaration*): RemoteIssuedCapturingExpression[P, placed]
+    (v: LocalDeclaration*): RemoteSubjectiveCapturingExpression[P, placed]
 }
 
-protected final abstract class RemoteIssuedCapturingExpression[P <: Peer, placed[_, _ <: Peer]] {
+protected final abstract class RemoteSubjectiveCapturingExpression[P <: Peer, placed[_, _ <: Peer]] {
   def apply[T, U, V, I, L <: Peer]
     (f: CurrentLocalPeerRemoteComputation[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: LocalPeer[L],
         ev1: RemotePlacingTypes[T, I],
-        ev2: IssuingTypes[L, I, U],
+        ev2: SubjectiveTypes[L, I, U],
         ev3: LocalValueTypes[U, V],
-        ev4: PeerConnection[L#Connection, P, _],
-        ev5: PeerConnection[P#Connection, L, _]): V placed P
+        ev4: PeerTie[L#Tie, P, _],
+        ev5: PeerTie[P#Tie, L, _]): V placed P
 }
 
 

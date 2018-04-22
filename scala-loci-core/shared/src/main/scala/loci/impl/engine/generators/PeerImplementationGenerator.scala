@@ -11,7 +11,7 @@ trait PeerImplementationGenerator { this: Generation =>
 
   val generatePeerImplementations = UniformAggregation[
     EnclosingContext with PeerDefinition with NonPlacedStatement with
-    PlacedStatement with PlacedAbstraction with PeerConnectionMultiplicity] {
+    PlacedStatement with PlacedAbstraction with PeerTieMultiplicity] {
       aggregator =>
 
     echo(verbose = true, " Generating peer implementations")
@@ -89,11 +89,11 @@ trait PeerImplementationGenerator { this: Generation =>
     def createDeclTypeTree(declTypeTree: Tree, exprType: Type) =
       if (types.bottom exists { exprType <:< _ })
         declTypeTree
-      else if (types.controlledIssuedPlacing exists { exprType <:< _ }) {
+      else if (types.controlledSubjectivePlacing exists { exprType <:< _ }) {
         val Seq(peer, value) = declTypeTree.typeArgTrees
         tq"$peer => $value"
       }
-      else if (types.issuedPlacing exists { exprType <:< _ }) {
+      else if (types.subjectivePlacing exists { exprType <:< _ }) {
         val Seq(_, value) = declTypeTree.typeArgTrees
         value
       }
@@ -106,14 +106,10 @@ trait PeerImplementationGenerator { this: Generation =>
         mods.privateWithin, mods.annotations)
 
     def peerPlacedAbstractions(peerSymbol: TypeSymbol) =
-      aggregator.all[PlacedAbstraction] filter {
-        _.peerSymbol == peerSymbol
-      }
+      aggregator.all[PlacedAbstraction] filter { _.peerSymbol == peerSymbol }
 
-    def peerConnectionMultiplicities(peerSymbol: TypeSymbol) =
-      aggregator.all[PeerConnectionMultiplicity] filter {
-        _.peerSymbol == peerSymbol
-      }
+    def peerTieMultiplicities(peerSymbol: TypeSymbol) =
+      aggregator.all[PeerTieMultiplicity] filter { _.peerSymbol == peerSymbol }
 
     def peerPlacedStatements(peerSymbol: TypeSymbol,
         peerSymbols: List[TypeSymbol]) = {
@@ -329,15 +325,15 @@ trait PeerImplementationGenerator { this: Generation =>
         isClass, _, _) = peerDefinition
 
       val peerName = peerSymbol.name
-      val multiplicities = peerConnectionMultiplicities(peerSymbol)
+      val multiplicities = peerTieMultiplicities(peerSymbol)
 
       import trees._
       import names._
 
       stats foreach {
-        case stat: ValOrDefDef if stat.name == connection =>
+        case stat: ValOrDefDef if stat.name == Tie =>
           c.abort(stat.pos,
-            s"member of name `$connection` not allowed in peer definitions")
+            s"member of name `$Tie` not allowed in peer definitions")
         case _ =>
       }
 
@@ -346,20 +342,19 @@ trait PeerImplementationGenerator { this: Generation =>
       }
 
       val peerMultiplicities = multiplicities map {
-        case PeerConnectionMultiplicity( _, connectedPeer,
-            connectionMultiplicity) =>
-          q"($peerTypeOf[$connectedPeer], $connectionMultiplicity)"
+        case PeerTieMultiplicity( _, tiedPeer, tieMultiplicity) =>
+          q"($peerTypeOf[$tiedPeer], $tieMultiplicity)"
       }
 
-      val peerConnections =
+      val peerTies =
         if (peerMultiplicities.nonEmpty || !hasPeerParents)
-          q"$Map[$PeerType, $ConnectionMultiplicity](..$peerMultiplicities)"
+          q"$Map[$PeerType, $TieMultiplicity](..$peerMultiplicities)"
         else
-          q"super.$connection"
+          q"super.$Tie"
 
-      val connectionImpl = q"$synthetic def $connection = $peerConnections"
+      val tieImpl = q"$synthetic def $Tie = $peerTies"
 
-      val generatedStats = markLociSynthetic(connectionImpl) :: stats
+      val generatedStats = markLociSynthetic(tieImpl) :: stats
       val generatedTree =
         if (isClass)
           q"""$mods class $peerName[..$typeArgs](...$args)

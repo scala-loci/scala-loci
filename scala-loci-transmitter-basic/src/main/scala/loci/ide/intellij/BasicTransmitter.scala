@@ -13,7 +13,7 @@ protected[loci] trait BasicTransmitter {
     [V, T, S, U, L <: Peer, R <: Peer, Provider <: TransmissionProvider](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, MultipleConnection],
+        ev0: TransmissionProperties[V, T, R, L, MultipleTie],
         ev1: Transmittable[T, S, U],
         ev2: MultipleTransmission[U, R, L] => Provider,
         ev3: Provider <:< BasicMultipleTransmissionProvider[U, R, L]):
@@ -24,7 +24,7 @@ protected[loci] trait BasicTransmitter {
     [V, T, S, U, L <: Peer, R <: Peer, Provider <: TransmissionProvider](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, OptionalConnection],
+        ev0: TransmissionProperties[V, T, R, L, OptionalTie],
         ev1: Transmittable[T, S, U],
         ev2: OptionalTransmission[U, R, L] => Provider,
         ev3: Provider <:< BasicOptionalTransmissionProvider[U, R, L]):
@@ -36,7 +36,7 @@ protected[loci] trait BasicTransmitter {
     (v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, SingleConnection],
+        ev0: TransmissionProperties[V, T, R, L, SingleTie],
         ev1: Transmittable[T, S, U],
         ev2: SingleTransmission[U, R, L] => Provider,
         ev3: Provider <:< BasicSingleTransmissionProvider[U, R, L]):

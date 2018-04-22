@@ -3,7 +3,7 @@ package loci
 import network.ConnectionRequestor
 import util.Notification
 
-sealed trait RemoteConnection[R <: Peer, M <: ConnectionMultiplicity] {
+sealed trait RemoteConnection[R <: Peer, M <: TieMultiplicity] {
   val id: Any
   def memo[T <: AnyRef](id: Any)(body: => T): T
 
@@ -14,18 +14,18 @@ sealed trait RemoteConnection[R <: Peer, M <: ConnectionMultiplicity] {
 }
 
 sealed trait MultipleRemoteConnection[R <: Peer]
-    extends RemoteConnection[R, MultipleConnection] {
+    extends RemoteConnection[R, MultipleTie] {
   def remotes: Seq[Remote[R]]
 }
 
 sealed trait OptionalRemoteConnection[R <: Peer]
-    extends RemoteConnection[R, OptionalConnection] {
+    extends RemoteConnection[R, OptionalTie] {
   def remote: Option[Remote[R]]
   def remotes: Seq[Remote[R]] = remote.toSeq
 }
 
 sealed trait SingleRemoteConnection[R <: Peer]
-    extends RemoteConnection[R, SingleConnection] {
+    extends RemoteConnection[R, SingleTie] {
   def remote: Remote[R]
   def remotes: Seq[Remote[R]] = Seq(remote)
 }

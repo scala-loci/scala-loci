@@ -30,7 +30,7 @@ trait ToExpressionProcessor { this: Generation =>
       val value = exprssValue.head.head
       val peer = exprssPeer.head.head
 
-      if ((types.controlledIssuedPlacing exists { value.tpe <:< _ }) &&
+      if ((types.controlledSubjectivePlacing exists { value.tpe <:< _ }) &&
           (types.bottom forall { value.tpe <:!< _ }))
         q"$value($peer)"
       else

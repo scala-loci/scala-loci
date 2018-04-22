@@ -188,7 +188,7 @@ private class WebRTCChannelConnectionRequestor(
 
     channel.readyState match {
       case RTCDataChannelState.connecting =>
-        // strange fix for strage issue with Cromium
+        // strange fix for strange issue with Cromium
         val handle = js.timers.setTimeout(1.day) { channel.readyState }
 
         channel.onopen = { _: dom.Event =>

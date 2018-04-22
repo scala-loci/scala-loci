@@ -206,7 +206,7 @@ object multitier {
       q"""{
         val $peer = $peerConstructionTree
         $Runtime.run(
-          $peer.$connection,
+          $peer.$Tie,
           $peer,
           $typeTag.${names.peerType},
           (context, connections, connected, connecting) => new $implementation {

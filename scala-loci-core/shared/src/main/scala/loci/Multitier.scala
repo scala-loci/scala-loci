@@ -12,12 +12,12 @@ class multitier extends StaticAnnotation {
 
 object multitier {
   @throws[RemoteConnectionException](
-    "if the connection setup does not respect the connection specification")
+    "if the connection setup does not respect the tie specification")
   def run[P <: Peer]: Runtime =
     macro impl.engine.multitier.run[P]
 
   @throws[RemoteConnectionException](
-    "if the connection setup does not respect the connection specification")
+    "if the connection setup does not respect the tie specification")
   def setup(peer: Peer): Runtime =
     macro impl.engine.multitier.setup
 

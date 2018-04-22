@@ -41,15 +41,15 @@ protected final abstract class PlacingExpression[P <: Peer] {
         ev0: NoLocalPeer[_],
         ev1: PlacingTypes[P, T, U],
         ev2: LocalValueTypes[U, V]): V localOn P
-  def issued[R <: Peer]: IssuingExpression[P, R]
+  def sbj[R <: Peer]: SubjectiveExpression[P, R]
 }
 
-protected final abstract class IssuingExpression[P <: Peer, R <: Peer] {
+protected final abstract class SubjectiveExpression[P <: Peer, R <: Peer] {
   def apply[T, U, V, I](f: CurrentLocalPeer[P] `implicit =>` T `argument name` { type ! })
     (implicit
         ev0: NoLocalPeer[_],
         ev1: PlacingTypes[P, T, I],
-        ev2: IssuingTypes[R, I, U],
+        ev2: SubjectiveTypes[R, I, U],
         ev3: LocalValueTypes[U, V],
-        ev4: PeerConnection[P#Connection, R, _]): V on P
+        ev4: PeerTie[P#Tie, R, _]): V on P
 }

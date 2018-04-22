@@ -121,13 +121,13 @@ trait RemoteExpressionProcessor { this: Generation =>
         // decompose tree
         val (exprBase, args, expr) = tree match {
           case q"$expr.$_[..$_].$_[..$_](...$exprssArg).$_[..$_](...$exprss)"
-              if tree.symbol == symbols.remoteIssuedCaptureApply =>
+              if tree.symbol == symbols.remoteSubjectiveCaptureApply =>
             (expr, exprssArg.head, exprss.head.head)
           case q"$expr.$_[..$_](...$exprssArg).$_[..$_](...$exprss)"
               if tree.symbol == symbols.remoteCaptureApply =>
             (expr, exprssArg.head, exprss.head.head)
           case q"$expr.$_[..$_].$_[..$_](...$exprss)"
-              if tree.symbol == symbols.remoteIssuedApply =>
+              if tree.symbol == symbols.remoteSubjectiveApply =>
             (expr, List.empty, exprss.head.head)
           case q"$expr.$_[..$_](...$exprss)" =>
             (expr, List.empty, exprss.head.head)
@@ -138,8 +138,8 @@ trait RemoteExpressionProcessor { this: Generation =>
         val exprType =
           if (wrapperType.isEmpty)
             originalExprType
-          else if ((originalExprType <:< types.issued ||
-                    originalExprType <:< types.issuedControlled) &&
+          else if ((originalExprType <:< types.subjective ||
+                    originalExprType <:< types.subjectiveControlled) &&
                    (types.bottom forall { originalExprType <:!< _ })) {
             val TypeRef(pre, sym, Seq(peerType, _)) = originalExprType.underlying
             internal typeRef (pre, sym, List(peerType, definitions.UnitTpe))
@@ -170,7 +170,7 @@ trait RemoteExpressionProcessor { this: Generation =>
                 if (peer.tpe.typeSymbol == peerType.typeSymbol)
                   c.warning(arg.pos, "captured value shadows placed value")
 
-                if ((types.issuedPlacing exists { placedArg.tpe <:< _ }) &&
+                if ((types.subjectivePlacing exists { placedArg.tpe <:< _ }) &&
                     (types.bottom forall { placedArg.tpe <:!< _ }))
                   placedArg.typeArgTrees.last
                 else

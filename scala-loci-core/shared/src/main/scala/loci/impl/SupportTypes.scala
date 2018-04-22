@@ -10,8 +10,8 @@ private object ValueTypes {
   class Commons[C <: Context](protected val c: C) {
     import c.universe._
 
-    val controlledIssuedPlaced = typeOf[(_ <=> _) localOn _]
-    val issuedPlaced = typeOf[(_ <-> _) localOn _]
+    val controlledSubjectivePlaced = typeOf[(_ <=> _) localOn _]
+    val subjectivePlaced = typeOf[(_ <-> _) localOn _]
     val placed = typeOf[_ localOn _]
 
     val remotePeer = typeOf[Remote[Peer]]
@@ -41,9 +41,9 @@ object LocalValueTypes {
     def transform(tpe: Type) = tpe map { tpe =>
       if (tpe =:= definitions.NothingTpe)
         tpe
-      else if (tpe <:< controlledIssuedPlaced)
+      else if (tpe <:< controlledSubjectivePlaced)
         replaceTypeArgs(function, tpe.typeArgs.head.typeArgs)
-      else if (tpe <:< issuedPlaced)
+      else if (tpe <:< subjectivePlaced)
         tpe.typeArgs.head.typeArgs.last
       else if (tpe <:< placed)
         tpe.typeArgs.head
@@ -73,7 +73,7 @@ object RemoteValueTypes {
     def transform(tpe: Type) = tpe map { tpe =>
       if (tpe =:= definitions.NothingTpe)
         tpe
-      else if (tpe <:< controlledIssuedPlaced || tpe <:< issuedPlaced)
+      else if (tpe <:< controlledSubjectivePlaced || tpe <:< subjectivePlaced)
         tpe.typeArgs.head.typeArgs.last
       else if (tpe <:< placed)
         tpe.typeArgs.head
@@ -88,7 +88,7 @@ object RemoteValueTypes {
     val remoteType =
       if (tpe =:= definitions.NothingTpe)
         definitions.NothingTpe
-      else if (tpe <:< controlledIssuedPlaced || tpe <:< issuedPlaced)
+      else if (tpe <:< controlledSubjectivePlaced || tpe <:< subjectivePlaced)
         tpe.typeArgs.head.typeArgs.head
       else if (tpe <:< placed)
         remotePeer

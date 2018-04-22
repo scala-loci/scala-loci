@@ -23,21 +23,21 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 
 class RemoteConnections(peerType: PeerType,
-    connectionMultiplicities: Map[PeerType, ConnectionMultiplicity]) {
+    tieMultiplicities: Map[PeerType, TieMultiplicity]) {
 
   private def terminatedException =
     new RemoteConnectionException("remote connection terminated")
 
   private def violationException =
-    new RemoteConnectionException("connection constraint violation")
+    new RemoteConnectionException("tie constraint violation")
 
   private def messageException(message: Message) =
     new MessageException(s"unexpected connect message: $message")
 
   private val multiplicities =
-    (connectionMultiplicities.keys flatMap bases map {
-      _ -> MultipleConnection }).toMap ++
-    connectionMultiplicities
+    (tieMultiplicities.keys flatMap bases map {
+      _ -> MultipleTie }).toMap ++
+    tieMultiplicities
 
   private def bases(peerType: PeerType): Set[PeerType] =
     peerType.bases.toSet ++ (peerType.bases flatMap bases)
@@ -203,7 +203,7 @@ class RemoteConnections(peerType: PeerType,
                   constraintViolationsConnecting(remotePeerType).isEmpty) {
                 val instance =
                   if (!createDesignatedInstance) this
-                  else new RemoteConnections(peerType, connectionMultiplicities)
+                  else new RemoteConnections(peerType, tieMultiplicities)
 
                 val remote = RemoteRef.create(remotePeerType,
                   instance.state.createId, connection.protocol, this)
@@ -372,9 +372,9 @@ class RemoteConnections(peerType: PeerType,
   private def checkConstraints(peerType: PeerType, count: Int): Boolean =
     (bases(peerType) + peerType).toSeq collect (Function unlift { peerType =>
       multiplicities get peerType map {
-        case MultipleConnection => true
-        case OptionalConnection => count <= 1
-        case SingleConnection => count == 1
+        case MultipleTie => true
+        case OptionalTie => count <= 1
+        case SingleTie => count == 1
       }
     }) reduceOption { _ && _ } getOrElse false
 

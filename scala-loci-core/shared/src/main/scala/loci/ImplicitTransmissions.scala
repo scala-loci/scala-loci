@@ -14,7 +14,7 @@ protected object ImplicitTransmissions {
        Provider <: TransmissionProvider]
       (v: V)
       (implicit
-          ev0: TransmissionProperties[V, T, R, L, MultipleConnection],
+          ev0: TransmissionProperties[V, T, R, L, MultipleTie],
           ev1: Transmittable[T, S, U],
           ev2: MultipleTransmission[U, R, L] => Provider): Provider = `#macro`
 
@@ -23,7 +23,7 @@ protected object ImplicitTransmissions {
        Provider <: TransmissionProvider]
       (v: V)
       (implicit
-          ev0: TransmissionProperties[V, T, R, L, OptionalConnection],
+          ev0: TransmissionProperties[V, T, R, L, OptionalTie],
           ev1: Transmittable[T, S, U],
           ev2: OptionalTransmission[U, R, L] => Provider): Provider = `#macro`
 
@@ -32,7 +32,7 @@ protected object ImplicitTransmissions {
        Provider <: TransmissionProvider]
       (v: V)
       (implicit
-          ev0: TransmissionProperties[V, T, R, L, SingleConnection],
+          ev0: TransmissionProperties[V, T, R, L, SingleTie],
           ev1: Transmittable[T, S, U],
           ev2: SingleTransmission[U, R, L] => Provider): Provider = `#macro`
   }

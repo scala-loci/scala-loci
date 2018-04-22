@@ -16,7 +16,7 @@ protected[loci] trait EventTransmissionProvider {
     [V, T, U, S, P, Evt[U, ES <: Struct] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, MultipleConnection],
+        ev0: TransmissionProperties[V, T, R, L, MultipleTie],
         ev1: T <:< Evt[U, ES],
         ev2: Transmittable[U, S, P],
         ev3: MultipleTransmission[Evt[P, ES], R, L] => RescalaEventMultipleTransmissionProvider[Evt, P, R, L, ES]):
@@ -27,7 +27,7 @@ protected[loci] trait EventTransmissionProvider {
     [V, T, U, S, P, Evt[U, ES <: Struct] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, OptionalConnection],
+        ev0: TransmissionProperties[V, T, R, L, OptionalTie],
         ev1: T <:< Evt[U, ES],
         ev2: Transmittable[U, S, P],
         ev3: OptionalTransmission[Evt[P, ES], R, L] => RescalaEventOptionalTransmissionProvider[Evt, P, R, L, ES]):
@@ -38,7 +38,7 @@ protected[loci] trait EventTransmissionProvider {
     [V, T, U, S, P, Evt[U, ES <: Struct] <: Event[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, SingleConnection],
+        ev0: TransmissionProperties[V, T, R, L, SingleTie],
         ev1: T <:< Evt[U, ES],
         ev2: Transmittable[U, S, P],
         ev3: SingleTransmission[Evt[P, ES], R, L] => RescalaEventSingleTransmissionProvider[Evt, P, R, L, ES]):

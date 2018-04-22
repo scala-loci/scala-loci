@@ -40,8 +40,8 @@ trait OutputGenerator { this: Generation =>
         val tpe = tree.tpe map { tpe =>
           if (types.bottom exists { tpe <:< _ })
             tpe
-          else if ((tpe <:< types.issued) ||
-                   (tpe <:< types.issuedControlled) ||
+          else if ((tpe <:< types.subjective) ||
+                   (tpe <:< types.subjectiveControlled) ||
                    (types.selection exists { tpe <:< _ }))
             definitions.UnitTpe
           else if (tpe <:< types.localOn)

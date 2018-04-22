@@ -26,7 +26,7 @@ protected[loci] trait EventTransmissionProvider {
 
     private lazy val emptyEvent = Evt[Nothing]
 
-    lazy val asLocal: Signal[Map[Remote[R], Event[T]]] =
+    lazy val asLocalFromAll: Signal[Map[Remote[R], Event[T]]] =
       transmission.memo(asLocalId) {
         val mapping = plan() { _ => Var(Map.empty[Remote[R], Event[T]]) }
 
@@ -51,9 +51,9 @@ protected[loci] trait EventTransmissionProvider {
         mapping
       }
 
-    lazy val asLocalSeq: Event[(Remote[R], T)] = transmission.memo(asLocalSeqId) {
+    lazy val asLocalFromAllSeq: Event[(Remote[R], T)] = transmission.memo(asLocalSeqId) {
       Signal {
-        asLocal() map { case (remote, event) =>
+        asLocalFromAll() map { case (remote, event) =>
           event map { (remote, _) }
         } reduceOption {
           _ || _

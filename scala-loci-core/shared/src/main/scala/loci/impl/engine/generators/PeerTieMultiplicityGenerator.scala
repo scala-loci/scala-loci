@@ -5,17 +5,17 @@ package engine.generators
 import engine._
 import scala.reflect.macros.blackbox.Context
 
-trait PeerConnectionMultiplicityGenerator { this: Generation =>
+trait PeerTieMultiplicityGenerator { this: Generation =>
   val c: Context
   import c.universe._
 
-  val generatePeerConnectionMultiplicities = AugmentedAggregation[
-    PeerDefinition with PlacedStatement, PeerConnectionMultiplicity] {
+  val generatePeerTieMultiplicities = AugmentedAggregation[
+    PeerDefinition with PlacedStatement, PeerTieMultiplicity] {
       aggregator =>
 
-    echo(verbose = true, " Generating peer Connection multiplicities")
+    echo(verbose = true, " Generating peer tie multiplicities")
 
-    val connectionTypeName = names.connection.toTypeName
+    val tieTypeName = names.Tie.toTypeName
 
     val multiplicities = aggregator.all[PeerDefinition] flatMap { definition =>
       val ClassDef(_, _, _, Template(_, _, body)) = definition.tree
@@ -25,7 +25,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
       }
 
       val multiplicities = body collectFirst {
-        case typeDef @ TypeDef(_, connectionTypeName, List(), rhs) =>
+        case typeDef @ TypeDef(_, `tieTypeName`, List(), rhs) =>
           val single = 1
           val optional = 2
           val multiple = 3
@@ -35,50 +35,50 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
             case `multiple` => "multiple"
           }
 
-          val connection = rhs.typeTree match {
+          val tie = rhs.typeTree match {
             case TypeBoundsTree(lo, _) if lo.tpe =:!= definitions.NothingTpe =>
               c.abort(lo.pos,
-                "lower type bounds not allowed for connection type")
+                s"lower type bounds not allowed for $tieTypeName type")
             case TypeBoundsTree(_, hi) => hi
             case _ => rhs
           }
 
-          val connections = connection.typeTree match {
+          val ties = tie.typeTree match {
             case CompoundTypeTree(Template(parents, noSelfType, List())) =>
-              val RefinedType(parentTypes, _) = connection.tpe
+              val RefinedType(parentTypes, _) = tie.tpe
               parents zip parentTypes map { case (tree, tpe) =>
                 internal setType (tree, tpe)
               }
             case CompoundTypeTree(Template(_, noSelfType, body)) =>
               c.abort(body.head.pos,
-                "definitions not allowed for connection type")
+                s"definitions not allowed for $tieTypeName type")
             case CompoundTypeTree(Template(_, self, _)) =>
               c.abort(self.pos,
-                "self-type not allowed for connection type")
+                s"self-type not allowed for $tieTypeName type")
             case tree =>
-              List(internal setType (tree, connection.tpe))
+              List(internal setType (tree, tie.tpe))
           }
 
-          val multiplicities = connections map { connection =>
-            if (connection.tpe <:< types.single)
-              (single, connection)
-            else if (connection.tpe <:< types.optional)
-              (optional, connection)
-            else if (connection.tpe <:< types.multiple)
-              (multiple, connection)
+          val multiplicities = ties map { tie =>
+            if (tie.tpe <:< types.single)
+              (single, tie)
+            else if (tie.tpe <:< types.optional)
+              (optional, tie)
+            else if (tie.tpe <:< types.multiple)
+              (multiple, tie)
             else
-              c.abort(connection.pos,
-                "only multiple, optional or single compounds " +
-                "allowed for connection type")
+              c.abort(tie.pos,
+                s"only multiple, optional or single compounds " +
+                s"allowed for $tieTypeName type")
           } map {
-            case (multiplicity, connection) =>
-              val AppliedTypeTree(_, List(arg)) = connection
-              val argType = connection.tpe.underlying.typeArgs.head
+            case (multiplicity, tie) =>
+              val AppliedTypeTree(_, List(arg)) = tie
+              val argType = tie.tpe.underlying.typeArgs.head
 
               if (argType <:!< types.peer || argType =:= definitions.NothingTpe)
                 c.abort(arg.pos, "peer type expected")
 
-              (connection, internal setType (arg, argType), multiplicity)
+              (tie, internal setType (arg, argType), multiplicity)
           }
 
 
@@ -101,11 +101,11 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
           }
 
           combinations foreach {
-            case Seq((connection0, peer0, _), (connection1, peer1, _)) =>
+            case Seq((tie0, peer0, _), (tie1, peer1, _)) =>
               if (peer0.tpe =:= peer1.tpe)
                 c.abort(typeDef.pos,
                   s"multiple occurrences of same peer type " +
-                  s"are not allowed: $connection0 and $connection1")
+                  s"are not allowed: $tie0 and $tie1")
           }
 
 
@@ -113,9 +113,10 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
             (multiplicities map { case (_, peer, multiplicity) =>
               val typeSymbol = peer.tpe.typeSymbol
               val symbol = typeSymbol.typeSignature match {
-                case TypeBounds(_, hi)
-                  if typeSymbol.isParameter => hi.typeSymbol
-                case _ => typeSymbol
+                case TypeBounds(_, hi) if typeSymbol.isParameter =>
+                  hi.typeSymbol
+                case _ =>
+                  typeSymbol
               }
               symbol -> multiplicity
             }).toMap
@@ -175,14 +176,13 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
                 }
                 if (peerAccessed)
                   c.warning(typeDef.pos,
-                    s"connection for ${peer.name} not specified " +
+                    s"tie for ${peer.name} not specified " +
                     s"(inferred as ${string(multiple)}, " +
                     s"but can be specified as ${string(potential)})")
 
-              case (potential, Some(stated))
-                  if potential > stated =>
+              case (potential, Some(stated)) if potential > stated =>
                 c.abort(typeDef.pos,
-                  s"connection for ${peer.name} specified as " +
+                  s"tie for ${peer.name} specified as " +
                   s"${string(stated)}, but must be ${string(potential)}")
 
               case _ =>
@@ -190,11 +190,11 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
           }
 
           multiplicities map { case (_, peer, multiplicity) =>
-            PeerConnectionMultiplicity(definition.peerSymbol, peer,
+            PeerTieMultiplicity(definition.peerSymbol, peer,
               multiplicity match {
-                case `single` => trees.SingleConnection
-                case `optional` => trees.OptionalConnection
-                case `multiple` => trees.MultipleConnection
+                case `single` => trees.SingleTie
+                case `optional` => trees.OptionalTie
+                case `multiple` => trees.MultipleTie
               })
           }
       }
@@ -203,7 +203,7 @@ trait PeerConnectionMultiplicityGenerator { this: Generation =>
     }
 
     echo(verbose = true,
-      s"  [${multiplicities.size} peer connection multiplicities added]")
+      s"  [${multiplicities.size} peer tie multiplicities added]")
 
     aggregator add multiplicities
   }

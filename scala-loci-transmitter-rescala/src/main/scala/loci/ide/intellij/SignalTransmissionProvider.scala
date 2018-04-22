@@ -16,7 +16,7 @@ protected[loci] trait SignalTransmissionProvider {
     [V, T, U, S, P, Sig[U, ES <: Struct] <: Signal[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, MultipleConnection],
+        ev0: TransmissionProperties[V, T, R, L, MultipleTie],
         ev1: T <:< Sig[U, ES],
         ev2: Transmittable[U, S, P],
         ev3: MultipleTransmission[Sig[P, ES], R, L] => RescalaSignalMultipleTransmissionProvider[Sig, P, R, L, ES]):
@@ -27,7 +27,7 @@ protected[loci] trait SignalTransmissionProvider {
     [V, T, U, S, P, Sig[U, ES <: Struct] <: Signal[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, OptionalConnection],
+        ev0: TransmissionProperties[V, T, R, L, OptionalTie],
         ev1: T <:< Sig[U, ES],
         ev2: Transmittable[U, S, P],
         ev3: OptionalTransmission[Sig[P, ES], R, L] => RescalaSignalOptionalTransmissionProvider[Sig, P, R, L, ES]):
@@ -38,7 +38,7 @@ protected[loci] trait SignalTransmissionProvider {
     [V, T, U, S, P, Sig[U, ES <: Struct] <: Signal[U, ES], L <: Peer, R <: Peer, ES <: Struct](v: V)
     (implicit
         dummy: IntelliJDummy,
-        ev0: TransmissionProperties[V, T, R, L, SingleConnection],
+        ev0: TransmissionProperties[V, T, R, L, SingleTie],
         ev1: T <:< Sig[U, ES],
         ev2: Transmittable[U, S, P],
         ev3: SingleTransmission[Sig[P, ES], R, L] => RescalaSignalSingleTransmissionProvider[Sig, P, R, L, ES]):
