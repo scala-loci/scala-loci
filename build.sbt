@@ -1,8 +1,12 @@
+enablePlugins(GitVersioning)
+
+git.useGitDescribe in ThisBuild := true
+
 scalaVersion in ThisBuild := "2.11.8"
 
-version in ThisBuild := "0.0.1-SNAPSHOT"
-
 organization in ThisBuild := "de.tuda.stg"
+
+licenses in ThisBuild += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
 
 scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint")
 
