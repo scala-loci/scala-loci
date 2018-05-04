@@ -17,7 +17,9 @@ private final case class PeerTypeTagImpl[P](peerType: PeerTypeImpl)
 object PeerTypeTag {
   def create[P](name: String, bases: List[PeerType]): PeerTypeTag[P] =
     PeerTypeTagImpl(PeerTypeImpl(name, bases))
+}
 
+object PeerTypeTagFallback {
   @compileTimeOnly(
     "peer type tag should have been eliminated " +
     "while expanding `multitier` environment")
@@ -53,7 +55,7 @@ object PeerTypeTag {
     }
 
     c.Expr[PeerTypeTag[P]](
-      q"_root_.loci.impl.PeerTypeTag.dummy[${weakTypeOf[P]}]")
+      q"_root_.loci.impl.PeerTypeTagFallback.dummy[${weakTypeOf[P]}]")
   }
 }
 
