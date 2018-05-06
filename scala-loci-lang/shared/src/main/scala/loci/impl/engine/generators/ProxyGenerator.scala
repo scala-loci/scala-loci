@@ -39,15 +39,21 @@ trait ProxyGenerator { this: Generation =>
     def extractArgumentNames(args: List[List[ValDef]]) =
       args map { _ map { _.name } }
 
+    def extractArgumentPositions(args: List[List[ValDef]]) =
+      args map { _ map { _.pos } }
+
     def extractArguments(tree: ValOrDefDef) =
       tree match {
         case DefDef(_, _, _, vparamss, _, _) => vparamss
         case ValDef(_, _, _, _) => List.empty
       }
 
-    def argumentTypesAsTupleTypeTree(argTypes: List[List[Type]]) = {
-      val types = argTypes map { types =>
-        tq"(..${types map typer.createTypeTree})"
+    def argumentTypesAsTupleTypeTree(argTypes: List[List[(Type, Position)]]) = {
+      val types = argTypes map { typesPositions =>
+        val types = typesPositions map { case (tpe, pos) =>
+          typer createTypeTree (tpe, pos)
+        }
+        tq"(..$types)"
       }
       tq"(..$types)"
     }
@@ -95,6 +101,7 @@ trait ProxyGenerator { this: Generation =>
         val args = extractArguments(decl)
         val argTypes = extractArgumentTypes(args)
         val argNames = extractArgumentNames(args)
+        val argPositions = extractArgumentPositions(args)
 
         val isBottomType = types.bottom exists { exprType <:< _ }
         val isSubjective = !isBottomType &&
@@ -134,7 +141,10 @@ trait ProxyGenerator { this: Generation =>
           if (isMutable)
             localResponseTypeTree
           else
-            argumentTypesAsTupleTypeTree(argTypes)
+            argumentTypesAsTupleTypeTree(
+              argTypes zip argPositions map {
+                case (types, positions) => types zip positions
+              })
 
         val response = {
           val arguments = applyTupleAsArguments(q"args", argTypes)

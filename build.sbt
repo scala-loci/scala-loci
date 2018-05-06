@@ -2,9 +2,9 @@ enablePlugins(GitVersioning)
 
 git.useGitDescribe in ThisBuild := true
 
-scalaVersion in ThisBuild := "2.12.4"
+scalaVersion in ThisBuild := "2.12.6"
 
-crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.4")
+crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.6")
 
 organization in ThisBuild := "de.tuda.stg"
 
@@ -20,26 +20,26 @@ val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % "provided"
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.0.4" % "test"
+  "org.scalatest" %%% "scalatest" % "3.0.5" % "test"
 
 val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val retypecheck = libraryDependencies +=
-  "de.tuda.stg" %% "retypecheck" % "0.4.0"
+  "de.tuda.stg" %% "retypecheck" % "0.5.0"
 
 val rescalaRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.20.0"
+  "de.tuda.stg" %%% "rescala" % "0.23.0"
 
 val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "0.4.4"
+  "com.lihaoyi" %%% "upickle" % "0.6.5"
 
 val circe = libraryDependencies ++= Seq(
-  "io.circe" %%% "circe-core" % "0.9.1",
-  "io.circe" %%% "circe-parser" % "0.9.1")
+  "io.circe" %%% "circe-core" % "0.9.3",
+  "io.circe" %%% "circe-parser" % "0.9.3")
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
@@ -56,22 +56,17 @@ val playDependencyOverrides = dependencyOverrides ++= Seq(
   "com.typesafe.akka" %% "akka-actor" % "[2.4,3.0)" % "provided")
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" %%%! "scalajs-dom" % "0.9.4"
+  "org.scala-js" %%%! "scalajs-dom" % "0.9.5"
 
 
-def preventPublication(project: Project) = project settings (
-  publish := { },
-  publishLocal := { },
-  publishArtifact := false,
-  packagedArtifacts := Map.empty)
-
-
-lazy val loci = preventPublication(project
+lazy val loci = (project
   in file(".")
+  settings (skip in publish := true)
   aggregate (lociJVM, lociJS))
 
-lazy val lociJVM = preventPublication(project
+lazy val lociJVM = (project
   in file(".jvm")
+  settings (skip in publish := true)
   aggregate (lociLangJVM, lociArchitecturesBasicJVM,
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
@@ -81,8 +76,9 @@ lazy val lociJVM = preventPublication(project
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
              lociCommunicationJVM))
 
-lazy val lociJS = preventPublication(project
+lazy val lociJS = (project
   in file(".js")
+  settings (skip in publish := true)
   aggregate (lociLangJS, lociArchitecturesBasicJS,
              lociSerializerUpickleJS,
              lociSerializerCirceJS,

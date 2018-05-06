@@ -3,8 +3,9 @@ package transmitter
 
 import contexts.Immediate.Implicits.global
 import _root_.rescala.core.Struct
-import _root_.rescala.core.Engine
-import _root_.rescala.reactives.{ Signal => EngineSignal }
+import _root_.rescala.core.Scheduler
+import _root_.rescala.macros.cutOutInReactiveMacro
+import _root_.rescala.reactives.{ Signal => SchedulerSignal }
 import scala.concurrent.Future
 import scala.language.higherKinds
 
@@ -12,14 +13,14 @@ protected[transmitter] trait SignalTransmissionProvider {
   private final val asLocalId = 0
 
   implicit class RescalaSignalMultipleTransmissionProvider
-      [Sig[T, ES <: Struct] <: EngineSignal[T, ES], T,
-       R <: Peer, L <: Peer, ES <: Struct]
-      (transmission: MultipleTransmission[Sig[T, ES], R, L])
-      (implicit val engine: Engine[ES])
+      [Sig[T, St <: Struct] <: SchedulerSignal[T, St], T,
+       R <: Peer, L <: Peer, St <: Struct]
+      (transmission: MultipleTransmission[Sig[T, St], R, L])
+      (implicit val scheduler: Scheduler[St])
     extends TransmissionProvider {
-    import engine.{ Signals, Signal, Var, transaction }
+    import scheduler.{ Signals, Signal, Var, transaction }
 
-    lazy val asLocalFromAll: Signal[Map[Remote[R], Signal[T]]] =
+    lazy val asLocal: Signal[Map[Remote[R], Signal[T]]] @cutOutInReactiveMacro =
       transmission.memo(asLocalId) {
         val mapping = transaction() { _ => Var(Map.empty[Remote[R], Signal[T]]) }
 
@@ -43,17 +44,17 @@ protected[transmitter] trait SignalTransmissionProvider {
     }
 
   implicit class RescalaSignalOptionalTransmissionProvider
-      [Sig[T, ES <: Struct] <: EngineSignal[T, ES], T,
-       R <: Peer, L <: Peer, ES <: Struct]
-      (transmission: OptionalTransmission[Sig[T, ES], R, L])
-      (implicit val engine: Engine[ES])
+      [Sig[T, St <: Struct] <: SchedulerSignal[T, St], T,
+       R <: Peer, L <: Peer, St <: Struct]
+      (transmission: OptionalTransmission[Sig[T, St], R, L])
+      (implicit val scheduler: Scheduler[St])
     extends TransmissionProvider {
-    import engine.{ Signals, Signal, Var, transaction }
+    import scheduler.{ Signals, Signal, Var, transaction }
 
     lazy val multiple =
       RescalaSignalMultipleTransmissionProvider(transmission.multiple)
 
-    lazy val asLocal: Signal[Option[T]] = transmission.memo(asLocalId) {
+    lazy val asLocal: Signal[Option[T]] @cutOutInReactiveMacro = transmission.memo(asLocalId) {
       val option = transaction() { _ => Var(Option.empty[Signal[T]]) }
 
       def update() = option set (transmission.retrieveRemoteValue map {
@@ -64,17 +65,17 @@ protected[transmitter] trait SignalTransmissionProvider {
       transmission.remoteLeft notify { _ => update }
       update
 
-      Signal { option() map { _() } }
+      option.flatten
     }
   }
 
   implicit class RescalaSignalSingleTransmissionProvider
-      [Sig[T, ES <: Struct] <: EngineSignal[T, ES], T,
-       R <: Peer, L <: Peer, ES <: Struct]
-      (transmission: SingleTransmission[Sig[T, ES], R, L])
-      (implicit val engine: Engine[ES])
+      [Sig[T, St <: Struct] <: SchedulerSignal[T, St], T,
+       R <: Peer, L <: Peer, St <: Struct]
+      (transmission: SingleTransmission[Sig[T, St], R, L])
+      (implicit val scheduler: Scheduler[St])
     extends TransmissionProvider {
-    import engine.{ Signals, Signal }
+    import scheduler.{ Signals, Signal }
 
     lazy val optional =
       RescalaSignalOptionalTransmissionProvider(transmission.optional)
@@ -82,7 +83,7 @@ protected[transmitter] trait SignalTransmissionProvider {
     lazy val multiple =
       RescalaSignalMultipleTransmissionProvider(transmission.multiple)
 
-    lazy val asLocal: Signal[T] =  transmission.memo(asLocalId) {
+    lazy val asLocal: Signal[T] @cutOutInReactiveMacro =  transmission.memo(asLocalId) {
       Signals.fromFuture(transmission.retrieveRemoteValue).flatten
     }
   }

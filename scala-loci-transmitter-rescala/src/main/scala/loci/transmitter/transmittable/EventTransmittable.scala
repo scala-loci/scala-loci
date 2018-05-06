@@ -4,24 +4,24 @@ package transmittable
 
 import _root_.rescala.core.Struct
 import _root_.rescala.core.Pulse
-import _root_.rescala.core.Engine
+import _root_.rescala.core.Scheduler
 import _root_.rescala.reactives.Event
 import scala.language.higherKinds
 
 protected[transmitter] trait EventTransmittable {
   implicit def rescalaEventTransmittable
-      [Evt[T, ES <: Struct] <: Event[T, ES], T, S, U, ES <: Struct](implicit
-      engine: Engine[ES],
+      [Evt[T, St <: Struct] <: Event[T, St], T, S, U, St <: Struct](implicit
+      scheduler: Scheduler[St],
       transmittable: Transmittable[(T, String), S, (U, String)],
       serializable: Serializable[S]) = {
     type From = (T, String)
     type To = (U, String)
 
-    new PushBasedTransmittable[Evt[T, ES], From, S, To, engine.Event[U]] {
+    new PushBasedTransmittable[Evt[T, St], From, S, To, scheduler.Event[U]] {
       final val ignoredValue = null.asInstanceOf[T]
       final val ignoredString = null.asInstanceOf[String]
 
-      def send(value: Evt[T, ES], remote: RemoteRef, endpoint: Endpoint[From, To]) = {
+      def send(value: Evt[T, St], remote: RemoteRef, endpoint: Endpoint[From, To]) = {
         val observer =
           (value
             map { (_, ignoredString) }
@@ -34,14 +34,14 @@ protected[transmitter] trait EventTransmittable {
       }
 
       def receive(value: To, remote: RemoteRef, endpoint: Endpoint[From, To]) = {
-        val event = engine.Evt[U]
+        val event = scheduler.Evt[U]
 
         endpoint.receive notify {
           _ match {
             case (value, `ignoredString`) =>
               event fire value
             case (_, message) =>
-              engine.transaction(event) { implicit turn =>
+              scheduler.transaction(event) { implicit turn =>
                 event admitPulse Pulse.Exceptional(
                   new rescala.RemoteReactiveFailure(message))
               }

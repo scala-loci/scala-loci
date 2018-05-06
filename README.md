@@ -11,71 +11,116 @@ detection of bugs.
 
 ## Getting ScalaLoci
 
-1. Enable the [Macro Paradise Plugin](http://docs.scala-lang.org/overviews/macros/paradise.html) (for macro annotations) in your `build.sbt`:
+1. Enable the [Macro Paradise Plugin](http://docs.scala-lang.org/overviews/macros/paradise.html) (for macro annotations) in your `build.sbt`
 
    ```scala
-   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.patch)
+   addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
    ```
 
-2. Add the resolver for the ScalaLoci dependencies to your `build.sbt`:
+2. Add the resolver for the ScalaLoci dependencies to your `build.sbt`
 
    ```scala
    resolvers += Resolver.bintrayRepo("stg-tud", "maven")
    ```
 
-3. Add the ScalaLoci dependencies that you need for your system to your `build.sbt`:
+3. Add the ScalaLoci dependencies that you need for your system to your `build.sbt`
 
-   1. ScalaLoci core (always required):
+   1. ScalaLoci language (always required)
 
       ```scala
-      libraryDependencies += "de.tuda.stg" %% "scala-loci-core" % "0.1.0"
+      libraryDependencies += "de.tuda.stg" %% "scala-loci-lang" % "0.2.0"
       ```
 
-   2. Transmitter for the types of values to be accessed remotely:
+   2. Transmitter for the types of values to be accessed remotely
 
-      * Built-in Scala types and standard collections:
-
-        ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-transmitter-basic" % "0.1.0"
-        ```
-
-      * [REScala](http://www.rescala-lang.com/) reactive events and signals:
+      * Built-in Scala types and standard collections
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-transmitter-rescala" % "0.1.0"
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-lang-transmitter-basic" % "0.2.0"
         ```
 
-   3. Network protocols to connect the different components of the distributed system:
+      * [REScala](http://www.rescala-lang.com/) reactive events and signals
+
+        ```scala
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-lang-transmitter-rescala" % "0.2.0"
+        ```
+
+   3. Network communicators to connect the different components of the distributed system
 
       * TCP [*JVM only*]
   
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-network-tcp" % "0.1.0"
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-tcp" % "0.2.0"
         ```
 
-      * WebSocket (using [Akka HTTP](https://doc.akka.io/docs/akka-http/current/) on the JVM) [*server: JVM only, client: JVM and JS native browser APIs*]
+      * WebSocket (using [Akka HTTP](http://doc.akka.io/docs/akka-http/current/) on the JVM) [*server: JVM only, client: JVM and JS web browser APIs*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-network-ws-akka" % "0.1.0"
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-ws-akka" % "0.2.0"
         ```
 
-      * WebSocket ([Play](http://www.playframework.com) integration) [*server: JVM only, client: JVM and JS native browser APIs*]
+      * WebSocket ([Play](http://www.playframework.com) integration) [*server: JVM only, client: JVM and JS web browser APIs*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-network-ws-akka-play" % "0.1.0"
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-ws-akka-play" % "0.2.0"
         ```
 
-      * WebRTC [*JS native browser APIs only*]
+      * WebRTC [*JS web browser APIs only*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-network-webrtc" % "0.1.0"
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-webrtc" % "0.2.0"
         ```
 
-   4. Serializer for network communication:
+   4. Serializer for network communication
+
+      * [µPickle](http://www.lihaoyi.com/upickle/) serialization
+
+        ```scala
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-serializer-upickle" % "0.2.0"
+        ```
+
+      * [Circe](http://circe.github.io/circe/) serialization
+
+        ```scala
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-serializer-circe" % "0.2.0"
+        ```
+
+
+## Using ScalaLoci network communication as a library
+
+ScalaLoci’s underlying network communication library abstracting over different
+network protocols can be used directly without ScalaLoci’s language
+abstractions. The library provides pluggable *communicators* for different
+network protocols and *transmitters* implementing the remote transmission
+semantics for values of different types.
+
+1. Add the resolver for the ScalaLoci dependencies to your `build.sbt` (same as [above](#getting-scalaloci))
+
+2. Add the ScalaLoci dependencies that you need for your system to your `build.sbt`
+
+   1. ScalaLoci communication library (always required)
 
       ```scala
-      libraryDependencies += "de.tuda.stg" %% "scala-loci-serializable-upickle" % "0.1.0"
+      libraryDependencies += "de.tuda.stg" %% "scala-loci-communication" % "0.2.0"
       ```
+
+   2. Transmitter for the types of values to be accessed remotely
+
+      * Built-in Scala types and standard collections
+
+        ```scala
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-transmitter-basic" % "0.2.0"
+        ```
+
+      * [REScala](http://www.rescala-lang.com/) reactive events and signals
+
+        ```scala
+        libraryDependencies += "de.tuda.stg" %% "scala-loci-transmitter-rescala" % "0.2.0"
+        ```
+
+   3. Network communicators to connect the different components of the distributed system (same as [above](#getting-scalaloci))
+
+   4. Serializer for network communication (same as [above](#getting-scalaloci))
 
 
 ## Examples and Case Studies

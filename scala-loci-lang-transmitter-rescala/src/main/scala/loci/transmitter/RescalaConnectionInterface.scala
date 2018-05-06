@@ -5,7 +5,8 @@ import communicator.ProtocolCommon
 import communicator.Bidirectional
 import communicator.Connector
 import _root_.rescala.core.Struct
-import _root_.rescala.core.Engine
+import _root_.rescala.core.Scheduler
+import _root_.rescala.macros.cutOutInReactiveMacro
 
 protected[transmitter] trait RescalaConnectionInterface {
   private final val joinedId = 0
@@ -15,18 +16,18 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   protected class RescalaRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: RemoteConnection[P, _])
-      (implicit val engine: Engine[S]) {
-    import engine.{ Event, Evt }
+      (implicit val scheduler: Scheduler[S]) {
+    import scheduler.{ Event, Evt }
 
-    lazy val joined: Event[Remote[P]] = connection.memo(joinedId) {
+    lazy val joined: Event[Remote[P]] @cutOutInReactiveMacro = connection.memo(joinedId) {
       val event = Evt[Remote[P]]
-      connection.remoteJoined notify event.apply
+      connection.remoteJoined notify event.fire
       event
     }
 
-    lazy val left: Event[Remote[P]] = connection.memo(leftId) {
+    lazy val left: Event[Remote[P]] @cutOutInReactiveMacro = connection.memo(leftId) {
       val event = Evt[Remote[P]]
-      connection.remoteLeft notify event.apply
+      connection.remoteLeft notify event.fire
       event
     }
 
@@ -39,15 +40,15 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit class RescalaMultipleRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: MultipleRemoteConnection[P])
-      (implicit override val engine: Engine[S])
+      (implicit override val scheduler: Scheduler[S])
     extends RescalaRemoteConnectionInterface[P, S](connection)
     with RemoteConnectionInterface {
-    import engine.{ Signal, Var }
+    import scheduler.{ Signal, Var }
 
-    lazy val connected: Signal[Seq[Remote[P]]] =
+    lazy val connected: Signal[Seq[Remote[P]]] @cutOutInReactiveMacro =
       connection.memo(connectedId) {
         val signal = Var(connection.remotes)
-        update { signal() = connection.remotes }
+        update { signal set connection.remotes }
         signal
       }
 
@@ -57,22 +58,22 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit def RescalaMultipleRemoteConnectionInterfaceView
     [P <: Peer, S <: Struct]
-    (implicit engine: Engine[S]) =
+    (implicit scheduler: Scheduler[S]) =
     { connection: MultipleRemoteConnection[P] =>
         new RescalaMultipleRemoteConnectionInterface(connection) }
 
 
   implicit class RescalaOptionalRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: OptionalRemoteConnection[P])
-      (implicit override val engine: Engine[S])
+      (implicit override val scheduler: Scheduler[S])
     extends RescalaRemoteConnectionInterface[P, S](connection)
     with RemoteConnectionInterface {
-    import engine.{ Signal, Var }
+    import scheduler.{ Signal, Var }
 
-    lazy val connected: Signal[Option[Remote[P]]] =
+    lazy val connected: Signal[Option[Remote[P]]] @cutOutInReactiveMacro =
       connection.memo(connectedId) {
         val signal = Var(connection.remote)
-        update { signal() = connection.remote }
+        update { signal set connection.remote }
         signal
       }
 
@@ -82,14 +83,14 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit def RescalaOptionalRemoteConnectionInterfaceView
     [P <: Peer, S <: Struct]
-    (implicit engine: Engine[S]) =
+    (implicit scheduler: Scheduler[S]) =
     { connection: OptionalRemoteConnection[P] =>
         new RescalaOptionalRemoteConnectionInterface(connection) }
 
 
   implicit class RescalaSingleRemoteConnectionInterface[P <: Peer, S <: Struct]
       (connection: SingleRemoteConnection[P])
-      (implicit override val engine: Engine[S])
+      (implicit override val scheduler: Scheduler[S])
     extends RescalaRemoteConnectionInterface[P, S](connection)
     with RemoteConnectionInterface {
 
@@ -98,7 +99,7 @@ protected[transmitter] trait RescalaConnectionInterface {
 
   implicit def RescalaSingleRemoteConnectionInterfaceView
     [P <: Peer, S <: Struct]
-    (implicit engine: Engine[S]) =
+    (implicit scheduler: Scheduler[S]) =
     { connection: SingleRemoteConnection[P] =>
         new RescalaSingleRemoteConnectionInterface(connection) }
 }

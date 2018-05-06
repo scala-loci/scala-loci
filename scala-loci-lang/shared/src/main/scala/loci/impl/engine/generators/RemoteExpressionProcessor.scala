@@ -147,12 +147,12 @@ trait RemoteExpressionProcessor { this: Generation =>
           else
             definitions.UnitTpe
         val exprTypeTree =
-          internal setType (typer createTypeTree exprType, exprType)
+          internal setType (typer createTypeTree (exprType, tree.pos), exprType)
 
         val TypeRef(pre, sym, _) = types.sharedOn.typeSymbol.asType.toType
         val declType = internal typeRef (pre, sym, List(exprType, peerType))
         val declTypeTree =
-          internal setType (typer createTypeTree declType, declType)
+          internal setType (typer createTypeTree (declType, tree.pos), declType)
 
         if (!(peerSymbols contains peerType.typeSymbol))
           c.abort(tree.pos,

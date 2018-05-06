@@ -4,24 +4,24 @@ package transmittable
 
 import _root_.rescala.core.Struct
 import _root_.rescala.core.Pulse
-import _root_.rescala.core.Engine
+import _root_.rescala.core.Scheduler
 import _root_.rescala.reactives.Signal
 import scala.language.higherKinds
 
 protected[transmitter] trait SignalTransmittable {
   implicit def rescalaSignalTransmittable
-      [Sig[T, ES <: Struct] <: Signal[T, ES], T, S, U, ES <: Struct](implicit
-      engine: Engine[ES],
+      [Sig[T, St <: Struct] <: Signal[T, St], T, S, U, St <: Struct](implicit
+      scheduler: Scheduler[St],
       transmittable: Transmittable[(T, String, Boolean), S, (U, String, Boolean)],
       serializable: Serializable[S]) = {
     type From = (T, String, Boolean)
     type To = (U, String, Boolean)
 
-    new PushBasedTransmittable[Sig[T, ES], From, S, To, engine.Signal[U]] {
+    new PushBasedTransmittable[Sig[T, St], From, S, To, scheduler.Signal[U]] {
       final val ignoredValue = null.asInstanceOf[T]
       final val ignoredString = null.asInstanceOf[String]
 
-      def send(value: Sig[T, ES], remote: RemoteRef, endpoint: Endpoint[From, To]) = {
+      def send(value: Sig[T, St], remote: RemoteRef, endpoint: Endpoint[From, To]) = {
         val signal =
           (value
             map { (_, ignoredString, false) }
@@ -32,17 +32,17 @@ protected[transmitter] trait SignalTransmittable {
 
         endpoint.closed notify { _ => observer.remove }
 
-        signal.now
+        signal.readValueOnce
       }
 
       def receive(value: To, remote: RemoteRef, endpoint: Endpoint[From, To]) = {
-        val signal = engine.transaction() { _ => engine.Var.empty[U] }
+        val signal = scheduler.transaction() { _ => scheduler.Var.empty[U] }
 
-        def update(signal: engine.Var[U], value: To) = value match {
+        def update(signal: scheduler.Var[U], value: To) = value match {
           case (value, `ignoredString`, false) =>
             signal set value
           case (_, message, false) =>
-            engine.transaction(signal) { implicit turn =>
+            scheduler.transaction(signal) { implicit turn =>
               signal admitPulse Pulse.Exceptional(
                 new rescala.RemoteReactiveFailure(message))
             }

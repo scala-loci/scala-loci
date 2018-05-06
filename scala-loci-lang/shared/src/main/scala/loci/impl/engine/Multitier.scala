@@ -182,7 +182,8 @@ object multitier {
 
     val peerType = weakTypeOf[P]
     val peerTree = markLociSynthetic(
-      typer createTypeTree peerType, processor.c.enclosingPosition)
+      typer createTypeTree (peerType, processor.c.enclosingPosition),
+      processor.c.enclosingPosition)
 
     processor.c.Expr[Runtime](
       createRuntimeTree(processor)(peerType, peerTree, q"new $peerTree"))

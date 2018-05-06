@@ -330,7 +330,7 @@ trait Generation {
         internal setType (tree.original, tree.tpe)
 
       case _ if tree.tpe != null =>
-        (typer createTypeTree tree.tpe) match {
+        (typer createTypeTree (tree.tpe, tree.pos)) match {
           case _: TypeTree if abortOnFailure =>
             typeTreeGenerationFailed(tree.pos, tree.tpe)
           case createdTree =>
@@ -426,7 +426,7 @@ trait Generation {
       case tq"$expr.$_[..$_]" => expr
       case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
       case _ =>
-        (typer createTypeTree peerType) match {
+        (typer createTypeTree (peerType, baseTree.pos)) match {
           case tq"$expr.$_[..$_]" => expr
           case tq"$expr.$_[..$_] forSome { ..$_ }" => expr
         }
