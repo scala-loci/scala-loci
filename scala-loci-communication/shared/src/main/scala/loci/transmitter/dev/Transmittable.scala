@@ -5,138 +5,121 @@ package dev
 import scala.concurrent.Future
 
 
-sealed trait NoDelegates extends Transmittable.Delegating
-
-object NoDelegates extends NoDelegates
-
-
-final case class /[
-    D <: Transmittable.Delegating, T <: Transmittable[_, _, _]] private[dev] (
-    tail: D, head: T) extends Transmittable.Delegating {
+final class /[D <: Transmittable.Delegating, T <: Transmittable[_, _, _]] private[dev] (
+    val tail: D, val head: T) extends Transmittable.Delegating {
   type Type = D / T
 
-  val tailDelegates = Transmittables.Delegates(tail)
+  def tailDelegates = new Transmittables.Delegates(tail)
 
-  def /(transmittable: Transmittable[_, _, _]): D / T / transmittable.Type =
-    new / (this, transmittable.common)
+  def /[B, I, R](transmittable: Transmittable[B, I, R]): D / T / transmittable.Type =
+    new / (this, transmittable)
 }
 
 
-sealed trait Transmittables
+sealed trait Transmittables extends Any
 
 object Transmittables {
-  final case class Delegates[T <: Transmittable.Delegating] private[dev] (delegates: T)
-    extends Transmittables
+  final class Delegates[T <: Transmittable.Delegating] private[dev] (val delegates: T)
+    extends AnyVal with Transmittables
 
-  final case class Message[T <: Transmittable.Messaging] private[dev] (message: T)
-    extends Transmittables
+  final class Message[T <: Transmittable[_, _, _]] private[dev] (val message: T)
+    extends AnyVal with Transmittables
+
+  final class None private[dev] extends Transmittables
 }
 
-sealed trait Transmittable[B, I, R] extends
-    Transmittable.Base with
-    Transmittable.Delegating with
-    Transmittable.Messaging {
+sealed trait Transmittable[B, I, R] extends Transmittable.Delegating {
   type Base = B
   type Intermediate = I
   type Result = R
   type Proxy
   type Transmittables <: dev.Transmittables
-  type Type = Transmittable.Common[Base, Intermediate, Result, Proxy, Transmittables]
+  type Type = Transmittable.Aux[Base, Intermediate, Result, Proxy, Transmittables]
+
+  val transmittables: Transmittables
+
+  def send(value: Base)(
+    implicit context: SendingContext[Transmittables]): Intermediate
+
+  def receive(value: Intermediate)(
+    implicit context: ReceivingContext[Transmittables]): Result
 }
 
 object Transmittable {
-  def apply[T](implicit resolution: Common.Resolution[T, _, _, _, _])
-    : resolution.common.Type = resolution.common.common
-
-  def Result[T](implicit resolution: Common.Resolution[_, _, T, _, _])
-    : resolution.common.Type = resolution.common.common
-
-  def Argument[T](implicit resolution: Common.Resolution[T, _, T, _, _])
-    : resolution.common.Type = resolution.common.common
-
   sealed trait Delegating
 
-  sealed trait Messaging
-
-  sealed trait Base {
-    type Type
-    def common: Type
-  }
-
-  type Aux[B, I, R, P, T <: Transmittables] = Common[B, I, R, P, T]
-
-  sealed trait Common[B, I, R, P, T <: Transmittables] extends Transmittable[B, I, R] {
+  type Aux[B, I, R, P, T <: Transmittables] = Transmittable[B, I, R] {
     type Proxy = P
     type Transmittables = T
-
-    final def common: Type = this
-
-    val transmittables: Transmittables
-
-    def send(value: Base)(
-      implicit context: SendingContext[Transmittables]): Intermediate
-
-    def receive(value: Intermediate)(
-      implicit context: ReceivingContext[Transmittables]): Result
   }
 
 
-  final case class SingletonValue[B, I, R, V] private[dev] (value: V) extends AnyVal
+  def apply[T](implicit resolution: Aux.Resolution[T, _, _, _, _])
+    : resolution.transmittable.Type = resolution.transmittable
+
+  def Argument[T](implicit resolution: Aux.Resolution[T, _, T, _, _])
+    : resolution.transmittable.Type = resolution.transmittable
+
+
+  final class SingletonValue[B, I, R, V] private (val value: V) extends AnyVal
 
   object SingletonValue {
     implicit def singletonValue[B, I, R](implicit
       transmittable: Transmittable[B, I, R])
     : SingletonValue[B, I, R, transmittable.type] =
-      SingletonValue(transmittable)
+      new SingletonValue(transmittable)
   }
 
-  sealed trait CommonResolutionFallback {
+  sealed trait AuxResolutionFallback {
     implicit def resolutionFallback[B, I, R, P, T <: Transmittables, V](implicit
       singleton: SingletonValue[B, I, R, V],
-      parameters: V <:< Transmittable[B, I, R] { type Type = Common[B, I, R, P, T] })
-    : Common.Resolution[B, I, R, P, T] =
-      Common.Resolution(singleton.value.common)
+      parameters: V <:< Transmittable[B, I, R] {
+        type Proxy = P
+        type Transmittables = T
+        type Type = Aux[B, I, R, P, T]
+      })
+    : Aux.Resolution[B, I, R, P, T] =
+      new Aux.Resolution(singleton.value)
   }
 
-  object Common extends CommonResolutionFallback {
-    final case class Resolution[B, I, R, P, T <: Transmittables] private[dev] (
-      common: Common[B, I, R, P, T]) extends AnyVal
+  object Aux extends AuxResolutionFallback {
+    final class Resolution[B, I, R, P, T <: Transmittables] private[Transmittable] (
+      val transmittable: Aux[B, I, R, P, T]) extends AnyVal
 
     implicit def resolution[
         B, I, R, P, T <: Transmittables, V <: Transmittable[B, I, R] {
           type Proxy = P
           type Transmittables = T
-          type Type = Common[B, I, R, P, T]
+          type Type = Aux[B, I, R, P, T]
         }](implicit
       singleton: SingletonValue[B, I, R, V])
     : Resolution[B, I, R, singleton.value.Proxy, singleton.value.Transmittables] =
-      Resolution(singleton.value.common)
+      new Resolution(singleton.value)
   }
 
   object Delegating {
-    final case class Resolution[D <: Delegating] private[dev] (
-      transmittables: D) extends AnyVal
-
-    implicit def none[B, I, R, P, T <: Transmittables]
-    : Resolution[NoDelegates] =
-      Resolution(NoDelegates)
+    final class Resolution[D <: Delegating] private[Transmittable] (
+      val transmittables: D) extends AnyVal
 
     implicit def single[B, I, R, P, T <: Transmittables](implicit
-      resolution: Common.Resolution[B, I, R, P, T])
-    : Resolution[Common[B, I, R, P, T]] =
-      Resolution(resolution.common)
+      resolution: Aux.Resolution[B, I, R, P, T])
+    : Resolution[Aux[B, I, R, P, T]] =
+      new Resolution(resolution.transmittable)
 
     implicit def list[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
-      resolution: Common.Resolution[B, I, R, P, T],
+      resolution: Aux.Resolution[B, I, R, P, T],
       delegates: Resolution[D])
-    : Resolution[D / Common[B, I, R, P, T]] =
-      Resolution(/ (delegates.transmittables, resolution.common))
+    : Resolution[D / Aux[B, I, R, P, T]] =
+      new Resolution(new / (delegates.transmittables, resolution.transmittable))
   }
 }
 
 
-sealed trait DelegatingTransmittable[Base, Intermediate, Result, Delegates <: Transmittable.Delegating] extends
-    Transmittable.Common[Base, Intermediate, Result, Future[Result], Transmittables.Delegates[Delegates]]
+sealed trait DelegatingTransmittable[B, I, R] extends Transmittable[B, I, R] {
+  type Proxy = Future[R]
+  type Transmittables = Transmittables.Delegates[Delegates]
+  type Delegates <: Transmittable.Delegating
+}
 
 object DelegatingTransmittable {
   type Delegates[D <: Transmittable.Delegating] = Transmittables.Delegates[D]
@@ -163,8 +146,10 @@ object DelegatingTransmittable {
     val _send = send
     val _receive = receive
 
-    new DelegatingTransmittable[B, I, R, D] {
-      val transmittables = Transmittables.Delegates(delegates.transmittables)
+    new DelegatingTransmittable[B, I, R] {
+      type Delegates = D
+
+      val transmittables = new Transmittables.Delegates(delegates.transmittables)
 
       def send(value: Base)(
           implicit context: dev.SendingContext[Transmittables]) =
@@ -178,15 +163,15 @@ object DelegatingTransmittable {
 }
 
 
-sealed trait ConnectedTransmittable[Base, Intermediate, Result, Message <: Transmittable.Messaging] extends
-  Transmittable.Common[Base, Intermediate, Result, Future[Result], Transmittables.Message[Message]]
+sealed trait ConnectedTransmittable[B, I, R] extends Transmittable[B, I, R] {
+  type Proxy = Future[R]
+  type Transmittables = Transmittables.Message[Message]
+  type Message <: Transmittable[_, _, _]
+}
 
 object ConnectedTransmittable {
-  type Message[B, I, R, P, T <: Transmittables] =
-    Transmittables.Message[Transmittable.Aux[B, I, R, P, T]]
-
-  final class ConnectedContext[B, I, R, P, T <: Transmittables](
-      implicit context: Context[Message[B, I, R, P, T]]) {
+  final class ConnectedContext[B, I, R, P, T <: Transmittables](implicit
+      context: Context[Transmittables.Message[Transmittable.Aux[B, I, R, P, T]]]) {
     val endpoint: Endpoint[B, R] = context.endpoint
   }
 
@@ -194,12 +179,14 @@ object ConnectedTransmittable {
       send: (B, ConnectedContext[B0, I0, R0, P0, T0]) => B0,
       receive: (R0, ConnectedContext[B0, I0, R0, P0, T0]) => R)(
     implicit
-      message: Transmittable.Common.Resolution[B0, I0, R0, P0, T0]) = {
+      message: Transmittable.Aux.Resolution[B0, I0, R0, P0, T0]) = {
     val _send = send
     val _receive = receive
 
-    new ConnectedTransmittable[B, I0, R, Transmittable.Common[B0, I0, R0, P0, T0]] {
-      val transmittables = Transmittables.Message(message.common)
+    new ConnectedTransmittable[B, I0, R] {
+      type Message = Transmittable.Aux[B0, I0, R0, P0, T0]
+
+      val transmittables = new Transmittables.Message(message.transmittable)
 
       def send(value: Base)(
           implicit context: SendingContext[Transmittables]) =

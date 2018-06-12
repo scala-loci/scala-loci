@@ -2,95 +2,46 @@ package loci
 package transmitter
 package dev
 
-import Transmittable.{ Delegating, Messaging }
-import Transmittables.{ Delegates, Message }
+import Transmittable.Delegating
+import Transmittables.{ Delegates, Message, None }
 
-sealed trait Contexts[T <: Transmittables] {
-  def head[TH <: Transmittables]
-    (implicit head: ContextsHead[T, TH]) = head(this)
+sealed trait Contexts[S <: Transmittables] {
+  import Contexts._
 
-  def tail[TT <: Transmittables]
-    (implicit tail: ContextsTail[T, TT]) = tail(this)
+  def message[B, I, R, P, T <: Transmittables](implicit
+    ev: Contexts[S] <:< Contexts[Message[Transmittable.Aux[B, I, R, P, T]]])
+  : ContextBuilder.Context[T] =
+    ev(this) match { case message: SingleMessage[B, I, R, P, T] => message.context }
+
+  def delegate[B, I, R, P, T <: Transmittables](implicit
+    ev: Contexts[S] <:< Contexts[Delegates[Transmittable.Aux[B, I, R, P, T]]])
+  : ContextBuilder.Context[T] =
+    ev(this) match { case delegating: SingleDelegate[B, I, R, P, T] => delegating.context }
+
+  def delegatesHead[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
+    ev: Contexts[S] <:< Contexts[Delegates[D / Transmittable.Aux[B, I, R, P, T]]])
+  : ContextBuilder.Context[T] =
+    ev(this) match { case list: List[B, I, R, P, T, D] => list.contextHead }
+
+  def delegatesTail[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
+    ev: Contexts[S] <:< Contexts[Delegates[D / Transmittable.Aux[B, I, R, P, T]]])
+  : Contexts[Delegates[D]] =
+    ev(this) match { case list: List[B, I, R, P, T, D] => list.contextTail }
 }
 
 object Contexts {
-  object Empty extends Contexts[Delegates[NoDelegates]]
+  object None extends Contexts[None]
 
-  final case class SingleDelegating[
-      B, I, R, P, T <: Transmittables] private[dev] (
-      context: ContextBuilder.Context[T])
-    extends Contexts[Delegates[Transmittable.Aux[B, I, R, P, T]]]
-
-  final case class SingleMessage[
-      B, I, R, P, T <: Transmittables] private[dev] (
-      context: ContextBuilder.Context[T])
+  final class SingleMessage[B, I, R, P, T <: Transmittables] private[dev] (
+      val context: ContextBuilder.Context[T])
     extends Contexts[Message[Transmittable.Aux[B, I, R, P, T]]]
 
-  final case class List[
-      B, I, R, P, T <: Transmittables, TT <: Delegating] private[dev] (
-      contextHead: ContextBuilder.Context[T],
-      contextTail: Contexts[Delegates[TT]])
-    extends Contexts[Delegates[TT / Transmittable.Aux[B, I, R, P, T]]]
-}
+  final class SingleDelegate[B, I, R, P, T <: Transmittables] private[dev] (
+      val context: ContextBuilder.Context[T])
+    extends Contexts[Delegates[Transmittable.Aux[B, I, R, P, T]]]
 
-
-sealed trait ContextsHead[T <: Transmittables, TH <: Transmittables] {
-  def apply(contexts: Contexts[T]): ContextBuilder.Context[TH]
-}
-
-object ContextsHead {
-  implicit def singleDelegating[
-    B, I, R, P, T <: Transmittables, T0 <: Delegating](implicit
-    ev: Contexts[Delegates[T0]] <:<
-        Contexts[Delegates[Transmittable.Aux[B, I, R, P, T]]])
-  : ContextsHead[Delegates[T0], T] =
-    new ContextsHead[Delegates[T0], T] {
-      def apply(contexts: Contexts[Delegates[T0]]) = {
-        val Contexts.SingleDelegating(context) = ev(contexts)
-        context
-      }
-    }
-
-  implicit def singleMessage[
-    B, I, R, P, T <: Transmittables, T0 <: Messaging](implicit
-    ev: Contexts[Message[T0]] <:<
-        Contexts[Message[Transmittable.Aux[B, I, R, P, T]]])
-  : ContextsHead[Message[T0], T] =
-    new ContextsHead[Message[T0], T] {
-      def apply(contexts: Contexts[Message[T0]]) = {
-        val Contexts.SingleMessage(context) = ev(contexts)
-        context
-      }
-    }
-
-  implicit def list[
-    B, I, R, P, T <: Transmittables, T0 <: Delegating, TT <: Delegating](implicit
-    ev: Contexts[Delegates[T0]] <:<
-        Contexts[Delegates[TT / Transmittable.Aux[B, I, R, P, T]]])
-  : ContextsHead[Delegates[T0], T] =
-    new ContextsHead[Delegates[T0], T] {
-      def apply(contexts: Contexts[Delegates[T0]]) = {
-        val Contexts.List(contextHead, _) = ev(contexts)
-        contextHead
-      }
-    }
-}
-
-
-sealed trait ContextsTail[T <: Transmittables, TT <: Transmittables] {
-  def apply(contexts: Contexts[T]): Contexts[TT]
-}
-
-object ContextsTail {
-  implicit def list[
-    B, I, R, P, T <: Transmittables, T0 <: Delegating, TT <: Delegating](implicit
-    ev: Contexts[Delegates[T0]] <:<
-        Contexts[Delegates[TT / Transmittable.Aux[B, I, R, P, T]]])
-  : ContextsTail[Delegates[T0], Delegates[TT]] =
-    new ContextsTail[Delegates[T0], Delegates[TT]] {
-      def apply(contexts: Contexts[Delegates[T0]]) = {
-        val Contexts.List(_, contextTail) = ev(contexts)
-        contextTail
-      }
-    }
+  final class List[B, I, R, P, T <: Transmittables, D <: Delegating] private[dev] (
+      val contextHead: ContextBuilder.Context[T],
+      val contextTail: Contexts[Delegates[D]])
+    extends Contexts[Delegates[D / Transmittable.Aux[B, I, R, P, T]]]
 }
