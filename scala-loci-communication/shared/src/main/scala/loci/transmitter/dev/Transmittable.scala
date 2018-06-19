@@ -3,6 +3,8 @@ package transmitter
 package dev
 
 import scala.annotation.implicitNotFound
+import scala.annotation.unchecked.uncheckedVariance
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 
@@ -46,6 +48,9 @@ sealed trait Transmittable[B, I, R] extends Transmittable.Delegating {
 
   def buildResult(value: Intermediate)(
     implicit context: Context.Receiving[Transmittables]): Result
+
+  def buildProxy(value: Future[Intermediate])(
+    implicit context: Context.Receiving[Transmittables]): Proxy
 }
 
 object Transmittable {
@@ -118,6 +123,60 @@ object Transmittable {
 }
 
 
+sealed trait IdenticallyTransmittable[B] extends Transmittable[B, B, B] {
+  type Proxy = Future[B]
+  type Transmittables = Transmittables.None
+}
+
+object IdenticallyTransmittable {
+  @inline def apply[B](): IdenticallyTransmittable[B] = implementation: Impl[B]
+
+  sealed trait Impl[-B] extends IdenticallyTransmittable[B @uncheckedVariance]
+
+  val implementation = new Impl[Any] {
+    val transmittables = new Transmittables.None
+
+    def buildIntermediate(value: Base)(
+      implicit context: Context.Providing[Transmittables]) = value
+
+    def buildResult(value: Intermediate)(
+      implicit context: Context.Receiving[Transmittables]) = value
+
+    def buildProxy(value: Future[Intermediate])(
+      implicit context: Context.Receiving[Transmittables]) = value
+  }
+}
+
+
+sealed trait TransformingTransmittable[B, I, R] extends Transmittable[B, I, R] {
+  type Proxy = Future[R]
+  type Transmittables = Transmittables.None
+}
+
+object TransformingTransmittable {
+  final class Context private[dev] (val remote: RemoteRef)
+
+  def apply[B, I, R](
+      provide: (B, Context) => I,
+      receive: (I, Context) => R) =
+    new TransformingTransmittable[B, I, R] {
+      val transmittables = new Transmittables.None
+
+      def buildIntermediate(value: Base)(
+          implicit context: Context.Providing[Transmittables]) =
+        provide(value, new Context(context.remote))
+
+      def buildResult(value: Intermediate)(
+          implicit context: Context.Receiving[Transmittables]) =
+        receive(value, new Context(context.remote))
+
+      def buildProxy(value: Future[Intermediate])(
+          implicit context: Context.Receiving[Transmittables]) =
+        value map buildResult
+    }
+}
+
+
 sealed trait DelegatingTransmittable[B, I, R] extends Transmittable[B, I, R] {
   type Proxy = Future[R]
   type Transmittables = Transmittables.Delegates[Delegates]
@@ -160,6 +219,10 @@ object DelegatingTransmittable {
       def buildResult(value: Intermediate)(
           implicit context: Context.Receiving[Transmittables]) =
         receive(value, new ReceivingContext)
+
+      def buildProxy(value: Future[Intermediate])(
+          implicit context: Context.Receiving[Transmittables]) =
+        value map buildResult
     }
 }
 
@@ -194,5 +257,49 @@ object ConnectedTransmittable {
       def buildResult(value: Intermediate)(
           implicit context: Context.Receiving[Transmittables]) =
         receive(context receive value, new Context)
+
+      def buildProxy(value: Future[Intermediate])(
+          implicit context: Context.Receiving[Transmittables]) =
+        value map buildResult
     }
+
+
+  sealed trait Proxy[B, I, R] extends Transmittable[B, I, R] {
+    type Transmittables = Transmittables.Message[Message]
+    type Message <: Transmittable[_, _, _]
+    type Internal
+  }
+
+  object Proxy {
+    def apply[B, R, P, N, B0, I0, R0, P0, T0 <: Transmittables](
+        provide: (B, Context[B0, I0, R0, P0, T0]) => B0,
+        receive: (R0, Context[B0, I0, R0, P0, T0]) => N,
+        direct: (N, Context[B0, I0, R0, P0, T0]) => R,
+        proxy: (Future[N], Context[B0, I0, R0, P0, T0]) => P)(
+      implicit
+        message: Transmittable.Aux.Resolution[B0, I0, R0, P0, T0]) =
+      new Proxy[B, I0, R] {
+        type Message = Transmittable.Aux[B0, I0, R0, P0, T0]
+        type Internal = N
+        type Proxy = P
+
+        val transmittables = new Transmittables.Message(message.transmittable)
+
+        def buildIntermediate(value: Base)(
+            implicit context: Context.Providing[Transmittables]) =
+          context provide provide(value, new Context)
+
+        def buildResult(value: Intermediate)(
+            implicit context: Context.Receiving[Transmittables]) = {
+          val ctx = new Context
+          direct(receive(context receive value, ctx), ctx)
+        }
+
+        def buildProxy(value: Future[Intermediate])(
+            implicit context: Context.Receiving[Transmittables]) = {
+          val ctx = new Context
+          proxy(value map { value => receive(context receive value, ctx) },  ctx)
+        }
+      }
+  }
 }
