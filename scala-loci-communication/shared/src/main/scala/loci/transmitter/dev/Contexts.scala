@@ -10,22 +10,22 @@ sealed trait Contexts[S <: Transmittables] {
 
   val index: Long
 
-  def message[B, I, R, P, T <: Transmittables](implicit
+  @inline final def message[B, I, R, P, T <: Transmittables](implicit
     ev: Contexts[S] <:< Contexts[Message[Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuilder.Context[T] =
     ev(this) match { case message: SingleMessage[B, I, R, P, T] => message.context }
 
-  def delegate[B, I, R, P, T <: Transmittables](implicit
+  @inline final def delegate[B, I, R, P, T <: Transmittables](implicit
     ev: Contexts[S] <:< Contexts[Delegates[Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuilder.Context[T] =
     ev(this) match { case delegating: SingleDelegate[B, I, R, P, T] => delegating.context }
 
-  def delegatesHead[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
+  @inline final def delegatesHead[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
     ev: Contexts[S] <:< Contexts[Delegates[D / Transmittable.Aux[B, I, R, P, T]]])
   : ContextBuilder.Context[T] =
     ev(this) match { case list: List[B, I, R, P, T, D] => list.contextHead }
 
-  def delegatesTail[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
+  @inline final def delegatesTail[B, I, R, P, T <: Transmittables, D <: Delegating](implicit
     ev: Contexts[S] <:< Contexts[Delegates[D / Transmittable.Aux[B, I, R, P, T]]])
   : Contexts[Delegates[D]] =
     ev(this) match { case list: List[B, I, R, P, T, D] => list.contextTail }

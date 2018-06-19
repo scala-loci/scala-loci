@@ -19,21 +19,22 @@ object ContextBuilder {
   val receiving = new Direction
 
   sealed abstract class Context[S <: Transmittables](
+      val remote: RemoteRef,
       val transmittables: S,
       val index: Long,
       val contexts: Contexts[S])
-    extends SendingContext[S] with ReceivingContext[S] {
+    extends Context.Providing[S] with Context.Receiving[S] {
 
-    def send[B, I, R, P, T <: Transmittables](
+    def provide[B, I, R, P, T <: Transmittables](
         value: B)(implicit selector: Selector[B, I, R, P, T, S]) = {
       implicit val context = selector context contexts
-      (selector transmittable transmittables) send value
+      (selector transmittable transmittables) buildIntermediate value
     }
 
     def receive[B, I, R, P, T <: Transmittables](
         value: I)(implicit selector: Selector[B, I, R, P, T, S]) = {
       implicit val context = selector context contexts
-      (selector transmittable transmittables) receive value
+      (selector transmittable transmittables) buildResult value
     }
   }
 
@@ -55,10 +56,9 @@ object ContextBuilder {
           direction)
 
         new Context[M](
-            transmittables,
-            index + 1l,
+            abstraction.remote, transmittables, index + 1l,
             new Contexts.SingleMessage(context, index)) with
-          Context.MessageEndpoint[B, I, R, P, T] {
+          Context.Endpoint.MessageImpl[B, I, R, P, T] {
 
           val sendingTurn = new AtomicLong(1)
           val receivingTurn = new AtomicLong(1)
@@ -70,7 +70,7 @@ object ContextBuilder {
               transmittable.transmittables,
               messagingAbstraction derive directedTurn,
               direction)
-            serializer serialize (transmittable send value)
+            serializer serialize (transmittable buildIntermediate value)
           }
 
           def deserialize(value: MessageBuffer) = {
@@ -80,7 +80,7 @@ object ContextBuilder {
               transmittable.transmittables,
               messagingAbstraction derive directedTurn,
               direction)
-            (serializer deserialize value) map transmittable.receive
+            (serializer deserialize value) map transmittable.buildResult
           }
 
           val endpoint = new Endpoint[B, R] {
@@ -103,8 +103,9 @@ object ContextBuilder {
           transmittables: Delegates[D], abstraction: AbstractionRef,
           direction: Direction, index: Long) = {
         val context = contextBuilders(transmittables, abstraction, direction, index)
-        new Context[Delegates[D]](transmittables, context.index, context) with
-          Context.DelegatesNoEndpoint[D]
+        new Context[Delegates[D]](
+            abstraction.remote, transmittables, context.index, context) with
+          Context.Endpoint.DelegatesImpl[D]
       }
     }
 
@@ -113,7 +114,8 @@ object ContextBuilder {
       def apply(
           transmittables: None, abstraction: AbstractionRef,
           direction: Direction, index: Long) =
-        new Context[None](transmittables, index, Contexts.None) with
-          Context.NoneNoEndpoint
+        new Context[None](
+            abstraction.remote, transmittables, index, Contexts.None) with
+          Context.Endpoint.NoneImpl
     }
 }
