@@ -3,12 +3,15 @@ package impl
 
 import transmitter._
 import scala.util.Try
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 import Marshallable.Int
 
 object Marshallable {
-  implicit object Int extends MarshallableArgument[Int] {
+  implicit object Int extends Marshallable[Int, Int, Future[Int]] {
     def marshal(value: Int, abstraction: AbstractionRef) = MessageBuffer fromString value.toString
     def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) = Try { (value toString (0, value.length)).toInt }
+    def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef) = value map { value => (value toString (0, value.length)).toInt }
     def isPushBased = false
   }
 }

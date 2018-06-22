@@ -1,6 +1,5 @@
 package loci
 package transmitter
-package dev
 
 import Transmittable.Delegating
 import Transmittables.{ Delegates, Message, None }
@@ -84,11 +83,15 @@ object ContextBuilder {
           }
 
           val endpoint = new Endpoint[B, R] {
-            val receive = messagingAbstraction.channel.receive collect
-              (Function unlift { deserialize(_).toOption })
+            val closed = messagingAbstraction.channel.closed
+
+            def close() = messagingAbstraction.channel.close()
 
             def send(value: B) =
               messagingAbstraction.channel send serialize(value)
+
+            val receive = messagingAbstraction.channel.receive collect
+              (Function unlift { deserialize(_).toOption })
           }
         }
       }

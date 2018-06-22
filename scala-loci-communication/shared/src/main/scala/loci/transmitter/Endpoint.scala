@@ -2,9 +2,8 @@ package loci
 package transmitter
 
 trait Endpoint[T, U] {
-  val abstraction: AbstractionRef
-  val closed: Notification[Unit] = abstraction.channel.closed
-  def close(): Unit = abstraction.channel.close
+  val closed: Notification[Unit]
+  def close(): Unit
   def send(value: T): Unit
   val receive: Notification[U]
 }

@@ -3,65 +3,59 @@ package transmitter
 
 import scala.util.Try
 import scala.annotation.implicitNotFound
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
-@implicitNotFound("${T} is not marshallable")
-trait Marshallable[T] {
-  type Result
+@implicitNotFound("${B} is not marshallable")
+trait Marshallable[B, R, P] {
+  def marshal(value: B, abstraction: AbstractionRef): MessageBuffer
+  def unmarshal(value: MessageBuffer, abstraction: AbstractionRef): Try[R]
+  def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef): P
 
-  protected final implicit class MarshallableOps[OpsT, OpsS, OpsR](
-      marshallable: (Transmittable[OpsT, OpsS, OpsR], Serializable[OpsS]))
-    extends transmittableMarshalling.MarshallableOps(marshallable)
+  type Type = Marshallable[B, R, P]
 
-  def marshal(unmarshalled: T, abstraction: AbstractionRef): MessageBuffer
-  def unmarshal(marshalled: MessageBuffer, abstraction: AbstractionRef): Try[Result]
+  @inline final def self: Type = this
 
   def isPushBased: Boolean
 }
 
-@implicitNotFound("${T} is not marshallable")
-trait MarshallableArgument[T] extends Marshallable[T] {
-  type Result = T
-}
-
-
 object Marshallable {
-  implicit def marshallable[T, S, R]
-    (implicit
-        transmittable: Transmittable[T, S, R],
-        serializable: Serializable[S]): Marshallable[T] { type Result = R } =
-    new Marshallable[T] {
-      type Result = R
-      def marshal(unmarshalled: T, abstraction: AbstractionRef): MessageBuffer =
-        (transmittable, serializable) marshal (unmarshalled, abstraction)
-      def unmarshal(marshalled: MessageBuffer, abstraction: AbstractionRef): Try[Result] =
-        (transmittable, serializable) unmarshal (marshalled, abstraction)
-      def isPushBased = transmittable match {
-        case _: PushBasedTransmittable[_, _, _, _, _] => true
-        case _: PullBasedTransmittable[_, _, _] => false
+  @inline def apply[T](implicit marshallable: Marshallable[T, _, _])
+  : marshallable.Type = marshallable.self
+
+  @inline def Argument[T](implicit marshallable: Marshallable[T, T, _])
+  : marshallable.Type = marshallable.self
+
+  implicit def marshallable[B, I, R, P, T <: Transmittables](implicit
+      resolution: Transmittable.Aux.Resolution[B, I, R, P, T],
+      serializer: Serializable[I],
+      contextBuilder: ContextBuilder[T]): Marshallable[B, R, P] =
+    new Marshallable[B, R, P] {
+      val transmittable = resolution.transmittable
+
+      def isPushBased = (transmittable: Transmittable[B, I, R]) match {
+        case _: ConnectedTransmittable[_, _, _] => true
+        case _: ConnectedTransmittable.Proxy[_, _, _] => true
+        case _ => false
+      }
+
+      def marshal(value: B, abstraction: AbstractionRef) = {
+        implicit val context = contextBuilder(
+          transmittable.transmittables, abstraction, ContextBuilder.sending)
+        serializer serialize (transmittable buildIntermediate value)
+      }
+
+      def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) = {
+        implicit val context = contextBuilder(
+          transmittable.transmittables, abstraction, ContextBuilder.receiving)
+        serializer deserialize value map transmittable.buildResult
+      }
+
+      def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef) = {
+        implicit val context = contextBuilder(
+          transmittable.transmittables, abstraction, ContextBuilder.receiving)
+        transmittable buildProxy (
+          value transform (v => (serializer deserialize v).get, identity))
       }
     }
-
-  @inline def apply[T](implicit marshallable: Marshallable[T])
-    : Marshallable[T] { type Result = marshallable.Result } = marshallable
-}
-
-object MarshallableArgument {
-  implicit def marshallable[T, S, R]
-    (implicit
-        transmittable: Transmittable[T, S, R],
-        supertype: R <:< T,
-        serializable: Serializable[S]): MarshallableArgument[T] =
-    new MarshallableArgument[T] {
-      def marshal(unmarshalled: T, abstraction: AbstractionRef): MessageBuffer =
-        (transmittable, serializable) marshal (unmarshalled, abstraction)
-      def unmarshal(marshalled: MessageBuffer, abstraction: AbstractionRef): Try[T] =
-        (transmittable, serializable) unmarshal (marshalled, abstraction) map supertype
-      def isPushBased = transmittable match {
-        case _: PushBasedTransmittable[_, _, _, _, _] => true
-        case _: PullBasedTransmittable[_, _, _] => false
-      }
-    }
-
-  @inline def apply[T](implicit marshallable: MarshallableArgument[T])
-    : MarshallableArgument[T] = marshallable
 }

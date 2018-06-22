@@ -34,20 +34,20 @@ trait BindingBuilder[T] {
 }
 
 trait ValueBindingBuilder {
-  protected def createCall[T](handler: Binding.Handler, message: MessageBuffer,
-      marshallable: Marshallable[T], abstraction: AbstractionRef) = {
-    val promise = Promise[marshallable.Result]
+  protected def createCall[T, S, _](handler: Binding.Handler, message: MessageBuffer,
+      marshallable: Marshallable[T, S, _], abstraction: AbstractionRef) = {
+    val promise = Promise[S]
     handler(message) { message =>
       promise complete (marshallable unmarshal (message, abstraction))
     }
     promise.future
   }
 
-  implicit def value[T](implicit res: Marshallable[T]) =
+  implicit def value[T, S](implicit res: Marshallable[T, S, _]) =
     new BindingBuilder.Value[T] {
-      type RemoteCall = Future[res.Result]
+      type RemoteCall = Future[S]
       def apply(bindingName: String) = new Binding[T] {
-        type RemoteCall = Future[res.Result]
+        type RemoteCall = Future[S]
         val name = bindingName
         def dispatch(
             function: RemoteRef => T, message: MessageBuffer, abstraction: AbstractionRef) =

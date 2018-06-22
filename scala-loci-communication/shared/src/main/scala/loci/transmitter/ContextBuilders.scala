@@ -1,6 +1,5 @@
 package loci
 package transmitter
-package dev
 
 import Transmittable.Delegating
 import Transmittables.{ Delegates, Message }
@@ -43,7 +42,7 @@ sealed trait ContextBuilders[S <: Transmittables] {
 }
 
 object ContextBuilders {
-  final class SingleMessage[B, I, R, P, T <: Transmittables] private[dev] (
+  final class SingleMessage[B, I, R, P, T <: Transmittables](
       val contextBuilder: ContextBuilder[T])
     extends ContextBuilders[Message[Transmittable.Aux[B, I, R, P, T]]] {
 
@@ -58,7 +57,7 @@ object ContextBuilders {
     }
   }
 
-  final class SingleDelegate[B, I, R, P, T <: Transmittables] private[dev] (
+  final class SingleDelegate[B, I, R, P, T <: Transmittables](
       val contextBuilder: ContextBuilder[T])
     extends ContextBuilders[Delegates[Transmittable.Aux[B, I, R, P, T]]] {
 
@@ -73,7 +72,7 @@ object ContextBuilders {
     }
   }
 
-  final class List[B, I, R, P, T <: Transmittables, D <: Delegating] private[dev] (
+  final class List[B, I, R, P, T <: Transmittables, D <: Delegating](
       val contextBuilderHead: ContextBuilder[T],
       val contextBuilderTail: ContextBuilders[Delegates[D]])
     extends ContextBuilders[Delegates[D / Transmittable.Aux[B, I, R, P, T]]] {

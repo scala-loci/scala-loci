@@ -6,147 +6,159 @@ import scala.collection.TraversableLike
 import scala.reflect.ClassTag
 import scala.language.higherKinds
 
-trait TransmittableNonNullableCollections extends TransmittableIdentity {
-  implicit def nonNullableTraversable[T, S, R, V[T] <: TraversableLike[T, V[T]]]
+trait TransmittableNonNullableCollections {
+  this: Transmittable.type =>
+
+  final implicit def nonNullableTraversable[B, I, R, V[T] <: TraversableLike[T, V[T]]]
     (implicit
-        transmittable: Transmittable[T, S, R],
-        cbfS: CanBuildFrom[V[T], S, V[S]],
-        cbfR: CanBuildFrom[V[S], R, V[R]])
-    : Transmittable[V[T], V[S], V[R]] =
-    new PullBasedTransmittable[V[T], V[S], V[R]] {
-      def send(value: V[T], remote: RemoteRef) =
-        value map { transmittable send _ }
-      def receive(value: V[S], remote: RemoteRef) =
-        value map { transmittable receive _ }
-    }
+        transmittable: Transmittable[B, I, R],
+        cbfI: CanBuildFrom[V[B], I, V[I]],
+        cbfR: CanBuildFrom[V[I], R, V[R]])
+  : DelegatingTransmittable[V[B], V[I], V[R]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) => value map { context delegate _ },
+      receive = (value, context) => value map { context delegate _ })
 }
 
-trait TransmittableGeneralCollections
-    extends TransmittableNonNullableCollections {
-  implicit def traversable[T, S, R, V[T] >: Null <: TraversableLike[T, V[T]]]
-    (implicit
-        transmittable: Transmittable[T, S, R],
-        cbfS: CanBuildFrom[V[T], S, V[S]],
-        cbfR: CanBuildFrom[V[S], R, V[R]])
-    : Transmittable[V[T], V[S], V[R]] =
-    new PullBasedTransmittable[V[T], V[S], V[R]] {
-      def send(value: V[T], remote: RemoteRef) =
-        if (value == null) null else value map { transmittable send _ }
-      def receive(value: V[S], remote: RemoteRef) =
-        if (value == null) null else value map { transmittable receive _ }
-    }
+trait TransmittableGeneralCollections extends TransmittableNonNullableCollections {
+  this: Transmittable.type =>
 
-  implicit def array[T: ClassTag, S: ClassTag, R: ClassTag]
-    (implicit transmittable: Transmittable[T, S, R])
-    : Transmittable[Array[T], Array[S], Array[R]] =
-    new PullBasedTransmittable[Array[T], Array[S], Array[R]] {
-      def send(value: Array[T], remote: RemoteRef) =
-        if (value == null) null else value map { transmittable send _ }
-      def receive(value: Array[S], remote: RemoteRef) =
-        if (value == null) null else value map { transmittable receive _ }
-    }
-
-  implicit def map[KT, KS, KR, VT, VS, VR]
+  final implicit def traversable[B, I, R, V[T] >: Null <: TraversableLike[T, V[T]]]
     (implicit
-        transmittableKey: Transmittable[KT, KS, KR],
-        transmittableValue: Transmittable[VT, VS, VR])
-    : Transmittable[Map[KT, VT], Map[KS, VS], Map[KR, VR]] =
-    new PullBasedTransmittable[Map[KT, VT], Map[KS, VS], Map[KR, VR]] {
-      def send(value: Map[KT, VT], remote: RemoteRef) =
+        transmittable: Transmittable[B, I, R],
+        cbfI: CanBuildFrom[V[B], I, V[I]],
+        cbfR: CanBuildFrom[V[I], R, V[R]])
+  : DelegatingTransmittable[V[B], V[I], V[R]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
+        if (value == null) null else value map { context delegate _ },
+      receive = (value, context) =>
+        if (value == null) null else value map { context delegate _ })
+
+  final implicit def array[B: ClassTag, I: ClassTag, R: ClassTag]
+    (implicit transmittable: Transmittable[B, I, R])
+  : DelegatingTransmittable[Array[B], Array[I], Array[R]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
+        if (value == null) null else value map { context delegate _ },
+      receive = (value, context) =>
+        if (value == null) null else value map { context delegate _ })
+
+  final implicit def map[KB, KI, KR, VB, VI, VR]
+    (implicit
+        transmittableKey: Transmittable[KB, KI, KR],
+        transmittableValue: Transmittable[VB, VI, VR])
+  : DelegatingTransmittable[Map[KB, VB], Map[KI, VI], Map[KR, VR]] {
+      type Delegates = transmittableKey.Type / transmittableValue.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
         if (value == null) null else value map { case (key, value) =>
-          (transmittableKey send key, transmittableValue send value) }
-      def receive(value: Map[KS, VS], remote: RemoteRef) =
+          (context delegate key, context delegate value) },
+      receive = (value, context) =>
         if (value == null) null else value map { case (key, value) =>
-          (transmittableKey receive key, transmittableValue receive value) }
-    }
+          (context delegate key, context delegate value) })
 
-  implicit def option[T, S, R]
-    (implicit transmittable: Transmittable[T, S, R])
-    : Transmittable[Option[T], Option[S], Option[R]] =
-    new PullBasedTransmittable[Option[T], Option[S], Option[R]] {
-      def send(value: Option[T], remote: RemoteRef) =
-        if (value == null) null else value map { transmittable send _ }
-      def receive(value: Option[S], remote: RemoteRef) =
-        if (value == null) null else value map { transmittable receive _ }
-    }
+  final implicit def option[B, I, R]
+    (implicit transmittable: Transmittable[B, I, R])
+  : DelegatingTransmittable[Option[B], Option[I], Option[R]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
+        if (value == null) null else value map { context delegate _ },
+      receive = (value, context) =>
+        if (value == null) null else value map { context delegate _ })
 
-  implicit def some[T, S, R]
-    (implicit transmittable: Transmittable[T, S, R])
-    : Transmittable[Some[T], Some[S], Some[R]] =
-    new PullBasedTransmittable[Some[T], Some[S], Some[R]] {
-      def send(value: Some[T], remote: RemoteRef) =
-        if (value == null) null else Some(transmittable send value.get)
-      def receive(value: Some[S], remote: RemoteRef) =
-        if (value == null) null else Some(transmittable receive value.get)
-    }
+  final implicit def some[B, I, R]
+    (implicit transmittable: Transmittable[B, I, R])
+  : DelegatingTransmittable[Some[B], Some[I], Some[R]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
+        if (value == null) null else Some(context delegate value.get),
+      receive = (value, context) =>
+        if (value == null) null else Some(context delegate value.get))
 
-  implicit def either[LT, LS, LR, RT, RS, RR]
+  final implicit def either[LB, LI, LR, RB, RI, RR]
     (implicit
-        transmittableLeft: Transmittable[LT, LS, LR],
-        transmittableRight: Transmittable[RT, RS, RR])
-    : Transmittable[Either[LT, RT], Either[LS, RS], Either[LR, RR]] =
-    new PullBasedTransmittable[Either[LT, RT], Either[LS, RS], Either[LR, RR]] {
-      def send(value: Either[LT, RT], remote: RemoteRef) = value match {
+        transmittableLeft: Transmittable[LB, LI, LR],
+        transmittableRight: Transmittable[RB, RI, RR])
+  : DelegatingTransmittable[Either[LB, RB], Either[LI, RI], Either[LR, RR]] {
+      type Delegates = transmittableLeft.Type / transmittableRight.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) => value match {
         case null => null
-        case Left(value) => Left(transmittableLeft send value)
-        case Right(value) => Right(transmittableRight send value)
-      }
-      def receive(value: Either[LS, RS], remote: RemoteRef) = value match {
+        case Left(value) => Left(context delegate value)
+        case Right(value) => Right(context delegate value)
+      },
+      receive = (value, context) => value match {
         case null => null
-        case Left(value) => Left(transmittableLeft receive value)
-        case Right(value) => Right(transmittableRight receive value)
-      }
-    }
+        case Left(value) => Left(context delegate value)
+        case Right(value) => Right(context delegate value)
+      })
 
-  implicit def left[LT, LS, LR, RT, RS, RR]
-    (implicit transmittable: Transmittable[LT, LS, LR])
-    : Transmittable[Left[LT, RT], Left[LS, RS], Left[LR, RR]] =
-    new PullBasedTransmittable[Left[LT, RT], Left[LS, RS], Left[LR, RR]] {
-      def send(value: Left[LT, RT], remote: RemoteRef) =
-        if (value == null) null else Left(transmittable send value.left.get)
-      def receive(value: Left[LS, RS], remote: RemoteRef) =
-        if (value == null) null else Left(transmittable receive value.left.get)
-    }
+  final implicit def left[LB, LI, LR, RB, RI, RR]
+    (implicit transmittable: Transmittable[LB, LI, LR])
+  : DelegatingTransmittable[Left[LB, RB], Left[LI, RI], Left[LR, RR]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
+        if (value == null) null else Left(context delegate value.left.get),
+      receive = (value, context) =>
+        if (value == null) null else Left(context delegate value.left.get))
 
-  implicit def right[LT, LS, LR, RT, RS, RR]
-    (implicit transmittable: Transmittable[RT, RS, RR])
-    : Transmittable[Right[LT, RT], Right[LS, RS], Right[LR, RR]] =
-    new PullBasedTransmittable[Right[LT, RT], Right[LS, RS], Right[LR, RR]] {
-      def send(value: Right[LT, RT], remote: RemoteRef) =
-        if (value == null) null else Right(transmittable send value.right.get)
-      def receive(value: Right[LS, RS], remote: RemoteRef) =
-        if (value == null) null else Right(transmittable receive value.right.get)
-    }
+  final implicit def right[LB, LI, LR, RB, RI, RR]
+    (implicit transmittable: Transmittable[RB, RI, RR])
+  : DelegatingTransmittable[Right[LB, RB], Right[LI, RI], Right[LR, RR]] {
+      type Delegates = transmittable.Type
+    } =
+    DelegatingTransmittable(
+      provide = (value, context) =>
+        if (value == null) null else Right(context delegate value.right.get),
+      receive = (value, context) =>
+        if (value == null) null else Right(context delegate value.right.get))
 }
 
 trait TransmittableCollections extends TransmittableGeneralCollections {
-  implicit def identicalTraversable
-    [T: IdenticallyTransmittable, V[T] <: TraversableLike[T, V[T]]] =
-    IdenticallyTransmittable[V[T]]
+  this: Transmittable.type =>
 
-  implicit def identicalArray[T: IdenticallyTransmittable] =
-    IdenticallyTransmittable[Array[T]]
+  @inline final implicit def identicalTraversable
+    [T: IdenticallyTransmittable, V[T] <: TraversableLike[T, V[T]]]
+  : IdenticallyTransmittable[V[T]] = IdenticallyTransmittable()
 
-  implicit def identicalMap
-    [V: IdenticallyTransmittable, K: IdenticallyTransmittable] =
-    IdenticallyTransmittable[Map[V, K]]
+  @inline final implicit def identicalArray[T: IdenticallyTransmittable]
+  : IdenticallyTransmittable[Array[T]] = IdenticallyTransmittable()
 
-  implicit def identicalOption[T: IdenticallyTransmittable] =
-    IdenticallyTransmittable[Option[T]]
+  @inline final implicit def identicalMap
+    [V: IdenticallyTransmittable, K: IdenticallyTransmittable]
+  : IdenticallyTransmittable[Map[V, K]] = IdenticallyTransmittable()
 
-  implicit def identicalSome[T: IdenticallyTransmittable] =
-    IdenticallyTransmittable[Some[T]]
+  @inline final implicit def identicalOption[T: IdenticallyTransmittable]
+  : IdenticallyTransmittable[Option[T]] = IdenticallyTransmittable()
 
-  implicit def identicalNone =
-    IdenticallyTransmittable[None.type]
+  @inline final implicit def identicalSome[T: IdenticallyTransmittable]
+  : IdenticallyTransmittable[Some[T]] = IdenticallyTransmittable()
 
-  implicit def identicalEither
-    [L: IdenticallyTransmittable, R: IdenticallyTransmittable] =
-    IdenticallyTransmittable[Either[L, R]]
+  @inline final implicit def identicalNone
+  : IdenticallyTransmittable[None.type] = IdenticallyTransmittable()
 
-  implicit def identicalLeft[L: IdenticallyTransmittable, R] =
-    IdenticallyTransmittable[Left[L, R]]
+  @inline final implicit def identicalEither
+    [L: IdenticallyTransmittable, R: IdenticallyTransmittable]
+  : IdenticallyTransmittable[Either[L, R]] = IdenticallyTransmittable()
 
-  implicit def identicalRight[L, R: IdenticallyTransmittable] =
-    IdenticallyTransmittable[Right[L, R]]
+  @inline final implicit def identicalLeft[L: IdenticallyTransmittable, R]
+  : IdenticallyTransmittable[Left[L, R]] = IdenticallyTransmittable()
+
+  @inline final implicit def identicalRight[L, R: IdenticallyTransmittable]
+  : IdenticallyTransmittable[Right[L, R]] = IdenticallyTransmittable()
 }

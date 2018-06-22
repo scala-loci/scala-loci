@@ -7,45 +7,45 @@ object SourceGenerator {
       val members = (1 to 22) map { i =>
         val tuple = s"Tuple$i"
         val tupleArgsT = (0 until i) map { i => s"T$i" } mkString ", "
-        val tupleArgsS = (0 until i) map { i => s"S$i" } mkString ", "
+        val tupleArgsB = (0 until i) map { i => s"B$i" } mkString ", "
+        val tupleArgsI = (0 until i) map { i => s"I$i" } mkString ", "
         val tupleArgsR = (0 until i) map { i => s"R$i" } mkString ", "
 
-        val typeArgs = (0 until i) map { i => s"T$i, S$i, R$i" } mkString ", "
+        val tupleArgs =
+          s"$tuple[$tupleArgsB], $tuple[$tupleArgsI], $tuple[$tupleArgsR]"
+
+        val typeArgs = (0 until i) map { i => s"B$i, I$i, R$i" } mkString ", "
 
         val typeArgsIdentically = (0 until i) map { i => s"""
           |      T$i: IdenticallyTransmittable""" } mkString ","
 
         val implicitArgs = (0 until i) map { i => s"""
-          |      transmittable$i: Transmittable[T$i, S$i, R$i]""" } mkString ","
+          |      transmittable$i: Transmittable[B$i, I$i, R$i]""" } mkString ","
 
-        val send = (0 until i) map { i => s"""
-          |          transmittable$i send value._${i+1}""" } mkString ","
+        val delegatesType = (0 until i) map { i =>
+          s"transmittable$i.Type"
+        } mkString " / "
 
-        val receive = (0 until i) map { i => s"""
-          |          transmittable$i receive value._${i+1}""" } mkString ","
+        val delegates = (0 until i) map { k => s"""
+          |        context.delegate(value._${k+1})(Selector.unchecked(${i-k-1}))"""
+        } mkString ","
+
+        val delegation = s"if (value == null) null else $tuple($delegates)"
 
         val tupleMember = s"""
-          |  implicit def tuple$i[$typeArgs](implicit $implicitArgs)
-          |    : Transmittable[
-          |      $tuple[$tupleArgsT],
-          |      $tuple[$tupleArgsS],
-          |      $tuple[$tupleArgsR]] =
-          |    new PullBasedTransmittable[
-          |        $tuple[$tupleArgsT],
-          |        $tuple[$tupleArgsS],
-          |        $tuple[$tupleArgsR]] {
-          |      def send(value: $tuple[$tupleArgsT], remote: RemoteRef) =
-          |        if (value == null) null
-          |        else $tuple($send)
-          |      def receive(value: $tuple[$tupleArgsS], remote: RemoteRef) =
-          |        if (value == null) null
-          |        else $tuple($receive)
-          |    }
+          |  final implicit def tuple$i[$typeArgs](implicit $implicitArgs)
+          |  : DelegatingTransmittable[$tupleArgs] {
+          |      type Delegates = $delegatesType
+          |    } =
+          |    DelegatingTransmittable(
+          |      provide = (value, context) => $delegation,
+          |      receive = (value, context) => $delegation)
           |"""
 
         val identicalTupleMember = s"""
-          |  implicit def identicalTuple$i[$typeArgsIdentically] =
-          |    IdenticallyTransmittable[$tuple[$tupleArgsT]]
+          |  @inline final implicit def identicalTuple$i[$typeArgsIdentically]
+          |  : IdenticallyTransmittable[$tuple[$tupleArgsT]] =
+          |    IdenticallyTransmittable()
           |"""
 
         (tupleMember, identicalTupleMember)
@@ -58,11 +58,13 @@ object SourceGenerator {
         s"""package loci
            |package transmitter
            |
-           |trait TransmittableGeneralTuples extends TransmittableIdentity {
+           |trait TransmittableGeneralTuples {
+           |  this: Transmittable.type =>
            |${tupleMembers.mkString}
            |}
            |
            |trait TransmittableTuples extends TransmittableGeneralTuples {
+           |  this: Transmittable.type =>
            |${identicalTupleMembers.mkString}
            |}
            |""".stripMargin
@@ -80,15 +82,15 @@ object SourceGenerator {
         val args = (0 until i) map { i => s"v$i" } mkString ", "
 
         val function =
-          if (i == 0) s"function$i[R]"
-          else s"function$i[$argTypes, R]"
+          if (i == 0) s"function$i[R, S]"
+          else s"function$i[$argTypes, R, S]"
 
         val marshallables =
           if (i == 0) s"""
-            |      res: Marshallable[R]"""
+            |      res: Marshallable[R, S, _]"""
           else s"""
-            |      arg: MarshallableArgument[($argTypes)],
-            |      res: Marshallable[R]"""
+            |      arg: Marshallable[($argTypes), ($argTypes), _],
+            |      res: Marshallable[R, S, _]"""
 
         val marshalling =
           if (i == 0) "MessageBuffer.empty"
@@ -108,9 +110,9 @@ object SourceGenerator {
         s"""
           |  implicit def $function(implicit $marshallables) = {
           |    new BindingBuilder[($argTypes) => R] {
-          |      type RemoteCall = ($argTypes) => Future[res.Result]
+          |      type RemoteCall = ($argTypes) => Future[S]
           |      def apply(bindingName: String) = new Binding[($argTypes) => R] {
-          |        type RemoteCall = ($argTypes) => Future[res.Result]
+          |        type RemoteCall = ($argTypes) => Future[S]
           |        val name = bindingName
           |        def dispatch(
           |            function: RemoteRef => ($argTypes) => R, message: MessageBuffer,
@@ -133,7 +135,6 @@ object SourceGenerator {
            |
            |import transmitter.AbstractionRef
            |import transmitter.Marshallable
-           |import transmitter.MarshallableArgument
            |import transmitter.RemoteRef
            |import scala.util.Try
            |import scala.concurrent.Future

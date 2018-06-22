@@ -2,16 +2,17 @@ package loci
 
 import transmitter._
 import org.scalatest._
+import scala.concurrent.Future
 
 class MultitierSpec extends FlatSpec with Matchers {
   behavior of "Multitier Macro Expansion"
 
-  implicit def dummyMarshallable0: MarshallableArgument[Int] = ???
-  implicit def dummyMarshallable1: MarshallableArgument[String] = ???
-  implicit def dummyMarshallable2: MarshallableArgument[(Int, Int)] = ???
-  implicit def dummyMarshallable3: MarshallableArgument[(Int, String)] = ???
-  implicit def dummyMarshallable4: MarshallableArgument[(Double, String)] = ???
-  implicit def dummyMarshallable5: MarshallableArgument[(Double, (String, Int))] = ???
+  implicit def dummyMarshallable0: Marshallable[Int, Int, Future[Int]] = ???
+  implicit def dummyMarshallable1: Marshallable[String, String, Future[String]] = ???
+  implicit def dummyMarshallable2: Marshallable[(Int, Int), (Int, Int), Future[(Int, Int)]] = ???
+  implicit def dummyMarshallable3: Marshallable[(Int, String), (Int, String), Future[(Int, String)]] = ???
+  implicit def dummyMarshallable4: Marshallable[(Double, String), (Double, String), Future[(Double, String)]] = ???
+  implicit def dummyMarshallable5: Marshallable[(Double, (String, Int)), (Double, (String, Int)), Future[(Double, (String, Int))]] = ???
 
   implicit class DummyMultipleTransmissionProvider
       [T, R <: Peer, L <: Peer]
@@ -231,7 +232,7 @@ class MultitierSpec extends FlatSpec with Matchers {
 
       class Clazz
 
-      implicit val marshallable: MarshallableArgument[(Int, String, Clazz)] = ???
+      implicit val marshallable: Marshallable[(Int, String, Clazz), (Int, String, Clazz), Future[(Int, String, Clazz)]] = ???
 
 
       val global = 6

@@ -1,6 +1,5 @@
 package loci
 package transmitter
-package dev
 
 import Transmittable.Delegating
 import Transmittables.{ Delegates, Message, None }
@@ -31,7 +30,7 @@ object Context {
       value: I)(implicit selector: Selector[B, I, R, P, T, S]): R
   }
 
-  private[dev] object Endpoint {
+  object Endpoint {
     sealed trait Base[S <: Transmittables] extends Context[S] {
       this: ContextBuilder.Context[S] =>
 

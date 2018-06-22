@@ -2,8 +2,7 @@ package loci
 package communicator
 package experimental
 
-import loci.transmitter.RemoteRef
-import loci.transmitter.PullBasedTransmittable
+import loci.transmitter.TransformingTransmittable
 
 import webrtc.WebRTC.Update
 import webrtc.WebRTC.IncrementalUpdate
@@ -16,95 +15,88 @@ package object webrtc {
   type UpdateRepresentation =
     ((String, String), (String, String), (String, String, Double))
 
-  implicit object transmittableUpdate
-    extends PullBasedTransmittable[
-      Update, UpdateRepresentation, Update] {
-    def send(value: Update, remote: RemoteRef) = value match {
-      case value @ CompleteSession(_, _) =>
-        (transmittableCompleteSession send (value, remote), null, null)
-      case value @ InitialSession(_, _) =>
-        (null, transmittableInitialSession send (value, remote), null)
-      case value @ SessionUpdate(_, _, _) =>
-        (null, null, transmittableSessionUpdate send (value, remote))
-    }
-    def receive(value: UpdateRepresentation, remote: RemoteRef) = value match {
-      case (value, _, _) if value != null =>
-        transmittableCompleteSession receive (value, remote)
-      case (_, value, _) if value != null =>
-        transmittableInitialSession receive (value, remote)
-      case (_, _, value) if value != null =>
-        transmittableSessionUpdate receive (value, remote)
-    }
-  }
+  implicit val transmittableUpdate: TransformingTransmittable[
+      Update, UpdateRepresentation, Update] =
+    TransformingTransmittable(
+      provide = (value, context) => value match {
+        case value @ CompleteSession(descType, sdp) =>
+          ((descType, sdp), null, null)
+        case value @ InitialSession(descType, sdp) =>
+          (null, (descType, sdp), null)
+        case value @ SessionUpdate(candidate, sdpMid, sdpMLineIndex) =>
+          (null, null, (candidate, sdpMid, sdpMLineIndex))
+      },
+      receive = (value, context) => value match {
+        case ((descType, sdp), _, _) =>
+          CompleteSession(descType, sdp)
+        case (_, (descType, sdp), _) if value != null =>
+          InitialSession(descType, sdp)
+        case (_, _, (candidate, sdpMid, sdpMLineIndex)) if value != null =>
+          SessionUpdate(candidate, sdpMid, sdpMLineIndex)
+      })
 
 
   type IncrementalUpdateRepresentation =
     ((String, String), (String, String, Double))
 
-  implicit object transmittableIncrementalUpdate
-    extends PullBasedTransmittable[
-      IncrementalUpdate, IncrementalUpdateRepresentation, IncrementalUpdate] {
-    def send(value: IncrementalUpdate, remote: RemoteRef) = value match {
-      case value @ InitialSession(_, _) =>
-        (transmittableInitialSession send (value, remote), null)
-      case value @ SessionUpdate(_, _, _) =>
-        (null, transmittableSessionUpdate send (value, remote))
-    }
-    def receive(value: IncrementalUpdateRepresentation, remote: RemoteRef) = value match {
-      case (value, _) if value != null =>
-        transmittableInitialSession receive (value, remote)
-      case (_, value) if value != null =>
-        transmittableSessionUpdate receive (value, remote)
-    }
-  }
+  implicit val transmittableIncrementalUpdate: TransformingTransmittable[
+      IncrementalUpdate, IncrementalUpdateRepresentation, IncrementalUpdate] =
+    TransformingTransmittable(
+      provide = (value, context) => value match {
+        case value @ InitialSession(descType, sdp) =>
+          ((descType, sdp), null)
+        case value @ SessionUpdate(candidate, sdpMid, sdpMLineIndex) =>
+          (null, (candidate, sdpMid, sdpMLineIndex))
+      },
+      receive = (value, context) => value match {
+        case ((descType, sdp), _) if value != null =>
+          InitialSession(descType, sdp)
+        case (_, (candidate, sdpMid, sdpMLineIndex)) if value != null =>
+          SessionUpdate(candidate, sdpMid, sdpMLineIndex)
+      })
 
 
   type CompleteUpdateRepresentation = (String, String)
 
-  implicit object transmittableCompleteUpdate
-    extends PullBasedTransmittable[
-      CompleteUpdate, CompleteUpdateRepresentation, CompleteUpdate] {
-    def send(value: CompleteUpdate, remote: RemoteRef) = value match {
-      case value @ CompleteSession(_, _) =>
-        transmittableCompleteSession send (value, remote)
-    }
-    def receive(value: CompleteUpdateRepresentation, remote: RemoteRef) =
-      transmittableCompleteSession receive (value, remote)
-  }
+  implicit val transmittableCompleteUpdate: TransformingTransmittable[
+      CompleteUpdate, CompleteUpdateRepresentation, CompleteUpdate] =
+    TransformingTransmittable(
+      provide = (value, context) => value match {
+        case value @ CompleteSession(descType, sdp) => (descType, sdp)
+      },
+      receive = (value, context) =>
+        CompleteSession(value._1, value._2))
 
 
   type InitialSessionRepresentation = (String, String)
 
-  implicit object transmittableInitialSession
-    extends PullBasedTransmittable[
-      InitialSession, InitialSessionRepresentation, InitialSession] {
-    def send(value: InitialSession, remote: RemoteRef) =
-      (value.descType, value.sdp)
-    def receive(value: InitialSessionRepresentation, remote: RemoteRef) =
-      InitialSession(value._1, value._2)
-  }
+  implicit val transmittableInitialSession: TransformingTransmittable[
+    InitialSession, InitialSessionRepresentation, InitialSession] =
+    TransformingTransmittable(
+      provide = (value, context) =>
+        (value.descType, value.sdp),
+      receive = (value, context) =>
+        InitialSession(value._1, value._2))
 
 
   type SessionUpdateRepresentation = (String, String, Double)
 
-  implicit object transmittableSessionUpdate
-    extends PullBasedTransmittable[
-      SessionUpdate, SessionUpdateRepresentation, SessionUpdate] {
-    def send(value: SessionUpdate, remote: RemoteRef) =
-      (value.candidate, value.sdpMid, value.sdpMLineIndex)
-    def receive(value: SessionUpdateRepresentation, remote: RemoteRef) =
-      SessionUpdate(value._1, value._2, value._3)
-  }
+  implicit val transmittableSessionUpdate: TransformingTransmittable[
+      SessionUpdate, SessionUpdateRepresentation, SessionUpdate] =
+    TransformingTransmittable(
+      provide = (value, context) =>
+        (value.candidate, value.sdpMid, value.sdpMLineIndex),
+      receive = (value, context) =>
+        SessionUpdate(value._1, value._2, value._3))
 
 
   type CompleteSessionRepresentation = (String, String)
 
-  implicit object transmittableCompleteSession
-    extends PullBasedTransmittable[
-      CompleteSession, CompleteSessionRepresentation, CompleteSession] {
-    def send(value: CompleteSession, remote: RemoteRef) =
-      (value.descType, value.sdp)
-    def receive(value: CompleteSessionRepresentation, remote: RemoteRef) =
-      CompleteSession(value._1, value._2)
-  }
+  implicit val transmittableCompleteSession: TransformingTransmittable[
+      CompleteSession, CompleteSessionRepresentation, CompleteSession] =
+    TransformingTransmittable(
+      provide = (value, context) =>
+        (value.descType, value.sdp),
+      receive = (value, context) =>
+        CompleteSession(value._1, value._2))
 }

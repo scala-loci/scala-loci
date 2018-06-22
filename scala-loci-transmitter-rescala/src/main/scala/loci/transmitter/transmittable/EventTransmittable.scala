@@ -9,34 +9,32 @@ import _root_.rescala.reactives.Event
 import scala.language.higherKinds
 
 protected[transmitter] trait EventTransmittable {
-  implicit def rescalaEventTransmittable
-      [Evt[T, St <: Struct] <: Event[T, St], T, S, U, St <: Struct](implicit
+  implicit def nonNullableTraversable
+      [Evt[T, St <: Struct] <: Event[T, St], T, I, U, St <: Struct](implicit
       scheduler: Scheduler[St],
-      transmittable: Transmittable[(T, String), S, (U, String)],
-      serializable: Serializable[S]) = {
-    type From = (T, String)
-    type To = (U, String)
+      transmittable: Transmittable[(T, String), I, (U, String)])
+  : ConnectedTransmittable[Evt[T, St], I, scheduler.Event[U]] {
+      type Message = transmittable.Type
+  } = {
+    val ignoredValue = null.asInstanceOf[T]
+    val ignoredString = null.asInstanceOf[String]
 
-    new PushBasedTransmittable[Evt[T, St], From, S, To, scheduler.Event[U]] {
-      final val ignoredValue = null.asInstanceOf[T]
-      final val ignoredString = null.asInstanceOf[String]
-
-      def send(value: Evt[T, St], remote: RemoteRef, endpoint: Endpoint[From, To]) = {
+    ConnectedTransmittable(
+      provide = (value, context) => {
         val observer =
           (value
             map { (_, ignoredString) }
             recover { case throwable => Some((ignoredValue, throwable.toString)) }
-            observe endpoint.send)
+            observe context.endpoint.send)
 
-        endpoint.closed notify { _ => observer.remove }
+        context.endpoint.closed notify { _ => observer.remove }
 
         null
-      }
-
-      def receive(value: To, remote: RemoteRef, endpoint: Endpoint[From, To]) = {
+      },
+      receive = (value, context) => {
         val event = scheduler.Evt[U]
 
-        endpoint.receive notify {
+        context.endpoint.receive notify {
           _ match {
             case (value, `ignoredString`) =>
               event fire value
@@ -48,10 +46,9 @@ protected[transmitter] trait EventTransmittable {
           }
         }
 
-        endpoint.closed notify { _ => event.disconnect }
+        context.endpoint.closed notify { _ => event.disconnect }
 
         event
-      }
-    }
+      })
   }
 }
