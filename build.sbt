@@ -192,7 +192,8 @@ lazy val lociCommunicatorWs = (crossProject
   crossType CrossType.Dummy
   in file("scala-loci-communicator-ws-akka")
   settings (normalizedName := "scala-loci-communicator-ws-akka",
-            akkaHttp, scalajsDom)
+            akkaHttp)
+  jsSettings (scalajsDom)
   dependsOn lociCommunication)
 
 lazy val lociCommunicatorWsJVM = lociCommunicatorWs.jvm
