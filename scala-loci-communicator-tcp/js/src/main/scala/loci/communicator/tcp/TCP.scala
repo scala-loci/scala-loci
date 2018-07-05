@@ -20,7 +20,8 @@ object TCP extends TCPSetupFactory {
 
   case class Properties(
     heartbeatDelay: FiniteDuration = 3.seconds,
-    heartbeatTimeout: FiniteDuration = 10.seconds)
+    heartbeatTimeout: FiniteDuration = 10.seconds,
+    noDelay: Boolean = true)
 
   private def ??? = sys error "TCP communicator only available on the JVM"
 

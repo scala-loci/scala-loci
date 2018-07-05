@@ -14,6 +14,7 @@ trait TCPSetupFactory extends
     Properties()
       .set[FiniteDuration]("heartbeat-delay") { v => _.copy(heartbeatDelay = v) }
       .set[FiniteDuration]("heartbeat-timeout") { v => _.copy(heartbeatTimeout = v) }
+      .set[Boolean]("no-delay") { v => _.copy(noDelay = v) }
 
   protected def listener(
       url: String, scheme: String, location: String, properties: Properties) =

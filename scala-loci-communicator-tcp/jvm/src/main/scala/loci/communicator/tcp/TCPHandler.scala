@@ -6,6 +6,7 @@ import java.io.IOException
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.net.Socket
+import java.net.SocketException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
@@ -19,6 +20,16 @@ private object TCPHandler {
       properties: TCP.Properties,
       connectionSetup: ConnectionSetup[TCP],
       connectionEstablished: Connection[TCP] => Unit) = {
+
+    // enable/disable Nagle's algorithm
+
+    try socket.setTcpNoDelay(properties.noDelay) catch {
+      case _: SocketException =>
+        // some implementations may not allow TCP_NODELAY to be set, in which
+        // case we just ignore the issue (there are, however, performance
+        // implications for certain communication patterns)
+    }
+
 
     // socket streams
 
@@ -154,8 +165,6 @@ private object TCPHandler {
     }
     catch {
       case _: IOException =>
-        connection.close
-      case _: NumberFormatException =>
         connection.close
     }
   }

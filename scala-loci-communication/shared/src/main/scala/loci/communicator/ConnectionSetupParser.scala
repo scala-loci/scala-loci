@@ -25,6 +25,8 @@ trait ConnectionSetupParser {
 }
 
 trait SimpleConnectionSetupProperties { this: ConnectionSetupParser =>
+  protected implicit object booleanParser
+    extends PropertyParserTry(_.head.toBoolean)
   protected implicit object byteParser
     extends PropertyParserTry(_.head.toByte)
   protected implicit object shortParser

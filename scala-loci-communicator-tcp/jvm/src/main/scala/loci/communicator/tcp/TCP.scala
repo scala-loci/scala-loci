@@ -20,7 +20,8 @@ object TCP extends TCPSetupFactory {
 
   case class Properties(
     heartbeatDelay: FiniteDuration = 3.seconds,
-    heartbeatTimeout: FiniteDuration = 10.seconds)
+    heartbeatTimeout: FiniteDuration = 10.seconds,
+    noDelay: Boolean = true)
 
   def apply(port: Int): Listener[TCP] =
     new TCPListener(port, "localhost", Properties())
