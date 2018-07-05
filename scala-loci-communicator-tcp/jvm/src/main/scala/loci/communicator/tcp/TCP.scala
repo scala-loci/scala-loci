@@ -19,8 +19,8 @@ object TCP extends TCPSetupFactory {
   def unapply(tcp: TCP) = Some((tcp.host, tcp.port))
 
   case class Properties(
-    heartbeatDelay: FiniteDuration = 2.seconds,
-    heartbeatTimeout: FiniteDuration = 4.seconds)
+    heartbeatDelay: FiniteDuration = 3.seconds,
+    heartbeatTimeout: FiniteDuration = 10.seconds)
 
   def apply(port: Int): Listener[TCP] =
     new TCPListener(port, "localhost", Properties())

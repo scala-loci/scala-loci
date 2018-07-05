@@ -26,8 +26,8 @@ object WS extends WSSetupFactory {
   def unapply(ws: WS) = Some((ws.url, ws.host, ws.port))
 
   case class Properties(
-    heartbeatDelay: FiniteDuration = 2.seconds,
-    heartbeatTimeout: FiniteDuration = 4.seconds)
+    heartbeatDelay: FiniteDuration = 3.seconds,
+    heartbeatTimeout: FiniteDuration = 10.seconds)
 
   def apply(
       http: HttpExt, port: Int)(implicit
