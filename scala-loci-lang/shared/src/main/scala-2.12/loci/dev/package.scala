@@ -2,12 +2,17 @@ package loci
 
 import loci.dev.language._
 
-import scala.annotation.{StaticAnnotation, showAsInfix}
+import scala.annotation.{StaticAnnotation, compileTimeOnly, showAsInfix}
+import scala.language.experimental.macros
 
 
 package dev {
+  @compileTimeOnly("enable macro paradise to use multitier code")
+  final class multitier extends StaticAnnotation {
+    def macroTransform(annottees: Any*): Any = macro language.impl.Multitier.annotation
+  }
+
   final class peer extends StaticAnnotation
-  final class multitier extends StaticAnnotation
 
   sealed trait Single[P] extends Multiple[P]
   sealed trait Optional[P] extends Multiple[P]
