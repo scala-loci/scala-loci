@@ -22,9 +22,9 @@ class Multitier(val c: Context) extends MultitierCode with Peers {
       case ClassDef(_, _, _, _) | ModuleDef(_, _, _)
           if c.hasErrors || isRecursiveExpansion =>
         Left(annottee)
-      case ClassDef(_, _, _, Template(_, _, body)) =>
+      case ClassDef(_, _, _, Template(_, _, _)) =>
         Right(new MultitierClass(annottee))
-      case ModuleDef(_, _, Template(_, _, body)) =>
+      case ModuleDef(_, _, Template(_, _, _)) =>
         Right(new MultitierModule(annottee))
       case _ =>
         c.abort(
@@ -39,9 +39,10 @@ class Multitier(val c: Context) extends MultitierCode with Peers {
       case Right(untypedCode) =>
         val code = untypedCode.typechecked
 
-        val module = code.tree.symbol.info
+        val moduleSymbol = code.tree.symbol
+        val moduleType = moduleSymbol.info
 
-        val peers = new Peers(module.decls.toSet)
+        val peers = new Peers(moduleType.decls.toSet)
 
         val peerDecls =
           (code.body collect (scala.Function unlift {
@@ -50,8 +51,8 @@ class Multitier(val c: Context) extends MultitierCode with Peers {
             case _ =>
               None
           })) ++
-          (module.members collect (scala.Function unlift { symbol =>
-            if (symbol.isType && (module decl symbol.name) == NoSymbol)
+          (moduleType.members collect (scala.Function unlift { symbol =>
+            if (symbol.isType && (moduleType decl symbol.name) == NoSymbol)
               peers.checkPeerType(symbol, symbol.pos)
             else
               None
@@ -60,61 +61,49 @@ class Multitier(val c: Context) extends MultitierCode with Peers {
         case class PeerImpl(peer: Peer, bases: List[Tree], body: List[Tree])
 
         val peerImpls =
-          peerDecls map { case peer @ Peer(symbol, name, _, bases, _) =>
-            // collect overridden peer types
+          peerDecls map { case peer @ Peer(symbol, name, bases, _) =>
+            // inherit implementation for overridden peer types
             // i.e., types of the same name in the module base types
             val overriddenBases =
               code.bases collect (scala.Function unlift { base =>
                 val basePeer = base.tpe member symbol.name
-                if (basePeer != NoSymbol) {
-                  peers.requirePeerType(basePeer, symbol.pos)
+                if (basePeer != NoSymbol)
                   Some(tq"super[${base.symbol.name.toTypeName}].$name")
-                }
                 else
                   None
               })
 
-            // collect super peer types
-            // i.e., peer types in the explicitly specified upper bound
-            val (inheritedSuperPeers, delegatedSuperPeers) = (bases
-              collect { case (base, baseTree) if !baseTree.isEmpty =>
-                peers.requirePeerType(base, symbol.pos) -> baseTree
-              }
-              partition { case (base, _) =>
-                (module member base.name) != NoSymbol
-              })
-
             // inherit implementation for peer bases defined in the same module
-            val inheritedBases =
-              inheritedSuperPeers map { case (peer, _) => tq"${peer.name}" }
+            val inheritedBases = bases collect {
+              case Peer.InheritedBase(_, name, tree)
+                  if !tree.isEmpty =>
+                tq"$name"
+            }
 
             // delegate implementation for peer bases defined in a different module
-            val delegatedBases =
-              delegatedSuperPeers map { case (peer, baseTree) =>
-                val peerImpl = baseTree match {
-                  case tq"$_#$_" => Left("type projection")
-                  case tq"$_.type" => Left("singleton type")
-                  case tq"$_ forSome { ..$_ }" => Left("existential type")
-                  case tq"$ref.$_[..$_]" => Right(tq"$ref.${peer.name}")
-                  case tq"$tpname" => Right(tq"${peer.name}")
-                }
+            val delegatedBases = bases collect {
+              case Peer.DelegatedBase(tpe, _, name, tree)
+                  if !tree.isEmpty && (moduleType member name) == NoSymbol =>
+                val peer = peers.requirePeerType(tpe.typeSymbol)
 
-                val tree = peerImpl match {
-                  case Left(desc) =>
-                    c.abort(baseTree.pos,
-                      s"peer type cannot be a subtype of $desc $baseTree")
-                  case Right(tree) =>
-                    tree
+                tree match {
+                  case tq"$ref.$_[..$_]" =>
+                    q"final val $name: $ref.${peer.name} = $ref.${peer.name.toTermName}"
+                  case tq"$tpname" =>
+                    q"final val $name: ${peer.name} = ${peer.name.toTermName}"
                 }
-
-                q"val ${peer.uniqueName}: $tree"
-              }
+            }
 
             PeerImpl(peer, overriddenBases ++ inheritedBases, delegatedBases)
           }
 
-        val result = code replaceBody (code.body ++ (peerImpls map { peerImpl =>
-          q"trait ${peerImpl.peer.name} extends ..${peerImpl.bases} { ..${peerImpl.body} }"
+        val result = code replaceBody (code.body ++ (peerImpls flatMap { peerImpl =>
+          Seq(
+            q"${Flag.SYNTHETIC} trait ${peerImpl.peer.name} extends ..${peerImpl.bases} { ..${peerImpl.body} }",
+            if (moduleSymbol.isAbstract)
+              q"${Flag.SYNTHETIC} def ${peerImpl.peer.name.toTermName}: ${peerImpl.peer.name}"
+            else
+              q"${Flag.SYNTHETIC} def ${peerImpl.peer.name.toTermName}: ${peerImpl.peer.name} = new ${peerImpl.peer.name} { }")
         }))
 
         result.untypechecked.tree

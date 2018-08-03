@@ -9,17 +9,31 @@ trait Peers {
 
   import c.universe._
 
-  sealed trait Tie
+  type Tie = Tie.Value
 
-  object Tie {
-    val Multiple = new Tie { override def toString: String = "Multiple" }
-    val Optional = new Tie { override def toString: String = "Optional" }
-    val Single = new Tie { override def toString: String = "Single" }
+  object Tie extends Enumeration {
+    val Multiple, Optional, Single = Value
   }
 
-  case class Peer(
-    symbol: Symbol, name: TypeName, uniqueName: TermName,
-    bases: List[(Symbol, Tree)], ties: List[(Tie, Symbol, Tree)])
+  case class Peer(symbol: Symbol, name: TypeName,
+    bases: List[Peer.Base], ties: List[Peer.Tie])
+
+  object Peer {
+    trait Base {
+      val tpe: Type
+      val tree: Tree
+    }
+
+    object Base {
+      def unapply(base: Base) = Some((base.tpe, base.tree))
+    }
+
+    case class InheritedBase(tpe: Type, name: TypeName, tree: Tree) extends Base
+
+    case class DelegatedBase(tpe: Type, id: String, name: TermName, tree: Tree) extends Base
+
+    case class Tie(tpe: Type, multiplicity: Peers.this.Tie, tree: Tree)
+  }
 
   object Peers {
     val MultipleTpe = typeOf[Multiple[_]]
@@ -65,7 +79,14 @@ trait Peers {
       // force loading of annotations
       val symbolType = symbol.info
 
-      if (symbol.annotations exists { _.tree.tpe <:< Peers.PeerAnnotationTpe })
+      val symbolOwnerType = symbol.owner.info
+
+      if (symbol.annotations exists { _.tree.tpe <:< Peers.PeerAnnotationTpe }) {
+        // recompute result if the peer symbol is currently under expansion and
+        // we are given a tree to ensure the result contains the correct trees
+        if (!tree.isEmpty && (underExpansion contains symbol))
+          cache -= symbol
+
         Some(cache.getOrElse(symbol, {
           val (symbolPos, symbolName) = info(symbol, tree, pos)
 
@@ -126,8 +147,14 @@ trait Peers {
           val bases = basesSpec collect {
             case (tpe, tree) if !(tpe =:= definitions.AnyTpe || tpe =:= definitions.AnyRefTpe) =>
               val symbol = tpe.typeSymbol
-              requirePeerType(symbol, EmptyTree, tree.pos orElse symbolPos)
-              (symbol, tree)
+              if (!(cache contains symbol))
+                requirePeerType(symbol, EmptyTree, tree.pos orElse symbolPos)
+
+              val id = makeUniqueName(tpe, symbolOwnerType)
+              if (symbolOwnerType.members exists { _ == symbol })
+                Peer.InheritedBase(tpe, TypeName(s"$$loci$$peer$$$id"), tree)
+              else
+                Peer.DelegatedBase(tpe, id, TermName(s"$$loci$$peer$$$id"), tree)
           }
 
           // ensure ties are specified to be `Multiple`, `Optional` or `Single`
@@ -135,9 +162,9 @@ trait Peers {
           val ties = tiesSpec collect {
             case (tpe, tree) if !(tpe =:= definitions.AnyTpe || tpe =:= definitions.AnyRefTpe) =>
               val multiplicity =
-                if (tpe <:< Peers.MultipleTpe) Tie.Multiple
+                if (tpe <:< Peers.SingleTpe) Tie.Single
                 else if (tpe <:< Peers.OptionalTpe) Tie.Optional
-                else if (tpe <:< Peers.SingleTpe) Tie.Single
+                else if (tpe <:< Peers.MultipleTpe) Tie.Multiple
                 else c.abort(tree.pos orElse symbolPos, s"illegal tie specification: $tpe")
 
               val tieTree = tree match {
@@ -145,25 +172,119 @@ trait Peers {
                 case _ => EmptyTree
               }
 
-              (multiplicity, tpe.typeArgs.head.typeSymbol, tieTree)
+              Peer.Tie(tpe.typeArgs.head, multiplicity, tieTree)
           }
 
           // construct peer and add it to the cache
           // so we do not run checks again
           val name = TypeName(s"$$loci$$peer$$${symbol.name}")
-          val uniqueName = TermName(s"$$loci$$peer$$${makeUniqueName(symbol)}")
-          val peer = Peer(symbol, name, uniqueName, bases, ties)
+          val peer = Peer(symbol, name, bases, ties)
           cache += symbol -> peer
 
           // ensure that tied types are peer types
-          ties foreach { case (_, symbol, tree) =>
-            requirePeerType(symbol, tree, tree.pos orElse symbolPos)
+          ties foreach { case Peer.Tie(tpe, _, tree) =>
+            val symbol = tpe.typeSymbol
+            if (!(cache contains symbol))
+              requirePeerType(symbol, tree, tree.pos orElse symbolPos)
           }
+
+          // validate peer declaration (super peers and tie specification)
+          if (!tree.isEmpty)
+            validate(peer, symbolPos)
 
           peer
         }))
+      }
       else
         None
+    }
+
+    private def validate(peer: Peer, pos: Position): Unit = {
+      // ensure that peers only appear once as super peer
+      peer.bases combinations 2 foreach {
+        case Seq(Peer.Base(tpe0, _), Peer.Base(tpe1, tree1)) =>
+          if (tpe0 =:= tpe1)
+            c.abort(tree1.pos orElse pos,
+              s"peer type cannot appear multiple times as super peer: $tpe1")
+      }
+
+
+      // ensure peer bases and tied peers are not type projections,
+      // singleton types or existential types
+      def validateTypeTree(tree: Tree) = tree match {
+        case SingletonTypeTree(_) => Some("singleton type")
+        case SelectFromTypeTree(_, _) => Some("type projection")
+        case ExistentialTypeTree(_, _) => Some("existential type")
+        case _ => None
+      }
+
+      peer.bases foreach { case Peer.Base(_, tree) =>
+        validateTypeTree(tree) foreach { desc =>
+          c.abort(tree.pos orElse pos,
+            s"peer type cannot be a subtype of $desc $tree")
+        }
+      }
+
+      peer.ties foreach { case Peer.Tie(_, _, tree) =>
+        validateTypeTree(tree) foreach { desc =>
+          c.abort(tree.pos orElse pos,
+            s"illegal tie specification with $desc $tree")
+        }
+      }
+
+
+      // ensure peer ties conform to super peer ties
+      def tieSymbol(symbol: Symbol) = symbol.info decl TypeName("Tie")
+
+      def tieType(symbol: Symbol) = tieSymbol(symbol).info match {
+        case TypeBounds(_, high) => high
+        case _ => definitions.AnyTpe
+      }
+
+      val peerTie = tieType(peer.symbol)
+
+      peer.bases foreach { case Peer.Base(tpe, _) =>
+        val TypeRef(pre, _, _) = tpe
+        val base = tpe.typeSymbol
+        val baseTie = tieType(base).asSeenFrom(pre, base.owner)
+
+        if (!(peerTie <:< baseTie))
+          c.abort(tieSymbol(peer.symbol).pos orElse pos,
+            s"tie specification for peer ${peer.symbol.name} does not conform to " +
+            s"tie specification for super peer ${base.fullName}: " +
+            s"$peerTie is not a subtype of $baseTie")
+      }
+
+
+      // ensure peer ties are consistent regarding subtype relations between peers
+      peer.ties foreach { case Peer.Tie(tpe0, multiplicity0, tree0) =>
+        val subtypes = (peer.ties
+          filter { case Peer.Tie(tpe1, _, _) => tpe1 <:< tpe0 }
+          sortWith { case (Peer.Tie(tpe0, _, _), Peer.Tie(tpe1, _, _)) => tpe0 <:< tpe1 })
+
+        if (subtypes.size > 1)
+          subtypes sliding 2 foreach {
+            case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
+              if (tpe1 =:= tpe2) {
+                if (multiplicity1 != multiplicity2)
+                  c.abort(tree2.pos orElse pos,
+                    s"$multiplicity1 tie required for $tpe2 " +
+                    s"when specified for same peer $tpe1")
+              }
+              else if (tpe1 <:< tpe2) {
+                if (multiplicity1 < multiplicity2)
+                  c.abort(tree2.pos orElse pos,
+                    s"$multiplicity1 tie required for $tpe2 " +
+                    s"when specified for sub peer $tpe1")
+              }
+              else {
+                if (multiplicity0 != Tie.Multiple)
+                  c.abort(tree0.pos orElse pos,
+                    s"${Tie.Multiple} tie required for $tpe0 " +
+                    s"since unrelated sub peers are tied: $tpe1 and $tpe2")
+              }
+          }
+      }
     }
 
     private def typeByUpperBound(
@@ -182,7 +303,7 @@ trait Peers {
     }
 
     private def info(symbol: Symbol, tree: Tree, pos: Position): (Position, String) = {
-      val symbolPos = tree.pos orElse symbol.pos orElse pos
+      val symbolPos = symbol.pos orElse tree.pos orElse pos
       val name = symbol.fullName
       val index = name lastIndexOf "."
       val symbolName =
@@ -206,6 +327,19 @@ trait Peers {
         s"$prefix$separator$suffix"
       }
     }
+
+    private def makeUniqueName(tpe: Type, outer: Type): String =
+      tpe match {
+        case TypeRef(ThisType(_), sym, _) =>
+          if (outer.members exists { _ == sym }) sym.name.toString else makeUniqueName(sym)
+        case SingleType(ThisType(_), sym) =>
+          if (outer.members exists { _ == sym }) sym.name.toString else makeUniqueName(sym)
+        case TypeRef(pre, sym, _) =>
+          s"${makeUniqueName(pre, outer)}$$${sym.name.toString}"
+        case SingleType(pre, sym) =>
+          s"${makeUniqueName(pre, outer)}$$${sym.name.toString}"
+        case _ => makeUniqueName(tpe.typeSymbol)
+      }
 
     private implicit class PositionOps(self: Position) {
       def orElse(other: Position) = if (self == NoPosition) other else self
