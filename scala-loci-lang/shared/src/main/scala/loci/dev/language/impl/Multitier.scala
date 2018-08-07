@@ -4,7 +4,10 @@ package impl
 
 import scala.reflect.macros.blackbox.Context
 
-class Multitier(val c: Context) extends MultitierCode with Peers {
+class Multitier(val c: Context) extends MultitierCode
+    with Definitions
+    with Peers
+    with Values {
   import c.universe._
 
   def annotation(annottees: Tree*): Tree = {
@@ -58,10 +61,12 @@ class Multitier(val c: Context) extends MultitierCode with Peers {
               None
           }))
 
-        case class PeerImpl(peer: Peer, bases: List[Tree], body: List[Tree])
+        val valueDecls = processPlacedValues(code.body, peers)
+
+        val globalValues = valueDecls collect { case GlobalValue(_, tree) => tree }
 
         val peerImpls =
-          peerDecls map { case peer @ Peer(symbol, name, bases, _) =>
+          peerDecls flatMap { case peer @ Peer(symbol, name, bases, _) =>
             // inherit implementation for overridden peer types
             // i.e., types of the same name in the module base types
             val overriddenBases =
@@ -94,17 +99,30 @@ class Multitier(val c: Context) extends MultitierCode with Peers {
                 }
             }
 
-            PeerImpl(peer, overriddenBases ++ inheritedBases, delegatedBases)
+            // collect values placed on the peer
+            val placedValues = valueDecls collect {
+              case PlacedValue(_, tree, `symbol`, _) => tree
+              case NonPlacedValue(_, tree) => tree
+            }
+
+            // generate peer implementation
+            val peerBases = overriddenBases ++ inheritedBases
+            val peerBody = delegatedBases ++ placedValues
+            val construction = name.toTermName
+
+            val peerImpl =
+              q"${Flag.SYNTHETIC} trait $name extends ..$peerBases { ..$peerBody }"
+
+            val peerConstruction =
+              if (moduleSymbol.isAbstract)
+                q"${Flag.SYNTHETIC} def $construction: $name"
+              else
+                q"${Flag.SYNTHETIC} def $construction: $name = new $name { }"
+
+            Seq(peerImpl, peerConstruction)
           }
 
-        val result = code replaceBody (code.body ++ (peerImpls flatMap { peerImpl =>
-          Seq(
-            q"${Flag.SYNTHETIC} trait ${peerImpl.peer.name} extends ..${peerImpl.bases} { ..${peerImpl.body} }",
-            if (moduleSymbol.isAbstract)
-              q"${Flag.SYNTHETIC} def ${peerImpl.peer.name.toTermName}: ${peerImpl.peer.name}"
-            else
-              q"${Flag.SYNTHETIC} def ${peerImpl.peer.name.toTermName}: ${peerImpl.peer.name} = new ${peerImpl.peer.name} { }")
-        }))
+        val result = code replaceBody (globalValues ++ peerImpls)
 
         result.untypechecked.tree
     }

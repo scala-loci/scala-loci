@@ -4,7 +4,7 @@ package impl
 
 import scala.reflect.macros.blackbox.Context
 
-trait Peers {
+trait Peers { this: Definitions =>
   val c: Context
 
   import c.universe._
@@ -33,13 +33,6 @@ trait Peers {
     case class DelegatedBase(tpe: Type, id: String, name: TermName, tree: Tree) extends Base
 
     case class Tie(tpe: Type, multiplicity: Peers.this.Tie, tree: Tree)
-  }
-
-  object Peers {
-    val MultipleTpe = typeOf[Multiple[_]]
-    val OptionalTpe = typeOf[Optional[_]]
-    val SingleTpe = typeOf[Single[_]]
-    val PeerAnnotationTpe = typeOf[peer]
   }
 
   final class Peers(underExpansion: Set[Symbol]) {
@@ -81,7 +74,7 @@ trait Peers {
 
       val symbolOwnerType = symbol.owner.info
 
-      if (symbol.annotations exists { _.tree.tpe <:< Peers.PeerAnnotationTpe }) {
+      if (symbol.annotations exists { _.tree.tpe <:< types.peer }) {
         // recompute result if the peer symbol is currently under expansion and
         // we are given a tree to ensure the result contains the correct trees
         if (!tree.isEmpty && (underExpansion contains symbol))
@@ -105,7 +98,7 @@ trait Peers {
                     List.fill(peerParents.size)(EmptyTree) -> List.empty
                 }
 
-                if (peerDecls.size == 1 && peerDecls.head.name == TypeName("Tie")) {
+                if (peerDecls.size == 1 && peerDecls.head.name == names.tie) {
                   val tieTree = body match {
                     case List(TypeDef(_, _, _, tie)) => tie
                     case _ => EmptyTree
@@ -162,9 +155,9 @@ trait Peers {
           val ties = tiesSpec collect {
             case (tpe, tree) if !(tpe =:= definitions.AnyTpe || tpe =:= definitions.AnyRefTpe) =>
               val multiplicity =
-                if (tpe <:< Peers.SingleTpe) Tie.Single
-                else if (tpe <:< Peers.OptionalTpe) Tie.Optional
-                else if (tpe <:< Peers.MultipleTpe) Tie.Multiple
+                if (tpe <:< types.single) Tie.Single
+                else if (tpe <:< types.optional) Tie.Optional
+                else if (tpe <:< types.multiple) Tie.Multiple
                 else c.abort(tree.pos orElse symbolPos, s"illegal tie specification: $tpe")
 
               val tieTree = tree match {
@@ -234,7 +227,7 @@ trait Peers {
 
 
       // ensure peer ties conform to super peer ties
-      def tieSymbol(symbol: Symbol) = symbol.info decl TypeName("Tie")
+      def tieSymbol(symbol: Symbol) = symbol.info decl names.tie
 
       def tieType(symbol: Symbol) = tieSymbol(symbol).info match {
         case TypeBounds(_, high) => high
@@ -302,15 +295,8 @@ trait Peers {
         c.abort(pos, s"$constructs cannot be type aliases: $name")
     }
 
-    private def info(symbol: Symbol, tree: Tree, pos: Position): (Position, String) = {
-      val symbolPos = symbol.pos orElse tree.pos orElse pos
-      val name = symbol.fullName
-      val index = name lastIndexOf "."
-      val symbolName =
-        if (index > 0) s"${name.substring(index + 1)} in ${name.substring(0, index)}"
-        else name
-      symbolPos -> symbolName
-    }
+    private def info(symbol: Symbol, tree: Tree, pos: Position): (Position, String) =
+      (symbol.pos orElse tree.pos orElse pos) -> symbol.fullNestedName
 
     private def makeUniqueName(symbol: Symbol): String = {
       val owner = symbol.owner
@@ -340,17 +326,6 @@ trait Peers {
           s"${makeUniqueName(pre, outer)}$$${sym.name.toString}"
         case _ => makeUniqueName(tpe.typeSymbol)
       }
-
-    private implicit class PositionOps(self: Position) {
-      def orElse(other: Position) = if (self == NoPosition) other else self
-    }
-
-    private implicit class TreeOps(tree: Tree) {
-      def original = tree match {
-        case tree: TypeTree => tree.original
-        case tree => tree
-      }
-    }
 
     private val cache = collection.mutable.Map.empty[Symbol, Peer]
   }
