@@ -61,9 +61,37 @@ class Multitier(val c: Context) extends MultitierCode
               None
           }))
 
-        val valueDecls = processPlacedValues(code.body, peers)
+        val valueDecls = processValuePlacement(code.body, code.tree.symbol, peers)
 
-        val globalValues = valueDecls collect { case GlobalValue(_, tree) => tree }
+        val globalValues = valueDecls collect { case GlobalValue(_, _, tree) => tree }
+
+        val (anyPeer, anyPeerImpl) = {
+          val anyPeerName = TypeName("$loci$anypeer")
+
+          // inherit implementation for any-peers defined in the module bases
+          val anyPeerBases =
+            code.bases collect (scala.Function unlift { base =>
+              val basePeer = base.tpe member anyPeerName
+              if (basePeer != NoSymbol)
+                Some(tq"super[${base.symbol.name.toTypeName}].$anyPeerName")
+              else
+                None
+            })
+
+          // any-peers contain the non-placed values available to any peer
+          val nonPlacedValues = valueDecls collect {
+            case NonPlacedValue(_, _, tree) => tree
+          }
+
+          // we only need an any-peer if we have non-placed values or
+          // we inherit more than one any-peer (which need to be merged)
+          if (nonPlacedValues.nonEmpty || anyPeerBases.size > 1)
+            List(tq"$anyPeerName") ->
+              List(q"${Flag.SYNTHETIC} trait $anyPeerName extends ..$anyPeerBases { ..$nonPlacedValues }")
+          else
+            List.empty ->
+              List.empty
+        }
 
         val peerImpls =
           peerDecls flatMap { case peer @ Peer(symbol, name, bases, _) =>
@@ -101,12 +129,11 @@ class Multitier(val c: Context) extends MultitierCode
 
             // collect values placed on the peer
             val placedValues = valueDecls collect {
-              case PlacedValue(_, tree, `symbol`, _) => tree
-              case NonPlacedValue(_, tree) => tree
+              case PlacedValue(_, _, tree, `symbol`, _) => tree
             }
 
             // generate peer implementation
-            val peerBases = overriddenBases ++ inheritedBases
+            val peerBases = anyPeer ++ overriddenBases ++ inheritedBases
             val peerBody = delegatedBases ++ placedValues
             val construction = name.toTermName
 
@@ -122,7 +149,7 @@ class Multitier(val c: Context) extends MultitierCode
             Seq(peerImpl, peerConstruction)
           }
 
-        val result = code replaceBody (globalValues ++ peerImpls)
+        val result = code replaceBody (globalValues ++ anyPeerImpl ++ peerImpls)
 
         result.untypechecked.tree
     }
