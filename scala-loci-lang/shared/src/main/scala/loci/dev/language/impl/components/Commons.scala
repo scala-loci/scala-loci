@@ -1,13 +1,19 @@
 package loci.dev
 package language
 package impl
+package components
 
-import scala.reflect.macros.blackbox.Context
+import scala.reflect.macros.blackbox
 
-trait Definitions {
-  val c: Context
+object Commons extends Component.Factory[Commons] {
+  def apply[C <: blackbox.Context](engine: Engine[C]) = new Commons(engine)
+  def asInstance[C <: blackbox.Context] = { case c: Commons[C] => c }
+}
 
-  import c.universe._
+class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
+  val phases = Seq.empty
+
+  import engine.c.universe._
   import names._
 
   object names {
@@ -43,7 +49,7 @@ trait Definitions {
     val owner = symbol.owner
     val name = symbol.name.toString
 
-    if (owner == c.mirror.RootClass)
+    if (owner == engine.c.mirror.RootClass)
       name
     else if (symbol.isSynthetic)
       uniqueName(owner)

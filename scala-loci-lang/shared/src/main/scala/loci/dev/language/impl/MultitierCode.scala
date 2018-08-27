@@ -14,8 +14,7 @@ trait MultitierCode {
   private val treeCopier = newLazyTreeCopier
 
   trait MultitierCode {
-    val tree: Tree
-    val name: TypeName
+    val tree: ImplDef
     val bases: List[Tree]
     val body: List[Tree]
     def replaceBody(body: List[Tree]): MultitierCode
@@ -23,9 +22,8 @@ trait MultitierCode {
     def untypechecked: MultitierCode
   }
 
-  class MultitierClass(val tree: Tree) extends MultitierCode {
-    val ClassDef(mods, tpname, tparams, Template(bases, self, body)) = tree
-    val name = tpname
+  class MultitierClass(impl: Tree) extends MultitierCode {
+    val tree @ ClassDef(mods, tpname, tparams, Template(bases, self, body)) = impl
 
     def replaceBody(body: List[Tree]) = new MultitierClass(
       treeCopier.ClassDef(tree, mods, tpname, tparams, Template(bases, self, body)))
@@ -34,9 +32,8 @@ trait MultitierCode {
     def untypechecked = new MultitierClass(c.retyper untypecheckAll tree)
   }
 
-  class MultitierModule(val tree: Tree) extends MultitierCode {
-    val ModuleDef(mods, tname, Template(bases, self, body)) = tree
-    val name = tname.toTypeName
+  class MultitierModule(impl: Tree) extends MultitierCode {
+    val tree @ ModuleDef(mods, tname, Template(bases, self, body)) = impl
 
     def replaceBody(body: List[Tree]) = new MultitierModule(
       treeCopier.ModuleDef(tree, mods, tname, Template(bases, self, body)))

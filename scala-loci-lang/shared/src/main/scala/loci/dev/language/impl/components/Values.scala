@@ -1,15 +1,35 @@
 package loci.dev
 package language
 package impl
+package components
 
-import scala.reflect.macros.blackbox.Context
+import scala.reflect.macros.blackbox
 
-trait Values { this: Definitions with Peers =>
-  val c: Context
+object Values extends Component.Factory[Values](
+    requires = Seq(ModuleInfo, Commons, Peers)) {
+  def apply[C <: blackbox.Context](engine: Engine[C]) = new Values(engine)
+  def asInstance[C <: blackbox.Context] = { case c: Values[C] => c }
+}
 
-  import c.universe._
+class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
+  val phases = Seq(
+    Phase("values:collect", collectPlacedValues, before = Set("*", "values:validate")),
+    Phase("values:validate", validatePlacedValues, before = Set("*")),
+    Phase("values:fixrefs", fixEnclosingReferences, after = Set("*", "values:validate")))
+
+  val moduleInfo = engine.require(ModuleInfo)
+  val commons = engine.require(Commons)
+  val peers = engine.require(Peers)
+
+  import engine._
+  import engine.c.universe._
+  import moduleInfo._
+  import commons._
+  import peers._
+
 
   sealed trait Modality
+
   object Modality {
     case object None extends Modality
     case object Local extends Modality
@@ -21,60 +41,61 @@ trait Values { this: Definitions with Peers =>
     val owner: Symbol
     val tree: Tree
 
-    def copy(symbol: Symbol = symbol, owner: Symbol = owner, tree: Tree = tree): Value =
-      this match {
-        case PlacedValue(_, _, _, peer, modality) => PlacedValue(symbol, owner, tree, peer, modality)
-        case NonPlacedValue(_, _, _) => NonPlacedValue(symbol, owner, tree)
-        case GlobalValue(_, _, _) => GlobalValue(symbol, owner, tree)
-      }
+    def copy(symbol: Symbol = symbol, owner: Symbol = owner, tree: Tree = tree): Value = this match {
+      case PlacedValue(_, _, _, peer, modality) => PlacedValue(symbol, owner, tree, peer, modality)
+      case NonPlacedValue(_, _, _) => NonPlacedValue(symbol, owner, tree)
+      case GlobalValue(_, _, _) => GlobalValue(symbol, owner, tree)
+    }
   }
+
+  sealed abstract class NonGlobalValue extends Value
 
   case class PlacedValue(symbol: Symbol, owner: Symbol, tree: Tree,
-    peer: Symbol, modality: Modality) extends Value
-  case class NonPlacedValue(symbol: Symbol, owner: Symbol, tree: Tree) extends Value
+    peer: Symbol, modality: Modality) extends NonGlobalValue
+
+  case class NonPlacedValue(symbol: Symbol, owner: Symbol, tree: Tree) extends NonGlobalValue
+
   case class GlobalValue(symbol: Symbol, owner: Symbol, tree: Tree) extends Value
 
-  def processValuePlacement(stats: List[Tree], owner: Symbol, peers: Peers): List[Value] = {
-    val values = collectPlacedValues(stats, owner)
-    validate(values, peers)
-    fixEnclosingReferences(values)
-  }
 
-  // 1. split statements into module-level and peer-level statements
-  private def collectPlacedValues(stats: List[Tree], owner: Symbol): List[Value] =
-    stats flatMap {
+  // split statements into module-level and peer-level statements
+  private def collectPlacedValues(records: List[Any]): List[Any] = {
+    val values = module.stats flatMap {
       case tree: ValOrDefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
         destructPlacementType(tree.symbol.info, tree.tpt, tree.pos) match {
           case Some((peer, tpe, tpt, modality)) => Seq(
-            PlacedValue(tree.symbol, owner,
+            PlacedValue(tree.symbol, module.symbol,
               changeType(stripPlacementSyntax(tree), tpe, tpt), peer, modality),
-            GlobalValue(tree.symbol, owner, eraseValue(tree)))
+            GlobalValue(tree.symbol, module.symbol, eraseValue(tree)))
 
           case _ => Seq(
-            NonPlacedValue(tree.symbol, owner, tree),
-            GlobalValue(tree.symbol, owner, eraseValue(tree)))
+            NonPlacedValue(tree.symbol, module.symbol, tree),
+            GlobalValue(tree.symbol, module.symbol, eraseValue(tree)))
         }
 
       case tree if tree.symbol.isTerm && !tree.symbol.isConstructor && !tree.symbol.isModule =>
         destructPlacementType(tree.tpe, EmptyTree, tree.pos) match {
           case Some((peer, _, _, modality)) =>
-            Seq(PlacedValue(NoSymbol, owner,
+            Seq(PlacedValue(NoSymbol, module.symbol,
               stripPlacementSyntax(tree), peer, modality))
 
           case _ =>
-            Seq(NonPlacedValue(NoSymbol, owner, tree))
+            Seq(NonPlacedValue(NoSymbol, module.symbol, tree))
         }
 
       case tree =>
-        Seq(GlobalValue(tree.symbol, owner, tree))
+        Seq(GlobalValue(tree.symbol, module.symbol, tree))
     }
 
-  // 2. validate types of placed values
-  private def validate(values: List[Value], peers: Peers): Unit =
-    values foreach {
+    records ++ values
+  }
+
+  // validate types of placed values
+  private def validatePlacedValues(records: List[Any]): List[Any] = {
+    records foreach {
       case PlacedValue(symbol, owner, tree, peer, modality) =>
         // ensure value is placed on a peer
-        peers.requirePeerType(peer, tree.pos)
+        requirePeerType(peer, tree.pos)
 
         // ensure the peer, on which the value is placed,
         // is defined in the same module
@@ -112,10 +133,13 @@ trait Values { this: Definitions with Peers =>
       case _ =>
     }
 
-  // 3. fix self and super references to the enclosing module
-  private def fixEnclosingReferences(values: List[Value]): List[Value] =
-    values map {
-      case value @ (PlacedValue(_, _, _, _, _) | NonPlacedValue(_, _, _)) =>
+    records
+  }
+
+  // fix self and super references to the enclosing module
+  private def fixEnclosingReferences(records: List[Any]): List[Any] =
+    records map {
+      case value: NonGlobalValue =>
         val owner = value.symbol.owner
         val name = owner.name
 
@@ -166,8 +190,8 @@ trait Values { this: Definitions with Peers =>
 
         value.copy(tree = transformer transform value.tree)
 
-      case value =>
-        value
+      case record =>
+        record
     }
 
   private def destructPlacementType(tpe: Type, tpt: Tree, pos: Position): Option[(Symbol, Type, Tree, Modality)] =
