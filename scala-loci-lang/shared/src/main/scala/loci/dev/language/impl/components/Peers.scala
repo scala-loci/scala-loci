@@ -52,8 +52,6 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private val cache = collection.mutable.Map.empty[Symbol, Peer]
 
-  private val underExpansion = module.symbol.info.decls.toSet
-
   val modulePeers: Seq[Peer] =
     (module.stats flatMap {
       case tree @ q"$_ type $_[..$_] = $tpt" =>
@@ -84,7 +82,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     val peer = checkPeerType(symbol, tree, pos) getOrElse c.abort(symbolPos,
       s"$symbolName is not a peer type: @peer type ${symbol.name}")
 
-    if (!(underExpansion contains symbol) && (symbol.owner.info member peer.name) == NoSymbol)
+    if (!underExpansion(symbol) && (symbol.owner.info member peer.name) == NoSymbol)
       c.abort(symbolPos,
         s"no generated peer definition found for peer type $symbolName, " +
         s"maybe ${symbol.owner.fullName} is not multitier: @multitier ${symbol.owner}")
@@ -110,7 +108,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     if (symbol.annotations exists { _.tree.tpe <:< types.peer }) {
       // recompute result if the peer symbol is currently under expansion and
       // we are given a tree to ensure the result contains the correct trees
-      if (!tree.isEmpty && (underExpansion contains symbol))
+      if (!tree.isEmpty && underExpansion(symbol))
         cache -= symbol
 
       Some(cache.getOrElse(symbol, {

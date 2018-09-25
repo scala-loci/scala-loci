@@ -3,6 +3,7 @@ package language
 package impl
 package components
 
+import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object Values extends Component.Factory[Values](
@@ -59,21 +60,27 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
 
   // split statements into module-level and peer-level statements
-  private def collectPlacedValues(records: List[Any]): List[Any] = {
+  def collectPlacedValues(records: List[Any]): List[Any] = {
     val values = module.stats flatMap {
       case tree: ValOrDefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
-        destructPlacementType(tree.symbol.info, tree.tpt, tree.pos) match {
-          case Some((peer, tpe, tpt, modality)) => Seq(
-            PlacedValue(tree.symbol, module.symbol,
-              changeType(stripPlacementSyntax(tree), tpe, tpt), peer, modality),
-            GlobalValue(tree.symbol, module.symbol, eraseValue(tree)))
+        if (isMultitierModule(tree.tpt.tpe))
+          Seq(GlobalValue(tree.symbol, module.symbol, tree))
+        else
+          destructPlacementType(tree.symbol.info, tree.tpt, tree.pos) match {
+            case Some((peer, tpe, tpt, modality)) => Seq(
+              PlacedValue(tree.symbol, module.symbol,
+                changeType(stripPlacementSyntax(tree), tpe, tpt), peer, modality),
+              GlobalValue(tree.symbol, module.symbol, eraseValue(tree)))
 
-          case _ => Seq(
-            NonPlacedValue(tree.symbol, module.symbol, tree),
-            GlobalValue(tree.symbol, module.symbol, eraseValue(tree)))
-        }
+            case _ => Seq(
+              NonPlacedValue(tree.symbol, module.symbol, tree),
+              GlobalValue(tree.symbol, module.symbol, eraseValue(tree)))
+          }
 
-      case tree if tree.symbol.isTerm && !tree.symbol.isConstructor && !tree.symbol.isModule =>
+      case tree: MemberDef =>
+        Seq(GlobalValue(tree.symbol, module.symbol, tree))
+
+      case tree =>
         destructPlacementType(tree.tpe, EmptyTree, tree.pos) match {
           case Some((peer, _, _, modality)) =>
             Seq(PlacedValue(NoSymbol, module.symbol,
@@ -82,16 +89,17 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
           case _ =>
             Seq(NonPlacedValue(NoSymbol, module.symbol, tree))
         }
-
-      case tree =>
-        Seq(GlobalValue(tree.symbol, module.symbol, tree))
     }
 
     records ++ values
   }
 
   // validate types of placed values
-  private def validatePlacedValues(records: List[Any]): List[Any] = {
+  def validatePlacedValues(records: List[Any]): List[Any] = {
+    val placedSymbols = (records collect {
+      case value: PlacedValue if value.symbol != NoSymbol => value.symbol
+    }).toSet
+
     records foreach {
       case PlacedValue(symbol, owner, tree, peer, modality) =>
         // ensure value is placed on a peer
@@ -130,6 +138,14 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             case _ =>
           }
 
+      case GlobalValue(_, _, _: ValOrDefDef) =>
+
+      case value: GlobalValue =>
+        value.tree foreach { tree =>
+          if (placedSymbols contains tree.symbol)
+            c.abort(tree.pos, accessMessage)
+        }
+
       case _ =>
     }
 
@@ -137,62 +153,115 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
   }
 
   // fix self and super references to the enclosing module
-  private def fixEnclosingReferences(records: List[Any]): List[Any] =
-    records map {
-      case value: NonGlobalValue =>
-        val owner = value.symbol.owner
-        val name = owner.name
+  def fixEnclosingReferences(records: List[Any]): List[Any] =
+    (records
+      // fix references to expanding module that will be wrong
+      // after moving the code to an inner trait
+      process {
+        case value: Value =>
+          object transformer extends Transformer {
+            override def transform(tree: Tree): Tree = tree match {
+              // inferred type trees with no correspondence in the original source code
+              case tree: TypeTree if tree.tpe != null && tree.original == null =>
+                def hasOwner(symbol: Symbol): Boolean =
+                  symbol != NoSymbol && (symbol == module.classSymbol || hasOwner(symbol.owner))
 
-        // fix references to expanding module that will be wrong
-        // after moving the code to an inner trait
-        object transformer extends Transformer {
-          override def transform(tree: Tree): Tree = tree match {
-            // inferred type trees with no correspondence in the original source code
-            case tree: TypeTree if tree.tpe != null && tree.original == null =>
-              val reInferType = tree.tpe exists {
-                case SingleType(ThisType(`owner`), _) => true
-                case _ => false
-              }
+                val reInferType = tree.tpe exists {
+                  case ThisType(sym) => hasOwner(sym)
+                  case _ => false
+                }
 
-              if (reInferType)
-                TypeTree()
-              else
-                tree
+                if (reInferType)
+                  TypeTree()
+                else
+                  tree
 
-            // type trees with correspondence in the original source code
-            case tree: TypeTree if tree.original != null =>
-              internal.setOriginal(TypeTree(), transform(tree.original))
+              // type trees with correspondence in the original source code
+              case tree: TypeTree if tree.original != null =>
+                internal.setOriginal(TypeTree(), transform(tree.original))
 
-            // explicit self references
-            case Select(This(`name`), name) =>
-              Ident(name)
-
-            // explicit reference to object through its path (accessors are also methods)
-            case Select(_, name)
-                if tree.symbol.isMethod && tree.symbol.owner == owner =>
-              Ident(name)
-
-            // static super reference
-            case Super(_, mix)
-                if mix != typeNames.EMPTY=>
-              c.abort(tree.pos, "Static super references not supported in multitier code")
-
-            // non-static super reference
-            case Super(This(qual), typeNames.EMPTY)
-                if qual == typeNames.EMPTY || qual == name =>
-              Super(This(typeNames.EMPTY), typeNames.EMPTY)
-
-            // any other tree
-            case _ =>
-              super.transform(tree)
+              // any other tree
+              case _ =>
+                super.transform(tree)
+            }
           }
-        }
 
-        value.copy(tree = transformer transform value.tree)
+          value.copy(tree = transformer transform value.tree)
+      }
+      process {
+        case value: NonGlobalValue =>
+          object transformer extends Transformer {
+            val skippedTrees = mutable.Set.empty[Tree]
 
-      case record =>
-        record
-    }
+            def skip(tree: Tree): Unit = tree match {
+              case Select(qualifier, _) =>
+                skippedTrees += tree
+                skip(qualifier)
+              case _ =>
+                skippedTrees += tree
+            }
+
+            override def transform(tree: Tree): Tree = tree match {
+              // type trees with correspondence in the original source code
+              case tree: TypeTree if tree.original != null =>
+                internal.setOriginal(TypeTree(), transform(tree.original))
+
+              // reference to nested type (should not be transformed)
+              case tree: RefTree if tree.isType =>
+                skip(tree)
+                super.transform(tree)
+
+              // reference to nested term
+              case tree: RefTree if !tree.symbol.isConstructor && !(skippedTrees contains tree) =>
+                def superReference(tree: Tree): Boolean = tree match {
+                  case Super(This(qual), typeNames.EMPTY)
+                      if qual == typeNames.EMPTY || qual == module.classSymbol.name =>
+                    true
+                  case Super(_, _) =>
+                    c.abort(tree.pos, "Static super references not supported in multitier code")
+                  case tree if tree.children.nonEmpty =>
+                    superReference(tree.children.head)
+                  case _ =>
+                    false
+                }
+
+                def stablePath(symbol: Symbol): Option[Tree] =
+                  if (module.symbol.info.baseClasses contains symbol) {
+                    if (superReference(tree))
+                      Some(Super(This(names.placedValues), typeNames.EMPTY))
+                    else
+                      Some(This(names.placedValues))
+                  }
+                  else if (symbol.isModuleClass || symbol.isModule)
+                    stablePath(symbol.owner) map { tree =>
+                      val moduleSymbol = if(symbol.isClass) symbol.asClass.module else symbol
+                      internal.setSymbol(Select(tree, symbol.name.toTermName), moduleSymbol)
+                    }
+                  else
+                    None
+
+                (stablePath(tree.symbol.owner)
+                  map { treeCopy.Select(tree, _, tree.name) }
+                  getOrElse super.transform(tree))
+
+              // any other tree
+              case _ =>
+                super.transform(tree)
+            }
+          }
+
+          value.copy(tree = transformer transform value.tree)
+      })
+
+  val moduleSelfReference =
+    internal.setSymbol(Ident(names.multitierModule), module.classSymbol)
+
+  def isMultitierModule(tpe: Type): Boolean = {
+    val symbol = tpe.finalResultType.typeSymbol
+    symbol == module.symbol ||
+      symbol == module.classSymbol ||
+      (symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule })
+  }
 
   private def destructPlacementType(tpe: Type, tpt: Tree, pos: Position): Option[(Symbol, Type, Tree, Modality)] =
     tpe.finalResultType match {
@@ -290,12 +359,13 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     extractedTag
   }
 
-  private val compileTimeOnlyAnnotation = {
-    val message = "Access to abstraction " +
-      "only allowed on peers on which the abstraction is placed. " +
-      "Remote access must be explicit."
-    q"new ${trees.compileTimeOnly}($message)"
-  }
+  private val accessMessage = "Access to abstraction " +
+    "only allowed on peers on which the abstraction is placed. " +
+    "Remote access must be explicit."
+
+  private val accessAnnotation = q"new ${trees.compileTimeOnly}($accessMessage)"
+
+  private val multitierStubAnnotation = q"new ${trees.multitierStub}"
 
   private def changeType(tree: ValOrDefDef, tpe: Type, tpt: Tree) =
     tree map { (mods, name, _, rhs) =>
@@ -303,8 +373,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     }
 
   private def eraseValue(tree: ValOrDefDef) =
-    tree map { (mods, name, tpt, rhs) =>
-      (mods mapAnnotations { compileTimeOnlyAnnotation :: _ },
+    tree map { (mods, name, _, rhs) =>
+      val tpt = createTypeTree(tree.tpt)
+      (mods mapAnnotations { accessAnnotation :: multitierStubAnnotation :: _ },
         name, tpt,
         if (tree.symbol.isAbstract) rhs else q"null.asInstanceOf[$tpt]")
     }

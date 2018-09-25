@@ -6,7 +6,7 @@ package components
 import scala.reflect.macros.blackbox
 
 object Assembly extends Component.Factory[Assembly](
-    requires = Seq(ModuleInfo, Peers, Values)) {
+    requires = Seq(Commons, ModuleInfo, Peers, Values)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new Assembly(engine)
   def asInstance[C <: blackbox.Context] = { case c: Assembly[C] => c }
 }
@@ -15,43 +15,43 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   val phases = Seq(
     Phase("assembly", assemblePeerImplementation, after = Set("*", "values:fixrefs")))
 
+  val commons = engine.require(Commons)
   val moduleInfo = engine.require(ModuleInfo)
   val peers = engine.require(Peers)
   val values = engine.require(Values)
 
   import engine.c.universe._
+  import commons._
   import moduleInfo._
   import peers._
   import values._
 
+  case class Assembly(tree: Tree)
+
   private def assemblePeerImplementation(records: List[Any]): List[Any] = {
     val values = records collect { case value: Value => value }
 
-    val (anyPeer, anyPeerImpl) = {
-      val anyPeerName = TypeName("$loci$anypeer")
-
-      // inherit implementation for any-peers defined in the module bases
-      val anyPeerBases = module.tree.impl.parents flatMap { base =>
-        val basePeer = base.tpe member anyPeerName
+    val (nonplaced, nonplacedImpl) = {
+      // inherit implementation for non-placed values defined in the module bases
+      val nonplacedBases = module.tree.impl.parents flatMap { base =>
+        val basePeer = base.tpe member names.placedValues
         if (basePeer != NoSymbol)
-          Some(tq"super[${base.symbol.name.toTypeName}].$anyPeerName")
+          Some(tq"super[${base.symbol.name.toTypeName}].${names.placedValues}")
         else
           None
       }
 
-      // any-peers contain the non-placed values available to any peer
-      val nonPlacedValues = values collect {
+      val nonplacedValues = values collect {
         case NonPlacedValue(_, _, tree) => tree
       }
 
-      // we only need an any-peer if we have non-placed values or
-      // we inherit more than one any-peer (which need to be merged)
-      if (nonPlacedValues.nonEmpty || anyPeerBases.size > 1)
-        List(tq"$anyPeerName") ->
-          List(q"${Flag.SYNTHETIC} trait $anyPeerName extends ..$anyPeerBases { ..$nonPlacedValues }")
+      // we only need a trait for non-placed values if we have non-placed values or
+      // we inherit more than one trait for non-placed values (which needs to be merged)
+      if (nonplacedValues.nonEmpty || nonplacedBases.size > 1)
+        Some(tq"${names.placedValues}") ->
+          Some(q"${Flag.SYNTHETIC} trait ${names.placedValues} extends ..${trees.placedValues :: nonplacedBases} { ..$nonplacedValues }")
       else
-        List.empty ->
-          List.empty
+        None -> None
     }
 
     val peerImpls = modulePeers flatMap { case peer @ Peer(symbol, name, bases, _) =>
@@ -90,7 +90,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       }
 
       // generate peer implementation
-      val peerBases = anyPeer ++ overriddenBases ++ inheritedBases
+      val peerBases = nonplaced ++ overriddenBases ++ inheritedBases
       val peerBody = delegatedBases ++ placedValues
       val construction = name.toTermName
 
@@ -106,6 +106,21 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       Seq(peerImpl, peerConstruction)
     }
 
-    records ++ (anyPeerImpl ++ peerImpls map { GlobalValue(NoSymbol, module.symbol, _) })
+    // create records for new peer implementations
+    val extendedRecords =
+      records ++ (nonplacedImpl ++ peerImpls map { GlobalValue(NoSymbol, module.symbol, _) })
+
+    // assemble multitier module
+    val tree = module.tree map { (mods, parents, self, _) =>
+      (mods mapAnnotations { multitierModuleAnnotation :: _ },
+       parents,
+       treeCopy.ValDef(self, self.mods, names.multitierModule, self.tpt, self.rhs),
+       extendedRecords collect { case value: GlobalValue => value.tree })
+    }
+
+    // add assembled results to records
+    Assembly(tree) :: records
   }
+
+  private val multitierModuleAnnotation = q"new ${trees.multitierModule}"
 }

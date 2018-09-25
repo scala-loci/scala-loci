@@ -4,7 +4,7 @@ package impl
 
 import scala.reflect.macros.blackbox
 
-class Multitier(val c: blackbox.Context) extends MultitierCode {
+class Multitier(val c: blackbox.Context) {
   import c.universe._
 
   def annotation(annottees: Tree*): Tree = {
@@ -18,40 +18,47 @@ class Multitier(val c: blackbox.Context) extends MultitierCode {
     }
     val isRecursiveExpansion = recursionCount > 2
 
-    val code = annottee match {
-      case ClassDef(_, _, _, _) | ModuleDef(_, _, _)
-          if c.hasErrors || isRecursiveExpansion =>
-        Left(annottee)
-      case ClassDef(_, _, _, Template(_, _, _)) =>
-        Right(new MultitierClass(annottee))
-      case ModuleDef(_, _, Template(_, _, _)) =>
-        Right(new MultitierModule(annottee))
+    val annotteeImpl = annottee match {
+      case annottee: ImplDef =>
+        annottee
       case _ =>
-        c.abort(
-          c.enclosingPosition,
+        c.abort(c.enclosingPosition,
           "multitier annotation only applicable to classes, traits or objects")
     }
 
-    val result = code match {
-      case Left(annottee) =>
+    val processedAnnotee: Tree =
+      if (!c.hasErrors && !isRecursiveExpansion) {
+        import preprocessors._
+        import components._
+        import retypecheck._
+
+        val retyper = c.retyper
+
+        val preprocessedAnnottee = Preprocessor.run(c)(
+          annottee,
+          Seq(MultitierTypes))
+
+        val typedAnnottee = retyper typecheck preprocessedAnnottee match {
+          case tree: ImplDef => tree
+        }
+
+        val Engine.Result(engine, records) = Engine.run(c)(
+          typedAnnottee,
+          Seq(Commons, ModuleInfo, Peers, Values, Impls, Assembly))
+
+        val assembly = engine.require(Assembly)
+
+        (records
+          collectFirst { case assembly.Assembly(annottee) =>
+            retyper untypecheckAll annottee
+          }
+          getOrElse annottee)
+      }
+      else
         annottee
 
-      case Right(untypedCode) =>
-        import components._
-
-        val code = untypedCode.typechecked
-
-        val Engine.Result(engine, records) =
-          Engine.run(c)(code.tree, Seq(Commons, ModuleInfo, Peers, Values, Assembly))
-
-        val values = engine.require(Values)
-
-        val result = code replaceBody
-          (records collect { case values.GlobalValue(_, _, tree) => tree })
-
-        result.untypechecked.tree
-    }
-
-    companion.headOption map { companion => q"$result; $companion"} getOrElse result
+    (companion.headOption
+      map { companion => q"$processedAnnotee; $companion"}
+      getOrElse processedAnnotee)
   }
 }

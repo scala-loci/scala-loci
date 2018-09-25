@@ -3,6 +3,9 @@ package language
 package impl
 package components
 
+import retypecheck._
+
+import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox
 
 object Commons extends Component.Factory[Commons] {
@@ -16,9 +19,13 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   import engine.c.universe._
   import names._
 
+  val retyper = engine.c.retyper
+
   object names {
     val root = termNames.ROOTPKG
     val tie = TypeName("Tie")
+    val placedValues = TypeName(NameTransformer encode "<placed values>")
+    val multitierModule = TermName(NameTransformer encode "<multitier module>")
   }
 
   object symbols {
@@ -27,6 +34,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val local = symbolOf[Local[_]]
     val On = symbolOf[Placement.On[_]]
     val Placed = symbolOf[Placement.Placed]
+    val placedValues = engine.c.mirror.staticModule("_root_.loci.dev.runtime.PlacedValues")
   }
 
   object types {
@@ -38,12 +46,43 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val remote = typeOf[Remote[_]]
     val placedValue = typeOf[PlacedValue[_, _]]
     val subjective = typeOf[Placed.Subjective[_, _]]
+    val multitierStub = typeOf[runtime.MultitierStub]
+    val multitierModule = typeOf[runtime.MultitierModule]
   }
 
   object trees {
     val compileTimeOnly = tq"$root.scala.annotation.compileTimeOnly"
+    val multitierStub = tq"$root.loci.dev.runtime.MultitierStub"
+    val placedValues = tq"$root.loci.dev.runtime.PlacedValues"
+    val multitierModule = tq"$root.loci.dev.runtime.MultitierModule"
     val remote = tq"$root.loci.dev.Remote"
   }
+
+  def createTypeTree(tpe: Type, pos: Position): Tree = {
+    def containsTypeTree(tree: Tree) = tree exists {
+      case _: TypeTree => true
+      case _ => false
+    }
+
+    val tree = retyper.createTypeTree(tpe, pos)
+    if (containsTypeTree(tree)) {
+      val underlyingTree = retyper.createTypeTree(tpe.underlying, pos)
+      if (containsTypeTree(underlyingTree))
+        tree
+      else
+        underlyingTree
+    }
+    else
+      tree
+  }
+
+  def createTypeTree(tree: Tree): Tree =
+    tree match {
+      case tree: TypeTree if tree.original == null =>
+        createTypeTree(tree.tpe, tree.pos)
+      case _ =>
+        tree
+    }
 
   def uniqueName(symbol: Symbol): String = {
     val owner = symbol.owner
@@ -71,6 +110,13 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     case SingleType(pre, sym) =>
       s"${uniqueName(pre, outer)}$$${sym.name.toString}"
     case _ => uniqueName(tpe.typeSymbol)
+  }
+
+  implicit class ListOps[T](list: List[T]) {
+    def process(f: PartialFunction[T, T]): List[T] =
+      list map { v => f.applyOrElse(v, identity[T]) }
+    def flatProcess(f: PartialFunction[T, TraversableOnce[T]]): List[T] =
+      list flatMap { v => f.applyOrElse(v, Traversable(_: T)) }
   }
 
   implicit class TypeOps(tpe: Type) {
@@ -110,6 +156,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   }
 
   implicit class SymbolOps(symbol: Symbol) {
+    def allAnnotations: List[Annotation] =
+      if (symbol.isMethod && symbol.asMethod.isAccessor)
+        symbol.annotations ++ symbol.asMethod.accessed.annotations
+      else
+        symbol.annotations
     def fullNestedName: String = {
       val name = symbol.fullName
       val tpe =
@@ -140,6 +191,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     def orElse(other: Position): Position = if (pos == NoPosition) other else pos
   }
 
+  implicit class ModifiersOps(mods: Modifiers) {
+    def withFlags(flags: FlagSet): Modifiers =
+      Modifiers(mods.flags | flags, mods.privateWithin, mods.annotations)
+  }
+
   implicit class TreeOps(tree: Tree) {
     def original: Tree = tree match {
       case tree: TypeTree => tree.original
@@ -147,19 +203,31 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     }
   }
 
+  implicit class ImplDefOps(tree: ImplDef) {
+    def map(f: (Modifiers, List[Tree], ValDef, List[Tree]) =>
+               (Modifiers, List[Tree], ValDef, List[Tree])): ImplDef = tree match {
+      case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, body)) =>
+        val (modsNew, parentsNew, selfNew, bodyNew) = f(mods, parents, self, body)
+        treeCopy.ClassDef(tree, modsNew, tpname, tparams,
+          treeCopy.Template(impl, parentsNew, selfNew, bodyNew))
+
+      case ModuleDef(mods, tpname, impl @ Template(parents, self, body)) =>
+        val (modsNew, parentsNew, selfNew, bodyNew) = f(mods, parents, self, body)
+        treeCopy.ModuleDef(tree, modsNew, tpname,
+          treeCopy.Template(impl, parentsNew, selfNew, bodyNew))
+    }
+  }
+
   implicit class ValOrDefDefOps(tree: ValOrDefDef) {
-    def map(f: (Modifiers, TermName, Tree, Tree) => (Modifiers, TermName, Tree, Tree)): ValOrDefDef = tree match {
+    def map(f: (Modifiers, TermName, Tree, Tree) =>
+               (Modifiers, TermName, Tree, Tree)): ValOrDefDef = tree match {
       case ValDef(mods, name, tpt, rhs) =>
         val (modsNew, nameNew, tptNew, rhsNew) = f(mods, name, tpt, rhs)
-        internal.setPos(
-          ValDef(modsNew, nameNew, tptNew, rhsNew),
-          tree.pos)
+        treeCopy.ValDef(tree, modsNew, nameNew, tptNew, rhsNew)
 
       case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
         val (modsNew, nameNew, tptNew, rhsNew) = f(mods, name, tpt, rhs)
-        internal.setPos(
-          DefDef(modsNew, nameNew, tparams, vparamss, tptNew, rhsNew),
-          tree.pos)
+        treeCopy.DefDef(tree, modsNew, nameNew, tparams, vparamss, tptNew, rhsNew)
     }
   }
 }
