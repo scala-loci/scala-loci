@@ -1,7 +1,7 @@
 package loci
 package transmitter
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -74,7 +74,7 @@ object Transmittable extends
   : resolution.transmittable.Type = resolution.transmittable.self
 
 
-  final class SingletonValue[B, I, R, V] private (val value: V) extends AnyVal
+  final class SingletonValue[B, I, R, +V] private (val value: V) extends AnyVal
 
   object SingletonValue {
     implicit def singletonValue[B, I, R](implicit
@@ -83,35 +83,32 @@ object Transmittable extends
       new SingletonValue(transmittable)
   }
 
-  sealed trait AuxResolutionFallback {
-    implicit def resolutionFallback[B, I, R, P, T <: Transmittables, V](implicit
-      singleton: SingletonValue[B, I, R, V],
-      parameters: V <:< Transmittable[B, I, R] {
-        type Proxy = P
-        type Transmittables = T
-        type Type = Aux[B, I, R, P, T]
-      })
-    : Aux.Resolution[B, I, R, P, T] =
-      new Aux.Resolution(singleton.value)
-  }
-
-  object Aux extends AuxResolutionFallback {
-    final class Resolution[B, I, R, P, T <: Transmittables] private[Transmittable] (
+  object Aux {
+    final class Resolution[B, I, R, P, T <: Transmittables] private[Aux] (
       val transmittable: Aux[B, I, R, P, T]) extends AnyVal
 
-    implicit def resolution[
-        B, I, R, P, T <: Transmittables, V <: Transmittable[B, I, R] {
-          type Proxy = P
-          type Transmittables = T
-          type Type = Aux[B, I, R, P, T]
-        }](implicit
-      singleton: SingletonValue[B, I, R, V])
-    : Resolution[B, I, R, singleton.value.Proxy, singleton.value.Transmittables] =
-      new Resolution(singleton.value)
+    sealed trait ResolutionFallback {
+      @compileTimeOnly("Cannot resolve Transmittable instance")
+      implicit def resolution[B, I, R, P, T <: Transmittables]
+      : Resolution[B, I, R, P, T] =
+        throw new NotImplementedError
+    }
+
+    object Resolution extends ResolutionFallback {
+      implicit def resolution[B, I, R, P, T <: Transmittables](implicit
+        singleton: SingletonValue[B, I, R, Aux[B, I, R, P, T]])
+      : Resolution[B, I, R, P, T] =
+        new Resolution(singleton.value)
+    }
+
+    implicit def resolution[B, I, R](implicit
+      transmittable: Transmittable[B, I, R])
+    : Resolution[B, I, R, transmittable.Proxy, transmittable.Transmittables] =
+      new Resolution(transmittable)
   }
 
   object Delegating {
-    final class Resolution[D <: Delegating] private[Transmittable] (
+    final class Resolution[D <: Delegating] private[Delegating] (
       val transmittables: D) extends AnyVal
 
     implicit def single[B, I, R, P, T <: Transmittables](implicit
