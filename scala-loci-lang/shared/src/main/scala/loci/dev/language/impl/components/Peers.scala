@@ -66,6 +66,23 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         None
     })
 
+  def modulePeer(tpe: Type): Boolean = {
+    val symbol = tpe.typeSymbol
+
+    def isModuleSymbol(sym: Symbol) =
+      sym == module.classSymbol ||
+      sym.isModule && sym.asModule.moduleClass == module.classSymbol
+
+    if (module.symbol.info.members.exists { _ == symbol })
+      tpe.underlying.asSeenFrom(internal.thisType(module.classSymbol), symbol.owner) match {
+        case TypeRef(ThisType(sym), _, _) => isModuleSymbol(sym)
+        case TypeRef(SingleType(_, sym), _, _) => isModuleSymbol(sym)
+        case _ => false
+      }
+    else
+      false
+  }
+
 
   @inline def requirePeerType(symbol: Symbol): Peer =
     requirePeerType(symbol, EmptyTree, NoPosition)
@@ -102,8 +119,6 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   def checkPeerType(symbol: Symbol, tree: Tree, pos: Position): Option[Peer] = {
     // force loading of annotations
     val symbolType = symbol.info
-
-    val symbolOwnerType = symbol.owner.info
 
     if (symbol.annotations exists { _.tree.tpe <:< types.peer }) {
       // recompute result if the peer symbol is currently under expansion and
@@ -171,11 +186,12 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         val bases = basesSpec collect {
           case (tpe, tree) if tpe =:!= definitions.AnyTpe && tpe =:!= definitions.AnyRefTpe =>
             val symbol = tpe.typeSymbol
+            val id = symbol.name.toString
+
             if (!(cache contains symbol))
               requirePeerType(symbol, EmptyTree, tree.pos orElse symbolPos)
 
-            val id = uniqueName(tpe, symbolOwnerType)
-            if (symbolOwnerType.members exists { _ == symbol })
+            if (modulePeer(tpe))
               Peer.InheritedBase(tpe, TypeName(s"$$loci$$peer$$$id"), tree)
             else
               Peer.DelegatedBase(tpe, id, TermName(s"$$loci$$peer$$$id"), tree)

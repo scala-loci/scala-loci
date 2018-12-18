@@ -100,18 +100,6 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     }
   }
 
-  def uniqueName(tpe: Type, outer: Type): String = tpe match {
-    case TypeRef(ThisType(_), sym, _) =>
-      if (outer.members exists { _ == sym }) sym.name.toString else uniqueName(sym)
-    case SingleType(ThisType(_), sym) =>
-      if (outer.members exists { _ == sym }) sym.name.toString else uniqueName(sym)
-    case TypeRef(pre, sym, _) =>
-      s"${uniqueName(pre, outer)}$$${sym.name.toString}"
-    case SingleType(pre, sym) =>
-      s"${uniqueName(pre, outer)}$$${sym.name.toString}"
-    case _ => uniqueName(tpe.typeSymbol)
-  }
-
   implicit class ListOps[T](list: List[T]) {
     def process(f: PartialFunction[T, T]): List[T] =
       list map { v => f.applyOrElse(v, identity[T]) }
@@ -194,6 +182,20 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   implicit class ModifiersOps(mods: Modifiers) {
     def withFlags(flags: FlagSet): Modifiers =
       Modifiers(mods.flags | flags, mods.privateWithin, mods.annotations)
+    def withoutFlags(flags: FlagSet): Modifiers = {
+      val reducedFlags =
+        Seq(Flag.ABSOVERRIDE, Flag.ABSTRACT, Flag.ARTIFACT, Flag.BYNAMEPARAM,
+            Flag.CASE, Flag.CASEACCESSOR, Flag.CONTRAVARIANT, Flag.COVARIANT,
+            Flag.DEFAULTINIT, Flag.DEFAULTPARAM, Flag.DEFERRED, Flag.FINAL,
+            Flag.IMPLICIT, Flag.INTERFACE, Flag.LAZY, Flag.LOCAL, Flag.MACRO,
+            Flag.MUTABLE, Flag.OVERRIDE, Flag.PARAM, Flag.PARAMACCESSOR,
+            Flag.PRESUPER, Flag.PRIVATE, Flag.PROTECTED, Flag.SEALED,
+            Flag.STABLE, Flag.SYNTHETIC, Flag.TRAIT)
+          .foldLeft(NoFlags) { (flagAcc, flag) =>
+            if ((flags != (flags | flag)) && (mods hasFlag flag)) flagAcc | flag else flagAcc
+          }
+      Modifiers(reducedFlags, mods.privateWithin, mods.annotations)
+    }
   }
 
   implicit class TreeOps(tree: Tree) {

@@ -7,7 +7,7 @@ import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object Impls extends Component.Factory[Impls](
-    requires = Seq(ModuleInfo, Commons, Values)) {
+    requires = Seq(ModuleInfo, Commons, Peers, Values)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new Impls(engine)
   def asInstance[C <: blackbox.Context] = { case c: Impls[C] => c }
 }
@@ -18,35 +18,40 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   val moduleInfo = engine.require(ModuleInfo)
   val commons = engine.require(Commons)
+  val peers = engine.require(Peers)
   val values = engine.require(Values)
 
   import engine._
   import engine.c.universe._
   import moduleInfo._
   import commons._
+  import peers._
   import values._
 
 
-  def liftNestedImplementations(records: List[Any]): List[Any] = {
+  def liftNestedImplementations(records: List[Any]): List[Any] =
     (records
       flatProcess {
-        case GlobalValue(symbol, owner, tree: ImplDef) =>
-          val (global, nonplaced) = lift(tree)
-          (global map { GlobalValue(symbol, owner, _) }) ++
-          (nonplaced map { NonPlacedValue(symbol, owner, _) })
+        case ModuleValue(symbol, tree: ImplDef) =>
+          val (moduleValues, placedValues) = lift(tree)
+          (moduleValues map { ModuleValue(symbol, _) }) ++
+          (placedValues map { PlacedValueDef(symbol, _, None, Modality.None) })
       }
       process {
+        case value: PlacedValuePeerImpl =>
+          value.copy(tree = injectPlacedValueReferences(value.tree,
+            q"${requirePeerType(value.peer).name}.this: ${names.multitierModule}.${names.placedValues}"))
         case value: Value =>
-          value.copy(tree = injectPlacedValueReferences(value.tree))
+          value.copy(tree = injectPlacedValueReferences(value.tree,
+            q"${names.placedValues}.this"))
       }
       process {
-        case value: NonGlobalValue =>
+        case value: PlacedValue =>
           value.copy(tree = typeTreeLifter transform value.tree)
       })
-  }
 
-  def lift(tree: Tree): (Option[Tree], Option[Tree]) =
-    lift(tree, moduleSelfReference)
+  private def lift(tree: Tree): (Option[Tree], Option[Tree]) =
+    lift(tree, q"${names.multitierModule}")
 
   private def lift(tree: Tree, valuePrefix: Tree): (Option[Tree], Option[Tree]) =
     tree match {
@@ -121,10 +126,10 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       if (tree.mods hasFlag Flag.CASE)
         c.abort(tree.pos, "Case objects may not refer to definitions of the multitier module")
 
-      val (global, nonplaced) = (body map { lift(_, q"$valuePrefix.$name") }).unzip
+      val (moduleValues, placedValues) = (body map { lift(_, q"$valuePrefix.$name") }).unzip
 
-      Some(treeCopy.ModuleDef(tree, mods, name, Template(parents, self, global.flatten))) ->
-        Some(treeCopy.ModuleDef(tree, liftMods(tree.symbol, mods), name, Template(parents, self, nonplaced.flatten)))
+      Some(treeCopy.ModuleDef(tree, mods, name, Template(parents, self, moduleValues.flatten))) ->
+        Some(treeCopy.ModuleDef(tree, liftMods(tree.symbol, mods), name, Template(parents, self, placedValues.flatten)))
     }
     else {
       val mods = if (tree.symbol.owner == module.classSymbol) tree.mods else liftMods(tree.symbol, tree.mods)
@@ -158,22 +163,12 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       (mods hasFlag Flag.PRIVATE) ||
       (mods hasFlag Flag.PROTECTED)
 
-    val privateWithin = liftPrivateWithin(symbol.privateWithin, scopeRestrictionFlag)
-
     // remove `private` and `local` flags since the cannot be used in conjunction
     // with `privateWithin` (as opposed to the `protected` flag)
-    val flags =
-      Seq(Flag.ABSOVERRIDE, Flag.ABSTRACT, Flag.ARTIFACT, Flag.BYNAMEPARAM,
-          Flag.CASE, Flag.CASEACCESSOR, Flag.CONTRAVARIANT, Flag.COVARIANT,
-          Flag.DEFAULTINIT, Flag.DEFAULTPARAM, Flag.DEFERRED, Flag.FINAL,
-          Flag.IMPLICIT, Flag.INTERFACE, Flag.LAZY, Flag.MACRO, Flag.MUTABLE,
-          Flag.OVERRIDE, Flag.PARAM, Flag.PARAMACCESSOR, Flag.PRESUPER,
-          Flag.PROTECTED, Flag.SEALED, Flag.STABLE, Flag.SYNTHETIC, Flag.TRAIT)
-        .foldLeft(NoFlags) { (flags, flag) =>
-          if ((removeFlags != (removeFlags | flag)) && (mods hasFlag flag)) flags | flag else flags
-        }
-
-    Modifiers(flags, privateWithin, mods.annotations)
+    Modifiers(
+      (mods withoutFlags (Flag.PRIVATE | Flag.LOCAL | removeFlags)).flags,
+      liftPrivateWithin(symbol.privateWithin, scopeRestrictionFlag),
+      mods.annotations)
   }
 
   // the visibility for value aliases to objects is the same as defined for the object
@@ -197,55 +192,19 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       else
         treeCopy.Apply(tree, tree, List(arg))
 
-  private def enclosingPlacedValueReference(symbol: Symbol, pos: Position): Tree = {
-    def enclosingUnliftedClass(symbol: Symbol): Option[ClassSymbol] =
-      if (symbol == NoSymbol || symbol == module.classSymbol)
-        None
-      else if (symbol.isClass && !symbol.isModuleClass && isUnlifted(symbol))
-        Some(symbol.asClass)
-      else
-        enclosingUnliftedClass(symbol.owner)
+  private def enclosingPlacedValueReference(symbol: Symbol, enclosing: Tree, pos: Position): Tree = {
+    def enclosingUnliftedClass(symbol: Symbol): Boolean =
+      symbol != NoSymbol &&
+      symbol != module.classSymbol &&
+      ((symbol.isClass && !symbol.isModuleClass && isUnlifted(symbol)) ||
+        enclosingUnliftedClass(symbol.owner))
 
     atPos(pos) {
-      (enclosingUnliftedClass(symbol)
-        map { symbol => q"${symbol.name}.this.${names.placedValues.toTermName}" }
-        getOrElse q"${names.placedValues}.this")
+      if (enclosingUnliftedClass(symbol))
+        q"${names.placedValues.toTermName}"
+      else
+        enclosing
     }
-  }
-
-  // construct the stable path within a multitier module for a symbol
-  // using a given prefix tree if the symbol has a stable path
-  // within the module
-  // module-stable implementations take part in lifting/unlifting
-  // this method assumes that the instance referenced by the symbol
-  // is part of this module instance
-  private def moduleStablePath(symbol: Symbol, prefix: Tree): Option[Tree] =
-    if ((module.symbol.info.baseClasses contains symbol) ||
-        (symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule }))
-      Some(prefix)
-    else if (symbol.isModuleClass || symbol.isModule)
-      moduleStablePath(symbol.owner, prefix) map { tree =>
-        val moduleSymbol = if(symbol.isClass) symbol.asClass.module else symbol
-        internal.setSymbol(Select(tree, symbol.name.toTermName), moduleSymbol)
-      }
-    else
-      None
-
-  // construct the stable path within a multitier module for a type
-  // using a given prefix tree if the symbol has a stable path
-  // within this module instance
-  // module-stable implementations take part in lifting/unlifting
-  private def moduleStablePath(tpe: Type, prefix: Tree): Option[Tree] = tpe match {
-    case ThisType(sym) =>
-      moduleStablePath(sym, prefix)
-    case SingleType(_, module.symbol) =>
-      Some(prefix)
-    case SingleType(pre, sym) if sym.isTerm =>
-      moduleStablePath(pre, prefix) map { tree =>
-        internal.setSymbol(Select(tree, sym.name), sym)
-      }
-    case _ =>
-      None
   }
 
   // construct the stable prefix path within a multitier module
@@ -312,11 +271,25 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   // lift type references to types which are stable within the module
   private object typeTreeLifter extends Transformer {
+    def multitierMember(tree: Tree): Boolean = tree match {
+      case Select(Ident(_), _) => isMultitierModule(tree.symbol.info)
+      case Select(qualifier, _) => multitierMember(qualifier)
+      case _ => true
+    }
+
+    def moduleMember(tree: Tree): Boolean = tree match {
+      case Select(qualifier, _) =>
+        (tree.symbol.isModule || tree.symbol.isModuleClass) && moduleMember(qualifier)
+      case _ =>
+        true
+    }
+
     override def transform(tree: Tree): Tree = tree match {
       case tree: TypeTree if tree.original != null =>
         internal.setOriginal(TypeTree(), transform(tree.original))
       case Select(qualifier, name) if tree.isType =>
-        (moduleStablePath(qualifier.tpe, moduleSelfReference)
+        (moduleStablePath(qualifier.tpe, q"${names.multitierModule}")
+          filter { tree => multitierMember(tree) || moduleMember(tree) }
           map { treeCopy.Select(tree, _, name) }
           getOrElse super.transform(tree))
       case _ =>
@@ -327,7 +300,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   // create synthetic placed value references
   // potentially replacing or removing the dummy references created implicitly
   // or inserted by the preprocessor
-  private def injectPlacedValueReferences(tree: Tree): Tree = {
+  private def injectPlacedValueReferences(tree: Tree, enclosing: Tree): Tree = {
     val skippedTrees = mutable.Set.empty[Tree]
 
     object placedValueReferencesCreator extends Transformer {
@@ -370,7 +343,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                   if (isModuleStable(classSymbol.owner))
                     addImplicitArgument(tree, q"${names.placedValues.toTermName}")
                   else
-                    addImplicitArgument(tree, enclosingPlacedValueReference(classSymbol.owner, classSymbol.pos))
+                    addImplicitArgument(tree, enclosingPlacedValueReference(classSymbol.owner, enclosing, classSymbol.pos))
               }
               Some(treeCopy.DefDef(tree, mods, name, tparams, vparamss, tpt,
                 treeCopy.Block(block, stats, expr)))
@@ -390,7 +363,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                   hasModuleStableParents &&
                   !inheritsImplicitPlacedValueReference)
                 Some(q"""${Flag.SYNTHETIC} protected[this] def ${names.placedValues.toTermName}: ${names.placedValues} =
-                           ${enclosingPlacedValueReference(classSymbol.owner, classSymbol.pos)}""")
+                           ${enclosingPlacedValueReference(classSymbol.owner, enclosing, classSymbol.pos)}""")
               else
                 None
 
@@ -404,7 +377,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
         // implicitly resolved dummy for synthetic placed value reference
         case q"$expr.$_[..$_]" if expr.symbol == symbols.placedValues =>
-          enclosingPlacedValueReference(currentOwner, tree.pos)
+          enclosingPlacedValueReference(currentOwner, enclosing, tree.pos)
 
         // class instantiation
         case q"new $expr[..$tpts](...$exprss)" if expr.tpe != null =>
@@ -416,7 +389,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
             skippedTrees += expr
             addImplicitArgument(
               super.transform(tree),
-              enclosingPlacedValueReference(currentOwner, tree.pos))
+              enclosingPlacedValueReference(currentOwner, enclosing, tree.pos))
           }
           else
             super.transform(tree)
