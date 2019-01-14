@@ -129,6 +129,17 @@ class Registry {
     bind(builder(name))(function)
 
   def bind[T](binding: Binding[T])(function: T): Unit =
+    bindings.bind(binding)(_ => function)
+
+  def bindValuePerRemote[T](name: String)(function: RemoteRef => T)(
+      implicit builder: BindingBuilder.Value[T]): Unit =
+    bindPerRemote(builder(name))(function)
+
+  def bindPerRemote[T](name: String)(function: RemoteRef => T)(
+      implicit builder: BindingBuilder[T]): Unit =
+    bindPerRemote(builder(name))(function)
+
+  def bindPerRemote[T](binding: Binding[T])(function: RemoteRef => T): Unit =
     bindings.bind(binding)(function)
 
   def lookupValue[T](name: String, remote: RemoteRef)(

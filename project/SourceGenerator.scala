@@ -80,8 +80,8 @@ object SourceGenerator {
         val args = (0 until i) map { i => s"v$i" } mkString ", "
 
         val function =
-          if (i == 0) s"function$i[T, R]"
-          else s"function$i[T, $argTypes, R]"
+          if (i == 0) s"function$i[R]"
+          else s"function$i[$argTypes, R]"
 
         val marshallables =
           if (i == 0) s"""
@@ -94,30 +94,26 @@ object SourceGenerator {
           if (i == 0) "MessageBuffer.empty"
           else s"arg marshal (($args), abstraction)"
 
-        val castedFunction = s"function.asInstanceOf[($argTypes) => R]"
-
         val tupledFunction =
-          if (i == 1) s"$castedFunction"
-          else s"$castedFunction.tupled"
+          if (i < 2) s"function(abstraction.remote)"
+          else s"function(abstraction.remote).tupled"
 
         val dispatch =
           if (i == 0) s"""
-            |          Try { res marshal ($castedFunction(), abstraction) }"""
+            |          Try { res marshal ($tupledFunction(), abstraction) }"""
           else s"""
             |          arg unmarshal (message, abstraction) map { arg =>
             |            res marshal ($tupledFunction(arg), abstraction) }"""
 
         s"""
-          |  implicit def $function(implicit
-          |      ev: (($argTypes) => R) =:= T, $marshallables) = {
-          |    locally(ev)
-          |    new BindingBuilder[T] {
+          |  implicit def $function(implicit $marshallables) = {
+          |    new BindingBuilder[($argTypes) => R] {
           |      type RemoteCall = ($argTypes) => Future[res.Result]
-          |      def apply(bindingName: String) = new Binding[T] {
+          |      def apply(bindingName: String) = new Binding[($argTypes) => R] {
           |        type RemoteCall = ($argTypes) => Future[res.Result]
           |        val name = bindingName
           |        def dispatch(
-          |            function: T, message: MessageBuffer,
+          |            function: RemoteRef => ($argTypes) => R, message: MessageBuffer,
           |            abstraction: AbstractionRef) = $dispatch
           |        def call(
           |            abstraction: AbstractionRef)(
@@ -138,6 +134,7 @@ object SourceGenerator {
            |import transmitter.AbstractionRef
            |import transmitter.Marshallable
            |import transmitter.MarshallableArgument
+           |import transmitter.RemoteRef
            |import scala.util.Try
            |import scala.concurrent.Future
            |

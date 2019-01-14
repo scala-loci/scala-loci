@@ -3,6 +3,7 @@ package registry
 
 import transmitter.AbstractionRef
 import transmitter.Channel
+import transmitter.RemoteRef
 import scala.util.Try
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -17,7 +18,7 @@ class Bindings[A <: AbstractionRef](
   private val responseHandlers = new ConcurrentHashMap[
     Channel, ConcurrentLinkedQueue[MessageBuffer => Unit]]
 
-  def bind[T](binding: Binding[T])(function: T): Unit =
+  def bind[T](binding: Binding[T])(function: RemoteRef => T): Unit =
     bindings put (binding.name, binding.dispatch(function, _, _))
 
   def lookup[T](binding: Binding[T], abstraction: A): binding.RemoteCall =
