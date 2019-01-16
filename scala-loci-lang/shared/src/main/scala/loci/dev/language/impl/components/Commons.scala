@@ -17,9 +17,14 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   val phases = Seq.empty
 
   import engine.c.universe._
-  import names._
 
   val retyper = engine.c.retyper
+
+  def expandMultitierModule(tree: ImplDef): ImplDef = {
+    val result = engine.run(tree)
+    val assembly = result.engine.require(Assembly)
+    result.records collectFirst { case assembly.Assembly(tree) => tree } getOrElse tree
+  }
 
   object names {
     val root = termNames.ROOTPKG
@@ -48,14 +53,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val subjective = typeOf[Placed.Subjective[_, _]]
     val multitierStub = typeOf[runtime.MultitierStub]
     val multitierModule = typeOf[runtime.MultitierModule]
-  }
-
-  object trees {
-    val compileTimeOnly = tq"$root.scala.annotation.compileTimeOnly"
-    val multitierStub = tq"$root.loci.dev.runtime.MultitierStub"
-    val placedValues = tq"$root.loci.dev.runtime.PlacedValues"
-    val multitierModule = tq"$root.loci.dev.runtime.MultitierModule"
-    val remote = tq"$root.loci.dev.Remote"
+    val compileTimeOnly = typeOf[annotation.compileTimeOnly]
+    val placedValues = symbols.placedValues.companion.asType.toType
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {
@@ -90,7 +89,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
     if (owner == engine.c.mirror.RootClass)
       name
-    else if (symbol.isSynthetic)
+    else if (symbol.isSynthetic || ((name startsWith "<") && (name endsWith ">")))
       uniqueName(owner)
     else {
       val prefix = uniqueName(owner)

@@ -7,25 +7,27 @@ import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object Values extends Component.Factory[Values](
-    requires = Seq(ModuleInfo, Commons, Peers)) {
+    requires = Seq(Commons, ModuleInfo, Initialization, Peers)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new Values(engine)
   def asInstance[C <: blackbox.Context] = { case c: Values[C] => c }
 }
 
 class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
-    Phase("values:collect", collectPlacedValues, before = Set("*", "values:validate")),
+    Phase("values:collect", collectPlacedValues, after = Set("init:inst"), before = Set("*", "values:validate")),
     Phase("values:validate", validatePlacedValues, before = Set("*")),
     Phase("values:fixrefs", fixEnclosingReferences, after = Set("*", "values:validate")))
 
-  val moduleInfo = engine.require(ModuleInfo)
   val commons = engine.require(Commons)
+  val moduleInfo = engine.require(ModuleInfo)
+  val initialization = engine.require(Initialization)
   val peers = engine.require(Peers)
 
   import engine._
   import engine.c.universe._
-  import moduleInfo._
   import commons._
+  import moduleInfo._
+  import initialization._
   import peers._
 
 
@@ -82,19 +84,122 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     val expr = s"$$loci$$expr$$${uniqueName(module.symbol)}$$"
     var index = 0
 
-    // create module-level members and corresponding peer-level members
-    def concretize(
+    // create a member for initializing a multitier module reference
+    // at the level of placed values for every peer
+    def setupMultitierModule(tree: Tree, multitierName: TermName, multitierType: Tree): Seq[Value] =
+      modulePeers map { peer =>
+        val bases = multitierType :: (peer.bases collect {
+          case Peer.DelegatedBase(TypeRef(pre, _, _), _, name, _)
+              if pre.termSymbol == tree.symbol =>
+            tq"${names.multitierModule}.${pre.termSymbol.asTerm.name}.$name"
+        })
+
+        val value = extractValue(multitierName, NoType, multitierType, q"new ..$bases { }", tree.pos)
+
+        PlacedValuePeerImpl(tree.symbol, value, peer.symbol, Modality.None)
+      }
+
+    // rename references for a given symbol to a given name
+    def rename(tree: Tree, symbol: Symbol, classSymbol: Symbol, name: TypeName) = {
+      object transformer extends Transformer {
+        override def transform(tree: Tree): Tree = tree match {
+          case tree: TypeTree if tree.original != null =>
+            internal.setOriginal(TypeTree(), transform(tree.original))
+          case This(_) if tree.symbol == classSymbol =>
+            treeCopy.This(tree, name)
+          case Ident(_) if tree.isType && tree.symbol == classSymbol =>
+            treeCopy.Ident(tree, name)
+          case Ident(_) if tree.isTerm && tree.symbol == symbol && symbol != NoSymbol =>
+            treeCopy.Ident(tree, name.toTermName)
+          case Select(qualifier, _) if tree.isType && tree.symbol == classSymbol =>
+            super.transform(treeCopy.Select(tree, qualifier, name))
+          case Select(qualifier, _) if tree.isTerm && tree.symbol == symbol && symbol != NoSymbol =>
+            super.transform(treeCopy.Select(tree, qualifier, name.toTermName))
+          case _ =>
+            super.transform(tree)
+        }
+      }
+
+      transformer transform tree
+    }
+
+    // create module-level members and corresponding members at the level of placed values
+    // for multitier module implementations
+    // 1) keep the member at the module-level,
+    //    but rename it and create a value alias to make the compiler happy
+    // 2) create a reference to the multitier module's placed values at the level of placed values and
+    // 3) (potentially) create an initializing member at the level of placed values for every peer
+    def splitMultitierModule(tree: ModuleDef): Seq[Value] = {
+      val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
+      val multitierType = tq"${names.multitierModule}.${tree.name}.${names.placedValues}"
+
+      val mods = Modifiers(
+        Flag.FINAL | Flag.LAZY |
+          (if (tree.mods hasFlag Flag.LOCAL) Flag.LOCAL else NoFlags) |
+          (if (tree.mods hasFlag Flag.PRIVATE) Flag.PRIVATE else NoFlags) |
+          (if (tree.mods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
+        tree.mods.privateWithin)
+
+      val value = extractValue(multitierName, NoType, multitierType, q"new $multitierType { }", tree.pos)
+      val application = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierType = $multitierName()" }
+      val reference = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierName.type = $multitierName" }
+
+      val definition = rename(
+        treeCopy.ModuleDef(tree, tree.mods, multitierName, tree.impl),
+        tree.symbol,
+        tree.symbol.asModule.moduleClass,
+        multitierName.toTypeName)
+
+      Seq(
+        PlacedValueDef(tree.symbol, application, None, Modality.None),
+        PlacedValueDef(tree.symbol, value, None, Modality.None),
+        ModuleValue(tree.symbol, definition),
+        ModuleValue(tree.symbol, reference)) ++
+      setupMultitierModule(tree, multitierName, multitierType)
+    }
+
+    // keep companion classes of multitier module implementations at the module-level,
+    // but rename it and create a type alias to make the compiler happy
+    // (like we do for the multitier module implementations themselves)
+    def splitMultitierModuleCompanionClass(tree: ClassDef): Seq[Value] = {
+      val multitierName = TypeName(s"$$loci$$multitier$$${tree.name}")
+
+      val mods = Modifiers(
+        Flag.FINAL |
+          (if (tree.mods hasFlag Flag.LOCAL) Flag.LOCAL else NoFlags) |
+          (if (tree.mods hasFlag Flag.PRIVATE) Flag.PRIVATE else NoFlags) |
+          (if (tree.mods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
+        tree.mods.privateWithin)
+
+      val reference = atPos(tree.pos) {
+        q"$mods type ${tree.name} = $multitierName"
+      }
+
+      val definition = rename(
+        treeCopy.ClassDef(tree, tree.mods, multitierName, tree.tparams, tree.impl),
+        NoSymbol,
+        tree.symbol,
+        multitierName)
+
+      Seq(
+        ModuleValue(tree.symbol, definition),
+        ModuleValue(tree.symbol, reference))
+    }
+
+    // create module-level members and corresponding members at the level of placed values
+    // for value and method definitions
+    def splitValOrDefDef(
         tree: ValOrDefDef)(
         concreteValues: (ValOrDefDef, Symbol, Type, Tree, Modality) => Seq[PlacedValue]): Seq[Value] =
       // for non-multitier references, create
-      // 1) dummy member at module-level, which is compile-time-only,
-      // 2) member at peer-level and
-      // 3) (potentially) a peer-specific initializing member at the peer-level,
+      // 1) dummy member at the module-level, which is compile-time-only,
+      // 2) member at the level of placed values
+      // 3) (potentially) a peer-specific initializing member at the level of placed values,
       //    in which case the member (2) is always non-abstract
-      if (!isMultitierModule(tree.tpt.tpe)) {
+      if (!isMultitierModule(tree.tpt.tpe, tree.pos)) {
         val values = destructPlacementType(tree.symbol.info, tree.tpt, tree.symbol, tree.pos) match {
           case Some((peer, tpe, tpt, modality)) =>
-            if (isMultitierModule(tpe))
+            if (isMultitierModule(tpe, tree.pos))
               c.abort(tree.pos, "Multitier module instances cannot be placed")
 
             val valOrDefDef = (changeType(stripPlacementSyntax(tree), tpe, tpt)
@@ -131,36 +236,67 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         values :+ ModuleValue(tree.symbol, eraseValue(tree))
       }
       // for multitier references,
-      // 1) keep the member at module-level,
-      // 2) create a reference to the multitier module's placed values at the peer-level and
-      // 3) (potentially) create an initializing member at the peer-level
-      else {
-        val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
-        val multitierType = tq"${names.multitierModule}.${tree.name}.${names.placedValues}"
+      // 1) keep the member at the module-level,
+      // 2) create a reference to the multitier module's placed values at the level of placed values and
+      // 3) (potentially) create an initializing member at the level of placed values for every peer
+      else tree match {
+        case _: ValDef =>
+          val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
+          val multitierType = tq"${names.multitierModule}.${tree.name}.${names.placedValues}"
 
-        if (tree.symbol.isAbstract) {
-          val application = tree map { (mods, name, _, rhs) =>
-            (mods, name, multitierType, rhs)
+          if (tree.symbol.isAbstract) {
+            val application = tree map { (mods, name, _, rhs) =>
+              (mods, name, multitierType, rhs)
+            }
+
+            Seq(
+              PlacedValueDef(tree.symbol, application, None, Modality.None),
+              ModuleValue(tree.symbol, tree))
+          }
+          else {
+            multitierInitializations get tree.symbol foreach { initializations =>
+              if (initializations.head.isTerm)
+                c.abort(tree.pos, s"Multitier module instance may not alias another value: ${initializations.head}")
+              else if (initializations exists { _ != tree.tpt.symbol }) {
+                initializations foreach { initialization =>
+                  val name = initialization.toString
+                  if (name startsWith "<$anon: ")
+                    c.abort(initialization.pos orElse tree.pos,
+                      "Multitier module instance may not be an instance of an anonymous class: " +
+                      name.substring(8, name.length - 1))
+                }
+                c.abort(tree.pos, "Multitier module instance must have most precise type " +
+                  s"of ${initializations.distinct mkString ", "}")
+              }
+            }
+
+            // by ensuring that multitier module instances are always given their precise type (above)
+            // we never should have to instantiate an abstract multitier module
+            // except the type system was circumvented
+            val (init, multitierModuleSetups) =
+              if (tree.tpt.symbol.isAbstract)
+                q"null.asInstanceOf[$multitierType]" -> Seq.empty
+              else
+                q"new $multitierType { }" -> setupMultitierModule(tree, multitierName, multitierType)
+
+            val value = extractValue(multitierName, NoType, multitierType, init, tree.pos)
+            val application = tree map { (mods, name, _, _) =>
+              (mods, name, multitierType, q"$multitierName()")
+            }
+
+            Seq(
+              PlacedValueDef(tree.symbol, application, None, Modality.None),
+              PlacedValueDef(tree.symbol, value, None, Modality.None),
+              ModuleValue(tree.symbol, tree)) ++
+            multitierModuleSetups
           }
 
-          Seq(
-            PlacedValueDef(tree.symbol, application, None, Modality.None),
-            ModuleValue(tree.symbol, tree))
-        }
-        else {
-          val application = tree map { (mods, name, _, _) =>
-            (mods, name, multitierType, q"$multitierName()")
-          }
-
-          val value = atPos(tree.pos) { q"protected[this] def $multitierName(): $multitierType" }
-
-          Seq(
-            PlacedValueDef(tree.symbol, application, None, Modality.None),
-            PlacedValueDef(tree.symbol, value, None, Modality.None),
-            ModuleValue(tree.symbol, tree))
-        }
+        case _ =>
+          c.abort(tree.pos, s"Stable identifier required for multitier module instance: ${tree.symbol.name}")
       }
 
+    // erase statements and expressions initializing a value from the module-level
+    // to make them peer-specific
     // 1) create a no-op erased dummy value,
     // 2) create an overriding peer-specific "real" value and
     // 3) create an application of the value,
@@ -183,81 +319,69 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
     // create module-level and peer-level values (including general placed values and peer-specific ones)
     // for all statements in the multitier module
-    val values = module.stats flatMap {
-      case tree: DefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
-        concretize(tree) { (tree, peer, _, _, modality) =>
-          Seq(PlacedValueDef(tree.symbol, tree, Some(peer), modality))
-        }
+    records ++ (records flatProcess {
+      case Initialized(tree) =>
+        tree.impl.body flatMap {
+          case tree: DefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
+            splitValOrDefDef(tree) { (tree, peer, _, _, modality) =>
+              Seq(PlacedValueDef(tree.symbol, tree, Some(peer), modality))
+            }
 
-      case tree: ValDef if tree.symbol.asTerm.isParamAccessor =>
-        if (!(tree.mods hasFlag Flag.BYNAMEPARAM))
-          c.abort(tree.pos, "Multitier module arguments must be call-by-name")
+          case tree: ValDef if tree.symbol.asTerm.isParamAccessor =>
+            if (!(tree.mods hasFlag Flag.BYNAMEPARAM) && !(tree.mods hasFlag Flag.IMPLICIT))
+              c.abort(tree.pos, "Multitier module arguments must be call-by-name or implicit")
 
-        Seq(ModuleValue(tree.symbol, tree))
+            if (!(tree.mods hasFlag Flag.LOCAL))
+              c.abort(tree.pos, "Multitier module arguments cannot be class values")
 
-      case tree: ValDef =>
-        concretize(tree) { (tree, peer, tpe, tpt, modality) =>
-          erase(
-            tree.rhs, tree.symbol,
-            peer, tpe, tpt, modality,
-            rhs => tree map { (mods, name, tpt, _) => (mods, name, tpt, rhs) })
-        }
+            Seq(ModuleValue(tree.symbol, tree))
 
-      case tree: MemberDef =>
-        Seq(ModuleValue(tree.symbol, tree))
+          case tree: ValDef =>
+            splitValOrDefDef(tree) { (tree, peer, tpe, tpt, modality) =>
+              erase(
+                tree.rhs, tree.symbol,
+                peer, tpe, tpt, modality,
+                rhs => tree map { (mods, name, tpt, _) => (mods, name, tpt, rhs) })
+            }
 
-      case tree =>
-        destructPlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos) match {
-          case Some((peer, _, _, modality)) =>
-            erase(
-              stripPlacementSyntax(tree), NoSymbol,
-              peer, definitions.UnitTpe, TypeTree(definitions.UnitTpe), modality,
-              identity)
+          case tree: ModuleDef if isMultitierModule(tree.symbol.info, tree.pos) =>
+            splitMultitierModule(tree)
 
-          case _ =>
+          case tree: ClassDef if isMultitierModule(tree.symbol.companion.info, tree.pos) =>
+            splitMultitierModuleCompanionClass(tree)
+
+          case tree @ (_: MemberDef | _: Import) =>
+            Seq(ModuleValue(tree.symbol, tree))
+
+          case tree @ q"$_[..$_](...$exprss)"
+              if tree.nonEmpty &&
+                 (tree.symbol.owner == symbols.On ||
+                  tree.symbol.owner == symbols.Placed) =>
+            destructPlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos) match {
+              case Some((peer, _, _, modality)) =>
+                erase(
+                  stripPlacementSyntax(tree), NoSymbol,
+                  peer, definitions.UnitTpe, TypeTree(definitions.UnitTpe), modality,
+                  identity)
+
+              case _ =>
+                Seq(PlacedValueDef(NoSymbol, tree, None, Modality.None))
+            }
+
+          case tree =>
             Seq(PlacedValueDef(NoSymbol, tree, None, Modality.None))
         }
-    }
-
-    // create a reference to the placed values of other multitier modules
-    // which are accessed through a stable path (i.e., not part of the expanding module)
-    val stableMultitierModuleValues = (module.stats flatMap {
-      _ collect {
-        case Select(qualifier, _) =>
-          stableMultitierModuleIdentifier(qualifier).toSeq flatMap { case (delegateName, multitierName, multitierType) =>
-            val delegateDefined = module.classSymbol.baseClasses.tail exists { base =>
-              ((base.info member names.placedValues).info member delegateName) != NoSymbol
-            }
-
-            if (!delegateDefined) {
-              val application = atPos(qualifier.pos) {
-                q"final protected[this] val $delegateName: $multitierType = $multitierName()"
-              }
-              val value = atPos(qualifier.pos) {
-                q"protected[this] def $multitierName(): $multitierType"
-              }
-
-              Seq(
-                PlacedValueDef(NoSymbol, application, None, Modality.None),
-                PlacedValueDef(NoSymbol, value, None, Modality.None))
-            }
-            else
-              Seq.empty
-          }
-      }
-    }).flatten
-
-    records ++ stableMultitierModuleValues ++ values
+    })
   }
 
   // validate types of placed values
   def validatePlacedValues(records: List[Any]): List[Any] = {
     val placedSymbols = (records collect {
-      case PlacedValue(symbol, _, Some(_), _) if symbol != NoSymbol => symbol
+      case PlacedValueDef(symbol, _, Some(_), _) if symbol != NoSymbol => symbol
     }).toSet
 
     records foreach {
-      case PlacedValue(symbol, tree, Some(_), modality) =>
+      case PlacedValueDef(symbol, tree, Some(_), modality) =>
         // ensure local placed values do not override non-local placed values
         // and placed values do not override non-placed values
         symbol.overrides foreach { overrideSymbol =>
@@ -378,11 +502,6 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         case tree: RefTree if !(skippedTrees contains tree) && tree.symbol == module.symbol =>
           This(enclosingName)
 
-        case tree: RefTree if !(skippedTrees contains tree) =>
-          (stableMultitierModuleIdentifier(tree)
-            map { case (delegateName, _, _) =>  q"$enclosingName.this.$delegateName" }
-            getOrElse super.transform(tree))
-
         // any other tree
         case _ =>
           super.transform(tree)
@@ -430,41 +549,24 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       None
   }
 
-  def isMultitierModule(tpe: Type): Boolean = {
-    val symbol = tpe.finalResultType.typeSymbol
-    symbol == module.symbol ||
+  def isMultitierModule(tpe: Type, pos: Position): Boolean = {
+    val finalType = tpe.finalResultType
+
+    val isMultitierModule = finalType.baseClasses take 2 exists { symbol =>
+      symbol == module.symbol ||
       symbol == module.classSymbol ||
       (symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule })
-  }
+    }
 
-  private def stableMultitierModuleIdentifier(tree: Tree) = {
-    def stablePath(symbol: Symbol): Option[Tree] =
-      if (module.symbol.info.baseClasses contains symbol)
-        None
-      else if (symbol.isModule || symbol.isModuleClass ||
-               symbol.isPackage || symbol.isPackageClass ||
-               symbol.isTerm && symbol.asTerm.isStable) {
-        if (symbol.owner == NoSymbol)
-          Some(Ident(termNames.ROOTPKG))
-        else
-          stablePath(symbol.owner) map { tree =>
-            val moduleSymbol = if (symbol.isModuleClass) symbol.asClass.module else symbol
-            internal.setSymbol(Select(tree, symbol.name.toTermName), moduleSymbol)
-          }
+    if (isMultitierModule)
+      finalType match {
+        case RefinedType(_, decls) if decls.nonEmpty =>
+          c.abort(finalType.typeSymbol.pos orElse pos,
+            "Type refinements not allowed for multitier modules")
+        case _ =>
       }
-      else
-        c.abort(tree.pos,
-          s"Stable identifier required to access members of multitier module $tree")
 
-    if (tree.tpe != null && tree.symbol != module.symbol && isMultitierModule(tree.tpe))
-      stablePath(tree.symbol) map { tree =>
-        val name = tree.toString.substring(6).replace('.', '$')
-        (TermName(s"$$loci$$delegate$$root$$$name"),
-         TermName(s"$$loci$$multitier$$root$$$name"),
-         tq"$tree.${names.placedValues}")
-      }
-    else
-      None
+    isMultitierModule
   }
 
   private def destructPlacementType(tpe: Type, tpt: Tree, symbol: Symbol, pos: Position): Option[(Symbol, Type, Tree, Modality)] =
@@ -497,7 +599,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
             val subjectiveTree = valueTree.original match {
               case AppliedTypeTree(_, List(subjectiveValueTree, subjectivePeerTree)) =>
-                tq"${trees.remote}[$subjectivePeerTree] => $subjectiveValueTree"
+                tq"${types.remote}[$subjectivePeerTree] => $subjectiveValueTree"
               case _ => EmptyTree
             }
 
@@ -569,13 +671,84 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     extractedTag
   }
 
+  private val multitierInitializations: Map[Symbol, List[Symbol]] = {
+    val multitierInitializations = mutable.Map.empty[Symbol, mutable.Set[Symbol]]
+
+    def findInitializations(tree: Tree): Seq[Symbol] =
+      tree match {
+        case Apply(_, _) | TypeApply(_, _) | Typed(_, _) =>
+          findInitializations(tree.children.head)
+        case Block(_, expr) =>
+          findInitializations(expr)
+        case Match(_, cases) =>
+          cases flatMap findInitializations
+        case If(_, _, _) =>
+          tree.children.tail flatMap findInitializations
+        case Try(_, _, _) =>
+          tree.children dropRight 1 flatMap findInitializations
+        case Assign(_, _) | Function(_, _) | Literal(_) | Throw(_) | _: DefTree =>
+          Seq.empty
+        case Select(New(_), termNames.CONSTRUCTOR) =>
+          Seq(tree.symbol.owner)
+        case Select(_, TermName("asInstanceOf")) =>
+          findInitializations(tree.children.head)
+        case Select(_, _) =>
+          Seq(tree.symbol)
+        case _ if tree.children.isEmpty =>
+          Seq(tree.symbol)
+        case _ =>
+          tree.children flatMap findInitializations
+      }
+
+    module.tree.impl foreach {
+      case tree: ValOrDefDef
+          if tree.symbol.isTerm &&
+             !tree.symbol.isConstructor &&
+             isMultitierModule(tree.tpt.tpe, tree.pos) =>
+        val initializations = findInitializations(tree.rhs)
+        if (initializations.nonEmpty)
+          multitierInitializations.getOrElseUpdate(
+            tree.symbol,
+            mutable.Set.empty[Symbol]) ++= initializations
+
+      case _ =>
+    }
+
+    // search for new initializations until reaching a fixed point
+    var foundAdditionals = true
+    while (foundAdditionals) {
+      foundAdditionals = false
+      multitierInitializations foreach { case (symbol, initializations) =>
+        val additionals =
+          (initializations flatMap multitierInitializations.get).flatten -- initializations
+        if (additionals.nonEmpty) {
+          initializations ++= additionals
+          foundAdditionals = true
+        }
+      }
+    }
+
+    multitierInitializations.toMap mapValues {
+      _.toList sortBy { symbol =>
+        if (symbol.isTerm) {
+          val termSymbol = symbol.asTerm
+          (if (termSymbol.isStable) -1 else 0) + (if (termSymbol.isAccessor) -1 else 0) - 1
+        }
+        else
+          0
+      }
+    }
+  }
+
   private val accessMessage = "Access to abstraction " +
     "only allowed on peers on which the abstraction is placed. " +
     "Remote access must be explicit."
 
-  private val accessAnnotation = q"new ${trees.compileTimeOnly}($accessMessage)"
+  private val accessAnnotation =
+    internal.setType(q"new ${types.compileTimeOnly}($accessMessage)", types.compileTimeOnly)
 
-  private val multitierStubAnnotation = q"new ${trees.multitierStub}"
+  private val multitierStubAnnotation =
+    internal.setType(q"new ${types.multitierStub}", types.multitierStub)
 
   private def changeType(tree: ValOrDefDef, tpe: Type, tpt: Tree) =
     tree map { (mods, name, _, rhs) =>
@@ -583,11 +756,11 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     }
 
   private def extractValue(name: TermName, tpe: Type, tpt: Tree, rhs: Tree, pos: Position) =
-    atPos(pos) { q"protected[this] override def $name(): ${createTypeTree(tpt orElse TypeTree(tpe))} = $rhs" }
+    atPos(pos) { q"${Flag.SYNTHETIC} protected[this] def $name(): ${createTypeTree(tpt orElse TypeTree(tpe))} = $rhs" }
 
   private def eraseValue(name: TermName, tpe: Type, tpt: Tree, pos: Position) = {
     val tree = createTypeTree(tpt orElse TypeTree(tpe))
-    atPos(pos) { q"protected[this] def $name(): $tree = null.asInstanceOf[$tree]" }
+    atPos(pos) { q"${Flag.SYNTHETIC} protected[this] def $name(): $tree = null.asInstanceOf[$tree]" }
   }
 
   private def eraseValue(tree: ValOrDefDef) =

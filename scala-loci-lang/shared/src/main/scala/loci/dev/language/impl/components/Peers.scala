@@ -3,10 +3,11 @@ package language
 package impl
 package components
 
+import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object Peers extends Component.Factory[Peers](
-    requires = Seq(ModuleInfo, Commons)) {
+    requires = Seq(Commons, ModuleInfo)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new Peers(engine)
   def asInstance[C <: blackbox.Context] = { case c: Peers[C] => c }
 }
@@ -14,13 +15,13 @@ object Peers extends Component.Factory[Peers](
 class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq.empty
 
-  val moduleInfo = engine.require(ModuleInfo)
   val commons = engine.require(Commons)
+  val moduleInfo = engine.require(ModuleInfo)
 
   import engine._
   import engine.c.universe._
-  import moduleInfo._
   import commons._
+  import moduleInfo._
 
 
   type Tie = Tie.Value
@@ -44,16 +45,16 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
     case class InheritedBase(tpe: Type, name: TypeName, tree: Tree) extends Base
 
-    case class DelegatedBase(tpe: Type, id: String, name: TermName, tree: Tree) extends Base
+    case class DelegatedBase(tpe: Type, id: String, name: TypeName, tree: Tree) extends Base
 
     case class Tie(tpe: Type, multiplicity: Peers.this.Tie, tree: Tree)
   }
 
 
-  private val cache = collection.mutable.Map.empty[Symbol, Peer]
+  private val cache = mutable.Map.empty[Symbol, Peer]
 
   val modulePeers: Seq[Peer] =
-    (module.stats flatMap {
+    (module.tree.impl.body flatMap {
       case tree @ q"$_ type $_[..$_] = $tpt" =>
         checkPeerType(tree.symbol, tpt, tree.pos)
       case _ =>
@@ -99,7 +100,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     val peer = checkPeerType(symbol, tree, pos) getOrElse c.abort(symbolPos,
       s"$symbolName is not a peer type: @peer type ${symbol.name}")
 
-    if (!underExpansion(symbol) && (symbol.owner.info member peer.name) == NoSymbol)
+    if (!underEnclosingExpansion(symbol) && (symbol.owner.info member peer.name) == NoSymbol)
       c.abort(symbolPos,
         s"no generated peer definition found for peer type $symbolName, " +
         s"maybe ${symbol.owner.fullName} is not multitier: @multitier ${symbol.owner}")
@@ -194,7 +195,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
             if (modulePeer(tpe))
               Peer.InheritedBase(tpe, TypeName(s"$$loci$$peer$$$id"), tree)
             else
-              Peer.DelegatedBase(tpe, id, TermName(s"$$loci$$peer$$$id"), tree)
+              Peer.DelegatedBase(tpe, id, TypeName(s"$$loci$$peer$$$id"), tree)
         }
 
         // ensure ties are specified to be `Multiple`, `Optional` or `Single`
@@ -246,6 +247,16 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         if (tpe0 =:= tpe1)
           c.abort(tree1.pos orElse pos,
             s"peer type cannot appear multiple times as super peer: $tpe1")
+    }
+
+
+    // ensure that all super peers are defined in the same module
+    peer.bases foreach {
+      case Peer.Base(tpe @ TypeRef(pre, _, _), tree) =>
+        if (!modulePeer(tpe) && !(module.symbol.info.members exists { _ == pre.termSymbol }))
+          c.abort(tree.pos orElse pos,
+            s"peer type cannot declare a super peer of another module: $tpe")
+      case _ =>
     }
 
 

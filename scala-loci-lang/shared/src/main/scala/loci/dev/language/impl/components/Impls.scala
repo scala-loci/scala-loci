@@ -7,24 +7,24 @@ import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object Impls extends Component.Factory[Impls](
-    requires = Seq(ModuleInfo, Commons, Peers, Values)) {
+    requires = Seq(Commons, ModuleInfo, Peers, Values)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new Impls(engine)
   def asInstance[C <: blackbox.Context] = { case c: Impls[C] => c }
 }
 
 class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
-    Phase("impls:lift", liftNestedImplementations, before = Set("values:fixrefs"), after = Set("values:validate")))
+    Phase("impls:lift", liftNestedImplementations, after = Set("values:validate"), before = Set("values:fixrefs")))
 
-  val moduleInfo = engine.require(ModuleInfo)
   val commons = engine.require(Commons)
+  val moduleInfo = engine.require(ModuleInfo)
   val peers = engine.require(Peers)
   val values = engine.require(Values)
 
   import engine._
   import engine.c.universe._
-  import moduleInfo._
   import commons._
+  import moduleInfo._
   import peers._
   import values._
 
@@ -59,6 +59,8 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         Some(tree) -> Some(tree)
       case tree: ValOrDefDef =>
         Some(eraseValue(tree)) -> Some(tree)
+      case tree: ImplDef if isMultitierModule(tree.symbol.info, tree.pos) =>
+        Some(tree) -> None
       case tree: ModuleDef =>
         liftModule(tree, valuePrefix)
       case tree: ClassDef =>
@@ -214,7 +216,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       case EmptyTree =>
         Some("")
       case Select(qualifier, name) =>
-        if (isMultitierModule(tree.symbol.info))
+        if (isMultitierModule(tree.symbol.info, tree.pos))
           multitierPrefixPath(qualifier, multitier = true) map { path => s"$path.$name" }
         else if (!multitier)
           multitierPrefixPath(qualifier, multitier = false)
@@ -272,7 +274,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   // lift type references to types which are stable within the module
   private object typeTreeLifter extends Transformer {
     def multitierMember(tree: Tree): Boolean = tree match {
-      case Select(Ident(_), _) => isMultitierModule(tree.symbol.info)
+      case Select(Ident(_), _) => isMultitierModule(tree.symbol.info, tree.pos)
       case Select(qualifier, _) => multitierMember(qualifier)
       case _ => true
     }
@@ -404,15 +406,16 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   // we cannot instantiate unlifted multitier classes and traits
   // of other multitier module instances
-  private def validateInstantiatability(tree: Tree): Unit = {
-    val TypeRef(pre, _, _) = tree.tpe
+  private def validateInstantiatability(tree: Tree): Unit =
+    if (tree.tpe != null) {
+      val TypeRef(pre, _, _) = tree.tpe
 
-    multitierPrefixPath(pre) foreach { path =>
-      if (path.nonEmpty && isUnlifted(tree.symbol))
-        c.abort(tree.pos,
-          s"Multitier type can only be instantiated in module in which it is defined: $path")
+      multitierPrefixPath(pre) foreach { path =>
+        if (path.nonEmpty && isUnlifted(tree.symbol))
+          c.abort(tree.pos,
+            s"Multitier type can only be instantiated in module in which it is defined: $path")
+      }
     }
-  }
 
   private val unliftables: Set[Symbol] = {
     val unliftables = mutable.Set.empty[Symbol]
@@ -423,6 +426,11 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     object traverser extends Traverser {
       var moduleStackSize = 0
       override def traverse(tree: Tree) = tree match {
+        case _: ImplDef if isMultitierModule(tree.symbol.info, tree.pos) =>
+          val currentModuleStackSize = moduleStackSize
+          moduleStackSize = 0
+          super.traverse(tree)
+          moduleStackSize = currentModuleStackSize
         case _: ClassDef =>
         case _: ModuleDef =>
           moduleStackSize += 1
@@ -430,13 +438,13 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
           moduleStackSize -= 1
         case tree: ValDef
               if tree.symbol != NoSymbol &&
-                 !isMultitierModule(tree.tpt.tpe) &&
+                 !isMultitierModule(tree.tpt.tpe, tree.pos) &&
                  !tree.symbol.isParameter =>
             unliftables += tree.symbol
           super.traverse(tree)
         case tree: DefDef
               if tree.symbol != NoSymbol &&
-                 !isMultitierModule(tree.tpt.tpe) &&
+                 !isMultitierModule(tree.tpt.tpe, tree.pos) &&
                  !tree.symbol.isConstructor &&
                  moduleStackSize == 0 =>
             unliftables += tree.symbol
@@ -446,7 +454,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       }
     }
 
-    module.tree.impl.body foreach { traverser traverse _ }
+    traverser traverseTrees module.tree.impl.body
 
     // compute dependency list for every definition
     module.tree foreach {
@@ -511,10 +519,11 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private val accessAnnotation = {
     val message = "Access to object member of multitier module not allowed."
-    q"new ${trees.compileTimeOnly}($message)"
+    internal.setType(q"new ${types.compileTimeOnly}($message)", types.compileTimeOnly)
   }
 
-  private val multitierStubAnnotation = q"new ${trees.multitierStub}"
+  private val multitierStubAnnotation =
+    internal.setType(q"new ${types.multitierStub}", types.multitierStub)
 
   private def eraseValue(tree: ValOrDefDef) =
     tree map { (mods, name, _, rhs) =>

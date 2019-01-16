@@ -26,16 +26,18 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   import peers._
   import values._
 
-  case class Assembly(tree: Tree)
+  case class Assembly(tree: ImplDef)
 
   private def assemblePeerImplementation(records: List[Any]): List[Any] = {
-    val (placedValuesIdent, placedValues) = {
+    val placedValuesImpl = {
       // inherit implementation for placed values defined in the module bases
-      val placedValuesBases = module.tree.impl.parents flatMap { base =>
-        if ((base.tpe member names.placedValues) != NoSymbol)
-          Some(tq"super[${base.symbol.name.toTypeName}].${names.placedValues}")
-        else
-          None
+      val placedValuesBases = module.tree.impl.parents collect {
+        case parent if
+            parent.tpe =:!= definitions.AnyTpe &&
+            parent.tpe =:!= definitions.AnyRefTpe =>
+          atPos(parent.pos) {
+            tq"super[${parent.symbol.name.toTypeName}].${names.placedValues}"
+          }
       }
 
       // collect placed values
@@ -43,18 +45,12 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         case PlacedValueDef(_, tree, _, _) => tree
       }
 
-      // we only need a trait for placed values if we have placed values or
-      // we inherit more than one trait for placed values (which need to be merged)
-      if (placedValues.nonEmpty || placedValuesBases.size > 1)
-        Some(tq"${names.placedValues}") ->
-          Some(q"${Flag.SYNTHETIC} trait ${names.placedValues} extends ..${trees.placedValues :: placedValuesBases} { ..$placedValues }")
-      else if (placedValuesBases.size == 1)
-        Some(tq"${names.placedValues}") -> None
-      else
-        None -> None
+      // generate placed values
+      val parents = tq"${types.placedValues}" :: placedValuesBases
+      q"${Flag.SYNTHETIC} trait ${names.placedValues} extends ..$parents { ..$placedValues }"
     }
 
-    val peerValues = modulePeers map { case Peer(symbol, name, bases, _) =>
+    val peerValues = modulePeers flatMap { case Peer(symbol, name, bases, _) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
       val overriddenBases = module.tree.impl.parents flatMap { base =>
@@ -74,12 +70,22 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         case PlacedValuePeerImpl(_, tree, `symbol`, _) => tree
       }
 
+      // generate peer implementations
+      val parents = tq"${names.placedValues}" :: overriddenBases ++ inheritedBases
+      val peerImpl = q"${Flag.SYNTHETIC} trait $name extends ..$parents { ..$placedValues }"
+
       // generate peer values
-      q"${Flag.SYNTHETIC} trait $name extends ..${placedValuesIdent ++ overriddenBases ++ inheritedBases} { ..$placedValues }"
+      val peerValue =
+        if (module.symbol.isAbstract)
+          q"${Flag.SYNTHETIC} def ${name.toTermName}: ${names.placedValues}"
+        else
+          q"${Flag.SYNTHETIC} def ${name.toTermName}: ${names.placedValues} = new $name { }"
+
+      Seq(peerImpl, peerValue)
     }
 
     // create records for new peer implementations
-    val stats = (records collect { case value: ModuleValue => value.tree }) ++ placedValues ++ peerValues
+    val stats = (records collect { case value: ModuleValue => value.tree }) ++ (placedValuesImpl +: peerValues)
 
     // assemble multitier module
     val tree = module.tree map { (mods, parents, self, _) =>
@@ -93,5 +99,6 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
     Assembly(tree) :: records
   }
 
-  private val multitierModuleAnnotation = q"new ${trees.multitierModule}"
+  private val multitierModuleAnnotation =
+    internal.setType(q"new ${types.multitierModule}", types.multitierModule)
 }

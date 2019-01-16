@@ -25,25 +25,39 @@ class Multitier(val c: blackbox.Context) {
   import c.universe._
 
   def annotation(annottees: Tree*): Tree = {
-    val annottee :: companion = annottees
+    val multitierAnnotationType = c.mirror.staticClass("_root_.loci.dev.multitier").toType
+
+    val isNestedExpansion = c.openMacros exists { other =>
+      other.macroApplication match {
+        case q"new $macroApplication(...$_).macroTransform(...$_)"
+            if c.enclosingPosition.source.file.path == other.enclosingPosition.source.file.path &&
+               (other.macroApplication exists { _.pos == c.enclosingPosition }) &&
+               (c.enclosingPosition != other.enclosingPosition ||
+                c.macroApplication.toString != other.macroApplication.toString) =>
+          c.typecheck(macroApplication, c.TYPEmode, silent = true).tpe =:= multitierAnnotationType
+
+        case _ =>
+          false
+      }
+    }
 
     // the current macro expansion always appears twice
     // see: http://stackoverflow.com/a/20466423
-    val recursionCount = c.openMacros.count { check =>
-      c.enclosingPosition == check.enclosingPosition &&
-      c.macroApplication.toString == check.macroApplication.toString
+    val recursionCount = c.openMacros.count { other =>
+      c.enclosingPosition == other.enclosingPosition &&
+      c.macroApplication.toString == other.macroApplication.toString
     }
     val isRecursiveExpansion = recursionCount > 2
 
-    annottee match {
-      case _: ImplDef =>
+    val (annottee, companion) = annottees match {
+      case (annottee: ImplDef) :: companion => (annottee, companion)
       case _ =>
         c.abort(c.enclosingPosition,
           "multitier annotation only applicable to classes, traits or objects")
     }
 
     val processedAnnotee: Tree =
-      if (!c.hasErrors && !isRecursiveExpansion) {
+      if (!c.hasErrors && !isRecursiveExpansion && !isNestedExpansion) {
         try {
           import preprocessors._
           import components._
@@ -63,7 +77,7 @@ class Multitier(val c: blackbox.Context) {
 
           val Engine.Result(engine, records) = Engine.run(c)(
             typedAnnottee,
-            Seq(Commons, ModuleInfo, Peers, Values, Impls, Assembly))
+            Seq(Commons, ModuleInfo, Initialization, Peers, Values, Impls, Assembly))
 
           val assembly = engine.require(Assembly)
 
@@ -74,6 +88,18 @@ class Multitier(val c: blackbox.Context) {
             getOrElse annottee)
         }
         catch improveMacroErrorReporting(annottee)
+      }
+      else if (!c.hasErrors && !isRecursiveExpansion) {
+        val mods = annottee.mods mapAnnotations {
+          q"new ${termNames.ROOTPKG}.loci.dev.runtime.MultitierModule" :: _
+        }
+
+        annottee match {
+          case ModuleDef(_, name, impl) =>
+            treeCopy.ModuleDef(annottee, mods, name, impl)
+          case ClassDef(_, name, tparams, impl) =>
+            treeCopy.ClassDef(annottee, mods, name, tparams, impl)
+        }
       }
       else
         annottee

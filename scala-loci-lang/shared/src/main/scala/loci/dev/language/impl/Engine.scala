@@ -11,9 +11,12 @@ trait Engine[C <: blackbox.Context] {
   val c: C
   val components: List[Component[Context]]
   val multitierCode: c.universe.ImplDef
+  val outerMultitierCode: c.universe.ImplDef
 
   def require[Comp[Ctx <: blackbox.Context] <: Component[Ctx]](
     factory: Component.Factory[Comp]): Comp[Context]
+
+  def run(code: c.universe.ImplDef): Engine.Result[Context]
 }
 
 object Engine {
@@ -22,7 +25,14 @@ object Engine {
   def run(
       ctx: blackbox.Context)(
       code: ctx.universe.ImplDef,
-      factories: Seq[Component.AnyFactory]) = {
+      factories: Seq[Component.AnyFactory]): Engine.Result[ctx.type] =
+    runNested(ctx)(code, code, factories)
+
+  private def runNested(
+      ctx: blackbox.Context)(
+      code: ctx.universe.ImplDef,
+      outerCode: ctx.universe.ImplDef,
+      factories: Seq[Component.AnyFactory]): Engine.Result[ctx.type] = {
     val resolved = Components.resolve(factories) match {
       case Components.Resolved(factories) =>
         factories
@@ -32,8 +42,8 @@ object Engine {
     }
 
     val engine =
-      resolved.foldLeft(create(ctx)(code, List.empty)) { (engine, factory) =>
-        create(ctx)(code, engine.components :+ factory(engine))
+      resolved.foldLeft(create(ctx)(code, outerCode, factories, List.empty)) { (engine, factory) =>
+        create(ctx)(code, outerCode, factories, engine.components :+ factory(engine))
       }
 
     val phases = Phases.sort(engine.components flatMap { _.phases }) match {
@@ -62,11 +72,14 @@ object Engine {
   private def create(
       ctx: blackbox.Context)(
       code: ctx.universe.ImplDef,
+      outerCode: ctx.universe.ImplDef,
+      factories: Seq[Component.AnyFactory],
       comps: List[Component[ctx.type]]) =
     new Engine[ctx.type] {
       val c: ctx.type = ctx
       val components = comps
       val multitierCode = code
+      val outerMultitierCode = outerCode
 
       def require[Comp[C <: blackbox.Context] <: Component[C]](factory: Component.Factory[Comp]) =
         (components collectFirst factory.asInstance) getOrElse {
@@ -80,6 +93,9 @@ object Engine {
           ctx.abort(ctx.enclosingPosition, s"$initFailed: " +
             s"Required unavailable component $name")
         }
+
+      def run(code: c.universe.ImplDef) =
+        Engine.runNested(ctx)(code, outerMultitierCode, factories)
     }
 
   private val initFailed = "Multitier macro engine initialization failed"
