@@ -29,6 +29,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   object names {
     val root = termNames.ROOTPKG
     val tie = TypeName("Tie")
+    val base = TypeName("Base")
+    val intermediate = TypeName("Intermediate")
+    val result = TypeName("Result")
+    val proxy = TypeName("Proxy")
+    val transmittables = TypeName("Transmittables")
     val placedValues = TypeName(NameTransformer encode "<placed values>")
     val multitierModule = TermName(NameTransformer encode "<multitier module>")
   }
@@ -53,8 +58,32 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val subjective = typeOf[Placed.Subjective[_, _]]
     val multitierStub = typeOf[runtime.MultitierStub]
     val multitierModule = typeOf[runtime.MultitierModule]
+    val marshallableInfo = typeOf[runtime.MarshallableInfo[_]]
+    val placedRuntimeValue = typeOf[runtime.PlacedValue[_, _, _, _, _, _]]
+    val placedRuntimeValueInfo = typeOf[runtime.PlacedValueInfo]
+    val remoteValue = typeOf[runtime.RemoteValue[_, _]]
+    val marshallable = typeOf[loci.transmitter.Marshallable[_, _, _]]
+    val transmittable = typeOf[loci.transmitter.Transmittable[_, _, _]]
+    val resolution = typeOf[loci.transmitter.Transmittable.Aux.Resolution[_, _, _, _, _]]
+    val serializable = typeOf[loci.transmitter.Serializable[_]]
+    val transmission = typeOf[transmitter.Transmission[_, _, _, _]]
+    val accessor = typeOf[transmitter.RemoteAccessor]
+    val delegates = typeOf[loci.transmitter.Transmittables.Delegates[_ ]]
+    val message = typeOf[loci.transmitter.Transmittables.Message[_]]
+    val none = typeOf[loci.transmitter.Transmittables.None]
     val compileTimeOnly = typeOf[annotation.compileTimeOnly]
     val placedValues = symbols.placedValues.companion.asType.toType
+  }
+
+  object trees {
+    val implicitly = q"${names.root}.scala.Predef.implicitly"
+    val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
+    val resolution = q"${names.root}.loci.transmitter.Transmittable.Aux.resolution"
+    val delegating = q"${names.root}.loci.transmitter.ContextBuilder.delegating"
+    val messaging = q"${names.root}.loci.transmitter.ContextBuilder.messaging"
+    val none = q"${names.root}.loci.transmitter.ContextBuilder.none"
+    val delegate = q"${names.root}.loci.transmitter.ContextBuilders.delegate"
+    val list = q"${names.root}.loci.transmitter.ContextBuilders.list"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {
@@ -202,6 +231,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
       case tree: TypeTree => tree.original
       case tree => tree
     }
+
+    def fullyExpanded: Tree =
+      typeTreeExpander transform tree
   }
 
   implicit class ImplDefOps(tree: ImplDef) {
@@ -229,6 +261,18 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
       case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
         val (modsNew, nameNew, tptNew, rhsNew) = f(mods, name, tpt, rhs)
         treeCopy.DefDef(tree, modsNew, nameNew, tparams, vparamss, tptNew, rhsNew)
+    }
+  }
+
+  private object typeTreeExpander extends Transformer {
+    override def transform(tree: Tree): Tree = tree match {
+      case tree: TypeTree =>
+        retyper.createTypeTree(tree.tpe, tree.pos) match {
+          case tree: TypeTree => tree
+          case tree => transform(tree)
+        }
+      case _ =>
+        super.transform(tree)
     }
   }
 }

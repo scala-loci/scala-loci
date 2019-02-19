@@ -39,6 +39,12 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     case class Subjective(peer: Type) extends Modality
   }
 
+  sealed trait Placement
+
+  case class Placed(peer: Symbol, tpe: Type, tpt: Tree, modality: Modality) extends Placement
+
+  case object NonPlaced extends Placement
+
   sealed trait Value {
     val symbol: Symbol
     val tree: Tree
@@ -197,8 +203,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       // 3) (potentially) a peer-specific initializing member at the level of placed values,
       //    in which case the member (2) is always non-abstract
       if (!isMultitierModule(tree.tpt.tpe, tree.pos)) {
-        val values = destructPlacementType(tree.symbol.info, tree.tpt, tree.symbol, tree.pos) match {
-          case Some((peer, tpe, tpt, modality)) =>
+        val values = decomposePlacementType(tree.symbol.info, tree.tpt, tree.symbol, tree.pos) match {
+          case Placed(peer, tpe, tpt, modality) =>
             if (isMultitierModule(tpe, tree.pos))
               c.abort(tree.pos, "Multitier module instances cannot be placed")
 
@@ -357,8 +363,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               if tree.nonEmpty &&
                  (tree.symbol.owner == symbols.On ||
                   tree.symbol.owner == symbols.Placed) =>
-            destructPlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos) match {
-              case Some((peer, _, _, modality)) =>
+            decomposePlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos) match {
+              case Placed(peer, _, _, modality) =>
                 erase(
                   stripPlacementSyntax(tree), NoSymbol,
                   peer, definitions.UnitTpe, TypeTree(definitions.UnitTpe), modality,
@@ -385,8 +391,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         // ensure local placed values do not override non-local placed values
         // and placed values do not override non-placed values
         symbol.overrides foreach { overrideSymbol =>
-          destructPlacementType(overrideSymbol.info, EmptyTree, symbol, tree.pos) match {
-            case Some((_, _, _, overrideModality)) =>
+          decomposePlacementType(overrideSymbol.info, EmptyTree, symbol, tree.pos) match {
+            case Placed(_, _, _, overrideModality) =>
               if (modality == Modality.Local && overrideModality != Modality.Local)
                 c.abort(tree.pos,
                   s"Local placed declaration ${symbol.fullNestedName} cannot override " +
@@ -569,7 +575,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     isMultitierModule
   }
 
-  private def destructPlacementType(tpe: Type, tpt: Tree, symbol: Symbol, pos: Position): Option[(Symbol, Type, Tree, Modality)] =
+  def decomposePlacementType(tpe: Type, tpt: Tree, symbol: Symbol, pos: Position): Placement =
     tpe.finalResultType match {
       // placed value
       case TypeRef(_, symbols.on, List(valueType, peerType)) =>
@@ -604,7 +610,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             }
 
             validatePlacedType(subjectiveType, pos)
-            Some((peerSymbol, subjectiveType, subjectiveTree, Modality.Subjective(subjectivePeerType)))
+            Placed(peerSymbol, subjectiveType, subjectiveTree, Modality.Subjective(subjectivePeerType))
 
           // modality: subjective, but wrong syntax
           case tpe if tpe real_<:< types.subjective =>
@@ -620,12 +626,12 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             }
 
             validatePlacedType(localValueType, pos)
-            Some((peerSymbol, localValueType, localValueTree, Modality.Local))
+            Placed(peerSymbol, localValueType, localValueTree, Modality.Local)
 
           // modality: none
           case _ =>
             validatePlacedType(valueType, pos)
-            Some((peerSymbol, valueType, valueTree, Modality.None))
+            Placed(peerSymbol, valueType, valueTree, Modality.None)
         }
 
       // non-placed value
@@ -638,7 +644,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         }
 
         validatePlacedType(tpe, pos)
-        None
+        NonPlaced
     }
 
   private def validatePlacedType(tpe: Type, pos: Position) = {
@@ -652,7 +658,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     }
   }
 
-  private def extractTag(tpe: Type, tag: Type, pos: Position): Type = {
+  def extractTag(tpe: Type, tag: Type, pos: Position): Type = {
     val extractedTag = tpe.underlying match {
       case RefinedType(parents, _) =>
         val tags = parents filter { _ real_<:< tag }
