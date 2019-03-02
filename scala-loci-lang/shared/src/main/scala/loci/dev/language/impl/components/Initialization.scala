@@ -26,7 +26,7 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
 
   case class Initialized(tree: ImplDef)
 
-  private def instantiateNestedModules(records: List[Any]): List[Any] = {
+  def instantiateNestedModules(records: List[Any]): List[Any] = {
     module.tree.impl.parents foreach { parent =>
       if (!(multitierModules contains parent.symbol) &&
           !isMultitierModule(parent) &&
@@ -36,7 +36,50 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
     }
 
     object transformer extends Transformer {
+      sealed trait Level
+      case object NoLevel extends Level
+      case object ModuleLevel extends Level
+      case class ValueLevel(name: String) extends Level
+
+      var level: Level = ModuleLevel
+
+      def withLevel[T](nextLevel: Level)(body: => T) = {
+        val prevLevel = level
+        level = nextLevel
+        val result = body
+        level = prevLevel
+        result
+      }
+
       override def transform(tree: Tree): Tree = tree match {
+        case Block(
+              List(classDef @ ClassDef(mods, className, _,_)),
+              apply @ Apply(Select(New(Ident(identName)), termNames.CONSTRUCTOR), List()))
+            if (mods hasFlag Flag.FINAL) && className == identName =>
+          treeCopy.Block(tree, List(transform(classDef)), apply)
+
+        case q"new $expr(...$exprss)" if isMultitierModule(expr) =>
+          level match {
+            case ValueLevel(name) =>
+              val moduleSignature = q"${Flag.SYNTHETIC} protected def $$loci$$sig = ${trees.moduleSignature}(super.$$loci$$sig, ${module.self}.$$loci$$sig, $name)"
+              withLevel(NoLevel) {
+                internal.setType(
+                  q"new ${super.transform(expr)}(...${exprss map { super.transformTrees(_) } }) { $moduleSignature }",
+                  tree.tpe)
+              }
+            case _ =>
+              withLevel(NoLevel) { super.transform(tree) }
+          }
+
+        case tree: Block =>
+          treeCopy.Block(tree, withLevel(NoLevel) { transformTrees(tree.stats) }, transform(tree.expr))
+
+        case tree: Apply =>
+          withLevel(NoLevel) { super.transform(tree) }
+
+        case tree: ValOrDefDef if level == ModuleLevel =>
+          withLevel(ValueLevel(tree.name.toString)) { super.transform(tree) }
+
         case tree: ImplDef if multitierModules contains tree.symbol =>
           val annotatedTree = tree map { (_, parents, self, body) =>
             val mods = tree.mods mapAnnotations {
@@ -44,9 +87,17 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
             }
             (mods, parents, self, body)
           }
-          expandMultitierModule(annotatedTree)
+          val name = (tree, level) match {
+            case (ModuleDef(_, name, _), ModuleLevel)  => Some(name.toString -> module.self)
+            case (ClassDef(_, _, _, _), ValueLevel(name))  => Some(name -> module.self)
+            case _ => None
+          }
+          expandMultitierModule(annotatedTree, name)
 
-        case tree =>
+        case tree: ImplDef if tree.symbol != module.symbol && tree.symbol != module.classSymbol =>
+          withLevel(NoLevel) { super.transform(tree) }
+
+        case _ =>
           super.transform(tree)
       }
     }
@@ -74,6 +125,10 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
     multitierModules.toSet - module.symbol
   }
 
-  private def isMultitierModule(tree: Tree): Boolean =
-    tree.symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule }
+  private def isMultitierModule(tree: Tree): Boolean = {
+    val symbol = tree.symbol
+    symbol == module.symbol ||
+    symbol == module.classSymbol ||
+    (symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule })
+  }
 }

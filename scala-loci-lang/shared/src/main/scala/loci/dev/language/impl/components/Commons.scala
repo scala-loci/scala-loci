@@ -20,8 +20,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   val retyper = engine.c.retyper
 
-  def expandMultitierModule(tree: ImplDef): ImplDef = {
-    val result = engine.run(tree)
+  def expandMultitierModule(tree: ImplDef, name: Option[(String, TermName)]): ImplDef = {
+    val result = engine.run(tree, name)
     val assembly = result.engine.require(Assembly)
     result.records collectFirst { case assembly.Assembly(tree) => tree } getOrElse tree
   }
@@ -35,7 +35,6 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val proxy = TypeName("Proxy")
     val transmittables = TypeName("Transmittables")
     val placedValues = TypeName(NameTransformer encode "<placed values>")
-    val multitierModule = TermName(NameTransformer encode "<multitier module>")
   }
 
   object symbols {
@@ -45,10 +44,14 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val On = symbolOf[Placement.On[_]]
     val Placed = symbolOf[Placement.Placed]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.dev.runtime.PlacedValues")
+    val cast = typeOf[runtime.Remote.type] member TermName("cast")
   }
 
   object types {
     val function = typeOf[_ => _]
+    val string = typeOf[String]
+    val unitFuture = typeOf[concurrent.Future[Unit]]
+    val nothingFuture = typeOf[concurrent.Future[Nothing]]
     val multiple = typeOf[Multiple[_]]
     val optional = typeOf[Optional[_]]
     val single = typeOf[Single[_]]
@@ -56,6 +59,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val remote = typeOf[Remote[_]]
     val placedValue = typeOf[PlacedValue[_, _]]
     val subjective = typeOf[Placed.Subjective[_, _]]
+    val messageBuffer = typeOf[loci.MessageBuffer]
+    val system = typeOf[runtime.System]
+    val abstractionRef = typeOf[runtime.AbstractionRef]
     val multitierStub = typeOf[runtime.MultitierStub]
     val multitierModule = typeOf[runtime.MultitierModule]
     val marshallableInfo = typeOf[runtime.MarshallableInfo[_]]
@@ -77,6 +83,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   object trees {
     val implicitly = q"${names.root}.scala.Predef.implicitly"
+    val `try` = q"${names.root}.scala.util.Try"
+    val nil = q"${names.root}.scala.collection.immutable.Nil"
+    val empty = q"${names.root}.loci.MessageBuffer.empty"
+    val moduleSignature = q"${names.root}.loci.dev.runtime.Module.Signature.create"
+    val peerSignature = q"${names.root}.loci.dev.runtime.Peer.Signature.create"
     val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
     val resolution = q"${names.root}.loci.transmitter.Transmittable.Aux.resolution"
     val delegating = q"${names.root}.loci.transmitter.ContextBuilder.delegating"
@@ -112,18 +123,29 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
         tree
     }
 
-  def uniqueName(symbol: Symbol): String = {
+  def uniqueRealisticTermName(symbol: Symbol): TermName =
+    TermName(uniqueName(symbol, NameTransformer encode ".", NameTransformer encode "#"))
+
+  def uniqueRealisticName(symbol: Symbol): String = uniqueName(symbol, ".", "#")
+
+  def uniqueName(symbol: Symbol): String = uniqueName(symbol, "$", "$$$")
+
+  private def uniqueName(symbol: Symbol, selection: String, projection: String): String = {
     val owner = symbol.owner
     val name = symbol.name.toString
 
     if (owner == engine.c.mirror.RootClass)
       name
     else if (symbol.isSynthetic || ((name startsWith "<") && (name endsWith ">")))
-      uniqueName(owner)
+      uniqueName(owner, selection, projection)
     else {
-      val prefix = uniqueName(owner)
-      val separator = if (owner.isType && !owner.isModuleClass) "$$$" else "$"
-      val suffix = if (name endsWith termNames.LOCAL_SUFFIX_STRING) name.dropRight(1) else name
+      val prefix = uniqueName(owner, selection, projection)
+      val separator = if (owner.isType && !owner.isModuleClass) projection else selection
+      val suffix =
+        if (name endsWith termNames.LOCAL_SUFFIX_STRING)
+          name.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
+        else
+          name
       s"$prefix$separator$suffix"
     }
   }

@@ -18,7 +18,8 @@ package dev {
   sealed trait Optional[P] extends Multiple[P]
   sealed trait Multiple[+P]
 
-  trait Remote[+P]
+  trait Remote[+P] extends Equals
+  object Remote extends transmitter.Remote
 }
 
 package object dev {

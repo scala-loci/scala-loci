@@ -7,7 +7,7 @@ import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object RemoteAccess extends Component.Factory[RemoteAccess](
-    requires = Seq(ModuleInfo, Commons, Values)) {
+    requires = Seq(Commons, ModuleInfo, Values)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new RemoteAccess(engine)
   def asInstance[C <: blackbox.Context] = { case c: RemoteAccess[C] => c }
 }
@@ -16,14 +16,14 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   val phases = Seq(
     Phase("remote:marshalling", createMarshallables, after = Set("values:validate"), before = Set("impls:lift")))
 
-  val moduleInfo = engine.require(ModuleInfo)
   val commons = engine.require(Commons)
+  val moduleInfo = engine.require(ModuleInfo)
   val values = engine.require(Values)
 
   import engine._
   import engine.c.universe._
-  import moduleInfo._
   import commons._
+  import moduleInfo._
   import values._
 
 
@@ -80,7 +80,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       method collect { case method if !method.isSetter =>
         decomposePlacementType(method.returnType, EmptyTree, method, method.pos) match {
-          case Placed(_, tpe, _, modality) if modality != Modality.Local =>
+          case Placed(peer, tpe, _, modality) if modality != Modality.Local =>
             if (method.typeParams.nonEmpty)
               c.abort(method.pos, "Placed methods cannot have type parameters")
 
@@ -121,9 +121,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               filterNot { _ eq definitions.UnitTpe })
 
             if (modality == Modality.None)
-              Some((method, res, tuple))
+              Some((method, peer, modality, res, tuple))
             else
-              Some((method, res.typeArgs(1), tuple))
+              Some((method, peer, modality, res.typeArgs(1), tuple))
 
           case _ =>
             None
@@ -181,8 +181,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var marshallableIndex = 0
     var placedValueIndex = 0
     var failed = false
-    val (marshallableNames, accessorValues) = (placedValues map {
-      case (symbol, res, arg) =>
+    val (placedValueNames, dispatchClauses, accessorValues) = (placedValues map {
+      case (symbol, peer, modality, res, arg) =>
         val flags = Flag.SYNTHETIC | Flag.FINAL
         val signature = methodSignature(symbol, res)
         val hasArguments = arg =:!= definitions.UnitTpe
@@ -315,10 +315,14 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                     })
                   }
 
-                val (argName, argMarshallable) =
-                  if (hasArguments) marshallable(argInfo, argTree) else q"null" -> Seq.empty
-                val (resName, resMarshallable) =
-                  if (hasResult) marshallable(resInfo, resTree) else q"null" -> Seq.empty
+                val nonStandardNonResult =
+                  resInfo.proxy =:!= types.unitFuture &&
+                  resInfo.proxy =:!= types.nothingFuture
+
+                val (argName, argMarshallable) = if (hasArguments)
+                  marshallable(argInfo, argTree) else q"null" -> Seq.empty
+                val (resName, resMarshallable) = if (hasResult || nonStandardNonResult)
+                  marshallable(resInfo, resTree) else q"null" -> Seq.empty
 
                 Right(argName -> resName) -> (argMarshallable ++ resMarshallable)
               }
@@ -326,7 +330,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               name match {
                 case Left(name) =>
                   // reusing inherited placed value info if possible
-                  symbol -> name -> seq
+                  (symbol -> name, None, seq)
 
                 case Right((argName, resName)) =>
                   // create new placed value info if necessary
@@ -345,14 +349,90 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                         $resName)"""
                   }
 
+                  // create dispatch clause
+                  def arguments(paramLists: List[List[Symbol]], prefix: Tree) = {
+                    def element(index: Int) = TermName(s"_$index")
+
+                    def arguments(paramList: List[Symbol], prefix: Tree) = {
+                      paramList.foldLeft(1 -> List.empty[Tree]) {
+                        case ((index, args), symbol) =>
+                          if (symbol.info =:= definitions.UnitTpe)
+                            index -> (q"()" :: args)
+                          else if ((paramList count { _.info =:!= definitions.UnitTpe }) == 1)
+                            index + 1 -> (prefix :: args)
+                          else
+                            index + 1 -> (q"$prefix.${element(index)}" :: args)
+                      }
+                    }
+
+                    val (_, argss) = paramLists.foldLeft(1 -> List.empty[List[Tree]]) {
+                      case ((index, argss), args) =>
+                        val (count, newargs) =
+                          if ((paramLists count { _ exists { _.info =:!= definitions.UnitTpe } }) == 1)
+                            arguments(args, prefix)
+                          else
+                            arguments(args, q"$prefix.${element(index)}")
+
+                        if (count == 1)
+                          index -> (newargs.reverse :: argss)
+                        else
+                          index + 1 -> (newargs.reverse :: argss)
+                    }
+
+                    argss.reverse
+                  }
+
+                  val (subjectivePeer, invocation) = modality match {
+                    case Modality.Subjective(peer) =>
+                      Some(peer) ->
+                        q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})($$loci$$remote)"
+                    case _ =>
+                      None ->
+                        q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})"
+                  }
+
+                  val marshalling =
+                    if (hasResult)
+                      q"$resName.marshal($$loci$$response, $$loci$$abstraction)"
+                    else
+                      trees.empty
+
+                  val resultMarshalling =
+                    q"${trees.`try`} { $invocation } map { $$loci$$response => $marshalling }"
+
+                  val requestProcessing = atPos(symbol.pos) {
+                    if (hasArguments)
+                      q"$argName.unmarshal($$loci$$request, $$loci$$abstraction) flatMap { $$loci$$arguments => $resultMarshalling }"
+                    else
+                      resultMarshalling
+                  }
+
+                  val remoteProcessing = (subjectivePeer
+                    map { case subjectivePeer @ TypeRef(pre, sym, _) =>
+                      (moduleStablePath(pre, q"${module.self}")
+                        map { module =>
+                          q"""${trees.`try`} {
+                            $$loci$$abstraction.remote.asRemote[$module.${sym.asType.name}].get
+                          } flatMap { $$loci$$remote =>
+                            $requestProcessing
+                          }"""
+                        }
+                        getOrElse c.abort(symbol.pos,
+                          s"Subjective definition may not refer to peer of another module: $subjectivePeer"))
+                    }
+                    getOrElse requestProcessing)
+
+                  val dispatchClause =
+                    Some(peer -> cq"$placedValueName.name => $remoteProcessing")
+
                   placedValueIndex += 1
 
-                  symbol -> placedValueName -> (seq :+ placedValue)
+                  (symbol -> placedValueName, dispatchClause, seq :+ placedValue)
               }
 
             // create statement to implicitly resolve the transmittable whose resolution failed
             // to communicate the failure to the developer
-            case (resTransmittable, _) =>
+            case (_, resTransmittable) =>
               failed = true
 
               val transmittableName = TermName(s"$$loci$$resolution$$failure$$$moduleName")
@@ -364,19 +444,33 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 collectFirst { case tree if tree.symbol == symbol.owner => tree.pos }
                 getOrElse symbol.pos)
 
-              NoSymbol -> termNames.EMPTY -> Seq(
+              (NoSymbol -> termNames.EMPTY, None, Seq(
                 atPos(pos) {
                   q"@${types.compileTimeOnly}($message) $flags def $transmittableName(): ${definitions.UnitTpe} = $rhs"
                 },
                 atPos(pos) {
                   q"$transmittableName()"
-                })
+                }))
           }
         else
-          NoSymbol -> termNames.EMPTY -> Seq.empty
-    }).unzip
+          (NoSymbol -> termNames.EMPTY, None, Seq.empty)
+    }).unzip3
 
-    records ++ (accessorValues.flatten map { ModuleValue(NoSymbol, _) })
+    val dispatches = (dispatchClauses.flatten
+      groupBy { case (peer, _) => peer }
+      map { case (peer, clauses) =>
+        val tree = q"""${Flag.SYNTHETIC} def $$loci$$dispatch(
+            $$loci$$request: ${types.messageBuffer},
+            $$loci$$signature: ${types.string},
+            $$loci$$abstraction: ${types.abstractionRef}) = $$loci$$signature match {
+          case ..${clauses map { case (_, clause) => clause } }
+          case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$abstraction)
+        }"""
+
+        PlacedValuePeerImpl(NoSymbol, tree, peer, Modality.None)
+      })
+
+    records ++ (accessorValues.flatten map { ModuleValue(NoSymbol, _) }) ++ dispatches
   }
 
   private def checkForTransmission[T](tree: Tree, peer: Symbol): Int = {
@@ -405,6 +499,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         val expectedValue =
           decomposePlacementType(arg.tpe.widen, EmptyTree, arg.symbol, arg.pos) match {
+            case Placed(_, tpe, _, Modality.Subjective(_)) => Some(tpe.typeArgs(1))
             case Placed(_, tpe, _, _) => Some(tpe)
             case _ => None
           }

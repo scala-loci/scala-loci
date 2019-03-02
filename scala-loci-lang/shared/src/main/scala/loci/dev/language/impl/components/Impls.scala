@@ -40,7 +40,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       process {
         case value: PlacedValuePeerImpl =>
           value.copy(tree = injectPlacedValueReferences(value.tree,
-            q"${requirePeerType(value.peer).name}.this: ${names.multitierModule}.${names.placedValues}"))
+            q"${requirePeerType(value.peer).name}.this: ${module.self}.${names.placedValues}"))
         case value: Value =>
           value.copy(tree = injectPlacedValueReferences(value.tree,
             q"${names.placedValues}.this"))
@@ -51,7 +51,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       })
 
   private def lift(tree: Tree): (Option[Tree], Option[Tree]) =
-    lift(tree, q"${names.multitierModule}")
+    lift(tree, q"${module.self}")
 
   private def lift(tree: Tree, valuePrefix: Tree): (Option[Tree], Option[Tree]) =
     tree match {
@@ -290,7 +290,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       case tree: TypeTree if tree.original != null =>
         internal.setOriginal(TypeTree(), transform(tree.original))
       case Select(qualifier, name) if tree.isType =>
-        (moduleStablePath(qualifier.tpe, q"${names.multitierModule}")
+        (moduleStablePath(qualifier.tpe, q"${module.self}")
           filter { tree => multitierMember(tree) || moduleMember(tree) }
           map { treeCopy.Select(tree, _, name) }
           getOrElse super.transform(tree))

@@ -92,15 +92,17 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
     // create a member for initializing a multitier module reference
     // at the level of placed values for every peer
-    def setupMultitierModule(tree: Tree, multitierName: TermName, multitierType: Tree): Seq[Value] =
+    def setupMultitierModule(tree: Tree, multitierName: TermName, multitierType: Tree, signature: String): Seq[Value] =
       modulePeers map { peer =>
         val bases = multitierType :: (peer.bases collect {
-          case Peer.DelegatedBase(TypeRef(pre, _, _), _, name, _)
+          case Peer.DelegatedBase(TypeRef(pre, _, _), name, _)
               if pre.termSymbol == tree.symbol =>
-            tq"${names.multitierModule}.${pre.termSymbol.asTerm.name}.$name"
+            tq"${module.self}.${pre.termSymbol.asTerm.name}.$name"
         })
 
-        val value = extractValue(multitierName, NoType, multitierType, q"new ..$bases { }", tree.pos)
+        val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${peer.name}.this.$$loci$$sys"
+        val instance = q"new ..$bases { $system }"
+        val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos)
 
         PlacedValuePeerImpl(tree.symbol, value, peer.symbol, Modality.None)
       }
@@ -137,7 +139,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     // 3) (potentially) create an initializing member at the level of placed values for every peer
     def splitMultitierModule(tree: ModuleDef): Seq[Value] = {
       val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
-      val multitierType = tq"${names.multitierModule}.${tree.name}.${names.placedValues}"
+      val multitierType = tq"${module.self}.${tree.name}.${names.placedValues}"
 
       val mods = Modifiers(
         Flag.FINAL | Flag.LAZY |
@@ -146,7 +148,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
           (if (tree.mods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
         tree.mods.privateWithin)
 
-      val value = extractValue(multitierName, NoType, multitierType, q"new $multitierType { }", tree.pos)
+      val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
+      val instance = q"new $multitierType { $system }"
+      val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos)
       val application = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierType = $multitierName()" }
       val reference = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierName.type = $multitierName" }
 
@@ -161,7 +165,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         PlacedValueDef(tree.symbol, value, None, Modality.None),
         ModuleValue(tree.symbol, definition),
         ModuleValue(tree.symbol, reference)) ++
-      setupMultitierModule(tree, multitierName, multitierType)
+      setupMultitierModule(tree, multitierName, multitierType, tree.name.toString)
     }
 
     // keep companion classes of multitier module implementations at the module-level,
@@ -248,7 +252,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       else tree match {
         case _: ValDef =>
           val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
-          val multitierType = tq"${names.multitierModule}.${tree.name}.${names.placedValues}"
+          val multitierType = tq"${module.self}.${tree.name}.${names.placedValues}"
 
           if (tree.symbol.isAbstract) {
             val application = tree map { (mods, name, _, rhs) =>
@@ -280,10 +284,12 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             // we never should have to instantiate an abstract multitier module
             // except the type system was circumvented
             val (init, multitierModuleSetups) =
-              if (tree.tpt.symbol.isAbstract)
-                q"null.asInstanceOf[$multitierType]" -> Seq.empty
+              if (!tree.tpt.symbol.isAbstract) {
+                val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
+                q"new $multitierType { $system }" -> setupMultitierModule(tree, multitierName, multitierType, tree.name.toString)
+              }
               else
-                q"new $multitierType { }" -> setupMultitierModule(tree, multitierName, multitierType)
+                q"null.asInstanceOf[$multitierType]" -> Seq.empty
 
             val value = extractValue(multitierName, NoType, multitierType, init, tree.pos)
             val application = tree map { (mods, name, _, _) =>
