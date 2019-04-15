@@ -7,23 +7,34 @@ import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object RemoteAccess extends Component.Factory[RemoteAccess](
-    requires = Seq(Commons, ModuleInfo, Values)) {
+    requires = Seq(Commons, ModuleInfo, Peers, Values)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new RemoteAccess(engine)
   def asInstance[C <: blackbox.Context] = { case c: RemoteAccess[C] => c }
+
+  object placedValueCache extends ContextReference {
+    class Value[C <: blackbox.Context](val c: C) extends Value.Base[C] {
+      val cache = mutable.Map.empty[c.Symbol, (c.TermName, c.Type, Option[c.Type])]
+    }
+    def apply[C <: blackbox.Context](c: C): Value[c.type] = new Value(c)
+  }
 }
 
 class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
-    Phase("remote:marshalling", createMarshallables, after = Set("values:validate"), before = Set("impls:lift")))
+    Phase("remote:widen", widenRemoteNarrowing, after = Set("values:validate"), before = Set("impls:lift")),
+    Phase("remote:marshalling", createMarshallables, after = Set("remote:widen"), before = Set("impls:lift")),
+    Phase("remote:access", processRemoteAccesses, after = Set("remote:marshalling"), before = Set("impls:lift")))
 
   val commons = engine.require(Commons)
   val moduleInfo = engine.require(ModuleInfo)
+  val peers = engine.require(Peers)
   val values = engine.require(Values)
 
   import engine._
   import engine.c.universe._
   import commons._
   import moduleInfo._
+  import peers._
   import values._
 
 
@@ -65,6 +76,25 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
 
+  def widenRemoteNarrowing(records: List[Any]): List[Any] =
+    records process {
+      case record @ PlacedValue(_, _, _, _) =>
+        object transformer extends Transformer {
+          override def transform(tree: Tree): Tree = tree match {
+            case q"$_[..$_](...$exprss)"
+                if tree.nonEmpty &&
+                   tree.symbol != null &&
+                   tree.symbol.owner == symbols.Narrow =>
+              transform(exprss.head.head)
+
+            case _ =>
+              super.transform(tree)
+          }
+        }
+
+        record.copy(tree = transformer transform record.tree)
+    }
+
   def createMarshallables(records: List[Any]): List[Any] = {
     val moduleName = uniqueName(module.symbol)
     val accessorGeneration =
@@ -79,7 +109,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       val method = if (symbol.isMethod) Some(symbol.asMethod) else None
 
       method collect { case method if !method.isSetter =>
-        decomposePlacementType(method.returnType, EmptyTree, method, method.pos) match {
+        decomposePlacementType(method.returnType, EmptyTree, method, method.pos, moduleDefinition = false) match {
           case Placed(peer, tpe, _, modality) if modality != Modality.Local =>
             if (method.typeParams.nonEmpty)
               c.abort(method.pos, "Placed methods cannot have type parameters")
@@ -120,10 +150,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               map { args => makeTuple(args filterNot { _ eq definitions.UnitTpe }) }
               filterNot { _ eq definitions.UnitTpe })
 
-            if (modality == Modality.None)
-              Some((method, peer, modality, res, tuple))
-            else
-              Some((method, peer, modality, res.typeArgs(1), tuple))
+            modality match {
+              case Modality.Subjective(subjective) =>
+                val tpe = subjective.asSeenFrom(internal.thisType(module.classSymbol), subjective.typeSymbol.owner)
+                Some((method, peer, modality, res.typeArgs(1), Some(tpe), tuple))
+              case _ =>
+                Some((method, peer, modality, res, None, tuple))
+            }
 
           case _ =>
             None
@@ -182,7 +215,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var placedValueIndex = 0
     var failed = false
     val (placedValueNames, dispatchClauses, accessorValues) = (placedValues map {
-      case (symbol, peer, modality, res, arg) =>
+      case (symbol, peer, modality, res, subjective, arg) =>
         val flags = Flag.SYNTHETIC | Flag.FINAL
         val signature = methodSignature(symbol, res)
         val hasArguments = arg =:!= definitions.UnitTpe
@@ -330,10 +363,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               name match {
                 case Left(name) =>
                   // reusing inherited placed value info if possible
-                  (symbol -> name, None, seq)
+                  ((symbol, name, arg, subjective), None, seq)
 
                 case Right((argName, resName)) =>
                   // create new placed value info if necessary
+                  val peerName = TermName(s"$$loci$$peer$$sig$$${peer.name}")
                   val placedValueName = TermName(s"$$loci$$val$$$moduleName$$$placedValueIndex")
                   val annotation = q"new ${types.placedRuntimeValueInfo}($signature, $argName, $resName)"
                   val placedValueType = types.placedRuntimeValue mapArgs { _ =>
@@ -344,6 +378,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                     q"""@$annotation $flags val $placedValueName =
                       new ${createTypeTree(placedValueType, symbol.pos)}(
                         $signature,
+                        $peerName,
                         ${symbol.isStable},
                         $argName,
                         $resName)"""
@@ -382,14 +417,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                     argss.reverse
                   }
 
-                  val (subjectivePeer, invocation) = modality match {
-                    case Modality.Subjective(peer) =>
-                      Some(peer) ->
-                        q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})($$loci$$remote)"
-                    case _ =>
-                      None ->
-                        q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})"
-                  }
+                  val invocation = (subjective
+                    map { subjective =>
+                      q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})($$loci$$remote)"
+                    } getOrElse {
+                      q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})"
+                    })
 
                   val marshalling =
                     if (hasResult)
@@ -407,8 +440,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                       resultMarshalling
                   }
 
-                  val remoteProcessing = (subjectivePeer
-                    map { case subjectivePeer @ TypeRef(pre, sym, _) =>
+                  val remoteProcessing = (subjective
+                    map { case subjective @ TypeRef(pre, sym, _) =>
                       (moduleStablePath(pre, q"${module.self}")
                         map { module =>
                           q"""${trees.`try`} {
@@ -418,7 +451,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                           }"""
                         }
                         getOrElse c.abort(symbol.pos,
-                          s"Subjective definition may not refer to peer of another module: $subjectivePeer"))
+                          s"Subjective definition may not refer to peer of another module: $subjective"))
                     }
                     getOrElse requestProcessing)
 
@@ -427,7 +460,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                   placedValueIndex += 1
 
-                  (symbol -> placedValueName, dispatchClause, seq :+ placedValue)
+                  ((symbol, placedValueName, arg, subjective), dispatchClause, seq :+ placedValue)
               }
 
             // create statement to implicitly resolve the transmittable whose resolution failed
@@ -444,7 +477,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 collectFirst { case tree if tree.symbol == symbol.owner => tree.pos }
                 getOrElse symbol.pos)
 
-              (NoSymbol -> termNames.EMPTY, None, Seq(
+              ((NoSymbol, termNames.EMPTY, NoType, None), None, Seq(
                 atPos(pos) {
                   q"@${types.compileTimeOnly}($message) $flags def $transmittableName(): ${definitions.UnitTpe} = $rhs"
                 },
@@ -453,8 +486,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 }))
           }
         else
-          (NoSymbol -> termNames.EMPTY, None, Seq.empty)
+          ((NoSymbol, termNames.EMPTY, NoType, None), None, Seq.empty)
     }).unzip3
+
+    placedValueNames foreach { case (symbol, name, tpe, subjective) =>
+      PlacedValues.makeResolvable(symbol, name, tpe, subjective)
+    }
 
     val dispatches = (dispatchClauses.flatten
       groupBy { case (peer, _) => peer }
@@ -473,6 +510,191 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     records ++ (accessorValues.flatten map { ModuleValue(NoSymbol, _) }) ++ dispatches
   }
 
+  def processRemoteAccesses(records: List[Any]): List[Any] = {
+    def arguments(paramLists: List[List[Symbol]], paramss: List[List[Tree]]) = {
+      val arguments = (paramLists zip paramss).foldRight(List.empty[Tree]) {
+        case ((paramList, params), tree) =>
+          val args = (paramList zip params) collect {
+            case (symbol, tree) if symbol.info =:!= definitions.UnitTpe => tree
+          }
+
+          args match {
+            case List() => tree
+            case List(arg) => arg :: tree
+            case _ => q"(..$args)" :: tree
+          }
+      }
+
+      arguments match {
+        case List() => q"()"
+        case List(arg) => arg
+        case _ => q"(..$arguments)"
+      }
+    }
+
+    def accessModuleValue(tree: Tree, name: TermName) = {
+      object transformer extends Transformer {
+        override def transform(tree: Tree): Tree = tree match {
+          case This(module.className) =>
+            Ident(module.self)
+          case tree: RefTree if tree.symbol == module.symbol =>
+            Ident(module.self)
+          case _ =>
+            super.transform(tree)
+        }
+      }
+
+      val Select(qualifier, _) = tree
+      Select(transformer transform qualifier, name)
+    }
+
+    def accessPeerSignature(tree: Tree) =
+      accessModuleValue(
+        createTypeTree(tree),
+        TermName(s"$$loci$$peer$$sig$$${tree.symbol.name}"))
+
+    def extractRemoteCall(tree: Tree) =
+      if (tree.nonEmpty &&
+          tree.symbol != null &&
+          tree.symbol.owner == symbols.Call) {
+        val q"$expr.$_[..$tpts](...$exprss)" = tree
+
+        val (remotes, remotesType, signature) = {
+          val q"$_[..$tpts](...$exprss)" = expr
+
+          if (expr.symbol.owner == symbols.Select) {
+            val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, tree) =>
+              q"$tree.::(${trees.reference}($remote))"
+            }
+            (remotes, tpts.head.tpe, EmptyTree)
+          }
+          else if (tpts.nonEmpty)
+            (trees.nil, tpts.head.tpe, accessPeerSignature(tpts.head))
+          else
+            (trees.nil, definitions.NothingTpe, EmptyTree)
+        }
+
+        Some((exprss.head.head, signature, remotes, remotesType))
+      }
+      else
+        None
+
+    def extractSelection(tree: Tree) =
+      if (symbols.froms contains tree.symbol) {
+        val q"$expr.$_[..$tpts](...$exprss)" = tree
+        if (exprss.nonEmpty) {
+          val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, tree) =>
+            q"$tree.::(${trees.reference}($remote))"
+          }
+          (expr, EmptyTree, remotes, tpts.head.tpe)
+        }
+        else
+          (expr, accessPeerSignature(tpts.head), trees.nil, tpts.head.tpe)
+      }
+      else
+        (tree, EmptyTree, trees.nil, definitions.NothingTpe)
+
+    def extractRemoteAccess(tree: Tree, peer: Symbol, remotesType: Type) = {
+      def preventSuperAccess(tree: Tree): Unit = tree match {
+        case q"$_.super[..$_].$_" =>
+          c.abort(tree.pos, "Remote access to super value not allowed")
+        case q"$expr.$_[..$_](...$_)" if tree.nonEmpty =>
+          preventSuperAccess(expr)
+        case _ =>
+      }
+
+      val q"$expr[..$_](...$exprss)" = tree
+
+      preventSuperAccess(expr)
+
+      val (placedValue, argumentsType, subjective) =
+        PlacedValues.resolve(tree.symbol, tree.pos)
+
+      val peerType = tree.tpe.widen.typeArgs(1)
+
+      if (requirePeerType(peer).ties forall { _.tpe <:!< peerType })
+        c.abort(tree.pos,
+          s"No tie specified from ${peer.asType.toType} to $peerType")
+
+      if (remotesType <:!< peerType)
+        c.abort(tree.pos,
+          s"${tree.symbol} placed on $peerType " +
+          s"is accessed for $remotesType remote instances")
+
+      subjective foreach { subjective =>
+        if (internal.typeRef(internal.thisType(module.classSymbol), peer, List.empty) <:!< subjective)
+          c.abort(tree.pos,
+            s"${tree.symbol} subjectively dispatched to $subjective " +
+            s"is accessed on ${peer.name}")
+      }
+
+      (accessModuleValue(expr, placedValue),
+       arguments(tree.symbol.asMethod.paramLists, exprss),
+       argumentsType)
+    }
+
+    records process {
+      case record @ PlacedValue(_, _, Some(peer), _) =>
+        object transformer extends Transformer {
+          override def transform(tree: Tree): Tree = tree match {
+            case tree: TypeTree if tree.original != null =>
+              internal.setOriginal(tree, transform(tree.original))
+
+            case tree: TypeTree if tree.tpe != null =>
+              val tpe = tree.tpe map {
+                case TypeRef(_, sym, _)
+                    if sym == symbols.from ||
+                       sym == symbols.fromSingle ||
+                       sym == symbols.fromMultiple ||
+                       sym == symbols.placedValue =>
+                  definitions.UnitTpe
+                case tpe =>
+                  tpe
+              }
+              internal.setType(tree, tpe)
+
+            case q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.accessor =>
+              val index = checkForTransmission(tree, peer)
+
+              val (value, signature, remotes, remotesType) =
+                extractRemoteCall(exprss.head.head) getOrElse
+                extractSelection(exprss.head.head)
+
+              val (placedValue, arguments, argumentsType) =
+                extractRemoteAccess(value, peer, remotesType)
+
+              val exprs = exprss(1).updated(
+                index,
+                q"""new ${createTypeTree(types.remoteRequest.typeConstructor, value.pos)}(
+                      $arguments, $placedValue, ${signature orElse q"$placedValue.peer"}, $remotes, $$loci$$sys)""")
+
+              atPos(value.pos) {
+                transform(q"$expr[..${tpts map createTypeTree}](${trees.remoteValue})(..$exprs)")
+              }
+
+            case _ =>
+              (extractRemoteCall(tree)
+                map { case (value, signature, remotes, remotesType) =>
+                  val (placedValue, arguments, _) =
+                    extractRemoteAccess(value, peer, remotesType)
+
+                  atPos(value.pos) {
+                    transform(q"$$loci$$sys.invokeRemoteAccess($arguments, $placedValue, ${signature orElse q"$placedValue.peer"}, $remotes, false)")
+                  }
+                }
+                getOrElse {
+                  if (symbols.froms contains tree.symbol)
+                    c.abort(tree.pos, "Selection using `from` only allowed for remote access")
+
+                  super.transform(tree)
+                })
+          }
+        }
+
+        record.copy(tree = transformer transform record.tree)
+    }
+  }
+
   private def checkForTransmission[T](tree: Tree, peer: Symbol): Int = {
     val q"$_[..$_](...$exprss)" = tree
 
@@ -484,7 +706,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var count = 0
     var result = -1
 
-    val arg = exprss(0).head
+    val arg = exprss.head.head
 
     exprss(1) foreach { expr =>
       if (expr.tpe real_<:< types.transmission) {
@@ -498,7 +720,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           extractTag(expr.tpe, types.transmission, tree.pos).typeArgs
 
         val expectedValue =
-          decomposePlacementType(arg.tpe.widen, EmptyTree, arg.symbol, arg.pos) match {
+          decomposePlacementType(arg.tpe.widen, EmptyTree, arg.symbol, arg.pos, moduleDefinition = false) match {
             case Placed(_, tpe, _, Modality.Subjective(_)) => Some(tpe.typeArgs(1))
             case Placed(_, tpe, _, _) => Some(tpe)
             case _ => None
@@ -537,6 +759,60 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   private def memberType(tpe: Type, name: Name) = {
     val symbol = tpe member name
     symbol.info.asSeenFrom(tpe.underlying, symbol.owner)
+  }
+
+  object PlacedValues {
+    def resolve(symbol: Symbol, pos: Position): (TermName, Type, Option[Type]) =
+      cache.getOrElseUpdate(symbol, {
+        val (resultType, peerType) =
+          if (symbol.isMethod) {
+            val method = symbol.asMethod
+
+            decomposePlacementType(method.returnType, EmptyTree, method, method.pos, moduleDefinition = false) match {
+              case Placed(_, tpe, _, modality) =>
+                val resultType =
+                  tpe.asSeenFrom(internal.thisType(module.classSymbol), tpe.typeSymbol.owner) match {
+                    case ClassInfoType(_, _, _) => tpe
+                    case tpe => tpe
+                  }
+
+                modality match {
+                  case Modality.Local =>
+                    c.abort(pos, s"Local placed $symbol cannot be accessed remotely")
+                  case Modality.None =>
+                    resultType -> None
+                  case Modality.Subjective(subjective) =>
+                    val tpe = subjective.asSeenFrom(internal.thisType(module.classSymbol), subjective.typeSymbol.owner)
+                    resultType.typeArgs(1) -> Some(tpe)
+                }
+
+              case _ =>
+                NoType -> None
+            }
+          }
+          else
+            NoType -> None
+
+        if (resultType == NoType)
+          c.abort(pos, s"$symbol is not placed")
+
+        val signature = methodSignature(symbol.asMethod, resultType)
+
+        (symbol.owner.info.members.sorted
+          collectFirst {
+            case symbol @ PlacedValueSymbol(`signature`, argInfo, _) =>
+              (symbol.name.toTermName,
+               argInfo map { _.base } getOrElse definitions.UnitTpe,
+               peerType)
+          }
+          getOrElse c.abort(pos, s"Could not find remote accessor for placed $symbol"))
+      })
+
+    def makeResolvable(symbol: Symbol, name: TermName, tpe: Type, subjective: Option[Type]): Unit =
+      cache += symbol -> ((name, tpe, subjective))
+
+    private val cache: mutable.Map[Symbol, (TermName, Type, Option[Type])] =
+      RemoteAccess.placedValueCache.get(c).cache
   }
 
   object MarshallableSymbol {

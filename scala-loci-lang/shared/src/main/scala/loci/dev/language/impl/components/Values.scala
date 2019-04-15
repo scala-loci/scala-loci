@@ -207,7 +207,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       // 3) (potentially) a peer-specific initializing member at the level of placed values,
       //    in which case the member (2) is always non-abstract
       if (!isMultitierModule(tree.tpt.tpe, tree.pos)) {
-        val values = decomposePlacementType(tree.symbol.info, tree.tpt, tree.symbol, tree.pos) match {
+        val values = decomposePlacementType(tree.symbol.info, tree.tpt, tree.symbol, tree.pos, moduleDefinition = true) match {
           case Placed(peer, tpe, tpt, modality) =>
             if (isMultitierModule(tpe, tree.pos))
               c.abort(tree.pos, "Multitier module instances cannot be placed")
@@ -367,9 +367,10 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
           case tree @ q"$_[..$_](...$exprss)"
               if tree.nonEmpty &&
+                 tree.symbol != null &&
                  (tree.symbol.owner == symbols.On ||
                   tree.symbol.owner == symbols.Placed) =>
-            decomposePlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos) match {
+            decomposePlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos, moduleDefinition = true) match {
               case Placed(peer, _, _, modality) =>
                 erase(
                   stripPlacementSyntax(tree), NoSymbol,
@@ -397,7 +398,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         // ensure local placed values do not override non-local placed values
         // and placed values do not override non-placed values
         symbol.overrides foreach { overrideSymbol =>
-          decomposePlacementType(overrideSymbol.info, EmptyTree, symbol, tree.pos) match {
+          decomposePlacementType(overrideSymbol.info, EmptyTree, symbol, tree.pos, moduleDefinition = false) match {
             case Placed(_, _, _, overrideModality) =>
               if (modality == Modality.Local && overrideModality != Modality.Local)
                 c.abort(tree.pos,
@@ -581,10 +582,14 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     isMultitierModule
   }
 
-  def decomposePlacementType(tpe: Type, tpt: Tree, symbol: Symbol, pos: Position): Placement =
+  def decomposePlacementType(tpe: Type, tpt: Tree, symbol: Symbol, pos: Position, moduleDefinition: Boolean): Placement =
     tpe.finalResultType match {
       // placed value
-      case TypeRef(_, symbols.on, List(valueType, peerType)) =>
+      case TypeRef(_, sym, List(valueType, peerType))
+          if sym == symbols.on ||
+             sym == symbols.from ||
+             sym == symbols.fromSingle ||
+             sym == symbols.fromMultiple =>
         val peerSymbol = peerType.typeSymbol
         val valueTree = tpt.original match {
           case AppliedTypeTree(_, List(valueTree, _)) => valueTree
@@ -596,7 +601,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
         // ensure the peer, on which the value is placed,
         // is defined in the same module
-        if (!modulePeer(peerType))
+        if (moduleDefinition && !modulePeer(peerType))
           c.abort(pos, s"${if (symbol != NoSymbol) symbol else "Statement"} " +
             "cannot be placed on peer of another module")
 
@@ -621,8 +626,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
           // modality: subjective, but wrong syntax
           case tpe if tpe real_<:< types.subjective =>
             val Seq(value, peer) = extractTag(tpe, types.subjective, pos).typeArgs
-            c.abort(pos, "Subjective placed type must be given as: " +
-              s"${value.typeSymbol.name} per ${peer.typeSymbol.name}")
+            c.abort(pos, s"Subjective placed type must be given as: $value per ${peer.typeSymbol.name}")
 
           // modality: local
           case TypeRef(_, symbols.local, List(localValueType)) =>
@@ -645,8 +649,24 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         // wrong syntax for placed values
         if (tpe real_<:< types.placedValue) {
           val Seq(value, peer) = extractTag(tpe, types.placedValue, pos).typeArgs
-          c.abort(pos, "Placed type must be given as: " +
-            s"${value.typeSymbol.name} on ${peer.typeSymbol.name}")
+
+          val (selectedValue, selection) =
+            if (value real_<:< types.singleSelection)
+              extractTag(value, types.singleSelection, pos).typeArgs.head -> "fromSingle"
+            else if (value real_<:< types.multipleSelection)
+              extractTag(value, types.multipleSelection, pos).typeArgs.head -> "fromMultiple"
+            else
+              value -> "on"
+
+          val subjectiveValue =
+            if (selectedValue real_<:< types.subjective) {
+              val Seq(value, peer) = extractTag(selectedValue, types.subjective, pos).typeArgs
+              s"$value per ${peer.typeSymbol.name}"
+            }
+            else
+              s"$selectedValue"
+
+          c.abort(pos, s"Placed type must be given as: $subjectiveValue $selection ${peer.typeSymbol.name}")
         }
 
         validatePlacedType(tpe, pos)

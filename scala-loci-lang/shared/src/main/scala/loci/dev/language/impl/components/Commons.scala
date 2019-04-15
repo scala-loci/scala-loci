@@ -40,11 +40,19 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   object symbols {
     val on = symbolOf[_ on _]
     val per = symbolOf[_ per _]
+    val from = symbolOf[_ from _]
+    val fromSingle = symbolOf[_ fromSingle _]
+    val fromMultiple = symbolOf[_ fromMultiple _]
     val local = symbolOf[Local[_]]
+    val placedValue = symbolOf[PlacedValue[_, _]]
     val On = symbolOf[Placement.On[_]]
     val Placed = symbolOf[Placement.Placed]
+    val Select = symbolOf[Placement.Select[Placement.Run]]
+    val Narrow = symbolOf[Placement.Narrow]
+    val Call = symbolOf[Placement.Call[_, PlacedValue]]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.dev.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
+    val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
   }
 
   object types {
@@ -60,6 +68,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val placedValue = typeOf[PlacedValue[_, _]]
     val subjective = typeOf[Placed.Subjective[_, _]]
     val messageBuffer = typeOf[loci.MessageBuffer]
+    val singleSelection = typeOf[Placed.Selected.Single[_]]
+    val multipleSelection = typeOf[Placed.Selected.Multiple[_]]
     val system = typeOf[runtime.System]
     val abstractionRef = typeOf[runtime.AbstractionRef]
     val multitierStub = typeOf[runtime.MultitierStub]
@@ -67,11 +77,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val marshallableInfo = typeOf[runtime.MarshallableInfo[_]]
     val placedRuntimeValue = typeOf[runtime.PlacedValue[_, _, _, _, _, _]]
     val placedRuntimeValueInfo = typeOf[runtime.PlacedValueInfo]
-    val remoteValue = typeOf[runtime.RemoteValue[_, _]]
     val marshallable = typeOf[loci.transmitter.Marshallable[_, _, _]]
     val transmittable = typeOf[loci.transmitter.Transmittable[_, _, _]]
     val resolution = typeOf[loci.transmitter.Transmittable.Aux.Resolution[_, _, _, _, _]]
     val serializable = typeOf[loci.transmitter.Serializable[_]]
+    val remoteRequest = typeOf[runtime.RemoteRequest[_, _, _, _, _]]
     val transmission = typeOf[transmitter.Transmission[_, _, _, _]]
     val accessor = typeOf[transmitter.RemoteAccessor]
     val delegates = typeOf[loci.transmitter.Transmittables.Delegates[_ ]]
@@ -86,6 +96,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val `try` = q"${names.root}.scala.util.Try"
     val nil = q"${names.root}.scala.collection.immutable.Nil"
     val empty = q"${names.root}.loci.MessageBuffer.empty"
+    val reference = q"${names.root}.loci.dev.Remote.reference"
+    val remoteValue = q"${names.root}.loci.dev.runtime.RemoteValue"
     val moduleSignature = q"${names.root}.loci.dev.runtime.Module.Signature.create"
     val peerSignature = q"${names.root}.loci.dev.runtime.Peer.Signature.create"
     val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
@@ -117,8 +129,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   def createTypeTree(tree: Tree): Tree =
     tree match {
-      case tree: TypeTree if tree.original == null =>
-        createTypeTree(tree.tpe, tree.pos)
+      case tree: TypeTree =>
+        if (tree.original != null)
+          tree.original
+        else
+          createTypeTree(tree.tpe, tree.pos)
       case _ =>
         tree
     }
