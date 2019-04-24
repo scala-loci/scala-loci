@@ -140,39 +140,6 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         Some(q"${moduleAliasMods(tree.mods)} val ${tree.name} = $valuePrefix.${tree.name}")
     }
 
-  // lifts the qualified visibility scope to the enclosing owner
-  // in case the visibility is more tightly scoped
-  private def liftPrivateWithin(privateWithin: Symbol, scopeRestrictionFlag: Boolean): Name = {
-    def isPrivateWithinModule(symbol: Symbol): Boolean =
-      symbol != NoSymbol && (symbol == module.classSymbol || isPrivateWithinModule(symbol.owner))
-
-    val liftedPrivateWithin =
-      if (isPrivateWithinModule(privateWithin)) module.classSymbol else privateWithin
-
-    if (scopeRestrictionFlag)
-      (liftedPrivateWithin orElse module.classSymbol).name
-    else if (liftedPrivateWithin != NoSymbol)
-      liftedPrivateWithin.name
-    else
-      typeNames.EMPTY
-  }
-
-  // since we potentially generate value aliases to objects in nested objects
-  // we lift their visibility (as little as possible) using qualified visibility modifiers
-  private def liftMods(symbol: Symbol, mods: Modifiers, removeFlags: FlagSet = NoFlags): Modifiers = {
-    val scopeRestrictionFlag =
-      (mods hasFlag Flag.LOCAL) ||
-      (mods hasFlag Flag.PRIVATE) ||
-      (mods hasFlag Flag.PROTECTED)
-
-    // remove `private` and `local` flags since the cannot be used in conjunction
-    // with `privateWithin` (as opposed to the `protected` flag)
-    Modifiers(
-      (mods withoutFlags (Flag.PRIVATE | Flag.LOCAL | removeFlags)).flags,
-      liftPrivateWithin(symbol.privateWithin, scopeRestrictionFlag),
-      mods.annotations)
-  }
-
   // the visibility for value aliases to objects is the same as defined for the object
   private def moduleAliasMods(mods: Modifiers) = Modifiers(
     Flag.FINAL | Flag.LAZY |

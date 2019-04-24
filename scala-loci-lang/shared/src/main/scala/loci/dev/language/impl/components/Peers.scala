@@ -76,7 +76,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       sym.isModule && sym.asModule.moduleClass == module.classSymbol
 
     if (module.symbol.info.members.exists { _ == symbol })
-      tpe.underlying.asSeenFrom(internal.thisType(module.classSymbol), symbol.owner) match {
+      tpe match {
         case TypeRef(ThisType(sym), _, _) => isModuleSymbol(sym)
         case TypeRef(SingleType(_, sym), _, _) => isModuleSymbol(sym)
         case _ => false
@@ -98,8 +98,12 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   def requirePeerType(symbol: Symbol, tree: Tree, pos: Position): Peer = {
     val (symbolPos, symbolName) = info(symbol, tree, pos)
 
-    val peer = checkPeerType(symbol, tree, pos) getOrElse c.abort(symbolPos,
-      s"$symbolName is not a peer type: @peer type ${symbol.name}")
+    val peer = checkPeerType(symbol, tree, pos) getOrElse c.abort(symbolPos, {
+      if (symbol.name.toString == "<refinement>")
+        s"${symbol.info} is not a peer type"
+      else
+        s"$symbolName is not a peer type: @peer type ${symbol.name}"
+    })
 
     if (!underEnclosingExpansion(symbol) && (symbol.owner.info member peer.name) == NoSymbol)
       c.abort(symbolPos,
@@ -193,10 +197,12 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
             if (!(cache contains symbol))
               requirePeerType(symbol, EmptyTree, tree.pos orElse symbolPos)
 
-            if (modulePeer(tpe))
-              Peer.InheritedBase(tpe, TypeName(s"$$loci$$peer$$$id"), tree)
+            val peerType = tpe.underlying.asSeenFrom(module.classSymbol)
+
+            if (modulePeer(peerType))
+              Peer.InheritedBase(peerType, TypeName(s"$$loci$$peer$$$id"), tree)
             else
-              Peer.DelegatedBase(tpe, TypeName(s"$$loci$$peer$$$id"), tree)
+              Peer.DelegatedBase(peerType, TypeName(s"$$loci$$peer$$$id"), tree)
         }
 
         // ensure ties are specified to be `Multiple`, `Optional` or `Single`
@@ -214,7 +220,9 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
               case _ => EmptyTree
             }
 
-            Peer.Tie(tpe.typeArgs.head, multiplicity, tieTree)
+            val tieType = tpe.typeArgs.head.underlying.asSeenFrom(module.classSymbol)
+
+            Peer.Tie(tieType, multiplicity, tieTree)
         }
 
         // construct peer and add it to the cache
@@ -355,5 +363,5 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   }
 
   private def info(symbol: Symbol, tree: Tree, pos: Position): (Position, String) =
-    (symbol.pos orElse tree.pos orElse pos) -> symbol.fullNestedName
+    (symbol.pos orElse tree.pos orElse pos) -> symbol.nameInEnclosing
 }

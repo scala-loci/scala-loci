@@ -5,6 +5,7 @@ package components
 
 import retypecheck._
 
+import scala.collection.mutable
 import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox
 
@@ -50,6 +51,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val Select = symbolOf[Placement.Select[Placement.Run]]
     val Narrow = symbolOf[Placement.Narrow]
     val Call = symbolOf[Placement.Call[_, PlacedValue]]
+    val Block = symbolOf[Placement.Block[_, PlacedValue]]
+    val Capture = symbolOf[Placement.Capture[_, PlacedValue]]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.dev.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
     val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
@@ -60,6 +63,11 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val string = typeOf[String]
     val unitFuture = typeOf[concurrent.Future[Unit]]
     val nothingFuture = typeOf[concurrent.Future[Nothing]]
+    val on = typeOf[_ on _]
+    val per = typeOf[_ per _]
+    val from = typeOf[_ from _]
+    val fromSingle = typeOf[_ fromSingle _]
+    val fromMultiple = typeOf[_ fromMultiple _]
     val multiple = typeOf[Multiple[_]]
     val optional = typeOf[Optional[_]]
     val single = typeOf[Single[_]]
@@ -71,6 +79,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val singleSelection = typeOf[Placed.Selected.Single[_]]
     val multipleSelection = typeOf[Placed.Selected.Multiple[_]]
     val system = typeOf[runtime.System]
+    val reference = typeOf[runtime.Remote.Reference]
     val abstractionRef = typeOf[runtime.AbstractionRef]
     val multitierStub = typeOf[runtime.MultitierStub]
     val multitierModule = typeOf[runtime.MultitierModule]
@@ -88,6 +97,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val message = typeOf[loci.transmitter.Transmittables.Message[_]]
     val none = typeOf[loci.transmitter.Transmittables.None]
     val compileTimeOnly = typeOf[annotation.compileTimeOnly]
+    val illegalAccessException = typeOf[IllegalAccessException]
     val placedValues = symbols.placedValues.companion.asType.toType
   }
 
@@ -206,6 +216,27 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
       case _ =>
         tpe
     }
+
+    def asSeenFrom(symbol: ClassSymbol): Type = {
+      val bases = symbol.baseClasses.toSet
+      val thisType = internal.thisType(symbol)
+      val symbols = mutable.ListBuffer.empty[Symbol]
+
+      tpe foreach {
+        case TypeRef(_, sym, _) => symbols += sym.owner
+        case ThisType(sym) => symbols += sym
+        case SingleType(_, sym) if sym.isModule => symbols += sym.asModule.moduleClass
+        case SingleType(_, sym) if sym.isModuleClass => symbols += sym
+        case _ =>
+      }
+
+      symbols.foldLeft(tpe) { (tpe, symbol) =>
+        if (bases contains symbol)
+          tpe.asSeenFrom(thisType, symbol)
+        else
+          tpe
+      }
+    }
   }
 
   implicit class SymbolOps(symbol: Symbol) {
@@ -214,7 +245,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
         symbol.annotations ++ symbol.asMethod.accessed.annotations
       else
         symbol.annotations
-    def fullNestedName: String = {
+
+    def nameInEnclosing: String = {
       val name = symbol.fullName
       val tpe =
         if (symbol.isType)
@@ -247,6 +279,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   implicit class ModifiersOps(mods: Modifiers) {
     def withFlags(flags: FlagSet): Modifiers =
       Modifiers(mods.flags | flags, mods.privateWithin, mods.annotations)
+
     def withoutFlags(flags: FlagSet): Modifiers = {
       val reducedFlags =
         Seq(Flag.ABSOVERRIDE, Flag.ABSTRACT, Flag.ARTIFACT, Flag.BYNAMEPARAM,

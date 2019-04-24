@@ -141,12 +141,10 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
       val multitierType = tq"${module.self}.${tree.name}.${names.placedValues}"
 
+      val liftedMods = liftMods(tree.symbol, tree.mods)
       val mods = Modifiers(
-        Flag.FINAL | Flag.LAZY |
-          (if (tree.mods hasFlag Flag.LOCAL) Flag.LOCAL else NoFlags) |
-          (if (tree.mods hasFlag Flag.PRIVATE) Flag.PRIVATE else NoFlags) |
-          (if (tree.mods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
-        tree.mods.privateWithin)
+        Flag.FINAL | Flag.LAZY | (if (liftedMods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
+        liftedMods.privateWithin)
 
       val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
       val instance = q"new $multitierType { $system }"
@@ -155,7 +153,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       val reference = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierName.type = $multitierName" }
 
       val definition = rename(
-        treeCopy.ModuleDef(tree, tree.mods, multitierName, tree.impl),
+        treeCopy.ModuleDef(tree, liftedMods, multitierName, tree.impl),
         tree.symbol,
         tree.symbol.asModule.moduleClass,
         multitierName.toTypeName)
@@ -174,19 +172,17 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     def splitMultitierModuleCompanionClass(tree: ClassDef): Seq[Value] = {
       val multitierName = TypeName(s"$$loci$$multitier$$${tree.name}")
 
+      val liftedMods = liftMods(tree.symbol, tree.mods)
       val mods = Modifiers(
-        Flag.FINAL |
-          (if (tree.mods hasFlag Flag.LOCAL) Flag.LOCAL else NoFlags) |
-          (if (tree.mods hasFlag Flag.PRIVATE) Flag.PRIVATE else NoFlags) |
-          (if (tree.mods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
-        tree.mods.privateWithin)
+        Flag.FINAL | Flag.LAZY | (if (liftedMods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
+        liftedMods.privateWithin)
 
       val reference = atPos(tree.pos) {
         q"$mods type ${tree.name} = $multitierName"
       }
 
       val definition = rename(
-        treeCopy.ClassDef(tree, tree.mods, multitierName, tree.tparams, tree.impl),
+        treeCopy.ClassDef(tree, liftedMods, multitierName, tree.tparams, tree.impl),
         NoSymbol,
         tree.symbol,
         multitierName)
@@ -217,10 +213,11 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                 // add `override` modifier to synthesized value if necessary
                 // since we initialize synthesized values with `null`
                 // instead of keeping them abstract
+                val liftedMods = liftMods(tree.symbol, mods)
                 if (tree.symbol.overrides.isEmpty)
-                  (mods, name, tpt, rhs)
+                  (liftedMods, name, tpt, rhs)
                 else
-                  (mods withFlags Flag.OVERRIDE, name, tpt, rhs)
+                  (liftedMods withFlags Flag.OVERRIDE, name, tpt, rhs)
               })
 
             if (tree.symbol.isAbstract) {
@@ -256,7 +253,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
           if (tree.symbol.isAbstract) {
             val application = tree map { (mods, name, _, rhs) =>
-              (mods, name, multitierType, rhs)
+              (liftMods(tree.symbol, mods), name, multitierType, rhs)
             }
 
             Seq(
@@ -293,7 +290,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
             val value = extractValue(multitierName, NoType, multitierType, init, tree.pos)
             val application = tree map { (mods, name, _, _) =>
-              (mods, name, multitierType, q"$multitierName()")
+              (liftMods(tree.symbol, mods), name, multitierType, q"$multitierName()")
             }
 
             Seq(
@@ -402,13 +399,13 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             case Placed(_, _, _, overrideModality) =>
               if (modality == Modality.Local && overrideModality != Modality.Local)
                 c.abort(tree.pos,
-                  s"Local placed declaration ${symbol.fullNestedName} cannot override " +
-                  s"non-local placed declaration ${overrideSymbol.fullNestedName}")
+                  s"Local placed declaration ${symbol.nameInEnclosing} cannot override " +
+                  s"non-local placed declaration ${overrideSymbol.nameInEnclosing}")
 
             case _ =>
               c.abort(tree.pos,
-                s"Placed declaration ${symbol.fullNestedName} cannot override " +
-                s"non-placed declaration ${overrideSymbol.fullNestedName}")
+                s"Placed declaration ${symbol.nameInEnclosing} cannot override " +
+                s"non-placed declaration ${overrideSymbol.nameInEnclosing}")
           }
         }
 
@@ -583,7 +580,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
   }
 
   def decomposePlacementType(tpe: Type, tpt: Tree, symbol: Symbol, pos: Position, moduleDefinition: Boolean): Placement =
-    tpe.finalResultType match {
+    tpe.finalResultType.asSeenFrom(module.classSymbol) match {
       // placed value
       case TypeRef(_, sym, List(valueType, peerType))
           if sym == symbols.on ||
@@ -616,9 +613,11 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
             val subjectiveTree = valueTree.original match {
               case AppliedTypeTree(_, List(subjectiveValueTree, subjectivePeerTree)) =>
-                tq"${types.remote}[$subjectivePeerTree] => $subjectiveValueTree"
+                tq"${createTypeTree(types.remote.typeConstructor, NoPosition)}[$subjectivePeerTree] => $subjectiveValueTree"
               case _ => EmptyTree
             }
+
+            requirePeerType(subjectivePeerType.typeSymbol, pos)
 
             validatePlacedType(subjectiveType, pos)
             Placed(peerSymbol, subjectiveType, subjectiveTree, Modality.Subjective(subjectivePeerType))
@@ -701,6 +700,39 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       c.abort(pos, s"Could not find unique tag: $tag")
 
     extractedTag
+  }
+
+  // lifts the qualified visibility scope to the enclosing owner
+  // in case the visibility is more tightly scoped
+  private def liftPrivateWithin(privateWithin: Symbol, scopeRestrictionFlag: Boolean): Name = {
+    def isPrivateWithinModule(symbol: Symbol): Boolean =
+      symbol != NoSymbol && (symbol == module.classSymbol || isPrivateWithinModule(symbol.owner))
+
+    val liftedPrivateWithin =
+      if (isPrivateWithinModule(privateWithin)) module.classSymbol else privateWithin
+
+    if (scopeRestrictionFlag)
+      (liftedPrivateWithin orElse module.classSymbol).name
+    else if (liftedPrivateWithin != NoSymbol)
+      liftedPrivateWithin.name
+    else
+      typeNames.EMPTY
+  }
+
+  // since we potentially generate value aliases to objects in nested objects
+  // we lift their visibility (as little as possible) using qualified visibility modifiers
+  def liftMods(symbol: Symbol, mods: Modifiers): Modifiers = {
+    val scopeRestrictionFlag =
+      (mods hasFlag Flag.LOCAL) ||
+      (mods hasFlag Flag.PRIVATE) ||
+      (mods hasFlag Flag.PROTECTED)
+
+    // remove `private` and `local` flags since the cannot be used in conjunction
+    // with `privateWithin` (as opposed to the `protected` flag)
+    Modifiers(
+      (mods withoutFlags (Flag.PRIVATE | Flag.LOCAL)).flags,
+      liftPrivateWithin(symbol.privateWithin, scopeRestrictionFlag),
+      mods.annotations)
   }
 
   private val multitierInitializations: Map[Symbol, List[Symbol]] = {
