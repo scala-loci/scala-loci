@@ -4,6 +4,7 @@ package impl
 package components
 
 import scala.collection.mutable
+import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox
 
 object Peers extends Component.Factory[Peers](
@@ -49,6 +50,100 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     case class DelegatedBase(tpe: Type, name: TypeName, tree: Tree) extends Base
 
     case class Tie(tpe: Type, multiplicity: Peers.this.Tie, tree: Tree)
+  }
+
+
+  def tieMultiplicity(ties: List[Peer.Tie], tpe: Type): Option[Tie] =
+    ties.foldLeft(Option.empty[Int]) { (multiplicity, tie) =>
+      if (tie.tpe =:= tpe)
+        multiplicity map { _ max tie.multiplicity.id } orElse Some(tie.multiplicity.id)
+      else if (tie.tpe <:< tpe)
+        multiplicity orElse Some(Tie.Multiple.id)
+      else
+        multiplicity
+    } map { Tie(_) }
+
+  def tieMultiplicities(ties: List[Peer.Tie]): List[Peer.Tie] =
+    ties.foldRight(List.empty[Peer.Tie]) { (tie, ties) =>
+      val (updatedTies, foundTie) = ties.foldRight(List.empty[Peer.Tie] -> false) {
+        case (existingTie, (ties, foundTie)) =>
+          if (existingTie.tpe =:= tie.tpe) {
+            if (tie.multiplicity > existingTie.multiplicity)
+              ties -> foundTie
+            else
+              (existingTie :: ties) -> true
+          }
+          else
+            (existingTie :: ties) -> foundTie
+      }
+
+      if (foundTie)
+        updatedTies
+      else
+        tie :: updatedTies
+    }
+
+
+  private val readingRemoteAccesses: Map[Symbol, List[(Type, Position)]] = {
+    val readingRemoteAccesses = mutable.Map.empty[Symbol, List[(Type, Position)]]
+    val peerContext = mutable.ListBuffer.empty[(Symbol, String)]
+
+    object traverser extends Traverser {
+      override def traverse(tree: Tree): Unit = tree match {
+        case q"$expr[..$_](...$exprss)"
+            if exprss.nonEmpty &&
+               exprss.head.nonEmpty &&
+               tree.symbol != null &&
+               (tree.symbol.owner == symbols.On ||
+                tree.symbol.owner == symbols.Placed ||
+                tree.symbol.owner == symbols.Block) =>
+          val context = exprss.head.head.tpe.underlying.typeArgs.head
+          val peer = context.underlying.typeArgs.head.typeSymbol
+
+          val (name, pos) = exprss.head.head match {
+            case Function(List(vparam), _) =>
+              if (!(vparam.mods hasFlag Flag.IMPLICIT))
+                c.abort(vparam.pos orElse tree.pos, "peer context parameter must be implicit")
+
+              vparam.name.toString -> vparam.pos
+
+            case _ =>
+              "" -> NoPosition
+          }
+
+          peerContext.headOption foreach { case (_, outerName) =>
+            if (outerName.nonEmpty && outerName != name)
+              c.abort(pos orElse tree.pos,
+                s"peer context parameter name `${NameTransformer decode name}` may not differ from " +
+                s"outer peer context parameter name `${NameTransformer decode outerName}`")
+          }
+
+          traverse(expr)
+          peerContext.prepend(peer -> name)
+          traverseTreess(exprss)
+          peerContext.remove(0)
+
+        case q"$_[..$_](...$exprss)"
+            if exprss.nonEmpty &&
+               exprss.head.nonEmpty &&
+               (tree.tpe real_<:< types.accessor) &&
+               (exprss.head.head.tpe <:!< types.fromSingle) &&
+               (exprss.head.head.tpe <:!< types.fromMultiple) =>
+          peerContext.headOption foreach { case (outerPeer, _) =>
+            val peer = exprss.head.head.tpe.widen.typeArgs(1)
+            val accesses = readingRemoteAccesses.getOrElse(outerPeer, List.empty)
+            readingRemoteAccesses.update(outerPeer, peer -> tree.pos :: accesses)
+          }
+          super.traverse(tree)
+
+        case _ =>
+          super.traverse(tree)
+      }
+    }
+
+    traverser traverse module.tree
+
+    readingRemoteAccesses.toMap
   }
 
 
@@ -129,8 +224,14 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     if (symbol.annotations exists { _.tree.tpe <:< types.peer }) {
       // recompute result if the peer symbol is currently under expansion and
       // we are given a tree to ensure the result contains the correct trees
-      if (!tree.isEmpty && underExpansion(symbol))
-        cache -= symbol
+      val cached =
+        if (!tree.isEmpty && underExpansion(symbol)) {
+          val cached = cache contains symbol
+          cache -= symbol
+          cached
+        }
+        else
+          false
 
       Some(cache.getOrElse(symbol, {
         val (symbolPos, symbolName) = info(symbol, tree, pos)
@@ -150,12 +251,28 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                   List.fill(peerParents.size)(EmptyTree) -> List.empty
               }
 
-              if (peerDecls.size == 1 && peerDecls.head.name == names.tie) {
+              val inheritedTies = peerParents exists { tpe =>
+                tpe.typeSymbol.isClass && tpe.typeSymbol.isSynthetic
+              }
+
+              // extract tie specification from generated synthetic peer trait
+              val peerDeclsInheritedTie =
+                if (peerDecls.isEmpty && inheritedTies) {
+                  val tie = symbolType member names.tie
+                  if (tie != NoSymbol)
+                    internal.newScopeWith(tie)
+                  else
+                    peerDecls
+                }
+                else
+                  peerDecls
+
+              if (peerDeclsInheritedTie.size == 1 && peerDeclsInheritedTie.head.name == names.tie) {
                 val tieTree = body match {
-                  case List(TypeDef(_, _, _, tie)) => tie
+                  case List(TypeDef(_, _, _, tie)) if !inheritedTies => tie
                   case _ => EmptyTree
                 }
-                val tieSymbol = peerDecls.head
+                val tieSymbol = peerDeclsInheritedTie.head
                 val tieType = tieSymbol.info
                 val tiePos = tieTree.pos orElse tieSymbol.pos orElse symbolPos
 
@@ -177,7 +294,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                     (peerParents zip peerParentTrees) -> List(tpe -> tree)
                 }
               }
-              else if (peerDecls.isEmpty)
+              else if (peerDeclsInheritedTie.isEmpty)
                 (peerParents zip peerParentTrees) -> List.empty
               else
                 c.abort(symbolPos,
@@ -189,8 +306,13 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
         // ensure all base peers are peer types
         // and ignore base `Any` and `AnyRef`
+        // and generated synthetic peer traits
         val bases = basesSpec collect {
-          case (tpe, tree) if tpe =:!= definitions.AnyTpe && tpe =:!= definitions.AnyRefTpe =>
+          case (tpe, tree)
+              if tpe =:!= definitions.AnyTpe &&
+                 tpe =:!= definitions.AnyRefTpe &&
+                 tpe =:!= types.peerMarker &&
+                 (!tpe.typeSymbol.isClass || !tpe.typeSymbol.isSynthetic) =>
             val symbol = tpe.typeSymbol
             val id = symbol.name.toString
 
@@ -225,22 +347,34 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
             Peer.Tie(tieType, multiplicity, tieTree)
         }
 
+        // infer ties in case the peer is not explicitly overridden
+        // but overridden peers come from (potentially multiple) super modules
+        val inferredTies =
+          if (tree.isEmpty &&
+              symbol.owner != module.classSymbol &&
+              (module.symbol.info.members exists { _ == symbol }))
+            inferTies(symbol, ties)
+          else
+            None
+
+        val computedTies = tieMultiplicities(inferredTies getOrElse ties)
+
         // construct peer and add it to the cache
         // so we do not run checks again
         val name = TypeName(s"$$loci$$peer$$${symbol.name}")
-        val peer = Peer(symbol, name, bases, ties)
+        val peer = Peer(symbol, name, bases, computedTies)
         cache += symbol -> peer
 
         // ensure that tied types are peer types
-        ties foreach { case Peer.Tie(tpe, _, tree) =>
+        computedTies foreach { case Peer.Tie(tpe, _, tree) =>
           val symbol = tpe.typeSymbol
           if (!(cache contains symbol))
             requirePeerType(symbol, tree, tree.pos orElse symbolPos)
         }
 
         // validate peer declaration (super peers and tie specification)
-        if (!tree.isEmpty)
-          validate(peer, symbolPos)
+        if ((module.symbol.info.members exists { _ == symbol }) && !cached)
+          validate(peer, inferredTies.nonEmpty, symbolPos)
 
         peer
       }))
@@ -249,7 +383,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       None
   }
 
-  private def validate(peer: Peer, pos: Position): Unit = {
+  private def validate(peer: Peer, tiesInferred: Boolean, pos: Position): Unit = {
     // ensure that peers only appear once as super peer
     peer.bases combinations 2 foreach {
       case Seq(Peer.Base(tpe0, _, _), Peer.Base(tpe1, _, tree1)) =>
@@ -271,12 +405,11 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
     // ensure peer bases and tied peers are not type projections,
     // singleton types or existential types
-    def validateTypeTree(tree: Tree) = tree match {
-      case SingletonTypeTree(_) => Some("singleton type")
-      case SelectFromTypeTree(_, _) => Some("type projection")
-      case ExistentialTypeTree(_, _) => Some("existential type")
-      case _ => None
-    }
+    def validateTypeTree(tree: Tree) = (tree collect {
+      case SingletonTypeTree(_) => "singleton type"
+      case SelectFromTypeTree(_, _) => "type projection"
+      case ExistentialTypeTree(_, _) => "existential type"
+    }).headOption
 
     peer.bases foreach { case Peer.Base(_, _, tree) =>
       validateTypeTree(tree) foreach { desc =>
@@ -293,58 +426,156 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     }
 
 
-    // ensure peer ties conform to super peer ties
-    def tieSymbol(symbol: Symbol) = symbol.info decl names.tie
+    // ensure peer bases conform to overridden peer bases
+    val overridden = overriddenPeers(peer.symbol)
 
-    def tieType(symbol: Symbol) = tieSymbol(symbol).info match {
-      case TypeBounds(_, high) => high
-      case _ => definitions.AnyTpe
-    }
-
-    val peerTie = tieType(peer.symbol)
-
-    peer.bases foreach { case Peer.Base(tpe, _, _) =>
-      val TypeRef(pre, _, _) = tpe
-      val base = tpe.typeSymbol
-      val baseTie = tieType(base).asSeenFrom(pre, base.owner)
-
-      if (!(peerTie <:< baseTie))
-        c.abort(tieSymbol(peer.symbol).pos orElse pos,
-          s"tie specification for peer ${peer.symbol.name} does not conform to " +
-          s"tie specification for super peer ${base.fullName}: " +
-          s"$peerTie is not a subtype of $baseTie")
+    overridden foreach { overridden =>
+      overridden.bases foreach { base =>
+        if (!(peer.bases exists { _.tpe <:< base.tpe })) {
+          c.abort(pos,
+            s"peer type needs to be a sub peer of ${base.tpe.typeSymbol.name} " +
+            s"conforming to overridden peer ${overridden.symbol.nameInEnclosing}")
+        }
+      }
     }
 
 
-    // ensure peer ties are consistent regarding subtype relations between peers
-    peer.ties foreach { case Peer.Tie(tpe0, multiplicity0, tree0) =>
-      val subtypes = (peer.ties
-        filter { case Peer.Tie(tpe1, _, _) => tpe1 <:< tpe0 }
+    if (!tiesInferred) {
+      // ensure peer ties conform to super and overridden peer ties
+      def tieSymbol(symbol: Symbol) = symbol.info member names.tie
+
+      def tieType(symbol: Symbol) = tieSymbol(symbol).info match {
+        case TypeBounds(_, high) => high
+        case _ => definitions.AnyTpe
+      }
+
+      val peerTie = tieType(peer.symbol).asSeenFrom(module.classSymbol)
+
+      val peers =
+        (peer.bases map { _.tpe -> "super" }) ++
+        (overridden map { _.symbol.asType.toType -> "overridden" })
+
+      peers foreach { case (tpe, relation) =>
+        val TypeRef(pre, _, _) = tpe
+        val base = tpe.typeSymbol
+        val baseTie = tieType(base).asSeenFrom(pre, base.owner).asSeenFrom(module.classSymbol)
+
+        if (!(peerTie <:< baseTie))
+          c.abort(if (peer.symbol.owner == module.classSymbol) tieSymbol(peer.symbol).pos orElse pos else pos,
+            s"tie specification of peer ${peer.symbol.name} does not conform to " +
+            s"tie specification of $relation peer ${base.nameInEnclosing}: " +
+            s"$peerTie is not a subtype of $baseTie")
+      }
+
+
+      // ensure peer ties are consistent regarding subtype relations between peers
+      peer.ties foreach { case Peer.Tie(tpe0, multiplicity0, tree0) =>
+        val subtypes = (peer.ties
+          filter { case Peer.Tie(tpe1, _, _) => tpe1 <:< tpe0 }
+          sortWith { case (Peer.Tie(tpe0, _, _), Peer.Tie(tpe1, _, _)) => tpe0 <:< tpe1 })
+
+        if (subtypes.size > 1)
+          subtypes sliding 2 foreach {
+            case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
+              if (tpe1 =:= tpe2) {
+                if (multiplicity1 != multiplicity2)
+                  c.abort(tree2.pos orElse pos,
+                    s"$multiplicity1 tie required for $tpe2 " +
+                    s"when specified for same peer $tpe1")
+              }
+              else if (tpe1 <:< tpe2) {
+                if (multiplicity1 < multiplicity2)
+                  c.abort(tree2.pos orElse pos,
+                    s"$multiplicity1 tie required for $tpe2 " +
+                    s"when specified for sub peer $tpe1")
+              }
+              else {
+                if (multiplicity0 != Tie.Multiple)
+                  c.abort(tree0.pos orElse pos,
+                    s"${Tie.Multiple} tie required for $tpe0 " +
+                    s"since unrelated sub peers are tied: $tpe1 and $tpe2")
+              }
+          }
+      }
+    }
+  }
+
+  private def inferTies(symbol: Symbol, ties: List[Peer.Tie]): Option[List[Peer.Tie]] = {
+    // merge tie specification of overridden peers
+    val mergedTies = (overriddenPeers(symbol) map { _.ties }).foldLeft(ties) { (ties0, ties1) =>
+      val updatedTies0 = ties0 map { tie0 =>
+        val multiplicity = ties1.foldLeft(tie0.multiplicity.id) { (multiplicity0, tie1) =>
+          if (tie1.tpe =:= tie0.tpe)
+            multiplicity0 max tie1.multiplicity.id
+          else
+            multiplicity0
+        }
+        tie0.copy(multiplicity = Tie(multiplicity))
+      }
+
+      val updatedTies1 = ties1 filterNot { tie1 =>
+        ties0 exists { _.tpe =:= tie1.tpe }
+      }
+
+      updatedTies0 ++ updatedTies1
+    }
+
+    // check merged tie specification for consistency
+    val tiesConsistent = mergedTies forall { tie =>
+      val subtypes = (mergedTies
+        filter { case Peer.Tie(tpe, _, _) => tpe <:< tie.tpe }
         sortWith { case (Peer.Tie(tpe0, _, _), Peer.Tie(tpe1, _, _)) => tpe0 <:< tpe1 })
 
       if (subtypes.size > 1)
-        subtypes sliding 2 foreach {
+        (subtypes sliding 2) forall {
           case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
-            if (tpe1 =:= tpe2) {
-              if (multiplicity1 != multiplicity2)
-                c.abort(tree2.pos orElse pos,
-                  s"$multiplicity1 tie required for $tpe2 " +
-                  s"when specified for same peer $tpe1")
-            }
-            else if (tpe1 <:< tpe2) {
-              if (multiplicity1 < multiplicity2)
-                c.abort(tree2.pos orElse pos,
-                  s"$multiplicity1 tie required for $tpe2 " +
-                  s"when specified for sub peer $tpe1")
-            }
-            else {
-              if (multiplicity0 != Tie.Multiple)
-                c.abort(tree0.pos orElse pos,
-                  s"${Tie.Multiple} tie required for $tpe0 " +
-                  s"since unrelated sub peers are tied: $tpe1 and $tpe2")
-            }
+            if (tpe1 =:= tpe2)
+              multiplicity1 == multiplicity2 && tie.multiplicity.id >= multiplicity2.id
+            else if (tpe1 <:< tpe2)
+              multiplicity1 >= multiplicity2 && tie.multiplicity.id >= multiplicity2.id
+            else
+              tie.multiplicity == Tie.Multiple
         }
+      else
+        true
     }
+
+    val moduleName = s"${module.name}.this."
+
+    def peerName(tpe: Type) = {
+      val typeName = tpe.toString
+      if (typeName startsWith moduleName)
+        typeName.substring(moduleName.length)
+      else
+        typeName
+    }
+
+    if (tiesConsistent) {
+      // ensure newly inferred tie conforms to existing remote accesses
+      // this is only relevant for reading remote accesses whose return value may depend on the tie
+      readingRemoteAccesses get symbol foreach {
+        _ foreach { case (tpe, pos) =>
+          if (tieMultiplicity(ties, tpe) != tieMultiplicity(mergedTies, tpe)) {
+            val ties = mergedTies map { tie =>
+              val name = peerName(tie.tpe)
+              tie.multiplicity match {
+                case Tie.Single => s"Single[$name]"
+                case Tie.Optional => s"Optional[$name]"
+                case Tie.Multiple => s"Multiple[$name]"
+              }
+            }
+
+            c.abort(pos,
+              s"Inconsistent remote access for inferred peer ties for ${symbol.name}. " +
+              s"You may define @peer type ${symbol.name} <: { type Tie <: ${ties mkString " with "} }")
+          }
+        }
+      }
+
+      Some(mergedTies)
+    }
+    else
+      None
   }
 
   private def typeByUpperBound(
@@ -362,6 +593,28 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       c.abort(pos, s"$constructs cannot be type aliases: $name")
   }
 
-  private def info(symbol: Symbol, tree: Tree, pos: Position): (Position, String) =
-    (symbol.pos orElse tree.pos orElse pos) -> symbol.nameInEnclosing
+  private def info(symbol: Symbol, tree: Tree, pos: Position) = {
+    (tree.pos
+      orElse {
+        (module.tree.impl.parents
+          collectFirst {
+            case parent if parent.symbol.asType.toType.members exists { _ == symbol } =>
+              parent.pos
+          }
+          getOrElse NoPosition)
+      }
+      orElse pos) -> symbol.nameInEnclosing
+  }
+
+  private def overriddenPeers(symbol: Symbol) =
+    (module.tree.impl.parents collect {
+      case parent
+          if parent.tpe =:!= definitions.AnyTpe &&
+             parent.tpe =:!= definitions.AnyRefTpe =>
+        val sym = parent.tpe member symbol.name
+        if (sym != NoSymbol && sym != symbol)
+          Some(requirePeerType(sym))
+        else
+          None
+    }).flatten
 }

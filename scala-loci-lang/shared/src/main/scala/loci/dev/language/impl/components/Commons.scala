@@ -72,6 +72,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val optional = typeOf[Optional[_]]
     val single = typeOf[Single[_]]
     val peer = typeOf[peer]
+    val peerMarker = typeOf[Peer]
     val remote = typeOf[Remote[_]]
     val placedValue = typeOf[PlacedValue[_, _]]
     val subjective = typeOf[Placed.Subjective[_, _]]
@@ -105,11 +106,15 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val implicitly = q"${names.root}.scala.Predef.implicitly"
     val `try` = q"${names.root}.scala.util.Try"
     val nil = q"${names.root}.scala.collection.immutable.Nil"
+    val map = q"${names.root}.scala.collection.immutable.Map.apply"
     val empty = q"${names.root}.loci.MessageBuffer.empty"
     val reference = q"${names.root}.loci.dev.Remote.reference"
     val remoteValue = q"${names.root}.loci.dev.runtime.RemoteValue"
     val moduleSignature = q"${names.root}.loci.dev.runtime.Module.Signature.create"
     val peerSignature = q"${names.root}.loci.dev.runtime.Peer.Signature.create"
+    val multiple = q"${names.root}.loci.dev.runtime.Peer.Tie.Multiple"
+    val optional = q"${names.root}.loci.dev.runtime.Peer.Tie.Optional"
+    val single = q"${names.root}.loci.dev.runtime.Peer.Tie.Single"
     val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
     val resolution = q"${names.root}.loci.transmitter.Transmittable.Aux.resolution"
     val delegating = q"${names.root}.loci.transmitter.ContextBuilder.delegating"

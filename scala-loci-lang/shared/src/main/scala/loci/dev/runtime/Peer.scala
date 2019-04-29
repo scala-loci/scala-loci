@@ -4,6 +4,22 @@ package runtime
 import SignatureParser._
 
 object Peer {
+  type Tie = Tie.Value
+
+  object Tie extends Enumeration {
+    val Multiple, Optional, Single = Value
+
+    def apply(signature: Peer.Signature, ties: Traversable[(Peer.Signature, Tie)]): Option[Tie] =
+      ties.foldLeft(Option.empty[Int]) { case (multiplicity, (tieSignature, tieMultiplicity)) =>
+        if (tieSignature == signature)
+          multiplicity map { _ max tieMultiplicity.id } orElse Some(tieMultiplicity.id)
+        else if (tieSignature <:< signature)
+          multiplicity orElse Some(Tie.Multiple.id)
+        else
+          multiplicity
+      } map { Tie(_) }
+  }
+
   case class Base(name: String, module: Module.Signature)
 
   case class Signature(name: String, bases: List[Base], module: Module.Signature) {

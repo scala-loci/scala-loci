@@ -20,6 +20,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   val peers = engine.require(Peers)
   val values = engine.require(Values)
 
+  import engine._
   import engine.c.universe._
   import commons._
   import moduleInfo._
@@ -66,7 +67,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       placedValuesImpl -> signatureImpl
     }
 
-    val peerValues = modulePeers flatMap { case Peer(symbol, name, bases, _) =>
+    val peerValues = modulePeers flatMap { case Peer(symbol, name, bases, ties) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
       val overriddenBases = module.tree.impl.parents flatMap { base =>
@@ -113,11 +114,120 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       val peerSignature =
         q"${Flag.SYNTHETIC} def ${TermName(s"$$loci$$peer$$sig$$${symbol.name}")} = ${trees.peerSignature}(${symbol.name.toString}, $signatureBases, $$loci$$sig)"
 
-      Seq(peerImpl, peerValue, peerSignature)
+      // generate peer tie specification
+      val peerTies = ties map { tie =>
+        val name = TermName(s"$$loci$$peer$$sig$$${tie.tpe.typeSymbol.name}")
+        val expr = tie.tree match {
+          case tq"$expr.$_" =>
+            expr
+          case _ =>
+            val tq"$expr.$_" = createTypeTree(tie.tpe.underlying, NoPosition)
+            expr
+        }
+
+        tie.multiplicity match {
+          case Tie.Multiple => q"($expr.$name, ${trees.multiple})"
+          case Tie.Optional => q"($expr.$name, ${trees.optional})"
+          case Tie.Single => q"($expr.$name, ${trees.single})"
+        }
+      }
+      val peerTieSpec =
+        q"${Flag.SYNTHETIC} def ${TermName(s"$$loci$$peer$$ties$$${symbol.name}")} = ${trees.map}(..$peerTies)"
+
+      Seq(peerImpl, peerValue, peerSignature, peerTieSpec)
+    }
+
+    val (peerTypeBodySymbolTrees, moduleValues) = (records collect {
+      case ModuleValue(symbol, tree @ TypeDef(mods, name, tparams, rhs))
+          if checkPeerType(symbol).nonEmpty =>
+        // collect super peers and tie specifications
+        val (parents, body) = rhs.original match {
+          case TypeBoundsTree(_, hi) => hi.original match {
+            case CompoundTypeTree(Template(parents, _, body)) =>
+              parents -> body
+            case parent @ Select(_, _) =>
+              List(parent) -> List.empty
+            case _ =>
+              List.empty -> List.empty
+          }
+          case _ =>
+            List.empty -> List.empty
+        }
+
+        // remove tie specification from peers defined inside the module
+        // we outsource the tie specification into a separate synthetically generated trait
+        // to work around http://github.com/scala/bug/issues/10928
+        Some(symbol -> body) -> atPos(rhs.pos orElse tree.pos) {
+          val tieName = TypeName(s"$$loci$$peer$$tie$$$name")
+          val tieParents = tq"${types.peerMarker} with ..$parents with $tieName"
+          val rhs = TypeBoundsTree(EmptyTree, tieParents)
+          treeCopy.TypeDef(tree, mods, name, tparams, rhs)
+        }
+
+      case ModuleValue(_, tree) =>
+        None -> tree
+    }).unzip
+
+    val peerTypeBodies = peerTypeBodySymbolTrees.flatten.toMap
+
+    val peerTypeTieTrees = modulePeers flatMap { peer =>
+      // collect inherited synthetic peer traits
+      val tieName = TypeName(s"$$loci$$peer$$tie$$${peer.symbol.name}")
+      val parents = module.tree.impl.parents collect {
+        case parent if
+            parent.tpe =:!= definitions.AnyTpe &&
+            parent.tpe =:!= definitions.AnyRefTpe &&
+            (parent.tpe member peer.symbol.name) != NoSymbol =>
+          atPos(parent.pos) {
+            tq"super[${parent.symbol.name.toTypeName}].$tieName"
+          }
+      }
+
+      (peerTypeBodies get peer.symbol
+        map { body =>
+          // generate synthetic peer trait for tie specification
+          // for peers defined inside the module
+          val tiesSpecified = body exists {
+            case TypeDef(_, TypeName("Tie"), _, _) => true
+            case _ => false
+          }
+
+          val stats =
+            if (tiesSpecified)
+              body
+            else
+              q"type Tie" :: body
+
+          Seq(q"${Flag.SYNTHETIC} trait $tieName extends ..$parents { ..$stats }")
+        }
+        getOrElse {
+          // generate synthetic peer trait for tie specification
+          // for inherited peers
+          val peerParents = types.peerMarker :: (peer.bases map { _.tpe }) map {
+            createTypeTree(_, c.enclosingPosition)
+          }
+
+          val ties = peer.ties map { tie =>
+            tie.multiplicity match {
+              case Tie.Single => types.single mapArgs { _ => List(tie.tpe) }
+              case Tie.Optional => types.optional mapArgs { _ => List(tie.tpe) }
+              case Tie.Multiple => types.multiple mapArgs { _ => List(tie.tpe) }
+            }
+          }
+
+          val tie = ties map { createTypeTree(_, c.enclosingPosition) } match {
+            case head :: tail => List(q"type Tie <: $head with ..$tail")
+            case _ => List(q"type Tie")
+          }
+
+          Seq(
+            q"@$peerAnnotation ${Flag.SYNTHETIC} type ${peer.symbol.name.toTypeName} <: ..$peerParents with $tieName",
+            q"${Flag.SYNTHETIC} trait $tieName extends ..$parents { ..$tie }")
+        })
     }
 
     // create records for new peer implementations
-    val stats = (records collect { case value: ModuleValue => value.tree }) ++ (placedValuesImpl +: signatureImpl +: peerValues)
+    val stats = moduleValues ++ peerTypeTieTrees ++ (placedValuesImpl +: signatureImpl +: peerValues)
 
     // assemble multitier module
     val tree = module.tree map { (mods, parents, self, _) =>
@@ -142,4 +252,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
   private val multitierModuleAnnotation =
     internal.setType(q"new ${types.multitierModule}", types.multitierModule)
+
+  private val peerAnnotation =
+    internal.setType(q"new ${types.peer}", types.peer)
 }
