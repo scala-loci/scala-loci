@@ -451,7 +451,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                               throw new ${types.illegalAccessException}("Illegal subjective access")
                           }"""
 
-                          q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})($remote)"
+                          if (symbol.asTerm.isStable)
+                            q"$$loci$$sys.subjectiveValue(${symbol.name}, $remote)"
+                          else
+                            q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})($remote)"
                         }
                         getOrElse c.abort(symbol.pos,
                           s"Subjective definition may not refer to peer of another module: $subjective"))

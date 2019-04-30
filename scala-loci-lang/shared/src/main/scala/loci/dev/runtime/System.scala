@@ -12,4 +12,6 @@ class System {
       peer: Peer.Signature,
       remotes: Seq[RemoteRef],
       requestResult: Boolean): Seq[T] = ???
+
+  def subjectiveValue[T, P](function: Remote[P] => T, remote: Remote[P]): T = ???
 }

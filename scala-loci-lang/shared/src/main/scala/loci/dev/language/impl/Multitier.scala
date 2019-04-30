@@ -77,7 +77,17 @@ class Multitier(val c: blackbox.Context) {
 
           val Engine.Result(engine, records) = Engine.run(c)(
             typedAnnottee,
-            Seq(Commons, ModuleInfo, Initialization, RemoteBlock, Peers, Values, RemoteAccess, Impls, Assembly))
+            Seq(
+              Commons,
+              ModuleInfo,
+              Initialization,
+              RemoteBlock,
+              Peers,
+              Values,
+              RemoteAccess,
+              Subjectivity,
+              Impls,
+              Assembly))
 
           val assembly = engine.require(Assembly)
 

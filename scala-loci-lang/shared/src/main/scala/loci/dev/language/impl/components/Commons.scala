@@ -55,6 +55,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val Capture = symbolOf[Placement.Capture[_, PlacedValue]]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.dev.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
+    val to = typeOf[Placed[_, _]] member TermName("to")
     val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
   }
 
