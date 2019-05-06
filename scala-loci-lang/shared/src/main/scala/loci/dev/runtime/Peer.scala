@@ -13,54 +13,72 @@ object Peer {
       ties.foldLeft(Option.empty[Int]) { case (multiplicity, (tieSignature, tieMultiplicity)) =>
         if (tieSignature == signature)
           multiplicity map { _ max tieMultiplicity.id } orElse Some(tieMultiplicity.id)
-        else if (tieSignature <:< signature)
+        else if (tieSignature < signature)
           multiplicity orElse Some(Tie.Multiple.id)
         else
           multiplicity
       } map { Tie(_) }
   }
 
-  case class Base(name: String, module: Module.Signature)
+  case class Signature(name: String, parents: List[Signature], module: Module.Signature)
+      extends PartiallyOrdered[Signature] {
+    if (parents exists { _.module.name != module.name})
+      throw new IllegalArgumentException("Base peer signature for different multitier module")
 
-  case class Signature(name: String, bases: List[Base], module: Module.Signature) {
-    def <:<(signature: Signature): Boolean = {
-      def subtype(name: String, module: Module.Signature) =
-        name == signature.name && module <:< signature.module
+    def bases: Set[Signature] =
+      parents.toSet ++ (parents flatMap { _.bases }) + this
 
-      this == signature || subtype(name, module) || (bases exists { base => subtype(base.name, base.module) })
-    }
+    def tryCompareTo[S >: Signature](other: S)(implicit ev: S => PartiallyOrdered[S]): Option[Int] =
+      other match {
+        case other: Signature if other canEqual this =>
+          def contains(bases: List[Signature], signature: Signature): Boolean =
+            bases exists { base =>
+              base.name == signature.name && base.module == signature.module ||
+              contains(base.parents, signature)
+            }
+
+          if (name == other.name && module == other.module) Some(0)
+          else if (contains(parents, other)) Some(-1)
+          else if (contains(other.parents, this)) Some(1)
+          else None
+
+        case _ =>
+          None
+      }
   }
 
   object Signature {
-    def create(name: String, bases: List[Signature], module: Module.Signature) =
-      Signature(name, (bases flatMap { base => Base(base.name, base.module) :: base.bases }).distinct, module)
+    private def serializeBases(signatures: List[Signature]): String =
+      list(signatures map { signature =>
+        elements(
+          string(signature.name),
+          list(signature.module.path),
+          serializeBases(signature.parents))
+      })
 
     def serialize(signature: Signature): String =
       elements(
         string(signature.name),
-        list(signature.bases map Base.serialize),
-        Module.Signature.serialize(signature.module))
+        list(signature.module.path),
+        serializeBases(signature.parents),
+        string(signature.module.name))
+
+    private def deserializeBases(signatures: SignatureParser, moduleName: String): List[Signature] =
+      signatures.asList map { signature =>
+        val Seq(name, path, bases) = signature.asElements(3)
+        Signature(
+          name.asString,
+          deserializeBases(bases, moduleName),
+          Module.Signature(moduleName, path.asList map { _.asString }))
+      }
 
     def deserialize(signature: String): Signature = {
-      val Seq(name, bases, module) = SignatureParser(signature).asElements(3)
+      val Seq(name, path, bases, module) = SignatureParser(signature).asElements(4)
+      val moduleName = module.asString
       Signature(
         name.asString,
-        bases.asList map { base => Base.deserialize(base.asString) },
-        Module.Signature.deserialize(module.asString))
-    }
-  }
-
-  object Base {
-    def serialize(base: Base): String =
-      elements(
-        string(base.name),
-        Module.Signature.serialize(base.module))
-
-    def deserialize(base: String): Base = {
-      val Seq(name, module) = SignatureParser(base).asElements(2)
-      Base(
-        name.asString,
-        Module.Signature.deserialize(module.asString))
+        deserializeBases(bases, moduleName),
+        Module.Signature(moduleName, path.asList map { _.asString }))
     }
   }
 }

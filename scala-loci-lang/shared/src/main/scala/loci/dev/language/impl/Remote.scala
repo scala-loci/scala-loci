@@ -46,7 +46,7 @@ object Remote {
       val ref = TermName("$loci$ref")
 
       q"""$expr match {
-        case $ref: $reference if $ref.signature <:< $signature =>
+        case $ref: $reference if $ref.signature <= $signature =>
           ${termNames.ROOTPKG}.scala.Some[$remote]($ref)
         case _ =>
           ${termNames.ROOTPKG}.scala.None

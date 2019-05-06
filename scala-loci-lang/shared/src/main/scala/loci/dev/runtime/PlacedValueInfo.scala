@@ -8,8 +8,7 @@ import scala.annotation.StaticAnnotation
 final class MarshallableInfo[I](signature: Int) extends StaticAnnotation
 
 final class PlacedValue[AB, AR, AP, RB, RR, RP](
-  val name: String,
-  val peer: Peer.Signature,
+  val signature: Value.Signature,
   val stable: Boolean,
   val arguments: Marshallable[AB, AR, AP],
   val result: Marshallable[RB, RR, RP])

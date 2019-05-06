@@ -4,12 +4,17 @@ import loci.dev.language._
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly, showAsInfix}
 import scala.language.experimental.macros
-
+import scala.language.higherKinds
 
 package dev {
   @compileTimeOnly("enable macro paradise to use multitier code")
   final class multitier extends StaticAnnotation {
     def macroTransform(annottees: Any*): Any = macro language.impl.Multitier.annotation
+  }
+
+  object multitier {
+    def start[P, Inst[P] <: Instance[P]](instance: Inst[P]): Instance[P] =
+      macro language.impl.Instance.start
   }
 
   final class peer extends StaticAnnotation

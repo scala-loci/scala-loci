@@ -1,10 +1,19 @@
 package loci.dev
 package runtime
 
+import loci.impl.RemoteConnections
 import loci.transmitter.RemoteRef
 
-class System {
-  def setup(peer: PlacedValues): Unit = { }
+import scala.concurrent.{ExecutionContext, Future}
+
+class System(
+    peer: PlacedValues,
+    executionContext: ExecutionContext,
+    remoteConnections: RemoteConnections,
+    singleConnectedRemotes: Seq[RemoteRef],
+    connectingRemotes: Seq[Future[RemoteRef]]) {
+
+  def start(main: Option[() => Unit]): Unit = { }
 
   def invokeRemoteAccess[U, T](
       arguments: U,

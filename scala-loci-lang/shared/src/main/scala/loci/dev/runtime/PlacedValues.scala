@@ -7,15 +7,15 @@ import scala.annotation.compileTimeOnly
 import scala.util.{Failure, Try}
 
 trait PlacedValues {
-  def $loci$sys: System
+  final val $loci$sys: System = $loci$sys$create
+  protected def $loci$sys$create: System
 
   def $loci$dispatch(
       request: MessageBuffer,
-      signature: String,
+      signature: Value.Signature,
       abstraction: AbstractionRef): Try[MessageBuffer] =
-    Failure(new Exception(s"Request for $signature could not be dispatched"))
-
-  $loci$sys.setup(this)
+    Failure(new IllegalAccessException(
+      s"Request for ${Value.Signature.serialize(signature)} could not be dispatched"))
 }
 
 object PlacedValues {

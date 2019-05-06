@@ -32,33 +32,31 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   def assemblePeerImplementation(records: List[Any]): List[Any] = {
     val (placedValuesImpl, signatureImpl) = {
       // inherit implementation for placed values defined in the module bases
-      val (placedValuesBases, moduleSignatureBases) =
-        (module.tree.impl.parents collect {
+      val placedValuesBases =
+        module.tree.impl.parents collect {
           case parent if
               parent.tpe =:!= definitions.AnyTpe &&
               parent.tpe =:!= definitions.AnyRefTpe =>
             atPos(parent.pos) {
               tq"super[${parent.symbol.name.toTypeName}].${names.placedValues}"
-            } ->
-              q"super[${parent.symbol.name.toTypeName}].$$loci$$sig"
-        }).unzip
+            }
+        }
 
       // collect placed values
       val placedValues = records collect {
         case PlacedValueDef(_, tree, _, _) => tree
       }
 
-      // generate signature bases
-      val signatureBases = moduleSignatureBases.foldRight[Tree](trees.nil) { (base, tree) =>
-        q"$tree.::($base)"
-      }
-
-      val signatureImpl = module.outer match {
-        case Some((value, outer)) =>
-          q"${Flag.SYNTHETIC} protected def $$loci$$sig = ${trees.moduleSignature}(${uniqueRealisticName(module.symbol)}, $signatureBases, $outer.$$loci$$sig, $value)"
-        case _ =>
-          q"${Flag.SYNTHETIC} protected def $$loci$$sig = ${trees.moduleSignature}(${uniqueRealisticName(module.symbol)}, $signatureBases)"
-      }
+      // generate signature
+      val signatureImpl = (module.outer
+        map { case (value, outer) =>
+          q"""${Flag.SYNTHETIC} protected lazy val $$loci$$sig: ${types.moduleSignature} =
+            ${trees.moduleSignature}($outer.$$loci$$sig, $value)"""
+        }
+        getOrElse {
+          q"""${Flag.SYNTHETIC} protected lazy val $$loci$$sig: ${types.moduleSignature} =
+            ${trees.moduleSignature}(${uniqueRealisticName(module.symbol)})"""
+        })
 
       // generate placed values
       val parents = tq"${types.placedValues}" :: placedValuesBases
@@ -91,15 +89,6 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       val parents = tq"${names.placedValues}" :: overriddenBases ++ inheritedBases
       val peerImpl = q"${Flag.SYNTHETIC} trait $name extends ..$parents { ..$placedValues }"
 
-      // generate peer values
-      val peerValue =
-        if (!module.symbol.isAbstract) {
-          val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = $$loci$$system"
-          q"${Flag.SYNTHETIC} def ${name.toTermName}($$loci$$system: ${types.system}): ${names.placedValues} = new $name { $system }"
-        }
-        else
-          q"${Flag.SYNTHETIC} def ${name.toTermName}($$loci$$system: ${types.system}): ${names.placedValues}"
-
       // generate peer signature
       val signatureBases = bases.foldRight[Tree](trees.nil) { (base, tree) =>
         val expr = base.tree match {
@@ -112,7 +101,8 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         q"$tree.::($expr.${TermName(s"$$loci$$peer$$sig$$${base.tpe.typeSymbol.name}")})"
       }
       val peerSignature =
-        q"${Flag.SYNTHETIC} def ${TermName(s"$$loci$$peer$$sig$$${symbol.name}")} = ${trees.peerSignature}(${symbol.name.toString}, $signatureBases, $$loci$$sig)"
+        q"""${Flag.SYNTHETIC} lazy val ${TermName(s"$$loci$$peer$$sig$$${symbol.name}")}: ${types.peerSignature} =
+          ${trees.peerSignature}(${symbol.name.toString}, $signatureBases, $$loci$$sig)"""
 
       // generate peer tie specification
       val peerTies = ties map { tie =>
@@ -132,9 +122,9 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         }
       }
       val peerTieSpec =
-        q"${Flag.SYNTHETIC} def ${TermName(s"$$loci$$peer$$ties$$${symbol.name}")} = ${trees.map}(..$peerTies)"
+        q"${Flag.SYNTHETIC} def ${TermName(s"$$loci$$peer$$ties$$${symbol.name}")}: ${types.tieSignature} = ${trees.map}(..$peerTies)"
 
-      Seq(peerImpl, peerValue, peerSignature, peerTieSpec)
+      Seq(peerImpl, peerSignature, peerTieSpec)
     }
 
     val (peerTypeBodySymbolTrees, moduleValues) = (records collect {

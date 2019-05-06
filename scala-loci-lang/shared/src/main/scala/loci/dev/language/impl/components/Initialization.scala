@@ -61,10 +61,13 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
         case q"new $expr(...$exprss)" if isMultitierModule(expr) =>
           level match {
             case ValueLevel(name) =>
-              val moduleSignature = q"${Flag.SYNTHETIC} protected def $$loci$$sig = ${trees.moduleSignature}(super.$$loci$$sig, ${module.self}.$$loci$$sig, $name)"
+              val moduleSignature =
+                q"""${Flag.SYNTHETIC} protected lazy val $$loci$$sig: ${types.moduleSignature} =
+                   ${trees.moduleSignature}(${module.self}.$$loci$$sig, $name)"""
+
               withLevel(NoLevel) {
                 internal.setType(
-                  q"new ${super.transform(expr)}(...${exprss map { super.transformTrees(_) } }) { $moduleSignature }",
+                  q"new ${super.transform(expr)}(...${exprss map super.transformTrees}) { $moduleSignature }",
                   tree.tpe)
               }
             case _ =>

@@ -230,7 +230,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var marshallableIndex = 0
     var placedValueIndex = 0
     var failed = false
-    val (placedValueNames, dispatchClauses, accessorValues) = (placedValues map {
+    val (placedValueNames, dispatchValueClauses, accessorValues) = (placedValues map {
       case (symbol, peer, res, subjective, arg) =>
         val flags = Flag.SYNTHETIC | Flag.FINAL
         val signature = methodSignature(symbol, res)
@@ -382,11 +382,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               name match {
                 case Left(name) =>
                   // reusing inherited placed value info if possible
-                  ((symbol, name, arg, subjective), None, seq)
+                  ((symbol, name, arg, subjective, true), None, seq)
 
                 case Right((argName, resName)) =>
                   // create new placed value info if necessary
-                  val peerName = TermName(s"$$loci$$peer$$sig$$${peer.name}")
                   val placedValueName = TermName(s"$$loci$$val$$$moduleName$$$placedValueIndex")
                   val annotation = q"new ${types.placedRuntimeValueInfo}($signature, $argName, $resName)"
                   val placedValueType = types.placedRuntimeValue mapArgs { _ =>
@@ -396,8 +395,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   val placedValue = atPos(symbol.pos) {
                     q"""@$annotation $flags val $placedValueName =
                       new ${createTypeTree(placedValueType, symbol.pos)}(
-                        $signature,
-                        $peerName,
+                        ${trees.valueSignature}($signature, $$loci$$sig.path),
                         ${symbol.isStable},
                         $argName,
                         $resName)"""
@@ -445,7 +443,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                           val ref = TermName("$loci$ref")
                           val remote = q"""$$loci$$abstraction.remote match {
-                            case $ref: ${types.reference} if $ref.signature <:< $signature =>
+                            case $ref: ${types.reference} if $ref.signature <= $signature =>
                               $ref
                             case _ =>
                               throw new ${types.illegalAccessException}("Illegal subjective access")
@@ -479,11 +477,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   }
 
                   val dispatchClause =
-                    Some(peer -> cq"$placedValueName.name => $requestProcessing")
+                    Some(peer -> cq"$placedValueName.signature.name => $requestProcessing")
 
                   placedValueIndex += 1
 
-                  ((symbol, placedValueName, arg, subjective), dispatchClause, seq :+ placedValue)
+                  ((symbol, placedValueName, arg, subjective, true), dispatchClause, seq :+ placedValue)
               }
 
             // create statement to implicitly resolve the transmittable whose resolution failed
@@ -500,7 +498,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 collectFirst { case tree if tree.symbol == symbol.owner => tree.pos }
                 getOrElse symbol.pos)
 
-              ((symbol, termNames.EMPTY, arg, subjective), None, Seq(
+              ((symbol, termNames.EMPTY, arg, subjective, false), None, Seq(
                 atPos(pos) {
                   q"@${types.compileTimeOnly}($message) $flags def $transmittableName(): ${definitions.UnitTpe} = $rhs"
                 },
@@ -509,31 +507,69 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 }))
           }
         else if (failed)
-          ((symbol, termNames.EMPTY, arg, subjective), None, Seq.empty)
+          ((symbol, termNames.EMPTY, arg, subjective, inheritedPlacedValue.nonEmpty), None, Seq.empty)
         else
-          ((NoSymbol, termNames.EMPTY, NoType, None), None, Seq.empty)
+          ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue.nonEmpty), None, Seq.empty)
     }).unzip3
 
-    placedValueNames foreach { case (symbol, name, tpe, subjective) =>
+    placedValueNames foreach { case (symbol, name, tpe, subjective, _) =>
       if (symbol != NoSymbol)
         PlacedValues.makeResolvable(symbol, name, tpe, subjective)
     }
 
-    val dispatches = (dispatchClauses.flatten
+    val modules = (records collect {
+      case ModuleValue(symbol, _)
+          if symbol.isTerm &&
+             symbol.asTerm.isStable &&
+             isMultitierModule(symbol.info, symbol.pos) =>
+        symbol.asTerm
+    }).distinct
+
+    val dispatchModuleClauses = modules map { symbol =>
+      cq"""${symbol.name.toString} => ${symbol.name}.$$loci$$dispatch(
+        $$loci$$request,
+        $$loci$$signature.copy($$loci$$signature.name, $$loci$$signature.path.tail),
+        $$loci$$abstraction)"""
+    }
+
+    val moduleDispatch =
+      if (dispatchModuleClauses.nonEmpty) {
+        val tree = q"""${Flag.SYNTHETIC} def $$loci$$dispatch(
+            $$loci$$request: ${types.messageBuffer},
+            $$loci$$signature: ${types.signature},
+            $$loci$$abstraction: ${types.abstractionRef}) =
+          if ($$loci$$signature.path.isEmpty)
+            super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$abstraction)
+          else
+            $$loci$$signature.path.head match {
+              case ..$dispatchModuleClauses
+              case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$abstraction)
+            }"""
+
+        Some(PlacedValueDef(NoSymbol, tree, None, Modality.None))
+      }
+      else
+        None
+
+    val valueDispatches = (dispatchValueClauses.flatten
       groupBy { case (peer, _) => peer }
       map { case (peer, clauses) =>
         val tree = q"""${Flag.SYNTHETIC} def $$loci$$dispatch(
             $$loci$$request: ${types.messageBuffer},
-            $$loci$$signature: ${types.string},
-            $$loci$$abstraction: ${types.abstractionRef}) = $$loci$$signature match {
-          case ..${clauses map { case (_, clause) => clause } }
-          case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$abstraction)
-        }"""
+            $$loci$$signature: ${types.signature},
+            $$loci$$abstraction: ${types.abstractionRef}) =
+          if ($$loci$$signature.path.isEmpty)
+            $$loci$$signature.name match {
+              case ..${clauses map { case (_, clause) => clause } }
+              case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$abstraction)
+            }
+          else
+            super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$abstraction)"""
 
         PlacedValuePeerImpl(NoSymbol, tree, peer, Modality.None)
       })
 
-    records ++ (accessorValues.flatten map { ModuleValue(NoSymbol, _) }) ++ dispatches
+    records ++ (accessorValues.flatten map { ModuleValue(NoSymbol, _) }) ++ moduleDispatch ++ valueDispatches
   }
 
   def processRemoteAccesses(records: List[Any]): List[Any] = {
@@ -574,10 +610,15 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       Select(transformer transform qualifier, name)
     }
 
-    def accessPeerSignature(tree: Tree) =
+    def accessPeerSignatureByTree(tree: Tree) =
       accessModuleValue(
         createTypeTree(tree),
         TermName(s"$$loci$$peer$$sig$$${tree.symbol.name}"))
+
+    def accessPeerSignatureByType(tpe: Type, pos: Position) =
+      accessModuleValue(
+        createTypeTree(tpe, pos),
+        TermName(s"$$loci$$peer$$sig$$${tpe.typeSymbol.name}"))
 
     def extractRemoteCall(tree: Tree) =
       if (tree.nonEmpty &&
@@ -595,7 +636,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             (remotes, tpts.head.tpe, EmptyTree)
           }
           else if (tpts.nonEmpty)
-            (trees.nil, tpts.head.tpe, accessPeerSignature(tpts.head))
+            (trees.nil, tpts.head.tpe, accessPeerSignatureByTree(tpts.head))
           else
             (trees.nil, definitions.NothingTpe, EmptyTree)
         }
@@ -615,7 +656,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           (expr, EmptyTree, remotes, tpts.head.tpe)
         }
         else
-          (expr, accessPeerSignature(tpts.head), trees.nil, tpts.head.tpe)
+          (expr, accessPeerSignatureByTree(tpts.head), trees.nil, tpts.head.tpe)
       }
       else
         (tree, EmptyTree, trees.nil, definitions.NothingTpe)
@@ -663,7 +704,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       val (placedValue, placedValuePeer) =
         if (placedValueName != termNames.EMPTY) {
           val placedValue = accessModuleValue(expr, placedValueName)
-          placedValue -> q"$placedValue.peer"
+          val placedValuePeer = accessPeerSignatureByType(peerType, tree.pos)
+          placedValue -> placedValuePeer
         }
         else
           q"null" -> q"null"

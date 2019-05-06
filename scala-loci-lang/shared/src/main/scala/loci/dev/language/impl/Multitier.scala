@@ -41,6 +41,25 @@ class Multitier(val c: blackbox.Context) {
       }
     }
 
+    val instance = symbolOf[loci.dev.Instance[_]].companion
+    val sourceContent = c.enclosingPosition.source.content
+
+    def hasInstanceOwner(symbol: Symbol): Boolean = {
+      symbol.isClass && symbol.pos != NoPosition && {
+        val selection = sourceContent.slice(
+          pathEndpoint(sourceContent, symbol.pos.point, -1),
+          pathEndpoint(sourceContent, symbol.pos.point, 1)).mkString
+
+        try { (c typecheck (c parse selection)).symbol == instance }
+        catch {
+          case _: reflect.macros.ParseException |
+               _: reflect.macros.TypecheckException |
+               _: reflect.internal.Symbols#CyclicReference =>
+            false
+        }
+      } || symbol != NoSymbol && hasInstanceOwner(symbol.owner)
+    }
+
     // the current macro expansion always appears twice
     // see: http://stackoverflow.com/a/20466423
     val recursionCount = c.openMacros.count { other =>
@@ -57,7 +76,10 @@ class Multitier(val c: blackbox.Context) {
     }
 
     val processedAnnotee: Tree =
-      if (!c.hasErrors && !isRecursiveExpansion && !isNestedExpansion) {
+      if (!c.hasErrors &&
+          !isRecursiveExpansion &&
+          !isNestedExpansion &&
+          !hasInstanceOwner(c.internal.enclosingOwner)) {
         try {
           import preprocessors._
           import components._
@@ -67,7 +89,7 @@ class Multitier(val c: blackbox.Context) {
 
           val preprocessedAnnottee = Preprocessor.run(c)(
             annottee,
-            Seq(MultitierTypes))
+            Seq(MultitierTypes, AbstractValues))
 
           val typedAnnottee =
             try retyper typecheck preprocessedAnnottee match { case tree: ImplDef => tree }
@@ -384,5 +406,51 @@ class Multitier(val c: blackbox.Context) {
       }
 
       throw e
+  }
+
+  private def pathEndpoint(content: Array[Char], pos: Int, step: Int) = {
+    var point = pos
+    var current = point
+    var separator = false
+    var escaped = false
+
+    while (current > 0 && current < content.length - 1)
+      if (content(current) == '`') {
+        if (escaped) {
+          current += step
+          point = current
+          separator = false
+          escaped = false
+        }
+        else {
+          current += step
+          escaped = true
+        }
+      }
+      else if (escaped)
+        current += step
+      else if (content(current) == '.') {
+        if (!separator) {
+          separator = true
+          current += step
+        }
+        else
+          current = 0
+      }
+      else if (Character.isJavaIdentifierPart(content(current))) {
+        if (current == point || separator) {
+          current += step
+          point = current
+          separator = false
+        }
+        else
+          current = 0
+      }
+      else if (Character.isWhitespace(content(current)))
+        current += step
+      else
+        current = 0
+
+    point
   }
 }

@@ -61,7 +61,6 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   object types {
     val function = typeOf[_ => _]
-    val string = typeOf[String]
     val unitFuture = typeOf[concurrent.Future[Unit]]
     val nothingFuture = typeOf[concurrent.Future[Nothing]]
     val on = typeOf[_ on _]
@@ -81,8 +80,10 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val singleSelection = typeOf[Placed.Selected.Single[_]]
     val multipleSelection = typeOf[Placed.Selected.Multiple[_]]
     val system = typeOf[runtime.System]
+    val signature = typeOf[runtime.Value.Signature]
     val reference = typeOf[runtime.Remote.Reference]
     val abstractionRef = typeOf[runtime.AbstractionRef]
+    val abstractValue = typeOf[runtime.AbstractValue]
     val multitierStub = typeOf[runtime.MultitierStub]
     val multitierModule = typeOf[runtime.MultitierModule]
     val marshallableInfo = typeOf[runtime.MarshallableInfo[_]]
@@ -93,6 +94,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val resolution = typeOf[loci.transmitter.Transmittable.Aux.Resolution[_, _, _, _, _]]
     val serializable = typeOf[loci.transmitter.Serializable[_]]
     val remoteRequest = typeOf[runtime.RemoteRequest[_, _, _, _, _]]
+    val moduleSignature = typeOf[runtime.Module.Signature]
+    val peerSignature = typeOf[runtime.Peer.Signature]
+    val tieSignature = typeOf[Map[runtime.Peer.Signature, runtime.Peer.Tie]]
     val transmission = typeOf[transmitter.Transmission[_, _, _, _]]
     val accessor = typeOf[transmitter.RemoteAccessor]
     val delegates = typeOf[loci.transmitter.Transmittables.Delegates[_ ]]
@@ -111,8 +115,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val empty = q"${names.root}.loci.MessageBuffer.empty"
     val reference = q"${names.root}.loci.dev.Remote.reference"
     val remoteValue = q"${names.root}.loci.dev.runtime.RemoteValue"
-    val moduleSignature = q"${names.root}.loci.dev.runtime.Module.Signature.create"
-    val peerSignature = q"${names.root}.loci.dev.runtime.Peer.Signature.create"
+    val moduleSignature = q"${names.root}.loci.dev.runtime.Module.Signature.apply"
+    val peerSignature = q"${names.root}.loci.dev.runtime.Peer.Signature.apply"
+    val valueSignature = q"${names.root}.loci.dev.runtime.Value.Signature.apply"
     val multiple = q"${names.root}.loci.dev.runtime.Peer.Tie.Multiple"
     val optional = q"${names.root}.loci.dev.runtime.Peer.Tie.Optional"
     val single = q"${names.root}.loci.dev.runtime.Peer.Tie.Single"

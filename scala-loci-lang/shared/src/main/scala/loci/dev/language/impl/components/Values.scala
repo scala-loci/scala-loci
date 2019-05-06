@@ -100,7 +100,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             tq"${module.self}.${pre.termSymbol.asTerm.name}.$name"
         })
 
-        val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${peer.name}.this.$$loci$$sys"
+        val system = q"${Flag.SYNTHETIC} protected def $$loci$$sys$$create: ${types.system} = ${peer.name}.this.$$loci$$sys"
         val instance = q"new ..$bases { $system }"
         val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos)
 
@@ -131,6 +131,39 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       transformer transform tree
     }
 
+    // remove the multitier abstract value annotation from the given defintion
+    def removeAbstractValueAnnotation(tree: ValOrDefDef): ValOrDefDef = {
+      internal.setAnnotations(
+        tree.symbol,
+        tree.symbol.annotations filterNot { _.tree.tpe <:< types.abstractValue }: _*)
+
+      tree map { (mods, name, tpt, rhs) =>
+        (mods mapAnnotations { _ filterNot { _.tpe <:< types.abstractValue } }, name, tpt, rhs)
+      }
+    }
+
+    object abstractValueAnnotationRemover extends Transformer {
+      override def transform(tree: Tree): Tree = tree match {
+        case tree: ImplDef if !isMultitierModule(tree.symbol.info, tree.pos) =>
+          val body = tree.impl.body map {
+            case tree: ValOrDefDef
+                if tree.mods.annotations exists { _.tpe <:< types.abstractValue } =>
+              removeAbstractValueAnnotation(tree map { (mods, name, tpt, rhs) =>
+                (mods withFlags Flag.DEFERRED, name, tpt, EmptyTree)
+              })
+
+            case tree =>
+              tree
+          }
+
+          super.transform(
+            tree map { (mods, parents, self, _) => (mods, parents, self, body) })
+
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
     // create module-level members and corresponding members at the level of placed values
     // for multitier module implementations
     // 1) keep the member at the module-level,
@@ -146,7 +179,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         Flag.FINAL | Flag.LAZY | (if (liftedMods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
         liftedMods.privateWithin)
 
-      val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
+      val system = q"${Flag.SYNTHETIC} protected def $$loci$$sys$$create: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
       val instance = q"new $multitierType { $system }"
       val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos)
       val application = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierType = $multitierName()" }
@@ -220,15 +253,17 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                   (liftedMods withFlags Flag.OVERRIDE, name, tpt, rhs)
               })
 
-            if (tree.symbol.isAbstract) {
+            if (tree.symbol.isAbstract ||
+                (tree.symbol.allAnnotations exists { _.tree.tpe <:< types.abstractValue })) {
               // initialize synthesized values with `null`
               // instead of keeping them abstract
               val erasure = valOrDefDef map { (mods, name, tpt, _) =>
                 (mods withoutFlags Flag.DEFERRED, name, tpt, q"null.asInstanceOf[$tpt]")
               }
-              Seq(PlacedValueDef(tree.symbol, erasure, Some(peer), modality))
+              Seq(PlacedValueDef(tree.symbol, removeAbstractValueAnnotation(erasure), Some(peer), modality))
             }
             else if (!tree.symbol.isAbstract &&
+                     !(tree.symbol.allAnnotations exists { _.tree.tpe <:< types.abstractValue }) &&
                      (valOrDefDef.mods hasFlag Flag.MUTABLE) &&
                      valOrDefDef.rhs.isEmpty) {
               Seq(PlacedValueDef(tree.symbol, valOrDefDef, Some(peer), Modality.None))
@@ -237,7 +272,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               concreteValues(valOrDefDef, peer, tpe, tpt, modality)
 
           case _ =>
-            Seq(PlacedValueDef(tree.symbol, tree, None, Modality.None))
+            Seq(PlacedValueDef(tree.symbol, removeAbstractValueAnnotation(tree), None, Modality.None))
         }
 
         values :+ ModuleValue(tree.symbol, eraseValue(tree))
@@ -251,14 +286,19 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
           val multitierName = TermName(s"$$loci$$multitier$$${tree.name}")
           val multitierType = tq"${module.self}.${tree.name}.${names.placedValues}"
 
-          if (tree.symbol.isAbstract) {
-            val application = tree map { (mods, name, _, rhs) =>
-              (liftMods(tree.symbol, mods), name, multitierType, rhs)
+          if (tree.symbol.isAbstract ||
+              (tree.symbol.allAnnotations exists { _.tree.tpe <:< types.abstractValue })) {
+            val application = tree map { (mods, name, _, _) =>
+              (liftMods(tree.symbol, mods) withFlags Flag.DEFERRED, name, multitierType, EmptyTree)
+            }
+
+            val valDef = tree map { (mods, name, tpt, _) =>
+              (mods withFlags Flag.DEFERRED, name, tpt, EmptyTree)
             }
 
             Seq(
-              PlacedValueDef(tree.symbol, application, None, Modality.None),
-              ModuleValue(tree.symbol, tree))
+              PlacedValueDef(tree.symbol, removeAbstractValueAnnotation(application), None, Modality.None),
+              ModuleValue(tree.symbol, removeAbstractValueAnnotation(valDef)))
           }
           else {
             multitierInitializations get tree.symbol foreach { initializations =>
@@ -282,7 +322,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             // except the type system was circumvented
             val (init, multitierModuleSetups) =
               if (!tree.tpt.symbol.isAbstract) {
-                val system = q"${Flag.SYNTHETIC} def $$loci$$sys: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
+                val system = q"${Flag.SYNTHETIC} protected def $$loci$$sys$$create: ${types.system} = ${names.placedValues}.this.$$loci$$sys"
                 q"new $multitierType { $system }" -> setupMultitierModule(tree, multitierName, multitierType, tree.name.toString)
               }
               else
@@ -326,11 +366,72 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         PlacedValuePeerImpl(symbol, value, peer, modality))
     }
 
+    // create concrete multitier stub values for inherited abstract values
+    // if the module is final
+    val concreteStubs: List[ModuleValue] =
+      if (module.symbol.isModule || module.symbol.isFinal)
+        (module.symbol.info.members collect {
+          case symbol
+              if symbol.isMethod &&
+                 symbol.isAbstract &&
+                 symbol.owner != module.classSymbol &&
+                 !isMultitierModule(symbol.info, symbol.pos) =>
+            val method = symbol.asMethod
+            val info = method.info.asSeenFrom(module.classSymbol)
+            val result = createTypeTree(info.finalResultType, c.enclosingPosition)
+
+            def hasPrivateWithinOwner(symbol: Symbol, privateWithin: Symbol): Boolean =
+              symbol != NoSymbol &&
+              (symbol == privateWithin ||
+               symbol.name != privateWithin.name && hasPrivateWithinOwner(symbol.owner, privateWithin))
+
+            if (method.privateWithin == NoSymbol ||
+                hasPrivateWithinOwner(module.classSymbol, method.privateWithin)) {
+              val flags =
+                Flag.SYNTHETIC |
+                (if (method.isPrivate) Flag.PRIVATE else NoFlags) |
+                (if (method.isProtected) Flag.PROTECTED else NoFlags) |
+                (if (method.isPrivateThis || method.isProtectedThis) Flag.LOCAL else NoFlags)
+              val privateWithin =
+                if (method.privateWithin == NoSymbol)
+                  typeNames.EMPTY
+                else
+                  method.privateWithin.name
+              val annotations =
+                abstractValueAnnotation :: (symbol.annotations map { _.tree })
+              val mods =
+                Modifiers(flags, privateWithin, annotations)
+
+              val tree =
+                if (!method.isStable) {
+                  val arguments = method.paramLists map {
+                    _ map { symbol =>
+                      val info = symbol.info.asSeenFrom(module.classSymbol)
+                      val param = createTypeTree(info, c.enclosingPosition)
+                      internal.setSymbol(
+                        q"${Modifiers(Flag.PARAM)} val ${symbol.name.toTermName}: $param",
+                        symbol)
+                    }
+                  }
+
+                  q"$mods def ${method.name}(...$arguments): $result = null.asInstanceOf[$result]"
+                }
+                else
+                  q"$mods val ${method.name}: $result = null.asInstanceOf[$result]"
+
+              Some(ModuleValue(method, internal.setSymbol(tree, method)))
+            }
+            else
+              None
+        }).flatten.toList
+      else
+        List.empty
+
     // create module-level and peer-level values (including general placed values and peer-specific ones)
     // for all statements in the multitier module
     records ++ (records flatProcess {
       case Initialized(tree) =>
-        tree.impl.body flatMap {
+        tree.impl.body map abstractValueAnnotationRemover.transform flatMap {
           case tree: DefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
             splitValOrDefDef(tree) { (tree, peer, _, _, modality) =>
               Seq(PlacedValueDef(tree.symbol, tree, Some(peer), modality))
@@ -381,7 +482,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
           case tree =>
             Seq(PlacedValueDef(NoSymbol, tree, None, Modality.None))
         }
-    })
+    }) ++ concreteStubs
   }
 
   // validate types of placed values
@@ -814,6 +915,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
   private val multitierStubAnnotation =
     internal.setType(q"new ${types.multitierStub}", types.multitierStub)
 
+  private val abstractValueAnnotation =
+    internal.setType(q"new ${types.abstractValue}", types.abstractValue)
+
   private def changeType(tree: ValOrDefDef, tpe: Type, tpt: Tree) =
     tree map { (mods, name, _, rhs) =>
       (mods, name, tpt orElse TypeTree(tpe), rhs)
@@ -830,7 +934,12 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
   private def eraseValue(tree: ValOrDefDef) =
     tree map { (mods, name, _, rhs) =>
       val tpt = createTypeTree(tree.tpt)
-      (mods mapAnnotations { accessAnnotation :: multitierStubAnnotation :: _ },
+      val annotations =
+        if (!tree.symbol.isPrivateThis)
+          List(accessAnnotation, multitierStubAnnotation)
+        else
+          List.empty
+      (mods mapAnnotations { annotations ++ _ },
         name, tpt,
         if (tree.symbol.isAbstract) rhs else q"null.asInstanceOf[$tpt]")
     }
