@@ -1,5 +1,6 @@
 package loci
 
+import loci.communicator._
 import loci.dev.language._
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
@@ -32,6 +33,18 @@ package object dev {
 
   type on[T, P] = Placed[T, P] with T
   type per[T, P] = Placed.Subjective[T, P]
+
+  def connect[P](setup: Connector[ProtocolCommon]): Connections =
+    macro language.impl.Connections.setup
+  def connect[P](factory: ConnectionSetupFactory[ProtocolCommon])(
+      /* url: String, props: ConnectionSetupFactory.Properties */ args: Any*): Connections =
+    macro language.impl.Connections.factory
+
+  def listen[P](setup: Listener[ProtocolCommon]): Connections =
+    macro language.impl.Connections.setup
+  def listen[P](factory: ConnectionSetupFactory[ProtocolCommon])(
+      /* url: String, props: ConnectionSetupFactory.Properties */ args: Any*): Connections =
+    macro language.impl.Connections.factory
 
   def placed: Placement.Placed = erased
   def on: Placement.Select[Placement.Run] = erased

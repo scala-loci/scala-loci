@@ -35,7 +35,7 @@ object TCP extends TCPSetupFactory {
 }
 
 trait TCPSetupFactory extends
-    ConnectionSetupFactory[TCP] { this: TCP.type =>
+    ConnectionSetupFactory.Implementation[TCP] { this: TCP.type =>
   val schemes = Seq("tcp")
 
   protected def properties(implicit props: ConnectionSetupFactory.Properties) =

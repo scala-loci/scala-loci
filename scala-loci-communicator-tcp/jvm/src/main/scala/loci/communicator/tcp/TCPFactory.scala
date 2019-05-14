@@ -5,7 +5,7 @@ package tcp
 import scala.concurrent.duration.FiniteDuration
 
 trait TCPSetupFactory extends
-    ConnectionSetupFactory[TCP] with
+    ConnectionSetupFactory.Implementation[TCP] with
     ConnectionSetupParser with
     SimpleConnectionSetupProperties { this: TCP.type =>
   val schemes = Seq("tcp")

@@ -16,7 +16,7 @@ private object WSSetupParser extends
       .set[FiniteDuration]("heartbeat-timeout") { v => _.copy(heartbeatTimeout = v) }
 }
 
-trait WSSetupFactory extends ConnectionSetupFactory[WS] {
+trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
     this: WS.type =>
 
   val schemes = Seq("ws", "wss")
@@ -34,7 +34,7 @@ trait WSSetupFactory extends ConnectionSetupFactory[WS] {
     Some(WS(url, properties))
 }
 
-trait WSSecureSetupFactory extends ConnectionSetupFactory[WS.Secure] {
+trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secure] {
     this: WS.Secure.type =>
 
   type Properties = WS.Properties
