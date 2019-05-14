@@ -21,7 +21,7 @@ object RemoteAccess extends Component.Factory[RemoteAccess](
 
 class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
-    Phase("remote:widen", widenRemoteNarrowing, after = Set("values:validate"), before = Set("impls:lift")),
+    Phase("remote:widen", widenRemoteNarrowing, after = Set("values:collect"), before = Set("impls:lift")),
     Phase("remote:marshalling", createMarshallables, after = Set("remote:widen"), before = Set("impls:lift")),
     Phase("remote:access", processRemoteAccesses, after = Set("remote:marshalling"), before = Set("impls:lift")))
 

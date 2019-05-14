@@ -13,7 +13,7 @@ object Subjectivity extends Component.Factory[Subjectivity](
 
 class Subjectivity[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
-    Phase("local:sbj", processLocalSubjectiveAccess, after = Set("values:validate"), before = Set("impls:lift")))
+    Phase("local:sbj", processLocalSubjectiveAccess, after = Set("values:collect"), before = Set("impls:lift")))
 
   val commons = engine.require(Commons)
   val values = engine.require(Values)

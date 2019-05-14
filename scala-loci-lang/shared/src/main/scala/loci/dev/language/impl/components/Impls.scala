@@ -14,7 +14,7 @@ object Impls extends Component.Factory[Impls](
 
 class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
-    Phase("impls:lift", liftNestedImplementations, after = Set("values:validate"), before = Set("values:fixrefs")))
+    Phase("impls:lift", liftNestedImplementations, after = Set("values:collect"), before = Set("values:fixrefs")))
 
   val commons = engine.require(Commons)
   val moduleInfo = engine.require(ModuleInfo)

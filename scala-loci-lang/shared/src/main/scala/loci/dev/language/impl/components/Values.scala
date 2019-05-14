@@ -15,7 +15,7 @@ object Values extends Component.Factory[Values](
 class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
     Phase("values:collect", collectPlacedValues, after = Set("init:inst"), before = Set("*", "values:validate")),
-    Phase("values:validate", validatePlacedValues, before = Set("*")),
+    Phase("values:validate", validatePlacedValues, after = Set("*")),
     Phase("values:fixrefs", fixEnclosingReferences, after = Set("*", "values:validate")))
 
   val commons = engine.require(Commons)
@@ -487,10 +487,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
   // validate types of placed values
   def validatePlacedValues(records: List[Any]): List[Any] = {
-    val placedSymbols = (records collect {
-      case PlacedValueDef(symbol, _, Some(_), _) if symbol != NoSymbol => symbol
-    }).toSet
-
+    // validate placement types
     records foreach {
       case PlacedValueDef(symbol, tree, Some(_), modality) =>
         // ensure local placed values do not override non-local placed values
@@ -520,14 +517,58 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             case _ =>
           }
 
+      case _ =>
+    }
+
+    // validate access to placed values
+    def validate(tree: Tree, peerType: Option[Type]) = {
+      tree foreach {
+        case tree: RefTree if tree.tpe != null =>
+          val treeType =
+            if (tree.symbol.isTerm && tree.symbol.asTerm.isSetter)
+              tree.symbol.asTerm.getter.info.finalResultType.asSeenFrom(module.classSymbol)
+            else
+              tree.tpe.asSeenFrom(module.classSymbol)
+
+          if (treeType real_<:< types.placedValue) {
+            val localPeer = peerType exists { tpe =>
+              val Seq(_, peer) = extractTag(treeType, types.placedValue, tree.pos).typeArgs
+              tpe <:< peer
+            }
+
+            if (!localPeer)
+              c.abort(tree.pos, accessMessage)
+          }
+          else if (tree.tpe.finalResultType.baseClasses exists { _.owner == symbols.placement })
+            c.abort(tree.pos, "Unexpected multitier construct")
+
+        case tree: TypeTree if tree.original != null =>
+          val treeTypes = Option(tree.tpe) ++ Option(tree.original.tpe)
+          val placementTypes = List(
+            types.placedValue, types.subjective, types.singleSelection, types.multipleSelection)
+
+          val placementType = treeTypes exists {
+            _.underlying exists {
+              case TypeRef(_, symbols.local, _) =>
+                true
+              case tpe =>
+                placementTypes exists { tpe.underlying real_<:< _ }
+            }
+          }
+
+          if (placementType)
+            c.abort(tree.pos, "Illegal usage of placement type")
+
+        case _ =>
+      }
+    }
+
+    records foreach {
       case ModuleValue(_, _: ValOrDefDef) =>
-
-      case value: ModuleValue =>
-        value.tree foreach { tree =>
-          if (placedSymbols contains tree.symbol)
-            c.abort(tree.pos, accessMessage)
-        }
-
+      case ModuleValue(symbol, tree) if !isMultitierModule(symbol.info, tree.pos) =>
+        validate(tree, None)
+      case PlacedValue(_, tree, peer, _) =>
+        validate(tree, peer map { _.asType.toType.asSeenFrom(module.classSymbol) })
       case _ =>
     }
 
