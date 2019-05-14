@@ -14,12 +14,17 @@ class Instance(val c: blackbox.Context) {
 
   object types {
     val on = typeOf[_ on _]
+    val per = typeOf[_ per _ ]
     val instance = typeOf[loci.dev.Instance[_]]
     val system = typeOf[runtime.System]
     val abstractValue = typeOf[runtime.AbstractValue]
     val multitierModule = typeOf[runtime.MultitierModule]
     val executionContext = typeOf[ExecutionContext]
     val placedValues = c.mirror.staticClass("_root_.loci.dev.runtime.PlacedValues").asType.toType
+  }
+
+  object symbols {
+    val lifts = (symbolOf[Placed[_, _]].companion.info member TermName("lift")).alternatives
   }
 
   object names {
@@ -57,6 +62,105 @@ class Instance(val c: blackbox.Context) {
         tpe
     }
   }
+
+  def retrieve(retrievable: Tree): Tree =
+    c.macroApplication match {
+      case q"$_[..$_]($instance).$_[$_]($_[..$_]($expr))" =>
+        val pos = if (expr.pos != NoPosition) expr.pos else c.enclosingPosition
+
+        expr match {
+          case q"$prefix.$name[..$tpt](...$exprss)" =>
+            val symbol = prefix.tpe.typeSymbol
+
+            // force loading of annotations
+            symbol.info
+
+            if (!(allAnnotations(symbol) exists { _.tree.tpe <:< types.multitierModule }))
+              c.abort(
+                if (prefix.pos != NoPosition) prefix.pos else pos,
+                s"$prefix is not a multitier module")
+
+            val (instancePeer, instanceModule) = instance.tpe.widen.typeArgs.head match {
+              case tpe @ TypeRef(pre, _, _) =>
+                tpe -> pre.termSymbol
+              case tpe =>
+                val symbol = tpe.typeSymbol.owner
+                if (symbol.isModuleClass)
+                  tpe -> symbol.asClass.module
+                else
+                  tpe -> symbol
+            }
+
+            def splitPrefixPath(tree: Tree): (Tree, Tree) = tree match {
+              case _ if tree.symbol == instanceModule =>
+                tree -> atPos(tree.pos) { Ident(TermName("values")) }
+              case Select(qualifier, name) =>
+                val (placedPrefix, placedPath) = splitPrefixPath(qualifier)
+                placedPrefix -> atPos(tree.pos) { Select(placedPath, name) }
+              case Apply(fun, args) =>
+                val (placedPrefix, placedPath) = splitPrefixPath(fun)
+                placedPrefix -> atPos(tree.pos) { Apply(placedPath, args) }
+              case TypeApply(fun, args) =>
+                val (placedPrefix, placedPath) = splitPrefixPath(fun)
+                placedPrefix -> atPos(tree.pos) { TypeApply(placedPath, args) }
+              case _ =>
+                c.abort(pos, s"$prefix.$name is not a value of multitier module ${instanceModule.fullName}")
+            }
+
+            val (placedPrefix, placedPath) = splitPrefixPath(prefix)
+
+            val Seq(value, peer) =
+              if (expr.tpe <:< types.on)
+                expr.tpe.widen.typeArgs
+              else
+                Seq(expr.tpe, NoType)
+
+            if (peer != NoType && !(instancePeer <:< peer))
+              c.abort(pos, s"$expr is not placed on $peer")
+
+            object transformer extends Transformer {
+              override def transform(tree: Tree): Tree = tree match {
+                case q"$_[..$_](...$exprss)"
+                    if tree.nonEmpty && (symbols.lifts contains tree.symbol) =>
+                  exprss.head.head
+
+                case _ =>
+                  super.transform(tree)
+              }
+            }
+
+            val access =
+              if (peer != NoType && value <:< types.per) {
+                val Seq(subjective, remote) = value.widen.typeArgs
+                val access =
+                  if (expr.symbol.asTerm.isStable)
+                    q"$placedPath.$$loci$$sys.subjectiveValue($placedPath.$name[..$tpt](...$exprss), remote)"
+                  else
+                    q"$placedPath.$name[..$tpt](...$exprss)(remote)"
+
+                q"""new ${termNames.ROOTPKG}.loci.dev.Instance.SubjectiveValue[$subjective, $remote] {
+                  def to(remote: ${termNames.ROOTPKG}.loci.dev.Remote[$remote]) = $access
+                }"""
+              }
+              else
+                q"$placedPath.$name[..$tpt](...$exprss)"
+
+            transformer transform q"""$instance match {
+              case instance: ${termNames.ROOTPKG}.loci.dev.runtime.Instance[_] => instance.values match {
+                case values: $placedPrefix.${names.placedValues} => $access
+                case _ => throw new IllegalAccessException("Illegal access to peer instance")
+              }
+              case _ => throw new IllegalAccessException("Illegal access to peer instance")
+            }"""
+
+          case _ =>
+            c.abort(pos, "Peer value expected: <module>.<value>")
+        }
+
+      case _ =>
+        c.abort(c.enclosingPosition,
+          "Access to peer values must be of the form: <peer instance of module> retrieve <module>.<value>")
+    }
 
   def start(instance: Tree): Tree = {
     // parse named arguments for constructor invocation
