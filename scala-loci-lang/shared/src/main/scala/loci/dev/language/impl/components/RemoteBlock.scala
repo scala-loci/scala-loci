@@ -227,7 +227,7 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
             case q"$expr[..$tpts](...$exprss)"
-                if (tree.tpe real_<:< types.accessor) &&
+                if (tree.tpe real_<:< types.remoteAccessor) &&
                    exprss.nonEmpty &&
                    exprss.head.size == 1 &&
                    isRemoteBlock(exprss.head.head) =>

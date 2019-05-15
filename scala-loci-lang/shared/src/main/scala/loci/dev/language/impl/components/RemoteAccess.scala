@@ -163,7 +163,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     val definedTransmittableTrees = records flatMap {
       case PlacedValue(_, tree, Some(peer), _) =>
         tree collect {
-          case tree @ q"$_[..$_](...$exprss)" if tree.tpe real_<:< types.accessor =>
+          case tree @ q"$_[..$_](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
             val index = checkForTransmission(tree, peer)
             val q"$_[..$_](...$transmissionExprss)" = exprss(1)(index)
 
@@ -213,7 +213,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                  exprss.head.nonEmpty &&
                  exprss.head.head.symbol != null &&
                  exprss.head.head.symbol.owner != symbols.Call &&
-                 ((tree.tpe real_<:< types.accessor) ||
+                 ((tree.tpe real_<:< types.remoteAccessor) ||
                   (tree.symbol != null &&
                    tree.symbol.owner == symbols.Call)) =>
             exprss.head.head.symbol
@@ -736,7 +736,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               }
               internal.setType(tree, tpe)
 
-            case q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.accessor =>
+            case q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
               val index = checkForTransmission(tree, peer)
 
               val (value, signature, remotes, remotesType) =

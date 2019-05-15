@@ -1,13 +1,13 @@
 package loci.dev
 
-import loci.dev.language._
-
 import scala.annotation.showAsInfix
 
 package object transmitter {
-  @showAsInfix type from[+T, -R] = PlacedValue[T, R]
+  @showAsInfix type from[+T, -R] = language.PlacedValue[T, R]
 
-  type Single = Tie.Single
-  type Optional = Tie.Optional
-  type Multiple = Tie.Multiple
+  type Gateway[R] = language.Gateway[R]
+
+  type Single = language.Tie.Single
+  type Optional = language.Tie.Optional
+  type Multiple = language.Tie.Multiple
 }

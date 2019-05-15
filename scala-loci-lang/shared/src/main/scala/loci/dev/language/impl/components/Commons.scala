@@ -75,6 +75,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val peer = typeOf[peer]
     val peerMarker = typeOf[Peer]
     val remote = typeOf[Remote[_]]
+    val gateway = typeOf[Gateway[_]]
     val placedValue = typeOf[PlacedValue[_, _]]
     val subjective = typeOf[Placed.Subjective[_, _]]
     val messageBuffer = typeOf[loci.MessageBuffer]
@@ -94,12 +95,15 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val transmittable = typeOf[loci.transmitter.Transmittable[_, _, _]]
     val resolution = typeOf[loci.transmitter.Transmittable.Aux.Resolution[_, _, _, _, _]]
     val serializable = typeOf[loci.transmitter.Serializable[_]]
+    val gatewayConnection = typeOf[runtime.GatewayConnection[_, _]]
     val remoteRequest = typeOf[runtime.RemoteRequest[_, _, _, _, _]]
     val moduleSignature = typeOf[runtime.Module.Signature]
     val peerSignature = typeOf[runtime.Peer.Signature]
     val tieSignature = typeOf[Map[runtime.Peer.Signature, runtime.Peer.Tie]]
+    val connection = typeOf[transmitter.Connection[_, _]]
     val transmission = typeOf[transmitter.Transmission[_, _, _, _]]
-    val accessor = typeOf[transmitter.RemoteAccessor]
+    val remoteGateway = typeOf[transmitter.RemoteGateway]
+    val remoteAccessor = typeOf[transmitter.RemoteAccessor]
     val delegates = typeOf[loci.transmitter.Transmittables.Delegates[_ ]]
     val message = typeOf[loci.transmitter.Transmittables.Message[_]]
     val none = typeOf[loci.transmitter.Transmittables.None]
@@ -115,6 +119,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val map = q"${names.root}.scala.collection.immutable.Map.apply"
     val empty = q"${names.root}.loci.MessageBuffer.empty"
     val reference = q"${names.root}.loci.dev.Remote.reference"
+    val remoteGateway = q"${names.root}.loci.dev.runtime.GatewayValue"
     val remoteValue = q"${names.root}.loci.dev.runtime.RemoteValue"
     val moduleSignature = q"${names.root}.loci.dev.runtime.Module.Signature.apply"
     val peerSignature = q"${names.root}.loci.dev.runtime.Peer.Signature.apply"

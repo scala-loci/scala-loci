@@ -1,11 +1,11 @@
 package loci.dev
 
-import loci.dev.language._
-
 package object transmitter {
-  type from[+T, -R] = PlacedValue[T, R]
+  type from[+T, -R] = language.PlacedValue[T, R]
 
-  type Single = Tie.Single
-  type Optional = Tie.Optional
-  type Multiple = Tie.Multiple
+  type Gateway[R] = language.Gateway[R]
+
+  type Single = language.Tie.Single
+  type Optional = language.Tie.Optional
+  type Multiple = language.Tie.Multiple
 }

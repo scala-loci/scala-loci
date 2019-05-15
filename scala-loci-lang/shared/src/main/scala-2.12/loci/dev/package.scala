@@ -25,7 +25,7 @@ package dev {
   sealed trait Multiple[+P]
 
   trait Remote[+P] extends Equals
-  object Remote extends transmitter.Remote
+  object Remote extends transmitter.RemoteReference
 }
 
 package object dev {
@@ -49,6 +49,6 @@ package object dev {
   def placed: Placement.Placed = erased
   def on: Placement.Select[Placement.Run] = erased
   def on[P]: Placement.On[P] with Placement.Run[P, language.from] = erased
-  def remote: Placement.Narrow with Placement.Select[Placement.Call] with Placement.Call[Nothing, language.from] = erased
-  def remote[P]: Placement.Call[P, language.from] = erased
+  def remote: Placement.Narrow with Placement.Select[Placement.Call] with Placement.Call[Nothing, language.from] with Gateway[Nothing] = erased
+  def remote[P]: Placement.Call[P, language.from] with Gateway[P] = erased
 }

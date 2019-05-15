@@ -126,7 +126,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         case q"$_[..$_](...$exprss)"
             if exprss.nonEmpty &&
                exprss.head.nonEmpty &&
-               (tree.tpe real_<:< types.accessor) &&
+               (tree.tpe real_<:< types.remoteAccessor) &&
                (exprss.head.head.tpe <:!< types.fromSingle) &&
                (exprss.head.head.tpe <:!< types.fromMultiple) =>
           peerContext.headOption foreach { case (outerPeer, _) =>

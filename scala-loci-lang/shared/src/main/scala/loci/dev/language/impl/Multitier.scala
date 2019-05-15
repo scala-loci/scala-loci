@@ -107,6 +107,7 @@ class Multitier(val c: blackbox.Context) {
               Peers,
               Values,
               RemoteAccess,
+              GatewayAccess,
               Subjectivity,
               Impls,
               Assembly))
