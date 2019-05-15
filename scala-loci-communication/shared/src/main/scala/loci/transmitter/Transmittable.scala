@@ -1,9 +1,10 @@
 package loci
 package transmitter
 
-import scala.annotation.{compileTimeOnly, implicitNotFound}
+import loci.contexts.Immediate.Implicits.global
+
 import scala.annotation.unchecked.uncheckedVariance
-import scala.concurrent.ExecutionContext.Implicits.global
+import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.concurrent.Future
 
 

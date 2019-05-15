@@ -148,49 +148,4 @@ object SourceGenerator {
       files foreach { case (file, content) => IO write (file, content) }
       files.keys.toSeq
     }
-
-  val valueTypesHigherKinds =
-    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
-      val higherKinds = (1 to 8) map { i =>
-        val typeArgsT = (0 until i) map { i => "_" } mkString ", "
-        val typeArgsU = (0 until i) map { i => s"U$i" } mkString ", "
-        val typeArgsV = (0 until i) map { i => s"V$i" } mkString ", "
-        val typeArgsDummy = (0 until i) map { i => s"Dummy$i" } mkString ", "
-
-        val higherKindEvidences = (0 to i) map { i => s"ev$i" } mkString ", "
-
-        val higherKindArgs = (0 until i) map { i => s"""
-          |        ev${i+1}: ValueTypes[U$i, _, Dummy$i, V$i]""" } mkString ","
-
-        val typeArgs =
-          s"T[$typeArgsT], $typeArgsU, $typeArgsV, $typeArgsDummy"
-
-        val resultType =
-          s"ValueTypes[T[$typeArgsU], Nothing, T[$typeArgsV], T[$typeArgsV]]"
-
-        val higherKind = s"""
-          |  implicit def higherKind$i[$typeArgs]
-          |    (implicit
-          |        ev0: NotNothing[T[$typeArgsU]], $higherKindArgs)
-          |    : $resultType = `#macro`($higherKindEvidences)
-          |"""
-
-        higherKind
-      }
-
-      val files = Map(
-        dir / "loci" / "ValueTypesHigherKinds.scala" ->
-        s"""package loci
-           |
-           |import scala.language.higherKinds
-           |
-           |trait ValueTypesHigherKinds extends ValueTypesIdentity {
-           |${higherKinds.mkString}
-           |}
-           |""".stripMargin
-      )
-
-      files foreach { case (file, content) => IO write (file, content) }
-      files.keys.toSeq
-    }
 }

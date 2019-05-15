@@ -26,13 +26,16 @@ val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val retypecheck = libraryDependencies +=
-  "de.tuda.stg" %% "retypecheck" % "0.5.0"
+  "de.tuda.stg" %% "retypecheck" % "0.6.0"
 
 val rescalaRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val rescala = libraryDependencies +=
   "de.tuda.stg" %%% "rescala" % "0.23.0"
+
+val rescalaDependencyOverrides = dependencyOverrides +=
+  "de.tuda.stg" %% "retypecheck" % "0.6.0"
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "0.6.5"
@@ -93,7 +96,6 @@ lazy val lociLang = (crossProject
   crossType CrossType.Full
   in file("scala-loci-lang")
   settings (normalizedName := "scala-loci-lang",
-            SourceGenerator.valueTypesHigherKinds,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scalatest)
   dependsOn lociCommunication)
@@ -161,7 +163,8 @@ lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 lazy val lociLangTransmitterRescala = (crossProject
   crossType CrossType.Pure
   in file("scala-loci-lang-transmitter-rescala")
-  settings (normalizedName := "scala-loci-lang-transmitter-rescala")
+  settings (normalizedName := "scala-loci-lang-transmitter-rescala",
+            rescalaDependencyOverrides)
   dependsOn (lociLang, lociTransmitterRescala))
 
 lazy val lociLangTransmitterRescalaJVM = lociLangTransmitterRescala.jvm

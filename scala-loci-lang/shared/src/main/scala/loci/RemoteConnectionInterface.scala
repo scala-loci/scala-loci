@@ -1,3 +1,0 @@
-package loci
-
-trait RemoteConnectionInterface

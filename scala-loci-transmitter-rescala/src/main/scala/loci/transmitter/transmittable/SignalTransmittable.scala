@@ -2,10 +2,10 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.core.Struct
-import _root_.rescala.core.Pulse
-import _root_.rescala.core.Scheduler
-import _root_.rescala.reactives.Signal
+import _root_.rescala.core.{Pulse, Scheduler, Struct}
+import _root_.rescala.reactives.{Signal, Signals}
+import loci.contexts.Immediate.Implicits.global
+
 import scala.language.higherKinds
 
 protected[transmitter] trait SignalTransmittable {
@@ -13,13 +13,15 @@ protected[transmitter] trait SignalTransmittable {
       [Sig[T, St <: Struct] <: Signal[T, St], T, I, U, St <: Struct](implicit
       scheduler: Scheduler[St],
       transmittable: Transmittable[(T, String, Boolean), I, (U, String, Boolean)])
-  : ConnectedTransmittable[Sig[T, St], I, scheduler.Signal[U]] {
+  : ConnectedTransmittable.Proxy[Sig[T, St], I, scheduler.Signal[U]] {
+      type Proxy = scheduler.Signal[U]
+      type Internal = scheduler.Var[U]
       type Message = transmittable.Type
   } = {
     val ignoredValue = null.asInstanceOf[T]
     val ignoredString = null.asInstanceOf[String]
 
-    ConnectedTransmittable(
+    ConnectedTransmittable.Proxy(
       provide = (value, context) => {
         val signal =
           (value
@@ -33,6 +35,7 @@ protected[transmitter] trait SignalTransmittable {
 
         signal.readValueOnce
       },
+
       receive = (value, context) => {
         val signal = scheduler.transaction() { _ => scheduler.Var.empty[U] }
 
@@ -58,6 +61,10 @@ protected[transmitter] trait SignalTransmittable {
         context.endpoint.receive notify { update(signal, _) }
 
         signal
-      })
+      },
+
+      direct = (signal, context) => signal,
+
+      proxy = (future, context) => Signals.fromFuture(future).flatten)
   }
 }

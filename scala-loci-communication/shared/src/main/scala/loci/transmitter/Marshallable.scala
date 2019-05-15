@@ -1,9 +1,10 @@
 package loci
 package transmitter
 
+import loci.contexts.Immediate.Implicits.global
+
 import scala.util.Try
 import scala.annotation.implicitNotFound
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
 @implicitNotFound("${B} is not marshallable")
@@ -16,7 +17,7 @@ trait Marshallable[B, R, P] {
 
   @inline final def self: Type = this
 
-  def isPushBased: Boolean
+  def connected: Boolean
 }
 
 object Marshallable {
@@ -33,7 +34,7 @@ object Marshallable {
     new Marshallable[B, R, P] {
       val transmittable = resolution.transmittable
 
-      def isPushBased = (transmittable: Transmittable[B, I, R]) match {
+      def connected = (transmittable: Transmittable[B, I, R]) match {
         case _: ConnectedTransmittable[_, _, _] => true
         case _: ConnectedTransmittable.Proxy[_, _, _] => true
         case _ => false

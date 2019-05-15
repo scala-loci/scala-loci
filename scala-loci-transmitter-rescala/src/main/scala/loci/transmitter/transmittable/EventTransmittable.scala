@@ -2,24 +2,26 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.core.Struct
-import _root_.rescala.core.Pulse
-import _root_.rescala.core.Scheduler
-import _root_.rescala.reactives.Event
+import _root_.rescala.core.{Pulse, Scheduler, Struct}
+import _root_.rescala.reactives.{Event, Signals}
+import loci.contexts.Immediate.Implicits.global
+
 import scala.language.higherKinds
 
 protected[transmitter] trait EventTransmittable {
-  implicit def nonNullableTraversable
+  implicit def rescalaEventTransmittable
       [Evt[T, St <: Struct] <: Event[T, St], T, I, U, St <: Struct](implicit
       scheduler: Scheduler[St],
       transmittable: Transmittable[(T, String), I, (U, String)])
-  : ConnectedTransmittable[Evt[T, St], I, scheduler.Event[U]] {
+  : ConnectedTransmittable.Proxy[Evt[T, St], I, scheduler.Event[U]] {
+      type Proxy = scheduler.Event[U]
+      type Internal = scheduler.Evt[U]
       type Message = transmittable.Type
   } = {
     val ignoredValue = null.asInstanceOf[T]
     val ignoredString = null.asInstanceOf[String]
 
-    ConnectedTransmittable(
+    ConnectedTransmittable.Proxy(
       provide = (value, context) => {
         val observer =
           (value
@@ -31,6 +33,7 @@ protected[transmitter] trait EventTransmittable {
 
         null
       },
+
       receive = (value, context) => {
         val event = scheduler.Evt[U]
 
@@ -49,6 +52,10 @@ protected[transmitter] trait EventTransmittable {
         context.endpoint.closed notify { _ => event.disconnect }
 
         event
-      })
+      },
+
+      direct = (event, context) => event,
+
+      proxy = (future, context) => Signals.fromFuture(future).flatten)
   }
 }
