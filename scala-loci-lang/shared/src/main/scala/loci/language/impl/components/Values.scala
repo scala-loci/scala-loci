@@ -544,8 +544,6 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
         case tree: TypeTree if tree.original != null =>
           val treeTypes = Option(tree.tpe) ++ Option(tree.original.tpe)
-          val placementTypes = List(
-            types.placedValue, types.subjective, types.singleSelection, types.multipleSelection)
 
           val placementType = treeTypes exists {
             _.underlying exists {
@@ -583,21 +581,43 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       process {
         case value: Value =>
           object transformer extends Transformer {
-            override def transform(tree: Tree): Tree = tree match {
-              // inferred type trees with no correspondence in the original source code
+            def underExpansion(tree: Tree): Boolean = tree match {
               case tree: TypeTree if tree.tpe != null && tree.original == null =>
                 def hasOwner(symbol: Symbol): Boolean =
                   symbol != NoSymbol && (symbol == module.classSymbol || hasOwner(symbol.owner))
 
-                val reInferType = tree.tpe exists {
+                tree.tpe exists {
                   case ThisType(sym) => hasOwner(sym)
                   case _ => false
                 }
 
-                if (reInferType)
-                  TypeTree()
-                else
-                  tree
+              case _ =>
+                false
+            }
+
+            override def transform(tree: Tree): Tree = tree match {
+              // inferred type trees with no correspondence in the original source code
+              case tree: ValOrDefDef if underExpansion(tree.tpt) =>
+                tree map { (mods, name, _, rhs) =>
+                  (transformModifiers(mods),
+                   name,
+                   if (tree.symbol.isParameter)
+                     createTypeTree(tree.tpt.tpe, tree.pos)
+                   else
+                     TypeTree(),
+                   transform(rhs))
+                }
+
+              case tree: TypeTree if underExpansion(tree) =>
+                val tpe = tree.tpe map { tpe =>
+                  if ((tpe.typeArgs.size == 1 || tpe.typeArgs.size == 2) &&
+                      (placementTypes exists { tpe real_<:< _ }))
+                    tpe.typeArgs.head
+                  else
+                    tpe
+                }
+
+                createTypeTree(tpe, tree.pos)
 
               // type trees with correspondence in the original source code
               case tree: TypeTree if tree.original != null =>
@@ -630,31 +650,37 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
           skippedTrees += tree
       }
 
+      def fixTypeReference(tree: Tree): Tree = tree match {
+        case Select(qualifier, name) =>
+          treeCopy.Select(tree, fixTypeReference(qualifier), name)
+        case This(_) if tree.symbol == module.classSymbol =>
+          Ident(module.self)
+        case _ =>
+          transform(tree)
+      }
+
       override def transform(tree: Tree): Tree = tree match {
-        // type trees with correspondence in the original source code
         case tree: TypeTree if tree.original != null =>
           internal.setOriginal(TypeTree(), transform(tree.original))
 
-        // reference to constructor call (should not be transformed)
         case tree: RefTree if tree.symbol.isConstructor =>
           skip(tree)
           super.transform(tree)
 
-        // reference to nested this reference
+        case tree: Select if tree.symbol.isType =>
+          fixTypeReference(tree)
+
         case tree: This if !(skippedTrees contains tree) =>
           (moduleStablePath(tree.symbol, This(enclosingName))
             getOrElse super.transform(tree))
 
-        // reference to nested identifier
         case tree: Ident if !(skippedTrees contains tree) =>
           (moduleStablePath(tree.tpe, This(enclosingName))
             getOrElse super.transform(tree))
 
-        // reference to nested selection
         case tree: RefTree if !(skippedTrees contains tree) && tree.symbol == module.symbol =>
           This(enclosingName)
 
-        // any other tree
         case _ =>
           super.transform(tree)
       }
@@ -945,6 +971,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       }
     }
   }
+
+  private val placementTypes = List(
+    types.placedValue, types.subjective, types.singleSelection, types.multipleSelection)
 
   private val accessMessage = "Access to abstraction " +
     "only allowed on peers on which the abstraction is placed. " +
