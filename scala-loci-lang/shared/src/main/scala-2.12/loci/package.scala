@@ -15,6 +15,12 @@ package loci {
   object multitier {
     def start[P, Inst[P] <: Instance[P]](instance: Inst[P]): Runtime[P] =
       macro impl.Instance.start
+
+    @compileTimeOnly("method can only be invoked in multitier code")
+    def running: Boolean = erased
+
+    @compileTimeOnly("method can only be invoked in multitier code")
+    def terminate(): Unit = erased
   }
 
   final class peer extends StaticAnnotation

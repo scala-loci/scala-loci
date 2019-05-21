@@ -35,6 +35,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val result = TypeName("Result")
     val proxy = TypeName("Proxy")
     val transmittables = TypeName("Transmittables")
+    val running = TermName("running")
+    val terminate = TermName("terminate")
     val placedValues = TypeName(NameTransformer encode "<placed values>")
   }
 
@@ -58,6 +60,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
     val to = typeOf[Placed[_, _]] member TermName("to")
     val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
+    val multitier = symbolOf[loci.multitier.type]
   }
 
   object types {

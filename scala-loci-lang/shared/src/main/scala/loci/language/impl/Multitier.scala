@@ -108,6 +108,7 @@ class Multitier(val c: blackbox.Context) {
               Values,
               RemoteAccess,
               GatewayAccess,
+              RuntimeAccess,
               Subjectivity,
               Impls,
               Assembly))
