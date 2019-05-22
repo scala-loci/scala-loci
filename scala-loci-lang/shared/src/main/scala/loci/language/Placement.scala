@@ -9,13 +9,13 @@ object Placement {
   sealed trait Context[P]
 
   sealed trait On[P] {
-    def apply[T, U](v: Context[P] => T)(implicit ev: PlacedClean[P, T, T, U]): U on P
-    def local[T, U](v: Context[P] => T)(implicit ev: PlacedClean[P, T, T, Local[U]]): Local[U] on P
-    def sbj[R, T, U](v: Context[P] => Remote[R] => T)(implicit ev: PlacedClean[P, T, T, U]): U per R on P
+    def apply[T, U](v: Context[P] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): U on P
+    def local[T, U](v: Context[P] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): Local[U] on P
+    def sbj[R, T, U](v: Context[P] => Remote[R] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): U per R on P
   }
 
   sealed trait Placed {
-    def apply[P, T, U, S](v: Context[P] => T)(implicit ev0: PlacedType[T, S], ev1: PlacedClean[P, S, S, U]): U on P
+    def apply[P, T, U, S](v: Context[P] => T)(implicit ev0: PlacedType[T, S], ev1: PlacedClean[U on P, P, S, S, U]): U on P
   }
 
   sealed trait Select[Command[_, _[_, _]]] {
@@ -33,8 +33,8 @@ object Placement {
   }
 
   sealed trait Block[P, placed[_, _]] {
-    def apply[T, U](v: Context[P] => T)(implicit ev: PlacedClean[P, T, T, U]): U placed P
-    def sbj[R, T, U](v: Context[P] => Remote[R] => T)(implicit ev: PlacedClean[P, T, T, U]): U per R placed P
+    def apply[T, U](v: Context[P] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): U placed P
+    def sbj[R, T, U](v: Context[P] => Remote[R] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): U per R placed P
   }
 
   sealed trait Narrow {
