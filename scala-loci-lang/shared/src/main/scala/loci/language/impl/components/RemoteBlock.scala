@@ -158,9 +158,8 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
 
           // generate the lifted definition
           val result = createTypeTree(tpe.resultType, expr.pos)
-          val definition =
-            q"""${Flag.SYNTHETIC} private[this] def $name(..$parameters): $result =
-              $placed(${exprss.head.head})"""
+          val body = internal.setType(q"$placed(${exprss.head.head})", tpe.resultType)
+          val definition = q"${Flag.SYNTHETIC} private[this] def $name(..$parameters): $result = $body"
           internal.setSymbol(definition, symbol)
           internal.setType(definition, tpe)
 

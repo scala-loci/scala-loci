@@ -229,7 +229,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     // for value and method definitions
     def splitValOrDefDef(
         tree: ValOrDefDef)(
-        concreteValues: (ValOrDefDef, Symbol, Type, Tree, Modality) => Seq[PlacedValue]): Seq[Value] =
+        concreteValues: (ValOrDefDef, Symbol, Type, Tree, Modality, Seq[(Tree, Symbol)]) => Seq[PlacedValue]): Seq[Value] =
       // for non-multitier references, create
       // 1) dummy member at the module-level, which is compile-time-only,
       // 2) member at the level of placed values
@@ -241,7 +241,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             if (isMultitierModule(tpe, tree.pos))
               c.abort(tree.pos, "Multitier module instances cannot be placed")
 
-            val valOrDefDef = (changeType(stripPlacementSyntax(tree), tpe, tpt)
+            val valOrDefDef = (changeType(tree, tpe, tpt)
               map { (mods, name, tpt, rhs) =>
                 // add `override` modifier to synthesized value if necessary
                 // since we initialize synthesized values with `null`
@@ -257,7 +257,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                 (tree.symbol.allAnnotations exists { _.tree.tpe <:< types.abstractValue })) {
               // initialize synthesized values with `null`
               // instead of keeping them abstract
-              val erasure = valOrDefDef map { (mods, name, tpt, _) =>
+              val erasure = stripPlacementSyntax(valOrDefDef) map { (mods, name, tpt, _) =>
                 (mods withoutFlags Flag.DEFERRED, name, tpt, q"null.asInstanceOf[$tpt]")
               }
               Seq(PlacedValueDef(tree.symbol, removeAbstractValueAnnotation(erasure), Some(peer), modality))
@@ -268,8 +268,72 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                      valOrDefDef.rhs.isEmpty) {
               Seq(PlacedValueDef(tree.symbol, valOrDefDef, Some(peer), Modality.None))
             }
-            else
-              concreteValues(valOrDefDef, peer, tpe, tpt, modality)
+            else {
+              // collect a list of peer-specific specialized implementations
+              val specializations = splitPlacementSyntax(valOrDefDef.rhs) map { tree =>
+                if (tree.tpe <:!< definitions.NothingTpe && tree.tpe <:!< definitions.NullTpe)
+                  decomposePlacementType(tree.tpe, EmptyTree, valOrDefDef.symbol, tree.pos, moduleDefinition = true) match {
+                    case Placed(peer, _, _, modality) =>
+                      (stripPlacementSyntax(tree), peer, modality)
+                    case _ =>
+                      c.abort(tree.pos, "Unexpected non-placed definition")
+                  }
+                else
+                  (tree, peer, modality)
+              }
+
+              // ensure that peer-specific specialized implementations agree on their modalities
+              if (specializations.size > 1)
+                specializations sliding 2 foreach {
+                  case Seq((_, _, modality0), (_, _, modality1)) =>
+                    val equal = (modality0, modality1) match {
+                      case (Modality.Subjective(peer1), Modality.Subjective(peer2)) =>
+                        peer1 =:= peer2
+                      case (Modality.Local, Modality.Local) | (Modality.None, Modality.None) =>
+                        true
+                      case _ =>
+                        false
+                    }
+
+                    if (!equal)
+                      c.abort(tree.pos, "Placed definitions must agree on subjective and local modalities")
+                }
+
+              // ensure that peer-specific specialized implementations exist
+              // 1) for the common super peer
+              // 2) with at most one implementation per peer
+              val peers = mutable.Set.empty[Symbol]
+
+              specializations foreach { case (tree, peer, _) =>
+                if (peers contains peer)
+                  c.abort(tree.pos, s"Duplicate implementation for ${peer.name}")
+                peers += peer
+              }
+
+              val inferredUnit =
+                if (!(peers contains peer))
+                  (modality, tpe.underlying.typeArgs) match {
+                    case (Modality.Subjective(_), Seq(peerType, argType)) if argType =:= definitions.UnitTpe =>
+                      List((q"{ _: ${createTypeTree(peerType, tree.pos)} => () }", peer, modality))
+                    case _ if tpe =:= definitions.UnitTpe =>
+                      List((q"()", peer, modality))
+                    case _ =>
+                      c.abort(tree.pos, s"Missing implementation for common super peer ${peer.name}")
+                  }
+                else
+                  List.empty
+
+              // collect common and specialized implementations
+              val (Seq((common, _, _)), specialized) = inferredUnit ++ specializations partition {
+                case (_, `peer`, _) => true
+                case _ => false
+              }
+
+              concreteValues(
+                valOrDefDef map { (mods, name, tpt, _) => (mods, name, tpt, common) },
+                peer, tpe, tpt, modality,
+                specialized map { case (tree, peer, _) => tree -> peer })
+            }
 
           case _ =>
             Seq(PlacedValueDef(tree.symbol, removeAbstractValueAnnotation(tree), None, Modality.None))
@@ -352,18 +416,22 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     //    which might be executing a statement or initializing a member
     def erase(
         tree: Tree, symbol: Symbol, peer: Symbol, tpe: Type, tpt: Tree, modality: Modality,
+        specialized: Seq[(Tree, Symbol)],
         apply: Tree => Tree): Seq[PlacedValue] = {
       val exprName = TermName(s"$expr$index")
       index += 1
 
+      val pos = tree.pos
       val erasure = eraseValue(exprName, tpe, tpt, tree.pos)
-      val value = extractValue(exprName, tpe, tpt, tree, tree.pos)
       val application = apply(q"$exprName()")
+      val values = ((tree -> peer) +: specialized) map { case (tree, peer) =>
+        val value = extractValue(exprName, tpe, tpt, tree, pos)
+        PlacedValuePeerImpl(symbol, value, peer, modality)
+      }
 
-      Seq(
+      values ++ Seq(
         PlacedValueDef(symbol, erasure, Some(peer), modality),
-        PlacedValueDef(symbol, application, Some(peer), modality),
-        PlacedValuePeerImpl(symbol, value, peer, modality))
+        PlacedValueDef(symbol, application, Some(peer), modality))
     }
 
     // create concrete multitier stub values for inherited abstract values
@@ -433,8 +501,14 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       case Initialized(tree) =>
         tree.impl.body map abstractValueAnnotationRemover.transform flatMap {
           case tree: DefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
-            splitValOrDefDef(tree) { (tree, peer, _, _, modality) =>
-              Seq(PlacedValueDef(tree.symbol, tree, Some(peer), modality))
+            splitValOrDefDef(tree) { (tree, peer, _, _, modality, specialized) =>
+              PlacedValueDef(tree.symbol, tree, Some(peer), modality) +:
+              (specialized map { case (rhs, peer) =>
+                val specialized = tree map { (mods, name, tpt, _) =>
+                  (mods withFlags Flag.OVERRIDE, name, tpt, rhs)
+                }
+                PlacedValuePeerImpl(tree.symbol, specialized, peer, modality)
+              })
             }
 
           case tree: ValDef if tree.symbol.asTerm.isParamAccessor =>
@@ -447,10 +521,11 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             Seq(ModuleValue(tree.symbol, tree))
 
           case tree: ValDef =>
-            splitValOrDefDef(tree) { (tree, peer, tpe, tpt, modality) =>
+            splitValOrDefDef(tree) { (tree, peer, tpe, tpt, modality, specialized) =>
               erase(
                 tree.rhs, tree.symbol,
                 peer, tpe, tpt, modality,
+                specialized,
                 rhs => tree map { (mods, name, tpt, _) => (mods, name, tpt, rhs) })
             }
 
@@ -473,6 +548,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                 erase(
                   stripPlacementSyntax(tree), NoSymbol,
                   peer, definitions.UnitTpe, TypeTree(definitions.UnitTpe), modality,
+                  List.empty,
                   identity)
 
               case _ =>
@@ -539,7 +615,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             if (!localPeer)
               c.abort(tree.pos, accessMessage)
           }
-          else if (tree.tpe.finalResultType.baseClasses exists { _.owner == symbols.placement })
+          else if ((tree.tpe.finalResultType.baseClasses exists { _.owner == symbols.placement }) ||
+                   tree.symbol == symbols.and)
             c.abort(tree.pos, "Unexpected multitier construct")
 
         case tree: TypeTree if tree.original != null =>
@@ -1013,6 +1090,15 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         name, tpt,
         if (tree.symbol.isAbstract) rhs else q"null.asInstanceOf[$tpt]")
     }
+
+  private def splitPlacementSyntax(tree: Tree): List[Tree] = tree match {
+    case q"$expr.$_[..$_](...$exprss)"
+        if tree.nonEmpty && tree.symbol == symbols.and =>
+      expr :: splitPlacementSyntax(exprss.head.head)
+
+    case _ =>
+      tree :: Nil
+  }
 
   private def stripPlacementSyntax(tree: ValOrDefDef): ValOrDefDef =
     tree map { (mods, name, tpt, rhs) =>

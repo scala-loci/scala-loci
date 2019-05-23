@@ -86,7 +86,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       }
 
       // generate peer implementations
-      val parents = tq"${names.placedValues}" :: overriddenBases ++ inheritedBases
+      val parents = overriddenBases ++ inheritedBases :+ tq"${names.placedValues}"
       val peerImpl = q"${Flag.SYNTHETIC} trait $name extends ..$parents { ..$placedValues }"
 
       // generate peer signature
