@@ -37,7 +37,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val transmittables = TypeName("Transmittables")
     val running = TermName("running")
     val terminate = TermName("terminate")
-    val placedValues = TypeName(NameTransformer encode "<placed values>")
+    val placedValues = TermName(NameTransformer encode "<placed values>")
+    def placedValues(symbol: Symbol) =
+      TypeName(NameTransformer encode s"<placed values of ${uniqueRealisticName(symbol)}>")
   }
 
   object symbols {
@@ -240,7 +242,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     }
 
     def asSeenFrom(symbol: ClassSymbol): Type = {
-      val bases = symbol.baseClasses.toSet
+      val bases = symbol.selfType.baseClasses.toSet
       val thisType = internal.thisType(symbol)
       val symbols = mutable.ListBuffer.empty[Symbol]
 

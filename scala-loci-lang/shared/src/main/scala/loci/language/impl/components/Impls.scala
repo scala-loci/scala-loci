@@ -40,10 +40,10 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       process {
         case value: PlacedValuePeerImpl =>
           value.copy(tree = injectPlacedValueReferences(value.tree,
-            q"${requirePeerType(value.peer).name}.this: ${module.self}.${names.placedValues}"))
+            q"${requirePeerType(value.peer).name}.this: ${module.self}.${names.placedValues(module.symbol)}"))
         case value: Value =>
           value.copy(tree = injectPlacedValueReferences(value.tree,
-            q"${names.placedValues}.this"))
+            q"${names.placedValues(module.symbol)}.this"))
       }
       process {
         case value: PlacedValue =>
@@ -77,13 +77,11 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
       val mods = tree.mods mapAnnotations { multitierStubAnnotation :: _ }
 
-      val placedValues = names.placedValues.toTermName
-
       val classDef =
         if (tree.mods hasFlag Flag.TRAIT) {
           val body =
-            q"$placedValues" ::
-            q"${Flag.SYNTHETIC} protected[this] def $placedValues: ${names.placedValues}" ::
+            q"${names.placedValues}" ::
+            q"${Flag.SYNTHETIC} protected[this] def ${names.placedValues}: ${names.placedValues(module.symbol)}" ::
             tree.impl.body
 
           treeCopy.ClassDef(tree, mods, name, tparams, Template(parents, self, body))
@@ -91,8 +89,8 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         else {
           def implicitArgument(flags: FlagSet) = ValDef(
             Modifiers(Flag.PARAMACCESSOR | Flag.SYNTHETIC | flags),
-            placedValues,
-            Ident(names.placedValues),
+            names.placedValues,
+            Ident(names.placedValues(module.symbol)),
             EmptyTree)
 
           val body =
@@ -170,7 +168,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
     atPos(pos) {
       if (enclosingUnliftedClass(symbol))
-        q"${names.placedValues.toTermName}"
+        q"${names.placedValues}"
       else
         enclosing
     }
@@ -209,13 +207,13 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private def isDummyPlacedValueReference(tree: DefDef) =
     (tree.mods hasFlag Flag.SYNTHETIC) &&
-    tree.name == names.placedValues.toTermName &&
+    tree.name == names.placedValues &&
     tree.symbol.info.finalResultType =:= definitions.NothingTpe
 
   // unlift value references which are stable within the module
   // to references to the synthetic placed value reference of the enclosing class
   private object termTreeUnlifter extends Transformer {
-    val placedValues = Ident(names.placedValues.toTermName)
+    val placedValues = Ident(names.placedValues)
 
     override def transform(tree: Tree): Tree = tree match {
       case tree: TypeTree if tree.original != null =>
@@ -310,7 +308,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                        isUnlifted(tree.symbol.owner) &&
                        underExpansion(tree.symbol.owner) =>
                   if (isModuleStable(classSymbol.owner))
-                    addImplicitArgument(tree, q"${names.placedValues.toTermName}")
+                    addImplicitArgument(tree, q"${names.placedValues}")
                   else
                     addImplicitArgument(tree, enclosingPlacedValueReference(classSymbol.owner, enclosing, classSymbol.pos))
               }
@@ -331,7 +329,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
               if (isLocalUnlifted(classSymbol) &&
                   hasModuleStableParents &&
                   !inheritsImplicitPlacedValueReference)
-                Some(q"""${Flag.SYNTHETIC} protected[this] def ${names.placedValues.toTermName}: ${names.placedValues} =
+                Some(q"""${Flag.SYNTHETIC} protected[this] def ${names.placedValues}: ${names.placedValues(module.symbol)} =
                            ${enclosingPlacedValueReference(classSymbol.owner, enclosing, classSymbol.pos)}""")
               else
                 None

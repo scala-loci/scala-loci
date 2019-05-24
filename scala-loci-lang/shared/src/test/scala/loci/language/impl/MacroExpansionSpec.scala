@@ -444,7 +444,7 @@ class MacroExpansionSpec extends FlatSpec with Matchers {
   }
 
   it should "correctly lift types" in {
-    val placedValuesClasses = new ClassLifting.`<placed values>` {
+    val placedValuesClasses = new ClassLifting.`<placed values of loci.language.impl.ClassLifting>` {
       lazy val $loci$sig = ""
       def $loci$sys$create = emptySystem(this)
     }
@@ -475,7 +475,7 @@ class MacroExpansionSpec extends FlatSpec with Matchers {
     // "new ClassLifting.p.E(2)" shouldNot typeCheck
 
 
-    val placedValuesTraits = new TraitLifting.`<placed values>` {
+    val placedValuesTraits = new TraitLifting.`<placed values of loci.language.impl.TraitLifting>` {
       lazy val $loci$sig = ""
       def $loci$sys$create = emptySystem(this)
     }

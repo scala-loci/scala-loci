@@ -35,6 +35,29 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
         c.abort(parent.pos, "Multitier modules cannot have non-multitier parents")
     }
 
+    def validateSelfType(tree: Tree): Unit = tree match {
+      case tq"$tree with ..$trees" =>
+        validateSelfType(tree)
+        trees foreach validateSelfType
+
+      case _ if tree.tpe != NoType =>
+        val symbol = tree.tpe match {
+          case RefinedType(Seq(tpe0, tpe1), _)
+            if tpe0.typeSymbol == module.classSymbol =>
+            tpe1.typeSymbol
+          case tpe =>
+            tpe.typeSymbol
+        }
+
+        if (!(multitierModules contains symbol) &&
+            !isMultitierModule(symbol))
+          c.abort(tree.pos, "Multitier modules cannot have non-multitier self-type annotations")
+
+      case _ =>
+    }
+
+    validateSelfType(module.tree.impl.self.tpt)
+
     object transformer extends Transformer {
       sealed trait Level
       case object NoLevel extends Level
@@ -128,8 +151,10 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
     multitierModules.toSet - module.symbol
   }
 
-  private def isMultitierModule(tree: Tree): Boolean = {
-    val symbol = tree.symbol
+  private def isMultitierModule(tree: Tree): Boolean =
+    isMultitierModule(tree.symbol)
+
+  private def isMultitierModule(symbol: Symbol): Boolean = {
     symbol == module.symbol ||
     symbol == module.classSymbol ||
     (symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule })

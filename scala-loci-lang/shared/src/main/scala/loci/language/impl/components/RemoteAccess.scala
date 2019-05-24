@@ -105,7 +105,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     // all placed values and their corresponding type
     // (with placement information stripped from the type)
-    val placedValues = (module.symbol.info.members.sorted flatMap { symbol =>
+    val placedValues = (module.classSymbol.selfType.members.sorted flatMap { symbol =>
       val method = if (symbol.isMethod) Some(symbol.asMethod) else None
 
       method collect { case method if !method.isSetter =>
@@ -199,7 +199,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     }: _*)
 
     // collect all inherited marshallables with their transmittable information
-    val definedMarshallables = mutable.ListBuffer(module.symbol.info.members.sorted collect {
+    val definedMarshallables = mutable.ListBuffer(module.classSymbol.selfType.members.sorted collect {
       case symbol @ MarshallableSymbol(info) => info -> symbol.asTerm.name
     }: _*)
 
@@ -244,7 +244,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         // find an inherited placed value with the same signature
         // and whose transmittable type conforms to the transmittable used in this code
-        val inheritedPlacedValue = (module.symbol.info.members.sorted collectFirst {
+        val inheritedPlacedValue = (module.classSymbol.selfType.members.sorted collectFirst {
           case symbol @ PlacedValueSymbol(`signature`, argInfo, resInfo) =>
             val resConformant = definedResTransmittable forall { case (info, _) =>
               !hasResult && resInfo.isEmpty ||
@@ -616,8 +616,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         }
       }
 
-      val Select(qualifier, _) = tree
-      Select(transformer transform qualifier, name)
+      tree match {
+        case Select(qualifier, _) =>
+          Select(transformer transform qualifier, name)
+        case _ =>
+          Ident(name)
+      }
     }
 
     def accessPeerSignatureByTree(tree: Tree) =
@@ -687,7 +691,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       val (placedValueName, argumentsType, subjective) =
         PlacedValues.resolve(tree.symbol, tree.pos)
 
-      val peerType = tree.tpe.widen.typeArgs(1)
+      val peerType = tree.tpe.finalResultType.widen.asSeenFrom(module.classSymbol).typeArgs(1)
 
       val valueName =
         if (tree.symbol.isSynthetic && tree.symbol.isPrivate)
@@ -800,6 +804,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var result = -1
 
     val arg = exprss.head.head
+    val tpe = arg.tpe.finalResultType.widen.asSeenFrom(module.classSymbol)
 
     exprss(1) foreach { expr =>
       if (expr.tpe real_<:< types.transmission) {
@@ -813,7 +818,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           extractTag(expr.tpe, types.transmission, tree.pos).typeArgs
 
         val expectedValue =
-          decomposePlacementType(arg.tpe.widen, EmptyTree, arg.symbol, arg.pos, moduleDefinition = false) match {
+          decomposePlacementType(tpe, EmptyTree, arg.symbol, arg.pos, moduleDefinition = false) match {
             case Placed(_, tpe, _, Modality.Subjective(_)) => Some(tpe.typeArgs(1))
             case Placed(_, tpe, _, _) => Some(tpe)
             case _ => None
@@ -822,7 +827,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         if (to.typeSymbol != peer ||
             expectedValue.isEmpty ||
             expectedValue.get =:!= value ||
-            arg.tpe <:!< (types.from mapArgs { _ => List(placedValue, placedPeer) }))
+            tpe <:!< (types.from mapArgs { _ => List(placedValue, placedPeer) }))
           c.abort(tree.pos, "Invalid remote accessor: " +
             "Transmission value does not conform to remote access")
 
@@ -890,7 +895,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         val signature = methodSignature(symbol.asMethod, resultType)
 
-        (symbol.owner.info.members.sorted
+        val info =
+          if (symbol.owner == module.classSymbol)
+            module.classSymbol.selfType
+          else
+            symbol.owner.info
+
+        (info.members.sorted
           collectFirst {
             case symbol @ PlacedValueSymbol(`signature`, argInfo, _) =>
               (symbol.name.toTermName,

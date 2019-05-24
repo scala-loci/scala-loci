@@ -29,7 +29,34 @@ class Instance(val c: blackbox.Context) {
   }
 
   object names {
-    val placedValues = TypeName(NameTransformer encode "<placed values>")
+    def placedValues(symbol: Symbol) =
+      TypeName(NameTransformer encode s"<placed values of ${uniqueRealisticName(symbol)}>")
+
+    private def uniqueRealisticName(symbol: Symbol): String = {
+      val owner = symbol.owner
+      val name = symbol.name.toString
+
+      val realisticName =
+        if (name startsWith "$loci$multitier$")
+          (symbol.owner.info member TermName(name.drop(16)) orElse symbol).name.toString
+        else
+          name
+
+      if (owner == c.mirror.RootClass)
+        realisticName
+      else if (symbol.isSynthetic || ((realisticName startsWith "<") && (realisticName endsWith ">")))
+        uniqueRealisticName(owner)
+      else {
+        val prefix = uniqueRealisticName(owner)
+        val separator = if (owner.isType && !owner.isModuleClass) "#" else "."
+        val suffix =
+          if (realisticName endsWith termNames.LOCAL_SUFFIX_STRING)
+            realisticName.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
+          else
+            realisticName
+        s"$prefix$separator$suffix"
+      }
+    }
   }
 
   def allAnnotations(symbol: Symbol): List[Annotation] =
@@ -148,7 +175,7 @@ class Instance(val c: blackbox.Context) {
 
             transformer transform q"""$instance match {
               case instance: ${termNames.ROOTPKG}.loci.runtime.Instance[_] => instance.values match {
-                case values: $placedPrefix.${names.placedValues} => $access
+                case values: $placedPrefix.${names.placedValues(instanceModule.info.typeSymbol)} => $access
                 case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
               }
               case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
@@ -402,7 +429,7 @@ class Instance(val c: blackbox.Context) {
           else
             NoType
 
-        val placedValues = multitierModuleType member names.placedValues
+        val placedValues = multitierModuleType member names.placedValues(multitierModuleType.typeSymbol)
 
         if (placedValues.isType) {
           if (self.name != termNames.WILDCARD || self.tpt.tpe != NoType)
@@ -436,7 +463,7 @@ class Instance(val c: blackbox.Context) {
             if (multitierPeerParents.nonEmpty)
               multitierPeerParents
             else
-              List(tq"$path.$name.${names.placedValues}")
+              List(tq"$path.$name.${placedValues.asType.name}")
 
           val (earlyDefinitions, lateDefinitions) =
             collectDefinitions(
@@ -451,7 +478,7 @@ class Instance(val c: blackbox.Context) {
             $$loci$$outer.$$loci$$sys"""
 
           val multitierModule = atPos(tree.pos) {
-            q"""${Flag.SYNTHETIC} protected[this] def $multitierName: $path.$name.${names.placedValues} =
+            q"""${Flag.SYNTHETIC} protected[this] def $multitierName: $path.$name.${placedValues.asType.name} =
               new { ..$earlyDefinitions } with ..$multitierParents { $self =>
                 $system
                 ..$lateDefinitions
@@ -534,7 +561,7 @@ class Instance(val c: blackbox.Context) {
           baseSymbol.isFinal &&
           baseInfo.finalResultType <:< types.placedValues && {
             val symbol = baseInfo.typeSymbol
-            symbol.name == names.placedValues &&
+            symbol.name == names.placedValues(symbol.owner) &&
             symbol.owner.isModuleClass &&
             (allAnnotations(symbol.owner) exists { _.tree.tpe <:< types.multitierModule })
           }

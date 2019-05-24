@@ -130,7 +130,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                (exprss.head.head.tpe <:!< types.fromSingle) &&
                (exprss.head.head.tpe <:!< types.fromMultiple) =>
           peerContext.headOption foreach { case (outerPeer, _) =>
-            val peer = exprss.head.head.tpe.widen.typeArgs(1)
+            val peer = exprss.head.head.tpe.finalResultType.widen.typeArgs(1)
             val accesses = readingRemoteAccesses.getOrElse(outerPeer, List.empty)
             readingRemoteAccesses.update(outerPeer, peer -> tree.pos :: accesses)
           }
@@ -156,7 +156,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       case _ =>
         None
     }) ++
-    (module.symbol.info.members flatMap { symbol =>
+    (module.classSymbol.selfType.members flatMap { symbol =>
       if (symbol.isType && (module.symbol.info decl symbol.name) == NoSymbol)
         checkPeerType(symbol, symbol.pos)
       else
@@ -170,7 +170,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       sym == module.classSymbol ||
       sym.isModule && sym.asModule.moduleClass == module.classSymbol
 
-    if (module.symbol.info.members.exists { _ == symbol })
+    if (module.classSymbol.selfType.members.exists { _ == symbol })
       tpe match {
         case TypeRef(ThisType(sym), _, _) => isModuleSymbol(sym)
         case TypeRef(SingleType(_, sym), _, _) => isModuleSymbol(sym)

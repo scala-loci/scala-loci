@@ -30,7 +30,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   case class Assembly(tree: ImplDef)
 
   def assemblePeerImplementation(records: List[Any]): List[Any] = {
-    val (placedValuesImpl, signatureImpl) = {
+    val (placedValuesImpl, signatureImpl, selfType) = {
       // inherit implementation for placed values defined in the module bases
       val placedValuesBases =
         module.tree.impl.parents collect {
@@ -38,9 +38,32 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
               parent.tpe =:!= definitions.AnyTpe &&
               parent.tpe =:!= definitions.AnyRefTpe =>
             atPos(parent.pos) {
-              tq"super[${parent.symbol.name.toTypeName}].${names.placedValues}"
+              tq"${names.placedValues(parent.symbol)}"
             }
         }
+
+      // self-type annotations for implementation for placed values
+      val selfType = {
+        def selfType(tree: Tree): Tree = tree match {
+          case tq"$tree with ..$trees" =>
+            tq"${selfType(tree)} with ..${trees map selfType}"
+
+          case _ if tree.tpe != NoType =>
+            val tpe = tree.tpe match {
+              case RefinedType(Seq(tpe0, tpe1), _)
+                  if tpe0.typeSymbol == module.classSymbol =>
+                tpe1
+              case tpe =>
+                tpe
+            }
+            tq"${names.placedValues(tpe.typeSymbol)}"
+
+          case _ =>
+            tq""
+        }
+
+        selfType(module.tree.impl.self.tpt)
+      }
 
       // collect placed values
       val placedValues = records collect {
@@ -59,10 +82,14 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         })
 
       // generate placed values
-      val parents = tq"${types.placedValues}" :: placedValuesBases
-      val placedValuesImpl = q"${Flag.SYNTHETIC} trait ${names.placedValues} extends ..$parents { ..$placedValues }"
+      val parents = placedValuesBases :+ tq"${types.placedValues}"
+      val placedValuesImpl =
+        q"""${Flag.SYNTHETIC} trait ${names.placedValues(module.symbol)} extends ..$parents {
+          this: $selfType =>
+          ..$placedValues
+        }"""
 
-      placedValuesImpl -> signatureImpl
+      (placedValuesImpl, signatureImpl, selfType)
     }
 
     val peerValues = modulePeers flatMap { case Peer(symbol, name, bases, ties) =>
@@ -86,8 +113,12 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       }
 
       // generate peer implementations
-      val parents = overriddenBases ++ inheritedBases :+ tq"${names.placedValues}"
-      val peerImpl = q"${Flag.SYNTHETIC} trait $name extends ..$parents { ..$placedValues }"
+      val parents = overriddenBases ++ inheritedBases :+ tq"${names.placedValues(module.symbol)}"
+      val peerImpl =
+        q"""${Flag.SYNTHETIC} trait $name extends ..$parents {
+          this: $selfType =>
+          ..$placedValues
+        }"""
 
       // generate peer signature
       val signatureBases = bases.foldRight[Tree](trees.nil) { (base, tree) =>
