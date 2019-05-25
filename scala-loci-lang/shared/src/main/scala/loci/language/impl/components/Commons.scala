@@ -63,6 +63,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val and = typeOf[Placed[_, _]] member TermName("and")
     val to = typeOf[Placed[_, _]] member TermName("to")
     val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
+    val lifts = (symbolOf[Placed[_, _]].companion.info member TermName("lift")).alternatives
     val multitier = symbolOf[loci.multitier.type]
   }
 

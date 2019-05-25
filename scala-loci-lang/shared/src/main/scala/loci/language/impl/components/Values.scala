@@ -15,6 +15,7 @@ object Values extends Component.Factory[Values](
 class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   val phases = Seq(
     Phase("values:collect", collectPlacedValues, after = Set("init:inst"), before = Set("*", "values:validate")),
+    Phase("values:lift", processLiftedPlacedValues, after = Set("values:collect"), before = Set("*", "values:validate")),
     Phase("values:validate", validatePlacedValues, after = Set("*")),
     Phase("values:fixrefs", fixEnclosingReferences, after = Set("*", "values:validate")))
 
@@ -560,6 +561,24 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         }
     }) ++ concreteStubs
   }
+
+  // erase implicit conversion that lifts standard values to placed values
+  def processLiftedPlacedValues(records: List[Any]): List[Any] =
+    records process {
+      case record @ PlacedValue(_, _, _, _) =>
+        object transformer extends Transformer {
+          override def transform(tree: Tree): Tree = tree match {
+            case q"$_[..$_](...$exprss)"
+                if tree.nonEmpty && (symbols.lifts contains tree.symbol) =>
+              exprss.head.head
+
+            case _ =>
+              super.transform(tree)
+          }
+        }
+
+        record.copy(tree = transformer transform record.tree)
+    }
 
   // validate types of placed values
   def validatePlacedValues(records: List[Any]): List[Any] = {

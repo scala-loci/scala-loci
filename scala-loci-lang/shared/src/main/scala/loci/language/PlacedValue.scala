@@ -19,6 +19,9 @@ sealed trait Placed[+T, -P] extends PlacedValue[T, P] {
 }
 
 object Placed {
+  implicit def lift[T, U, P](v: T): U on P = erased
+  implicit def lift[T, U, P, R](v: Remote[R] => T): U per R on P = erased
+
   sealed trait Subjective[+T, -P]
 
   object Selected {
