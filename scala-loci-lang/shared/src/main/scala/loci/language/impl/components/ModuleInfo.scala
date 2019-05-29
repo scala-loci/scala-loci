@@ -26,7 +26,8 @@ class ModuleInfo[C <: blackbox.Context](val engine: Engine[C]) extends Component
     val symbol = tree.symbol
     val classSymbol = if (symbol.isModule) symbol.asModule.moduleClass.asClass else symbol.asClass
     val self = uniqueRealisticTermName(engine.multitierCode.symbol)
-    val outer = engine.outerMultitierName
+    val outer = engine.outerMultitierName.headOption
+    val path = engine.outerMultitierName.reverse map { case (value, _) => value }
   }
 
   private val underExpansion: Set[Symbol] = (engine.multitierCode collect {

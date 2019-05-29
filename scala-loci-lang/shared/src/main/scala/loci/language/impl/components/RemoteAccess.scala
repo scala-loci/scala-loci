@@ -13,7 +13,7 @@ object RemoteAccess extends Component.Factory[RemoteAccess](
 
   object placedValueCache extends ContextReference {
     class Value[C <: blackbox.Context](val c: C) extends Value.Base[C] {
-      val cache = mutable.Map.empty[c.Symbol, (c.TermName, c.Type, Option[c.Type])]
+      val cache = mutable.Map.empty[(String, c.Symbol), (c.TermName, c.Type, Option[c.Type])]
     }
     def apply[C <: blackbox.Context](c: C): Value[c.type] = new Value(c)
   }
@@ -522,9 +522,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue.nonEmpty), None, Seq.empty)
     }).unzip3
 
+    val path = module.path mkString "."
+
     placedValueNames foreach { case (symbol, name, tpe, subjective, _) =>
       if (symbol != NoSymbol)
-        PlacedValues.makeResolvable(symbol, name, tpe, subjective)
+        PlacedValues.makeResolvable(path, symbol, name, tpe, subjective)
     }
 
     val modules = (records collect {
@@ -688,8 +690,25 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       preventSuperAccess(expr)
 
+      val path = expr match {
+        case Select(qualifier, _) =>
+          def path(tree: Tree): List[String] = tree match {
+            case Select(Ident(termNames.EMPTY), name) =>
+              List(name.toString)
+            case Select(qualifier, name) =>
+              path(qualifier) :+ name.toString
+            case _ =>
+              List.empty
+          }
+
+          module.path ++ (moduleStablePath(qualifier.tpe, Ident(termNames.EMPTY)).toList flatMap path) mkString "."
+
+        case _ =>
+          ""
+      }
+
       val (placedValueName, argumentsType, subjective) =
-        PlacedValues.resolve(tree.symbol, tree.pos)
+        PlacedValues.resolve(path, tree.symbol, tree.pos)
 
       val peerType = tree.tpe.finalResultType.widen.asSeenFrom(module.classSymbol).typeArgs(1)
 
@@ -860,8 +879,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
   object PlacedValues {
-    def resolve(symbol: Symbol, pos: Position): (TermName, Type, Option[Type]) =
-      cache.getOrElseUpdate(symbol, {
+    def resolve(path: String, symbol: Symbol, pos: Position): (TermName, Type, Option[Type]) =
+      cache.getOrElseUpdate(path -> symbol, {
         val (resultType, peerType) =
           if (symbol.isMethod) {
             val method = symbol.asMethod
@@ -911,10 +930,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           getOrElse c.abort(pos, s"Could not find remote accessor for placed $symbol"))
       })
 
-    def makeResolvable(symbol: Symbol, name: TermName, tpe: Type, subjective: Option[Type]): Unit =
-      cache += symbol -> ((name, tpe, subjective))
+    def makeResolvable(path: String, symbol: Symbol, name: TermName, tpe: Type, subjective: Option[Type]): Unit =
+      cache += path -> symbol -> ((name, tpe, subjective))
 
-    private val cache: mutable.Map[Symbol, (TermName, Type, Option[Type])] =
+    private val cache: mutable.Map[(String, Symbol), (TermName, Type, Option[Type])] =
       RemoteAccess.placedValueCache.get(c).cache
   }
 

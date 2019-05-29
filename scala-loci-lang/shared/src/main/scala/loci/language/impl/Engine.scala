@@ -12,7 +12,7 @@ trait Engine[C <: blackbox.Context] {
   val components: List[Component[Context]]
   val multitierCode: c.universe.ImplDef
   val outerMultitierCode: c.universe.ImplDef
-  val outerMultitierName: Option[(String, c.universe.TermName)]
+  val outerMultitierName: List[(String, c.universe.TermName)]
 
   def require[Comp[Ctx <: blackbox.Context] <: Component[Ctx]](
     factory: Component.Factory[Comp]): Comp[Context]
@@ -27,13 +27,13 @@ object Engine {
       ctx: blackbox.Context)(
       code: ctx.universe.ImplDef,
       factories: Seq[Component.AnyFactory]): Engine.Result[ctx.type] =
-    runNested(ctx)(code, code, None, factories)
+    runNested(ctx)(code, code, List.empty, factories)
 
   private def runNested(
       ctx: blackbox.Context)(
       code: ctx.universe.ImplDef,
       outerCode: ctx.universe.ImplDef,
-      outerName: Option[(String, ctx.universe.TermName)],
+      outerName: List[(String, ctx.universe.TermName)],
       factories: Seq[Component.AnyFactory]): Engine.Result[ctx.type] = {
     val resolved = Components.resolve(factories) match {
       case Components.Resolved(factories) =>
@@ -75,7 +75,7 @@ object Engine {
       ctx: blackbox.Context)(
       code: ctx.universe.ImplDef,
       outerCode: ctx.universe.ImplDef,
-      outerName: Option[(String, ctx.universe.TermName)],
+      outerName: List[(String, ctx.universe.TermName)],
       factories: Seq[Component.AnyFactory],
       comps: List[Component[ctx.type]]) =
     new Engine[ctx.type] {
@@ -99,7 +99,7 @@ object Engine {
         }
 
       def run(code: c.universe.ImplDef, name: Option[(String, c.universe.TermName)]) =
-        Engine.runNested(ctx)(code, outerMultitierCode, name, factories)
+        Engine.runNested(ctx)(code, outerMultitierCode, name.toList ++ outerMultitierName, factories)
     }
 
   private val initFailed = "Multitier macro engine initialization failed"
