@@ -501,7 +501,10 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     records ++ (records flatProcess {
       case Initialized(tree) =>
         tree.impl.body map abstractValueAnnotationRemover.transform flatMap {
-          case tree: DefDef if tree.symbol.isTerm && !tree.symbol.isConstructor =>
+          case tree: DefDef
+            if tree.symbol.isTerm &&
+               !tree.symbol.isConstructor &&
+               (!tree.symbol.isSynthetic || !tree.symbol.asTerm.isParamWithDefault) =>
             splitValOrDefDef(tree) { (tree, peer, _, _, modality, specialized) =>
               PlacedValueDef(tree.symbol, tree, Some(peer), modality) +:
               (specialized map { case (rhs, peer) =>
@@ -758,6 +761,15 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       override def transform(tree: Tree): Tree = tree match {
         case tree: TypeTree if tree.original != null =>
           internal.setOriginal(TypeTree(), transform(tree.original))
+
+        case Select(qualifier, name)
+          if (qualifier.symbol == module.symbol ||
+              qualifier.symbol == module.classSymbol) &&
+             (name.toString contains "$default$") &&
+              (tree.symbol == NoSymbol ||
+               tree.symbol.isTerm && tree.symbol.isSynthetic && tree.symbol.asTerm.isParamWithDefault) =>
+          skip(tree)
+          super.transform(tree)
 
         case tree: RefTree if tree.symbol.isConstructor =>
           skip(tree)

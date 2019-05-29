@@ -525,6 +525,43 @@ class MacroExpansionSpec extends FlatSpec with Matchers {
     }""" should compile
   }
 
+  it should "typecheck default arguments" in {
+    """@multitier object mod {
+      val x = 1
+
+      def f(x: Int = 1) = ()
+
+      class C(x: Int = 1) {
+        def f(x: Int = 1) = ()
+      }
+
+      object o {
+        val y = x
+
+        def f(x: Int = 1) = ()
+
+        f()
+        new C()
+        mod.this.f()
+        mod.this.o.f()
+        new mod.this.C()
+        mod.f()
+        mod.o.f()
+        new mod.C()
+      }
+
+      f()
+      o.f()
+      new C()
+      mod.this.f()
+      mod.this.o.f()
+      new mod.this.C()
+      mod.f()
+      mod.o.f()
+      new mod.C()
+    }""" should compile
+  }
+
   it should "correctly compile nested multitier modules" in {
     new NestedMultitierModules.p.$loci$peer$Peer {
       def $loci$sys$create = emptySystem(this)
