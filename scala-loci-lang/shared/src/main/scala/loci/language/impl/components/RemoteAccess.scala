@@ -114,23 +114,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             if (method.typeParams.nonEmpty)
               c.abort(method.pos, "Placed methods cannot have type parameters")
 
-            val types = List(tpe) :: (method.paramLists map { _ map { _.info }})
-            val typeViews = types map { _ map { _.asSeenFrom(module.classSymbol) } }
-
-            // if the view involves an abstract type member defined in the scope
-            // of the `owner` symbol, we get some strange `ClassInfoType`,
-            // which causes the call to the implicit resolution below
-            // to run into an infinite loop (and also seems to be wrong in general)
-            val invalidView = typeViews exists {
-              _ exists {
-                _ exists {
-                  case ClassInfoType(_, _, _) => true
-                  case _ => false
-                }
-              }
+            def paramTypes(tpe: Type): List[List[Type]] = tpe match {
+              case MethodType(params, resultType) => (params map { _.info }) :: paramTypes(resultType)
+              case NullaryMethodType(tpe) => List.empty
+              case _ => List.empty
             }
-
-            val List(res) :: argss = if (invalidView) types else typeViews
 
             def makeTuple(types: List[Type]) = types match {
               case List() => definitions.UnitTpe
@@ -142,15 +130,17 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 c.mirror.staticClass(s"_root_.scala.Tuple$size").toType mapArgs { _ => types }
             }
 
+            val argss = paramTypes(method.info.asSeenFrom(module.classSymbol))
+
             val tuple = makeTuple(argss
               map { args => makeTuple(args filterNot { _ eq definitions.UnitTpe }) }
               filterNot { _ eq definitions.UnitTpe })
 
             modality match {
               case Modality.Subjective(subjective) =>
-                Some((method, peer, res.typeArgs(1), Some(subjective), tuple))
+                Some((method, peer, tpe.typeArgs(1), Some(subjective), tuple))
               case _ =>
-                Some((method, peer, res, None, tuple))
+                Some((method, peer, tpe, None, tuple))
             }
 
           case _ =>
