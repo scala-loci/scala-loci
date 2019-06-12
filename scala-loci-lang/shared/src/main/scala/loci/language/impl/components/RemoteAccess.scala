@@ -397,7 +397,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   val placedValue = atPos(symbol.pos) {
                     q"""@$annotation $flags val $placedValueName =
                       new ${createTypeTree(placedValueType, symbol.pos)}(
-                        ${trees.valueSignature}($signature, $$loci$$sig.path),
+                        ${trees.valueSignature}($signature, $$loci$$mod, $$loci$$sig.path),
                         ${symbol.isStable},
                         $argValue,
                         $resValue)"""
@@ -530,7 +530,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     val dispatchModuleClauses = modules map { symbol =>
       cq"""${symbol.name.toString} => ${symbol.name}.$$loci$$dispatch(
         $$loci$$request,
-        $$loci$$signature.copy($$loci$$signature.name, $$loci$$signature.path.tail),
+        $$loci$$signature.copy($$loci$$signature.name, $$loci$$signature.module, $$loci$$signature.path.tail),
         $$loci$$reference)"""
     }
 
@@ -560,11 +560,15 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             $$loci$$request: ${types.messageBuffer},
             $$loci$$signature: ${types.signature},
             $$loci$$reference: ${types.valueReference}) =
-          if ($$loci$$signature.path.isEmpty)
-            $$loci$$signature.name match {
-              case ..${clauses map { case (_, clause) => clause } }
-              case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
-            }
+          if ($$loci$$signature.path.isEmpty) {
+            if ($$loci$$signature.module == $$loci$$mod)
+              $$loci$$signature.name match {
+                case ..${clauses map { case (_, clause) => clause } }
+                case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
+              }
+            else
+              super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
+          }
           else
             super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)"""
 

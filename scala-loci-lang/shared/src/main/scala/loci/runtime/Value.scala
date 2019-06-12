@@ -4,20 +4,33 @@ package runtime
 import scala.collection.mutable
 
 object Value {
-  case class Signature(name: String, path: List[String])
+  case class Signature(name: String, module: String, path: List[String])
 
   object Signature {
     def serialize(signature: Signature): String =
       if (signature.path.isEmpty)
-        signature.name
+        s"${signature.module}!${signature.name}"
       else
-        s"${signature.path mkString "."}.${signature.name}"
+        s"${signature.module}!${signature.path mkString "."}.${signature.name}"
 
     def deserialize(signature: String): Signature = {
       var first = 0
       var last = 0
       val end = signature.length
       val buffer = mutable.ListBuffer.empty[String]
+
+      while (last < end && first < end)
+        signature(last) match {
+          case '!' =>
+            first = end
+          case _ =>
+            last += 1
+        }
+
+      val module = signature.substring(0, last)
+      if (last < end)
+        last += 1
+      first = last
 
       while (last < end)
         signature(last) match {
@@ -31,7 +44,7 @@ object Value {
             last += 1
         }
 
-      Signature(signature.substring(first, end), buffer.toList)
+      Signature(signature.substring(first, end), module, buffer.toList)
     }
   }
 

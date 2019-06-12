@@ -30,7 +30,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   case class Assembly(tree: ImplDef)
 
   def assemblePeerImplementation(records: List[Any]): List[Any] = {
-    val (placedValuesImpl, signatureImpl, selfType) = {
+    val (placedValuesImpl, signatureImpl, moduleImpl, selfType) = {
       // inherit implementation for placed values defined in the module bases
       val placedValuesBases =
         module.tree.impl.parents collect {
@@ -81,6 +81,9 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
             ${trees.moduleSignature}(${uniqueRealisticName(module.symbol)})"""
         })
 
+      // generate module identifier
+      val moduleImpl = q"""${Flag.SYNTHETIC} private lazy val $$loci$$mod = ${uniqueRealisticName(module.symbol)}"""
+
       // generate placed values
       val parents = placedValuesBases :+ tq"${types.placedValues}"
       val placedValuesImpl =
@@ -89,7 +92,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
           ..$placedValues
         }"""
 
-      (placedValuesImpl, signatureImpl, selfType)
+      (placedValuesImpl, signatureImpl, moduleImpl, selfType)
     }
 
     val peerValues = modulePeers flatMap { case Peer(symbol, name, bases, ties) =>
@@ -248,7 +251,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
     }
 
     // create records for new peer implementations
-    val stats = moduleValues ++ peerTypeTieTrees ++ (placedValuesImpl +: signatureImpl +: peerValues)
+    val stats = moduleValues ++ peerTypeTieTrees ++ (placedValuesImpl +: signatureImpl +: moduleImpl +: peerValues)
 
     // assemble multitier module
     val tree = module.tree map { (mods, parents, self, _) =>
