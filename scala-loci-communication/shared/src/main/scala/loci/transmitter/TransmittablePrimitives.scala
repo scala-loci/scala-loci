@@ -3,66 +3,66 @@ package transmitter
 
 import scala.concurrent.duration.{ Duration, FiniteDuration }
 
-trait TransmittablePrimitives {
+trait TransmittablePrimitives extends TransmittableDummy {
   this: Transmittable.type =>
 
-  @inline final implicit def nothing: IdenticallyTransmittable[Nothing] =
+  final implicit def nothing: IdenticallyTransmittable[Nothing] =
     IdenticallyTransmittable()
-  @inline final implicit def unit: IdenticallyTransmittable[Unit] =
+  final implicit def unit: IdenticallyTransmittable[Unit] =
     IdenticallyTransmittable()
-  @inline final implicit def boolean: IdenticallyTransmittable[Boolean] =
+  final implicit def boolean: IdenticallyTransmittable[Boolean] =
     IdenticallyTransmittable()
-  @inline final implicit def char: IdenticallyTransmittable[Char] =
+  final implicit def char: IdenticallyTransmittable[Char] =
     IdenticallyTransmittable()
-  @inline final implicit def byte: IdenticallyTransmittable[Byte] =
+  final implicit def byte: IdenticallyTransmittable[Byte] =
     IdenticallyTransmittable()
-  @inline final implicit def short: IdenticallyTransmittable[Short] =
+  final implicit def short: IdenticallyTransmittable[Short] =
     IdenticallyTransmittable()
-  @inline final implicit def int: IdenticallyTransmittable[Int] =
+  final implicit def int: IdenticallyTransmittable[Int] =
     IdenticallyTransmittable()
-  @inline final implicit def long: IdenticallyTransmittable[Long] =
+  final implicit def long: IdenticallyTransmittable[Long] =
     IdenticallyTransmittable()
-  @inline final implicit def float: IdenticallyTransmittable[Float] =
+  final implicit def float: IdenticallyTransmittable[Float] =
     IdenticallyTransmittable()
-  @inline final implicit def double: IdenticallyTransmittable[Double] =
+  final implicit def double: IdenticallyTransmittable[Double] =
     IdenticallyTransmittable()
-  @inline final implicit def string: IdenticallyTransmittable[String] =
+  final implicit def string: IdenticallyTransmittable[String] =
     IdenticallyTransmittable()
-  @inline final implicit def symbol: IdenticallyTransmittable[Symbol] =
+  final implicit def symbol: IdenticallyTransmittable[Symbol] =
     IdenticallyTransmittable()
-  @inline final implicit def bigInt: IdenticallyTransmittable[BigInt] =
+  final implicit def bigInt: IdenticallyTransmittable[BigInt] =
     IdenticallyTransmittable()
-  @inline final implicit def bigDecimal: IdenticallyTransmittable[BigDecimal] =
+  final implicit def bigDecimal: IdenticallyTransmittable[BigDecimal] =
     IdenticallyTransmittable()
-  @inline final implicit def duration: IdenticallyTransmittable[Duration] =
+  final implicit def duration: IdenticallyTransmittable[Duration] =
     IdenticallyTransmittable()
-  @inline final implicit def finiteDuration: IdenticallyTransmittable[FiniteDuration] =
+  final implicit def finiteDuration: IdenticallyTransmittable[FiniteDuration] =
     IdenticallyTransmittable()
-  @inline final implicit def infiniteDuration: IdenticallyTransmittable[Duration.Infinite] =
+  final implicit def infiniteDuration: IdenticallyTransmittable[Duration.Infinite] =
     IdenticallyTransmittable()
 
-  @inline final implicit def javaBoolean: IdenticallyTransmittable[java.lang.Boolean] =
+  final implicit def javaBoolean: IdenticallyTransmittable[java.lang.Boolean] =
     IdenticallyTransmittable()
-  @inline final implicit def javaChar: IdenticallyTransmittable[java.lang.Character] =
+  final implicit def javaChar: IdenticallyTransmittable[java.lang.Character] =
     IdenticallyTransmittable()
-  @inline final implicit def javaByte: IdenticallyTransmittable[java.lang.Byte] =
+  final implicit def javaByte: IdenticallyTransmittable[java.lang.Byte] =
     IdenticallyTransmittable()
-  @inline final implicit def javaShort: IdenticallyTransmittable[java.lang.Short] =
+  final implicit def javaShort: IdenticallyTransmittable[java.lang.Short] =
     IdenticallyTransmittable()
-  @inline final implicit def javaInt: IdenticallyTransmittable[java.lang.Integer] =
+  final implicit def javaInt: IdenticallyTransmittable[java.lang.Integer] =
     IdenticallyTransmittable()
-  @inline final implicit def javaLong: IdenticallyTransmittable[java.lang.Long] =
+  final implicit def javaLong: IdenticallyTransmittable[java.lang.Long] =
     IdenticallyTransmittable()
-  @inline final implicit def javaFloat: IdenticallyTransmittable[java.lang.Float] =
+  final implicit def javaFloat: IdenticallyTransmittable[java.lang.Float] =
     IdenticallyTransmittable()
-  @inline final implicit def javaDouble: IdenticallyTransmittable[java.lang.Double] =
+  final implicit def javaDouble: IdenticallyTransmittable[java.lang.Double] =
     IdenticallyTransmittable()
-  @inline final implicit def javaBigInteger: IdenticallyTransmittable[java.math.BigInteger] =
+  final implicit def javaBigInteger: IdenticallyTransmittable[java.math.BigInteger] =
     IdenticallyTransmittable()
-  @inline final implicit def javaBigDecimal: IdenticallyTransmittable[java.math.BigDecimal] =
+  final implicit def javaBigDecimal: IdenticallyTransmittable[java.math.BigDecimal] =
     IdenticallyTransmittable()
-  @inline final implicit def javaUuid: IdenticallyTransmittable[java.util.UUID] =
+  final implicit def javaUuid: IdenticallyTransmittable[java.util.UUID] =
     IdenticallyTransmittable()
-  @inline final implicit def javaDate: IdenticallyTransmittable[java.util.Date] =
+  final implicit def javaDate: IdenticallyTransmittable[java.util.Date] =
     IdenticallyTransmittable()
 }

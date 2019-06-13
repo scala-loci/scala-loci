@@ -6,7 +6,7 @@ import scala.collection.TraversableLike
 import scala.reflect.ClassTag
 import scala.language.higherKinds
 
-trait TransmittableNonNullableCollections {
+trait TransmittableNonNullableCollections extends TransmittableDummy {
   this: Transmittable.type =>
 
   final implicit def nonNullableTraversable[B, I, R, V[T] <: TraversableLike[T, V[T]]]
@@ -132,33 +132,33 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
 trait TransmittableCollections extends TransmittableGeneralCollections {
   this: Transmittable.type =>
 
-  @inline final implicit def identicalTraversable
+  final implicit def identicalTraversable
     [T: IdenticallyTransmittable, V[T] <: TraversableLike[T, V[T]]]
   : IdenticallyTransmittable[V[T]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalArray[T: IdenticallyTransmittable]
+  final implicit def identicalArray[T: IdenticallyTransmittable]
   : IdenticallyTransmittable[Array[T]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalMap
+  final implicit def identicalMap
     [V: IdenticallyTransmittable, K: IdenticallyTransmittable]
   : IdenticallyTransmittable[Map[V, K]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalOption[T: IdenticallyTransmittable]
+  final implicit def identicalOption[T: IdenticallyTransmittable]
   : IdenticallyTransmittable[Option[T]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalSome[T: IdenticallyTransmittable]
+  final implicit def identicalSome[T: IdenticallyTransmittable]
   : IdenticallyTransmittable[Some[T]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalNone
+  final implicit def identicalNone
   : IdenticallyTransmittable[None.type] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalEither
+  final implicit def identicalEither
     [L: IdenticallyTransmittable, R: IdenticallyTransmittable]
   : IdenticallyTransmittable[Either[L, R]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalLeft[L: IdenticallyTransmittable, R]
+  final implicit def identicalLeft[L: IdenticallyTransmittable, R]
   : IdenticallyTransmittable[Left[L, R]] = IdenticallyTransmittable()
 
-  @inline final implicit def identicalRight[L, R: IdenticallyTransmittable]
+  final implicit def identicalRight[L, R: IdenticallyTransmittable]
   : IdenticallyTransmittable[Right[L, R]] = IdenticallyTransmittable()
 }

@@ -58,6 +58,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val Block = symbolOf[Placement.Block[_, PlacedValue]]
     val Capture = symbolOf[Placement.Capture[_, PlacedValue]]
     val placement = symbolOf[Placement.type]
+    val transmittableDummy = symbolOf[transmitter.TransmittableDummy]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
     val and = typeOf[Placed[_, _]] member TermName("and")

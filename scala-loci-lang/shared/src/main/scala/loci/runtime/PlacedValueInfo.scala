@@ -4,7 +4,9 @@ package runtime
 import loci.transmitter.Marshallable
 
 import scala.annotation.StaticAnnotation
+import scala.annotation.meta.{getter, setter}
 
+@getter @setter
 final class MarshallableInfo[I](signature: Int) extends StaticAnnotation
 
 final class PlacedValue[U, T](
@@ -13,6 +15,7 @@ final class PlacedValue[U, T](
   val arguments: Marshallable[U, _, _],
   val result: Marshallable[_, _, T])
 
+@getter @setter
 final class PlacedValueInfo(
   signature: String,
   arguments: Marshallable[_, _, _],

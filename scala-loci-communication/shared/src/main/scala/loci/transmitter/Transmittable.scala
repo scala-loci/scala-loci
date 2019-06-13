@@ -85,6 +85,7 @@ object Transmittable extends
   }
 
   object Aux {
+    @implicitNotFound("${B} is not transmittable")
     final class Resolution[B, I, R, P, T <: Transmittables] private[Aux] (
       val transmittable: Aux[B, I, R, P, T]) extends AnyVal
 

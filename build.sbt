@@ -110,7 +110,7 @@ lazy val lociCommunication = (crossProject
   settings (normalizedName := "scala-loci-communication",
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
-            scalatest))
+            macrodeclaration, scalatest))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js

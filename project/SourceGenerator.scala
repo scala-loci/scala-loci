@@ -43,7 +43,7 @@ object SourceGenerator {
           |"""
 
         val identicalTupleMember = s"""
-          |  @inline final implicit def identicalTuple$i[$typeArgsIdentically]
+          |  final implicit def identicalTuple$i[$typeArgsIdentically]
           |  : IdenticallyTransmittable[$tuple[$tupleArgsT]] =
           |    IdenticallyTransmittable()
           |"""
@@ -58,7 +58,7 @@ object SourceGenerator {
         s"""package loci
            |package transmitter
            |
-           |trait TransmittableGeneralTuples {
+           |trait TransmittableGeneralTuples extends TransmittableDummy {
            |  this: Transmittable.type =>
            |${tupleMembers.mkString}
            |}
