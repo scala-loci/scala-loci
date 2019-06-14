@@ -89,7 +89,7 @@ class Multitier(val c: blackbox.Context) {
 
           val preprocessedAnnottee = Preprocessor.run(c)(
             annottee,
-            Seq(MultitierTypes, AbstractValues))
+            Seq(MultitierTypes, AbstractValues, ImplicitContext))
 
           val typedAnnottee =
             try retyper typecheck preprocessedAnnottee match { case tree: ImplDef => tree }
