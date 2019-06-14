@@ -60,6 +60,12 @@ class Multitier(val c: blackbox.Context) {
       } || symbol != NoSymbol && hasInstanceOwner(symbol.owner)
     }
 
+    val documentationCompiler =
+      c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
+        case Seq(flag, value) =>
+          flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+      })
+
     // the current macro expansion always appears twice
     // see: http://stackoverflow.com/a/20466423
     val recursionCount = c.openMacros.count { other =>
@@ -91,35 +97,39 @@ class Multitier(val c: blackbox.Context) {
             annottee,
             Seq(MultitierTypes, AbstractValues, ImplicitContext))
 
-          val typedAnnottee =
-            try retyper typecheck preprocessedAnnottee match { case tree: ImplDef => tree }
-            catch improveTypecheckingErrorMessage
+          if (!documentationCompiler) {
+            val typedAnnottee =
+              try retyper typecheck preprocessedAnnottee match { case tree: ImplDef => tree }
+              catch improveTypecheckingErrorMessage
 
-          fixAnnotteeSymbols(typedAnnottee)
+            fixAnnotteeSymbols(typedAnnottee)
 
-          val Engine.Result(engine, records) = Engine.run(c)(
-            typedAnnottee,
-            Seq(
-              Commons,
-              ModuleInfo,
-              Initialization,
-              RemoteBlock,
-              Peers,
-              Values,
-              RemoteAccess,
-              GatewayAccess,
-              RuntimeAccess,
-              Subjectivity,
-              Impls,
-              Assembly))
+            val Engine.Result(engine, records) = Engine.run(c)(
+              typedAnnottee,
+              Seq(
+                Commons,
+                ModuleInfo,
+                Initialization,
+                RemoteBlock,
+                Peers,
+                Values,
+                RemoteAccess,
+                GatewayAccess,
+                RuntimeAccess,
+                Subjectivity,
+                Impls,
+                Assembly))
 
-          val assembly = engine.require(Assembly)
+            val assembly = engine.require(Assembly)
 
-          (records
-            collectFirst { case assembly.Assembly(annottee) =>
-              retyper untypecheckAll annottee
-            }
-            getOrElse annottee)
+            (records
+              collectFirst { case assembly.Assembly(annottee) =>
+                retyper untypecheckAll annottee
+              }
+              getOrElse annottee)
+          }
+          else
+            preprocessedAnnottee
         }
         catch improveMacroErrorReporting(annottee)
       }

@@ -91,8 +91,17 @@ class Instance(val c: blackbox.Context) {
     }
   }
 
+  val documentationCompiler =
+    c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
+      case Seq(flag, value) =>
+        flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+    })
+
   def retrieve(retrievable: Tree): Tree =
     c.macroApplication match {
+      case _ if documentationCompiler =>
+        q"${termNames.ROOTPKG}.scala.Predef.???"
+
       case q"$_[..$_]($instance).$_[$_]($_[..$_]($expr))" =>
         val pos = if (expr.pos != NoPosition) expr.pos else c.enclosingPosition
 
@@ -210,6 +219,9 @@ class Instance(val c: blackbox.Context) {
     }
 
     expr match {
+      case _ if documentationCompiler =>
+        q"${termNames.ROOTPKG}.scala.Predef.???"
+
       case q"new { ..$earlydefs } with $inst[$tpt](...$exprss) { $self => ..$body }"
           if inst.tpe <:< types.instance.typeConstructor =>
 

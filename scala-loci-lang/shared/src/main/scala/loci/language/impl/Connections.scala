@@ -24,12 +24,22 @@ class Connections(val c: blackbox.Context) {
     q"${termNames.ROOTPKG}.loci.language.Connections.$name(..${signature(tpt) +: factory +: arguments})"
   }
 
+  private val documentationCompiler =
+    c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
+      case Seq(flag, value) =>
+        flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+    })
+
   private def signature(tpt: Tree) = {
     val name = TermName(s"$$loci$$peer$$sig$$${tpt.symbol.name}")
 
     tpt match {
+      case _ if documentationCompiler =>
+        q"${termNames.ROOTPKG}.scala.Predef.???"
+
       case tq"$prefix.$_" if (prefix.tpe member name) != NoSymbol =>
         q"$prefix.$name"
+
       case _ =>
         c.abort(
           if (tpt.pos != NoPosition) tpt.pos else c.enclosingPosition,

@@ -28,7 +28,13 @@ object Remote {
       }
     }
 
-    if (!enclosingMultitierMacro) {
+    val documentationCompiler =
+      c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
+        case Seq(flag, value) =>
+          flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+      })
+
+    if (!enclosingMultitierMacro && !documentationCompiler) {
       val remote = weakTypeOf[Remote[P]]
       val reference = typeOf[runtime.Remote.Reference]
       val name = TermName(s"$$loci$$peer$$sig$$${tpt.symbol.name}")
@@ -52,6 +58,8 @@ object Remote {
           ${termNames.ROOTPKG}.scala.None
       }"""
     }
+    else if (documentationCompiler)
+      atPos(tpt.pos) { q"${termNames.ROOTPKG}.scala.Predef.???" }
     else
       atPos(tpt.pos) { q"${termNames.ROOTPKG}.loci.runtime.Remote.cast[$tpt]($expr)" }
   }
