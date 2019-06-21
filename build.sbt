@@ -74,7 +74,6 @@ lazy val lociJVM = (project
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
              lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
-             lociLangTransmitterBasicJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
              lociCommunicationJVM))
@@ -86,7 +85,6 @@ lazy val lociJS = (project
              lociSerializerUpickleJS,
              lociSerializerCirceJS,
              lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
-             lociLangTransmitterBasicJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
              lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
              lociCommunicationJS))
@@ -169,16 +167,6 @@ lazy val lociLangTransmitterRescala = (crossProject
 
 lazy val lociLangTransmitterRescalaJVM = lociLangTransmitterRescala.jvm
 lazy val lociLangTransmitterRescalaJS = lociLangTransmitterRescala.js
-
-
-lazy val lociLangTransmitterBasic = (crossProject
-  crossType CrossType.Pure
-  in file("scala-loci-lang-transmitter-basic")
-  settings (normalizedName := "scala-loci-lang-transmitter-basic")
-  dependsOn lociLang)
-
-lazy val lociLangTransmitterBasicJVM = lociLangTransmitterBasic.jvm
-lazy val lociLangTransmitterBasicJS = lociLangTransmitterBasic.js
 
 
 lazy val lociCommunicatorTcp = (crossProject

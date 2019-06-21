@@ -7,6 +7,8 @@ import scala.language.{higherKinds, implicitConversions}
 
 abstract class PlacedValue[+T, -P] private[loci]
 
+object PlacedValue extends transmitter.RemoteAccessor.Default
+
 sealed trait Placed[+T, -P] extends PlacedValue[T, P] {
   def and[T0, T1, P0, P1, T0_on_P0](v: T0_on_P0)(implicit
     ev0: T0_on_P0 <:< (T0 on P0),
