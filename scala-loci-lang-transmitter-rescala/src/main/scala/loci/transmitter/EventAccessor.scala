@@ -1,8 +1,9 @@
 package loci
 package transmitter
 
-import _root_.rescala.core.{Scheduler, Struct}
-import _root_.rescala.macros.cutOutInReactiveMacro
+import _root_.rescala.core.{ReSerializable, Scheduler, Struct}
+import _root_.rescala.interface.RescalaInterface
+import _root_.rescala.macros.cutOutOfUserComputation
 import _root_.rescala.reactives.Event
 
 import scala.language.higherKinds
@@ -15,12 +16,16 @@ protected[transmitter] trait EventAccessor {
       [Evt[T, St <: Struct] <: Event[T, St], St <: Struct, V, R, T, L](
        value: V from R)(implicit
        ev: Transmission[V, R, Evt[T, St], L, Multiple],
-       val scheduler: Scheduler[St])
-    extends RemoteAccessor {
-    import scheduler.{Event, Evt, Signal, Var, transaction}
+       val scheduler: Scheduler[St]) extends RemoteAccessor {
+    val interface = RescalaInterface.interfaceFor(scheduler)
 
-    lazy val asLocal: Signal[Seq[(Remote[R], Event[T])]] @cutOutInReactiveMacro =
+    import interface.{Event, Evt, Signal, Var, transaction}
+
+    @cutOutOfUserComputation lazy val asLocal: Signal[Seq[(Remote[R], Event[T])]] =
       value.cache(asLocalId) {
+        implicit val serializer: ReSerializable[Seq[(Remote[R], Event[T])]] =
+          ReSerializable.noSerializer
+
         val mapping = transaction() { _ => Var(Seq.empty[(Remote[R], Event[T])]) }
 
         def update() = mapping.set(value.remotes zip value.retrieveValues)
@@ -32,7 +37,7 @@ protected[transmitter] trait EventAccessor {
         mapping
       }
 
-    lazy val asLocalFromAllSeq: Event[(Remote[R], T)] @cutOutInReactiveMacro =
+    @cutOutOfUserComputation lazy val asLocalFromAllSeq: Event[(Remote[R], T)] =
       value.cache(asLocalSeqId) {
         (asLocal map { remoteEvents =>
           (remoteEvents
@@ -47,12 +52,16 @@ protected[transmitter] trait EventAccessor {
       [Evt[T, St <: Struct] <: Event[T, St], St <: Struct, V, R, T, L](
        value: V from R)(implicit
        ev: Transmission[V, R, Evt[T, St], L, Optional],
-       val scheduler: Scheduler[St])
-    extends RemoteAccessor {
-    import scheduler.{Event, Evt, Signal, Var, transaction}
+       val scheduler: Scheduler[St]) extends RemoteAccessor {
+    val interface = RescalaInterface.interfaceFor(scheduler)
 
-    lazy val asLocal: Signal[Option[Event[T]]] @cutOutInReactiveMacro =
+    import interface.{Event, Evt, Signal, Var, transaction}
+
+    @cutOutOfUserComputation lazy val asLocal: Signal[Option[Event[T]]] =
       value.cache(asLocalId) {
+        implicit val serializer: ReSerializable[Option[Event[T]]] =
+          ReSerializable.noSerializer
+
         val option = transaction() { _ => Var(Option.empty[Event[T]]) }
 
         def update() = option.set(value.retrieveValue)
@@ -64,7 +73,7 @@ protected[transmitter] trait EventAccessor {
         option
       }
 
-    lazy val asLocalSeq: Event[T] @cutOutInReactiveMacro =
+    @cutOutOfUserComputation lazy val asLocalSeq: Event[T] =
       value.cache(asLocalSeqId) {
         (asLocal map { _ getOrElse Evt[Nothing] }).flatten
       }
@@ -74,11 +83,12 @@ protected[transmitter] trait EventAccessor {
       [Evt[T, St <: Struct] <: Event[T, St], St <: Struct, V, R, T, L](
        value: V from R)(implicit
        ev: Transmission[V, R, Evt[T, St], L, Single],
-       val scheduler: Scheduler[St])
-    extends RemoteAccessor {
-    import scheduler.Event
+       val scheduler: Scheduler[St]) extends RemoteAccessor {
+    val interface = RescalaInterface.interfaceFor(scheduler)
 
-    lazy val asLocal: Event[T] @cutOutInReactiveMacro =
+    import interface.Event
+
+    @cutOutOfUserComputation lazy val asLocal: Event[T] =
       value.retrieveValue
   }
 }

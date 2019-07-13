@@ -1,10 +1,13 @@
+import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
+import org.scalajs.sbtplugin.ScalaJSCrossVersion
+
 enablePlugins(GitVersioning)
 
 git.useGitDescribe in ThisBuild := true
 
-scalaVersion in ThisBuild := "2.12.6"
+scalaVersion in ThisBuild := "2.12.8"
 
-crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.6")
+crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.8")
 
 organization in ThisBuild := "de.tuda.stg"
 
@@ -20,7 +23,7 @@ val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % "provided"
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.0.5" % "test"
+  "org.scalatest" %%% "scalatest" % "3.0.8" % "test"
 
 val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
@@ -32,17 +35,14 @@ val rescalaRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.23.0"
-
-val rescalaDependencyOverrides = dependencyOverrides +=
-  "de.tuda.stg" %% "retypecheck" % "0.6.0"
+  "de.tuda.stg" %%% "rescala" % "0.26.0"
 
 val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "0.6.5"
+  "com.lihaoyi" %%% "upickle" % "0.7.4"
 
 val circe = libraryDependencies ++= Seq(
-  "io.circe" %%% "circe-core" % "0.9.3",
-  "io.circe" %%% "circe-parser" % "0.9.3")
+  "io.circe" %%% "circe-core" % "0.11.1",
+  "io.circe" %%% "circe-parser" % "0.11.1")
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
@@ -52,14 +52,8 @@ val play = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
   "com.typesafe.play" %% "play" % "[2.5,2.7)" % "provided")
 
-val playDependencyOverrides = dependencyOverrides ++= Seq(
-  "org.scala-lang.modules" %% "scala-java8-compat" % "[0.7,0.9)" % "provided",
-  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
-  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % "provided",
-  "com.typesafe.akka" %% "akka-actor" % "[2.4,3.0)" % "provided")
-
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" %%%! "scalajs-dom" % "0.9.5"
+  "org.scala-js" % "scalajs-dom" % "0.9.7" cross ScalaJSCrossVersion.binary
 
 
 lazy val loci = (project
@@ -90,7 +84,7 @@ lazy val lociJS = (project
              lociCommunicationJS))
 
 
-lazy val lociLang = (crossProject
+lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("scala-loci-lang")
   settings (normalizedName := "scala-loci-lang",
@@ -102,7 +96,7 @@ lazy val lociLangJVM = lociLang.jvm
 lazy val lociLangJS = lociLang.js
 
 
-lazy val lociCommunication = (crossProject
+lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("scala-loci-communication")
   settings (normalizedName := "scala-loci-communication",
@@ -114,7 +108,7 @@ lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js
 
 
-lazy val lociArchitecturesBasic = (crossProject
+lazy val lociArchitecturesBasic = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-architectures-basic")
   settings (normalizedName := "scala-loci-architectures-basic",
@@ -125,7 +119,7 @@ lazy val lociArchitecturesBasicJVM = lociArchitecturesBasic.jvm
 lazy val lociArchitecturesBasicJS = lociArchitecturesBasic.js
 
 
-lazy val lociSerializerUpickle = (crossProject
+lazy val lociSerializerUpickle = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-serializer-upickle")
   settings (normalizedName := "scala-loci-serializer-upickle",
@@ -136,7 +130,7 @@ lazy val lociSerializerUpickleJVM = lociSerializerUpickle.jvm
 lazy val lociSerializerUpickleJS = lociSerializerUpickle.js
 
 
-lazy val lociSerializerCirce = (crossProject
+lazy val lociSerializerCirce = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-serializer-circe")
   settings (normalizedName := "scala-loci-serializer-circe",
@@ -147,7 +141,7 @@ lazy val lociSerializerCirceJVM = lociSerializerCirce.jvm
 lazy val lociSerializerCirceJS = lociSerializerCirce.js
 
 
-lazy val lociTransmitterRescala = (crossProject
+lazy val lociTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-transmitter-rescala")
   settings (normalizedName := "scala-loci-transmitter-rescala",
@@ -158,18 +152,17 @@ lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 
 
-lazy val lociLangTransmitterRescala = (crossProject
+lazy val lociLangTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-lang-transmitter-rescala")
-  settings (normalizedName := "scala-loci-lang-transmitter-rescala",
-            rescalaDependencyOverrides)
+  settings (normalizedName := "scala-loci-lang-transmitter-rescala")
   dependsOn (lociLang, lociTransmitterRescala))
 
 lazy val lociLangTransmitterRescalaJVM = lociLangTransmitterRescala.jvm
 lazy val lociLangTransmitterRescalaJS = lociLangTransmitterRescala.js
 
 
-lazy val lociCommunicatorTcp = (crossProject
+lazy val lociCommunicatorTcp = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-tcp")
   settings (normalizedName := "scala-loci-communicator-tcp")
@@ -179,19 +172,18 @@ lazy val lociCommunicatorTcpJVM = lociCommunicatorTcp.jvm
 lazy val lociCommunicatorTcpJS = lociCommunicatorTcp.js
 
 
-lazy val lociCommunicatorWs = (crossProject
+lazy val lociCommunicatorWs = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-ws-akka")
   settings (normalizedName := "scala-loci-communicator-ws-akka",
-            akkaHttp)
-  jsSettings (scalajsDom)
+            akkaHttp, scalajsDom)
   dependsOn lociCommunication)
 
 lazy val lociCommunicatorWsJVM = lociCommunicatorWs.jvm
 lazy val lociCommunicatorWsJS = lociCommunicatorWs.js
 
 
-lazy val lociCommunicatorWsPlay = (crossProject
+lazy val lociCommunicatorWsPlay = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-ws-akka-play")
   settings (normalizedName := "scala-loci-communicator-ws-akka-play",
@@ -202,7 +194,7 @@ lazy val lociCommunicatorWsPlayJVM = lociCommunicatorWsPlay.jvm
 lazy val lociCommunicatorWsPlayJS = lociCommunicatorWsPlay.js
 
 
-lazy val lociCommunicatorWebRtc = (crossProject
+lazy val lociCommunicatorWebRtc = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("scala-loci-communicator-webrtc")
   settings (normalizedName := "scala-loci-communicator-webrtc",

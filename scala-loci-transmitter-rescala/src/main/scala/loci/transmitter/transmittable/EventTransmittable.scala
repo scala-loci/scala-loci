@@ -2,24 +2,26 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.core.{Pulse, Scheduler, Struct}
-import _root_.rescala.reactives.{Event, Signals}
+import _root_.rescala.core.{Pulse, ReSerializable, Scheduler, Struct}
+import _root_.rescala.interface.RescalaInterface
+import _root_.rescala.reactives.{Event, Evt, Signals}
 import loci.contexts.Immediate.Implicits.global
 
 import scala.language.higherKinds
 
 protected[transmitter] trait EventTransmittable {
   implicit def rescalaEventTransmittable
-      [Evt[T, St <: Struct] <: Event[T, St], T, I, U, St <: Struct](implicit
+      [E[T, St <: Struct] <: Event[T, St], T, I, U, St <: Struct](implicit
       scheduler: Scheduler[St],
       transmittable: Transmittable[(T, String), I, (U, String)])
-  : ConnectedTransmittable.Proxy[Evt[T, St], I, scheduler.Event[U]] {
-      type Proxy = scheduler.Event[U]
-      type Internal = scheduler.Evt[U]
+  : ConnectedTransmittable.Proxy[E[T, St], I, Event[U, St]] {
+      type Proxy = Event[U, St]
+      type Internal = Evt[U, St]
       type Message = transmittable.Type
   } = {
     val ignoredValue = null.asInstanceOf[T]
     val ignoredString = null.asInstanceOf[String]
+    val interface = RescalaInterface.interfaceFor(scheduler)
 
     ConnectedTransmittable.Proxy(
       provide = (value, context) => {
@@ -35,14 +37,14 @@ protected[transmitter] trait EventTransmittable {
       },
 
       receive = (value, context) => {
-        val event = scheduler.Evt[U]
+        val event = interface.Evt[U]
 
         context.endpoint.receive notify {
           _ match {
             case (value, `ignoredString`) =>
               event fire value
             case (_, message) =>
-              scheduler.transaction(event) { implicit turn =>
+              interface.transaction(event) { implicit turn =>
                 event admitPulse Pulse.Exceptional(
                   new rescala.RemoteReactiveFailure(message))
               }
@@ -56,6 +58,9 @@ protected[transmitter] trait EventTransmittable {
 
       direct = (event, context) => event,
 
-      proxy = (future, context) => Signals.fromFuture(future).flatten)
+      proxy = (future, context) => {
+        implicit val serializer: ReSerializable[Evt[U, St]] = ReSerializable.noSerializer
+        Signals.fromFuture(future).flatten
+      })
   }
 }
