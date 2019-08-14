@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-case class Channel(name: String, remote: Remote.Reference, system: System)
+case class Channel(name: String, anchor: String, remote: Remote.Reference, system: System)
     extends transmitter.Channel {
 
   val doReceive = Notifier[MessageBuffer]

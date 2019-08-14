@@ -1,11 +1,15 @@
 package loci
 package registry
 
+import java.util.concurrent.ConcurrentHashMap
+
 import messaging.Message
 import messaging.Channels
 import communicator.Connector
 import communicator.Listener
 import transmitter.RemoteRef
+
+import scala.collection.mutable.ListBuffer
 import scala.util.Try
 import scala.concurrent.Promise
 import scala.concurrent.Future
@@ -21,7 +25,7 @@ object Registry {
   }
 
   private final case class Channel(
-      name: String, remote: RemoteRef, registry: Registry)
+      name: String, anchor: String, remote: RemoteRef, registry: Registry)
         extends transmitter.Channel with Channels.Channel {
     val doReceive = Notifier[MessageBuffer]
     val doClosed = Notifier[Unit]
@@ -35,12 +39,18 @@ object Registry {
   }
 
   private final case class AbstractionRef(name: String, remote: RemoteRef,
-    channelName: String, registry: Registry)
+    channelName: String, channelAnchor: String, registry: Registry)
       extends transmitter.AbstractionRef {
     def derive(name: String) =
-      AbstractionRef(this.name, remote, s"$channelName:$name", registry)
+      AbstractionRef(this.name, remote, s"$channelName:$name", channelAnchor, registry)
 
-    lazy val channel = registry.channels obtain (channelName, remote)
+    lazy val channel = registry.channels obtain (channelName, channelAnchor, remote)
+  }
+
+  private object AbstractionRef {
+    def apply(name: String, remote: RemoteRef,
+        channelName: String, registry: Registry): AbstractionRef =
+      AbstractionRef(name, remote, channelName, channelName, registry)
   }
 }
 
@@ -53,6 +63,9 @@ class Registry {
     handleLookup(Registry.Message.Request),
     handleLookup(Registry.Message.Response))
 
+  private val channelMessages =
+    new ConcurrentHashMap[String, ListBuffer[Message[Registry.Message.type]]]
+
   val remoteJoined: Notification[RemoteRef] = connections.remoteJoined
 
   val remoteLeft: Notification[RemoteRef] = connections.remoteLeft
@@ -64,21 +77,32 @@ class Registry {
   def terminate(): Unit = connections.terminate
 
 
-  private def createChannel(name: String, remote: RemoteRef) =
-    Registry.Channel(name, remote, this)
+  private def createChannel(name: String, anchorDefault: String, remote: RemoteRef) =
+    Registry.Channel(name, anchorDefault, remote, this)
 
   private def closeChannel(channel: Registry.Channel) =
     channel.doClosed()
 
 
   private def send(channel: Registry.Channel, message: MessageBuffer) =
-    if (channel.open)
-      connections send (
-        channel.remote,
-        Message(
-          Registry.Message,
-          Map(Registry.Message.Channel -> Seq(channel.name)),
-          message))
+    if (channel.open) {
+      val channelMessage = Message(
+        Registry.Message,
+        Map(Registry.Message.Channel -> Seq(channel.name)),
+        message)
+
+      val queued = Option(channelMessages get channel.anchor) exists { messages =>
+        messages synchronized {
+          val queued = channelMessages containsKey channel.anchor
+          if (queued)
+            messages += channelMessage
+          queued
+        }
+      }
+
+      if (!queued)
+        connections send (channel.remote, channelMessage)
+    }
 
   connections.remoteLeft notify { remote =>
     channels close remote
@@ -93,6 +117,7 @@ class Registry {
      properties get Registry.Message.Response,
      properties get Registry.Message.Channel) match {
       case (Some(Seq(name)), None, Some(Seq(channelName))) =>
+        channelMessages.put(channelName, ListBuffer.empty)
         bindings processRequest (
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
@@ -101,7 +126,7 @@ class Registry {
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, None, Some(Seq(channelName))) =>
-        channels obtain (channelName, remote) doReceive message
+        channels get (channelName, remote) foreach { _ doReceive message }
 
       case _ =>
         // unknown message
@@ -109,7 +134,7 @@ class Registry {
   }
 
   private def handleLookup(method: String)(
-      abstraction: Registry.AbstractionRef, message: MessageBuffer) =
+      abstraction: Registry.AbstractionRef, message: MessageBuffer) = {
     connections send (
       abstraction.remote,
       Message(
@@ -118,6 +143,15 @@ class Registry {
           method -> Seq(abstraction.name),
           Registry.Message.Channel -> Seq(abstraction.channel.name)),
         message))
+
+    Option(channelMessages get abstraction.channelAnchor) foreach { messages =>
+      messages synchronized {
+        messages foreach { connections send (abstraction.remote, _) }
+        messages.clear
+        channelMessages.remove(abstraction.channelAnchor)
+      }
+    }
+  }
 
 
   def bindValue[T](name: String)(function: T)(

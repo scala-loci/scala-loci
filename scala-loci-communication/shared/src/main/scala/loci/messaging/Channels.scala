@@ -12,14 +12,14 @@ object Channels {
 }
 
 class Channels[C <: Channels.Channel, R <: RemoteRef](
-    createChannel: (String, R) => C,
+    createChannel: (String, String, R) => C,
     closeChannel: C => Unit) {
 
   private val channels = new ConcurrentHashMap[(String, R), C]
 
-  def obtain(name: String, remote: R): C = {
-    val channelId = (name, remote)
-    val channel = createChannel(name, remote)
+  def obtain(name: String, anchorDefault: String, remote: R): C = {
+    val channelId = name -> remote
+    val channel = createChannel(name, anchorDefault, remote)
     if (remote.connected) {
       val obtainedChannel =
         Option(channels putIfAbsent (channelId, channel)) getOrElse channel
@@ -31,6 +31,14 @@ class Channels[C <: Channels.Channel, R <: RemoteRef](
     }
     else
       channel
+  }
+
+  def get(name: String, remote: R): Option[C] = {
+    val channelId = name -> remote
+    if (remote.connected)
+      Option(channels get channelId)
+    else
+      None
   }
 
   def close(channel: C): Unit = {

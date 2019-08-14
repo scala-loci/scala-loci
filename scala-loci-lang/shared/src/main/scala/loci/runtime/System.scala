@@ -9,6 +9,7 @@ import loci.messaging.Message
 import loci.transmitter.RemoteRef
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.ref.WeakReference
 import scala.util.Success
@@ -221,6 +222,8 @@ class System(
     new ConcurrentHashMap[(String, RemoteRef), Channel]
   private val channelResponseHandlers =
     new ConcurrentHashMap[Channel, ConcurrentLinkedQueue[MessageBuffer => Unit]]
+  private val channelMessages =
+    new ConcurrentHashMap[String, ListBuffer[Message[Method]]]
   private val pushedValues =
     new ConcurrentHashMap[(Remote[Any], Value.Signature), System.ValueCell[_]]
   private val subjectiveValues =
@@ -231,9 +234,12 @@ class System(
   dispatcher.dispatch(PendingConstruction)
 
 
-  private[runtime] def obtainChannel(name: String, remote: Remote.Reference): Channel = {
+  private[runtime] def obtainChannel(
+      name: String,
+      anchorDefault: String,
+      remote: Remote.Reference): Channel = {
     val channelId = name -> remote
-    val channel = Channel(name, remote, this)
+    val channel = Channel(name, anchorDefault, remote, this)
     if (isConnected(remote)) {
       val obtainedChannel =
         Option(channels.putIfAbsent(channelId, channel)) getOrElse channel
@@ -245,6 +251,16 @@ class System(
     }
     else
       channel
+  }
+
+  private[runtime] def getChannel(
+      name: String,
+      remote: Remote.Reference): Option[Channel] = {
+    val channelId = name -> remote
+    if (remote.connected)
+      Option(channels get channelId)
+    else
+      None
   }
 
   private[runtime] def closeChannel(channel: Channel): Unit = {
@@ -270,7 +286,6 @@ class System(
       case _ =>
     }
 
-
     subjectiveValues.keys.asScala.toSeq foreach {
       case value @ (`remote`, _) =>
         subjectiveValues.remove(value)
@@ -284,11 +299,21 @@ class System(
   }
 
   private[runtime] def sendMessage(channel: Channel, payload: MessageBuffer): Unit =
-    if (isChannelOpen(channel))
-      remoteConnections send (
-        channel.remote,
-        ChannelMessage("Update", channel.name, None, payload))
+    if (isChannelOpen(channel)) {
+      val message = ChannelMessage("Update", channel.name, None, payload)
 
+      val queued = Option(channelMessages get channel.anchor) exists { messages =>
+        messages synchronized {
+          val queued = channelMessages containsKey channel.anchor
+          if (queued)
+            messages += message
+          queued
+        }
+      }
+
+      if (!queued)
+        remoteConnections send (channel.remote, message)
+    }
 
   remoteConnections.remotes foreach { remote =>
     startedRemotes.put(remote, remote)
@@ -366,25 +391,39 @@ class System(
           Some(abstraction),
           payload) =>
         val signature = Value.Signature.deserialize(abstraction)
-        val reference = Value.Reference(channelName, remote, System.this)
+        val reference = Value.Reference(channelName, channelName, remote, System.this)
         context execute new Runnable {
-          def run() = values.$loci$dispatch(payload, signature, reference) foreach { payload =>
-            if (messageType == "Request")
-              remoteConnections send (
-                remote,
-                ChannelMessage("Response", channelName, None, payload))
+          def run() = {
+            val messages = ListBuffer.empty[Message[Method]]
+            channelMessages.put(channelName, messages)
+
+            values.$loci$dispatch(payload, signature, reference) foreach { payload =>
+              if (messageType == "Request") {
+                remoteConnections send (
+                  remote,
+                  ChannelMessage("Response", channelName, None, payload))
+
+                messages synchronized {
+                  messages foreach { remoteConnections send (reference.remote, _) }
+                  messages.clear()
+                  channelMessages.remove(channelName)
+                }
+              }
+            }
+
+            channelMessages.remove(channelName)
           }
         }
 
       case ChannelMessage("Response", channelName, None, payload) =>
-        val channel = obtainChannel(channelName, remote)
-        Option(channelResponseHandlers get channel) foreach { handlers =>
-          Option(handlers.poll) foreach { _(payload) }
+        getChannel(channelName, remote) foreach { channel =>
+          Option(channelResponseHandlers get channel) foreach { handlers =>
+            Option(handlers.poll) foreach { _(payload) }
+          }
         }
 
       case ChannelMessage("Update", channelName, None, payload) =>
-        val channel = obtainChannel(channelName, remote)
-        channel.doReceive(payload)
+        getChannel(channelName, remote) foreach { _.doReceive(payload) }
 
       case _ =>
     }
@@ -411,8 +450,10 @@ class System(
           Some(Value.Signature.serialize(placedValue.signature)),
           placedValue.arguments.marshal(arguments, reference)))
 
-    def createReference(remote: Remote.Reference) =
-      Value.Reference(java.util.UUID.randomUUID.toString, remote, this)
+    def createReference(remote: Remote.Reference) = {
+      val id = java.util.UUID.randomUUID.toString
+      Value.Reference(id, id, remote, this)
+    }
 
     if (!requestResult && (!placedValue.stable || !placedValue.result.connected)) {
       remoteReferences(peer, remotes, earlyAccess = true) foreach { remote =>

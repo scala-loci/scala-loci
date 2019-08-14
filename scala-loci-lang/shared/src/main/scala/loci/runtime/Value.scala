@@ -48,9 +48,10 @@ object Value {
     }
   }
 
-  case class Reference(link: String, remote: Remote.Reference, system: System)
+  case class Reference(channelName: String, channelAnchor: String,
+        remote: Remote.Reference, system: System)
       extends transmitter.AbstractionRef {
-    def channel: Channel = system.obtainChannel(link, remote)
-    def derive(name: String) = Reference(link + ":" + name, remote, system)
+    lazy val channel = system.obtainChannel(channelName, channelAnchor, remote)
+    def derive(name: String) = Reference(s"$channelName:$name", channelAnchor, remote, system)
   }
 }
