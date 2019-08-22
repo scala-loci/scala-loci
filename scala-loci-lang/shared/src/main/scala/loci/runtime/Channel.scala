@@ -11,6 +11,6 @@ case class Channel(name: String, anchor: String, remote: Remote.Reference, syste
   val closed = doClosed.notification
 
   def send(message: MessageBuffer) = system.sendMessage(this, message)
-  def close() = system.closeChannel(this)
+  def close() = system.closeChannel(this, notifyRemote = true)
   def open = system.isChannelOpen(this)
 }

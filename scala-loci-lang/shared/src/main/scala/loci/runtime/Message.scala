@@ -60,6 +60,22 @@ object StartedMessage {
     }
 }
 
+object CloseMessage {
+  def apply(channel: String): Message[Method] =
+    Message(
+      Content,
+      Map("Type" -> Seq("Close"), "Channel" -> Seq(channel)),
+      MessageBuffer.empty)
+
+  def unapply(message: Message[Method]): Option[String] =
+    (message.method, message.properties get "Channel") match {
+      case (Content, Some(Seq(channel))) =>
+        Some(channel)
+      case _ =>
+        None
+    }
+}
+
 object ChannelMessage {
   def apply(messageType: String, channel: String, abstraction: Option[String],
       payload: MessageBuffer): Message[Method] = {

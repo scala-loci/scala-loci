@@ -22,6 +22,7 @@ object Registry {
     final val Request = "Request"
     final val Response = "Response"
     final val Channel = "Channel"
+    final val Close = "Close"
   }
 
   private final case class Channel(
@@ -34,7 +35,7 @@ object Registry {
     val closed = doClosed.notification
 
     def send(message: MessageBuffer) = registry send (this, message)
-    def close() = registry.channels close this
+    def close() = registry.channels close (this, notifyRemote = true)
     def open = registry.channels isOpen this
   }
 
@@ -80,29 +81,41 @@ class Registry {
   private def createChannel(name: String, anchorDefault: String, remote: RemoteRef) =
     Registry.Channel(name, anchorDefault, remote, this)
 
-  private def closeChannel(channel: Registry.Channel) =
+  private def closeChannel(channel: Registry.Channel, notifyRemote: Boolean) = {
+    if (notifyRemote)
+      bufferedSend(
+        channel,
+        Message(
+          Registry.Message,
+          Map(Registry.Message.Close -> Seq(channel.name)),
+          MessageBuffer.empty))
+
     channel.doClosed()
+  }
 
 
   private def send(channel: Registry.Channel, message: MessageBuffer) =
-    if (channel.open) {
-      val channelMessage = Message(
-        Registry.Message,
-        Map(Registry.Message.Channel -> Seq(channel.name)),
-        message)
+    if (channel.open)
+      bufferedSend(
+        channel,
+        Message(
+          Registry.Message,
+          Map(Registry.Message.Channel -> Seq(channel.name)),
+          message))
 
-      val queued = Option(channelMessages get channel.anchor) exists { messages =>
-        messages synchronized {
-          val queued = channelMessages containsKey channel.anchor
-          if (queued)
-            messages += channelMessage
-          queued
-        }
+  private def bufferedSend(channel: Registry.Channel, message: Message[Registry.Message.type]): Unit = {
+    val queued = Option(channelMessages get channel.anchor) exists { messages =>
+      messages synchronized {
+        val queued = channelMessages containsKey channel.anchor
+        if (queued)
+          messages += message
+        queued
       }
-
-      if (!queued)
-        connections send (channel.remote, channelMessage)
     }
+
+    if (!queued)
+      connections send (channel.remote, message)
+  }
 
   connections.remoteLeft notify { remote =>
     channels close remote
@@ -115,18 +128,22 @@ class Registry {
     val (remote, Message(_, properties, message)) = remoteMessage
     (properties get Registry.Message.Request,
      properties get Registry.Message.Response,
-     properties get Registry.Message.Channel) match {
-      case (Some(Seq(name)), None, Some(Seq(channelName))) =>
+     properties get Registry.Message.Channel,
+     properties get Registry.Message.Close) match {
+      case (Some(Seq(name)), None, Some(Seq(channelName)), None) =>
         channelMessages.put(channelName, ListBuffer.empty)
         bindings processRequest (
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
-      case (None, Some(Seq(name)), Some(Seq(channelName))) =>
+      case (None, Some(Seq(name)), Some(Seq(channelName)), None) =>
         bindings processResponse (
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
-      case (None, None, Some(Seq(channelName))) =>
+      case (None, None, Some(Seq(channelName)), None) =>
         channels get (channelName, remote) foreach { _ doReceive message }
+
+      case (None, None, None, Some(Seq(channelName))) =>
+        channels get (channelName, remote) foreach { channels close (_, notifyRemote = false) }
 
       case _ =>
         // unknown message

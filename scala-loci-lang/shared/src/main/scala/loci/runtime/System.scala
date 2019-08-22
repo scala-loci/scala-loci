@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 import loci.communicator.Connector
@@ -221,7 +221,7 @@ class System(
   private val channels =
     new ConcurrentHashMap[(String, RemoteRef), Channel]
   private val channelResponseHandlers =
-    new ConcurrentHashMap[Channel, ConcurrentLinkedQueue[MessageBuffer => Unit]]
+    new ConcurrentHashMap[Channel, (Boolean, MessageBuffer => Unit)]
   private val channelMessages =
     new ConcurrentHashMap[String, ListBuffer[Message[Method]]]
   private val pushedValues =
@@ -263,9 +263,13 @@ class System(
       None
   }
 
-  private[runtime] def closeChannel(channel: Channel): Unit = {
+  private[runtime] def closeChannel(channel: Channel, notifyRemote: Boolean): Unit = {
     val channelId = (channel.name, channel.remote)
+
     Option(channels.remove(channelId)) foreach { channel =>
+      if (notifyRemote)
+        bufferedSend(channel, CloseMessage(channel.name))
+
       context execute new Runnable {
         def run() = channel.doClosed()
       }
@@ -275,7 +279,7 @@ class System(
   private[runtime] def closeChannels(remote: Remote.Reference): Unit = {
     channels.values.asScala.toSeq foreach { channel =>
       if (channel.remote == remote) {
-        closeChannel(channel)
+        closeChannel(channel, notifyRemote = false)
         channelResponseHandlers.remove(channel)
       }
     }
@@ -299,21 +303,22 @@ class System(
   }
 
   private[runtime] def sendMessage(channel: Channel, payload: MessageBuffer): Unit =
-    if (isChannelOpen(channel)) {
-      val message = ChannelMessage("Update", channel.name, None, payload)
+    if (isChannelOpen(channel))
+      bufferedSend(channel, ChannelMessage("Update", channel.name, None, payload))
 
-      val queued = Option(channelMessages get channel.anchor) exists { messages =>
-        messages synchronized {
-          val queued = channelMessages containsKey channel.anchor
-          if (queued)
-            messages += message
-          queued
-        }
+  def bufferedSend(channel: Channel, message: Message[Method]): Unit = {
+    val queued = Option(channelMessages get channel.anchor) exists { messages =>
+      messages synchronized {
+        val queued = channelMessages containsKey channel.anchor
+        if (queued)
+          messages += message
+        queued
       }
-
-      if (!queued)
-        remoteConnections send (channel.remote, message)
     }
+
+    if (!queued)
+      remoteConnections send (channel.remote, message)
+  }
 
   remoteConnections.remotes foreach { remote =>
     startedRemotes.put(remote, remote)
@@ -417,13 +422,18 @@ class System(
 
       case ChannelMessage("Response", channelName, None, payload) =>
         getChannel(channelName, remote) foreach { channel =>
-          Option(channelResponseHandlers get channel) foreach { handlers =>
-            Option(handlers.poll) foreach { _(payload) }
+          Option(channelResponseHandlers remove channel) foreach { case (connected, handler) =>
+            handler(payload)
+            if (!connected)
+              closeChannel(channel, notifyRemote = false)
           }
         }
 
       case ChannelMessage("Update", channelName, None, payload) =>
         getChannel(channelName, remote) foreach { _.doReceive(payload) }
+
+      case CloseMessage(channelName) =>
+        getChannel(channelName, remote) foreach { closeChannel(_, notifyRemote = false) }
 
       case _ =>
     }
@@ -443,10 +453,10 @@ class System(
 
     def sendRequest(messageType: String, reference: Value.Reference) =
       remoteConnections send (
-        reference.channel.remote,
+        reference.remote,
         ChannelMessage(
           messageType,
-          reference.channel.name,
+          reference.channelName,
           Some(Value.Signature.serialize(placedValue.signature)),
           placedValue.arguments.marshal(arguments, reference)))
 
@@ -472,14 +482,9 @@ class System(
             val promise = Promise[MessageBuffer]
 
             if (isConnected(remote)) {
-              val handlers = Option(channelResponseHandlers get channel) getOrElse {
-                val handlers = new ConcurrentLinkedQueue[MessageBuffer => Unit]
-                Option(channelResponseHandlers.putIfAbsent(channel, handlers)) getOrElse handlers
-              }
-
-              handlers add { response =>
-                promise tryComplete Success(response)
-              }
+              channelResponseHandlers.put(
+                channel,
+                placedValue.result.connected -> { promise tryComplete Success(_) })
 
               channel.closed notify { _ =>
                 promise tryFailure channelClosedException

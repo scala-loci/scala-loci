@@ -13,7 +13,7 @@ object Channels {
 
 class Channels[C <: Channels.Channel, R <: RemoteRef](
     createChannel: (String, String, R) => C,
-    closeChannel: C => Unit) {
+    closeChannel: (C, Boolean) => Unit) {
 
   private val channels = new ConcurrentHashMap[(String, R), C]
 
@@ -41,9 +41,9 @@ class Channels[C <: Channels.Channel, R <: RemoteRef](
       None
   }
 
-  def close(channel: C): Unit = {
+  def close(channel: C, notifyRemote: Boolean): Unit = {
     val channelId = (channel.name, channel.remote)
-    Option(channels remove channelId) foreach closeChannel
+    Option(channels remove channelId) foreach { closeChannel(_, notifyRemote) }
   }
 
   def close(remote: R): Unit = {
@@ -51,7 +51,7 @@ class Channels[C <: Channels.Channel, R <: RemoteRef](
     while (iterator.hasNext)
       iterator.next match {
         case id @ (_, `remote`) =>
-          Option(channels remove id) foreach closeChannel
+          Option(channels remove id) foreach { closeChannel(_, false) }
         case _ =>
       }
   }
