@@ -5,7 +5,6 @@ import transmitter.AbstractionRef
 import transmitter.Marshallable
 import transmitter.RemoteRef
 import scala.util.Try
-import scala.concurrent.Promise
 import scala.concurrent.Future
 
 trait Binding[T] {
@@ -13,13 +12,11 @@ trait Binding[T] {
   val name: String
   def dispatch(function: RemoteRef => T, message: MessageBuffer, abstraction: AbstractionRef)
     : Try[MessageBuffer]
-  def call(abstraction: AbstractionRef)(handler: Binding.Handler)
+  def call(abstraction: AbstractionRef)(handler: MessageBuffer => Future[MessageBuffer])
     : RemoteCall
 }
 
 object Binding {
-  type Handler = MessageBuffer => (MessageBuffer => Unit) => Unit
-
   def apply[T](name: String)(implicit builder: BindingBuilder[T]) =
     builder(name)
 
@@ -34,27 +31,24 @@ trait BindingBuilder[T] {
 }
 
 trait ValueBindingBuilder {
-  protected def createCall[T, S, _](handler: Binding.Handler, message: MessageBuffer,
-      marshallable: Marshallable[T, S, _], abstraction: AbstractionRef) = {
-    val promise = Promise[S]
-    handler(message) { message =>
-      promise complete (marshallable unmarshal (message, abstraction))
-    }
-    promise.future
-  }
-
-  implicit def value[T, S](implicit res: Marshallable[T, S, _]) =
+  implicit def value[T, P](implicit res: Marshallable[T, _, P]) =
     new BindingBuilder.Value[T] {
-      type RemoteCall = Future[S]
+      type RemoteCall = P
+
       def apply(bindingName: String) = new Binding[T] {
-        type RemoteCall = Future[S]
+        type RemoteCall = P
         val name = bindingName
+
         def dispatch(
-            function: RemoteRef => T, message: MessageBuffer, abstraction: AbstractionRef) =
-          Try { res marshal (function(abstraction.remote), abstraction) }
+            function: RemoteRef => T,
+            message: MessageBuffer,
+            abstraction: AbstractionRef) =
+          Try { res.marshal(function(abstraction.remote), abstraction) }
+
         def call(
-            abstraction: AbstractionRef)(handler: Binding.Handler) =
-          createCall(handler, MessageBuffer.empty, res, abstraction)
+            abstraction: AbstractionRef)(
+            handler: MessageBuffer => Future[MessageBuffer]) =
+          res.unmarshal(handler(MessageBuffer.empty), abstraction)
       }
     }
 }

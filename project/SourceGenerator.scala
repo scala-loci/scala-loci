@@ -82,15 +82,15 @@ object SourceGenerator {
         val args = (0 until i) map { i => s"v$i" } mkString ", "
 
         val function =
-          if (i == 0) s"function$i[R, S]"
-          else s"function$i[$argTypes, R, S]"
+          if (i == 0) s"function$i[R, P]"
+          else s"function$i[$argTypes, R, P]"
 
         val marshallables =
           if (i == 0) s"""
-            |      res: Marshallable[R, S, _]"""
+            |      res: Marshallable[R, _, P]"""
           else s"""
             |      arg: Marshallable[($argTypes), ($argTypes), _],
-            |      res: Marshallable[R, S, _]"""
+            |      res: Marshallable[R, _, P]"""
 
         val marshalling =
           if (i == 0) "MessageBuffer.empty"
@@ -102,26 +102,27 @@ object SourceGenerator {
 
         val dispatch =
           if (i == 0) s"""
-            |          Try { res marshal ($tupledFunction(), abstraction) }"""
+            |          Try { res.marshal($tupledFunction(), abstraction) }"""
           else s"""
-            |          arg unmarshal (message, abstraction) map { arg =>
-            |            res marshal ($tupledFunction(arg), abstraction) }"""
+            |          arg.unmarshal(message, abstraction) map { arg =>
+            |            res.marshal($tupledFunction(arg), abstraction) }"""
 
         s"""
           |  implicit def $function(implicit $marshallables) = {
           |    new BindingBuilder[($argTypes) => R] {
-          |      type RemoteCall = ($argTypes) => Future[S]
+          |      type RemoteCall = ($argTypes) => P
           |      def apply(bindingName: String) = new Binding[($argTypes) => R] {
-          |        type RemoteCall = ($argTypes) => Future[S]
+          |        type RemoteCall = ($argTypes) => P
           |        val name = bindingName
           |        def dispatch(
-          |            function: RemoteRef => ($argTypes) => R, message: MessageBuffer,
+          |            function: RemoteRef => ($argTypes) => R,
+          |            message: MessageBuffer,
           |            abstraction: AbstractionRef) = $dispatch
           |        def call(
           |            abstraction: AbstractionRef)(
-          |            handler: Binding.Handler) =
+          |            handler: MessageBuffer => Future[MessageBuffer]) =
           |          ($typedArgs) =>
-          |            createCall(handler, $marshalling, res, abstraction)
+          |            res.unmarshal(handler($marshalling), abstraction)
           |      }
           |    }
           |  }

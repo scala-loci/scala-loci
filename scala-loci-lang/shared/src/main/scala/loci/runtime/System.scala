@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import loci.communicator.Connector
 import loci.messaging.Message
-import loci.transmitter.RemoteRef
+import loci.transmitter.{RemoteAccessException, RemoteRef}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -446,11 +446,6 @@ class System(
       remotes: Seq[RemoteRef],
       requestResult: Boolean): Seq[T] = {
 
-    def channelClosedException =
-      new RemoteAccessException("channel closed")
-    def remoteNotConnectedException =
-      new RemoteAccessException("remote not connected")
-
     def sendRequest(messageType: String, reference: Value.Reference) =
       remoteConnections send (
         reference.remote,
@@ -487,16 +482,16 @@ class System(
                 placedValue.result.connected -> { promise tryComplete Success(_) })
 
               channel.closed notify { _ =>
-                promise tryFailure channelClosedException
+                promise tryFailure new RemoteAccessException(RemoteAccessException.ChannelClosed)
               }
 
               if (!isChannelOpen(channel))
-                promise tryFailure channelClosedException
+                promise tryFailure new RemoteAccessException(RemoteAccessException.ChannelClosed)
               else
                 sendRequest("Request", reference)
             }
             else
-              promise tryFailure remoteNotConnectedException
+              promise tryFailure new RemoteAccessException(RemoteAccessException.RemoteDisconnected)
 
             placedValue.result.unmarshal(promise.future, reference)
           }

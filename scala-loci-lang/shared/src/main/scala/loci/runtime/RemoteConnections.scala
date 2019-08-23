@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import loci.communicator.{Connection, Connector, Listener}
 import loci.messaging.{ConnectionsBase, Message}
+import loci.transmitter.RemoteAccessException
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{Future, Promise}
