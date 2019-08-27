@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import SignatureParser._
+import transmitter.Parser._
 
 import scala.util.Try
 
@@ -50,22 +50,22 @@ object Peer {
   }
 
   object Signature {
-    private def serializeBases(signatures: List[Signature]): String =
+    private def serializeBases(signatures: List[Signature]): Serializer =
       list(signatures map { signature =>
         elements(
           string(signature.name),
-          list(signature.module.path),
+          list(signature.module.path map string),
           serializeBases(signature.parents))
       })
 
     def serialize(signature: Signature): String =
       elements(
         string(signature.name),
-        list(signature.module.path),
+        list(signature.module.path map string),
         serializeBases(signature.parents),
-        string(signature.module.name))
+        string(signature.module.name)).toString
 
-    private def deserializeBases(signatures: SignatureParser, moduleName: String): List[Signature] =
+    private def deserializeBases(signatures: Deserializer, moduleName: String): List[Signature] =
       signatures.asList map { signature =>
         val Seq(name, path, bases) = signature.asElements(3)
         Signature(
@@ -75,7 +75,7 @@ object Peer {
       }
 
     def deserialize(signature: String): Try[Signature] = Try {
-      val Seq(name, path, bases, module) = SignatureParser(signature).asElements(4)
+      val Seq(name, path, bases, module) = parse(signature).asElements(4)
       val moduleName = module.asString
       Signature(
         name.asString,

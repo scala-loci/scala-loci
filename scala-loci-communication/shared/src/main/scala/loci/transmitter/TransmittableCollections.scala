@@ -3,8 +3,12 @@ package transmitter
 
 import scala.collection.generic.CanBuildFrom
 import scala.collection.TraversableLike
+import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag
 import scala.language.higherKinds
+import loci.contexts.Immediate.Implicits.global
+
+import scala.util.{Failure, Success}
 
 trait TransmittableNonNullableCollections extends TransmittableDummy {
   this: Transmittable.type =>
@@ -127,6 +131,71 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
         if (value == null) null else Right(context delegate value.right.get),
       receive = (value, context) =>
         if (value == null) null else Right(context delegate value.right.get))
+
+  implicit def future[B, I, R, T]
+    (implicit
+       transmittable: Transmittable[(Option[B], Option[String]), I, T],
+       ev: T <:< (Option[R], Option[String]))
+  : ConnectedTransmittable.Proxy[Future[B], I, Future[R]] {
+      type Proxy = Future[R]
+      type Internal = Promise[R]
+      type Message = transmittable.Type
+    } =
+    ConnectedTransmittable.Proxy(
+      provide = (value, context) => {
+        value.value match {
+          case Some(Success(value)) =>
+            context.endpoint.close()
+            Some(value) -> None
+
+          case Some(Failure(value)) =>
+            context.endpoint.close()
+            None -> Some(RemoteAccessException.serialize(value))
+
+          case _ =>
+            value onComplete { completed =>
+              val message = completed match {
+                case Success(value) => Some(value) -> None
+                case Failure(value) => None -> Some(RemoteAccessException.serialize(value))
+              }
+              context.endpoint.send(message)
+              context.endpoint.close()
+            }
+
+            None -> None
+        }
+      },
+
+      receive = (value, context) => {
+        val promise = Promise[R]
+
+        def update(value: (Option[R], Option[String])) =
+          value match {
+            case (Some(value), _) =>
+              promise.success(value)
+              context.endpoint.close()
+
+            case (_, Some(value)) =>
+              promise.failure(RemoteAccessException.deserialize(value))
+              context.endpoint.close()
+
+            case _ =>
+          }
+
+        update(value)
+
+        context.endpoint.receive notify { update(_) }
+
+        context.endpoint.closed notify { _ =>
+          promise.tryFailure(new RemoteAccessException(RemoteAccessException.ChannelClosed))
+        }
+
+        promise
+      },
+
+      direct = (promise, context) => promise.future,
+
+      proxy = (future, context) => future flatMap { _.future })
 }
 
 trait TransmittableCollections extends TransmittableGeneralCollections {

@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import SignatureParser._
+import transmitter.Parser._
 
 import scala.util.Try
 
@@ -18,10 +18,10 @@ object Module {
     def serialize(signature: Signature): String =
       elements(
         string(signature.name),
-        list(signature.path))
+        list(signature.path map string)).toString
 
     def deserialize(signature: String): Try[Signature] = Try {
-      val Seq(name, path) = SignatureParser(signature).asElements(2)
+      val Seq(name, path) = parse(signature).asElements(2)
       Signature(
         name.asString,
         path.asList map { _.asString })
