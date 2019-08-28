@@ -12,7 +12,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.ref.WeakReference
-import scala.util.Success
+import scala.util.{Failure, Success, Try}
 
 object System {
   private trait ValueCell[T] {
@@ -221,7 +221,7 @@ class System(
   private val channels =
     new ConcurrentHashMap[(String, RemoteRef), Channel]
   private val channelResponseHandlers =
-    new ConcurrentHashMap[Channel, (Boolean, MessageBuffer => Unit)]
+    new ConcurrentHashMap[Channel, (Boolean, Try[MessageBuffer] => Unit)]
   private val channelMessages =
     new ConcurrentHashMap[String, ListBuffer[Message[Method]]]
   private val pushedValues =
@@ -304,7 +304,7 @@ class System(
 
   private[runtime] def sendMessage(channel: Channel, payload: MessageBuffer): Unit =
     if (isChannelOpen(channel))
-      bufferedSend(channel, ChannelMessage("Update", channel.name, None, payload))
+      bufferedSend(channel, ChannelMessage(ChannelMessage.Type.Update, channel.name, None, payload))
 
   def bufferedSend(channel: Channel, message: Message[Method]): Unit = {
     val queued = Option(channelMessages get channel.anchor) exists { messages =>
@@ -391,7 +391,7 @@ class System(
           }
 
       case ChannelMessage(
-          messageType @ ("Request" | "Call"),
+          messageType @ (ChannelMessage.Type.Request | ChannelMessage.Type.Call),
           channelName,
           Some(abstraction),
           payload) =>
@@ -402,17 +402,23 @@ class System(
             val messages = ListBuffer.empty[Message[Method]]
             channelMessages.put(channelName, messages)
 
-            values.$loci$dispatch(payload, signature, reference) foreach { payload =>
-              if (messageType == "Request") {
-                remoteConnections send (
-                  remote,
-                  ChannelMessage("Response", channelName, None, payload))
+            val result = values.$loci$dispatch(payload, signature, reference)
 
-                messages synchronized {
-                  messages foreach { remoteConnections send (reference.remote, _) }
-                  messages.clear()
-                  channelMessages.remove(channelName)
-                }
+            if (messageType == ChannelMessage.Type.Request) {
+              val message = result match {
+                case Success(payload) =>
+                  ChannelMessage(ChannelMessage.Type.Response, channelName, None, payload)
+                case Failure(exception) =>
+                  val payload = MessageBuffer.fromString(RemoteAccessException.serialize(exception))
+                  ChannelMessage(ChannelMessage.Type.Failure, channelName, None, payload)
+              }
+
+              remoteConnections send (remote, message)
+
+              messages synchronized {
+                messages foreach { remoteConnections send (reference.remote, _) }
+                messages.clear()
+                channelMessages.remove(channelName)
               }
             }
 
@@ -420,16 +426,27 @@ class System(
           }
         }
 
-      case ChannelMessage("Response", channelName, None, payload) =>
+      case ChannelMessage(
+          messageType @ (ChannelMessage.Type.Response | ChannelMessage.Type.Failure),
+          channelName,
+          None,
+          payload) =>
         getChannel(channelName, remote) foreach { channel =>
           Option(channelResponseHandlers remove channel) foreach { case (connected, handler) =>
-            handler(payload)
+            val message =
+              if (messageType == ChannelMessage.Type.Response)
+                Success(payload)
+              else
+                Failure(RemoteAccessException.deserialize(payload.toString(0, payload.length)))
+
+            handler(message)
+
             if (!connected)
               closeChannel(channel, notifyRemote = false)
           }
         }
 
-      case ChannelMessage("Update", channelName, None, payload) =>
+      case ChannelMessage(ChannelMessage.Type.Update, channelName, None, payload) =>
         getChannel(channelName, remote) foreach { _.doReceive(payload) }
 
       case CloseMessage(channelName) =>
@@ -446,7 +463,7 @@ class System(
       remotes: Seq[RemoteRef],
       requestResult: Boolean): Seq[T] = {
 
-    def sendRequest(messageType: String, reference: Value.Reference) =
+    def sendRequest(messageType: ChannelMessage.Type, reference: Value.Reference) =
       remoteConnections send (
         reference.remote,
         ChannelMessage(
@@ -462,7 +479,7 @@ class System(
 
     if (!requestResult && (!placedValue.stable || !placedValue.result.connected)) {
       remoteReferences(peer, remotes, earlyAccess = true) foreach { remote =>
-        sendRequest("Call", createReference(remote))
+        sendRequest(ChannelMessage.Type.Call, createReference(remote))
       }
       Seq.empty
     }
@@ -479,7 +496,7 @@ class System(
             if (isConnected(remote)) {
               channelResponseHandlers.put(
                 channel,
-                placedValue.result.connected -> { promise tryComplete Success(_) })
+                placedValue.result.connected -> { promise tryComplete _ })
 
               channel.closed notify { _ =>
                 promise tryFailure new RemoteAccessException(RemoteAccessException.ChannelClosed)
@@ -488,7 +505,7 @@ class System(
               if (!isChannelOpen(channel))
                 promise tryFailure new RemoteAccessException(RemoteAccessException.ChannelClosed)
               else
-                sendRequest("Request", reference)
+                sendRequest(ChannelMessage.Type.Request, reference)
             }
             else
               promise tryFailure new RemoteAccessException(RemoteAccessException.RemoteDisconnected)

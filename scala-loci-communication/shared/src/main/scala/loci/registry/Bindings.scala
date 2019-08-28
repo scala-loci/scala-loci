@@ -12,7 +12,7 @@ import scala.concurrent.Promise
 
 class Bindings[A <: AbstractionRef](
     request: (A, MessageBuffer) => Unit,
-    respond: (A, MessageBuffer) => Unit) {
+    respond: (A, Try[MessageBuffer]) => Unit) {
 
   private val bindings = new ConcurrentHashMap[
     String, (MessageBuffer, A) => Try[MessageBuffer]]
@@ -40,12 +40,12 @@ class Bindings[A <: AbstractionRef](
   def processRequest(
       message: MessageBuffer, name: String, abstraction: A): Unit =
     Option(bindings get name) foreach { dispatch =>
-      dispatch(message, abstraction) foreach { respond(abstraction, _) }
+      respond(abstraction, dispatch(message, abstraction))
     }
 
   def processResponse(
-      message: MessageBuffer, name: String, abstraction: A): Unit =
-    Option(responseHandlers remove abstraction.channel) foreach { _ success message }
+      message: Try[MessageBuffer], name: String, abstraction: A): Unit =
+    Option(responseHandlers remove abstraction.channel) foreach { _ complete message }
 
   def channelsClosed(): Unit = {
     val iterator = responseHandlers.entrySet.iterator

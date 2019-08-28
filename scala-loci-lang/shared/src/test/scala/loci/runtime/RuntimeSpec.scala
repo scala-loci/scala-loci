@@ -45,7 +45,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
           connections.remoteJoined notify { remote =>
             connections send (
               remote,
-              ChannelMessage("dummyType", "dummyChannel", None, MessageBuffer fromString "hello from server"))
+              ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from server"))
           }
 
           val instance = new ServerClientApp.$loci$peer$Client {
@@ -75,7 +75,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
           connections send (
             connections.remotes.head,
-            ChannelMessage("dummyType", "dummyChannel", None, MessageBuffer fromString "hello from client0"))
+            ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from client0"))
 
           val instance = new ServerClientApp.$loci$peer$Server {
             protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
@@ -103,7 +103,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
           connections send (
             connections.remotes.head,
-            ChannelMessage("dummyType", "dummyChannel", None, MessageBuffer fromString "hello from client1"))
+            ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from client1"))
 
           val instance = new ServerClientApp.$loci$peer$Server {
             protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
@@ -124,10 +124,10 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
-        Server(New), Server(Receive(Seq("dummyType"), "hello from client0")))
+        Server(New), Server(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from client0")))
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
-        Server(New), Server(Receive(Seq("dummyType"), "hello from client1")))
+        Server(New), Server(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from client1")))
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
         Server(New), Server(Receive(Seq("Started"), "")))
@@ -139,14 +139,14 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
-        Client0(New), Client0(Receive(Seq("dummyType"), "hello from server")))
+        Client0(New), Client0(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from server")))
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
         Client0(New), Server(Receive(Seq("Started"), "")))
 
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
-        Client1(New), Client1(Receive(Seq("dummyType"), "hello from server")))
+        Client1(New), Client1(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from server")))
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
         Client1(New), Server(Receive(Seq("Started"), "")))

@@ -7,9 +7,12 @@ import messaging.Message
 import messaging.Channels
 import communicator.Connector
 import communicator.Listener
+import transmitter.RemoteAccessException
 import transmitter.RemoteRef
 
 import scala.collection.mutable.ListBuffer
+import scala.util.Failure
+import scala.util.Success
 import scala.util.Try
 import scala.concurrent.Promise
 import scala.concurrent.Future
@@ -21,6 +24,7 @@ object Registry {
 
     final val Request = "Request"
     final val Response = "Response"
+    final val Failure = "Failure"
     final val Channel = "Channel"
     final val Close = "Close"
   }
@@ -60,9 +64,7 @@ class Registry {
 
   private val channels = new Channels(createChannel, closeChannel)
 
-  private val bindings = new Bindings(
-    handleLookup(Registry.Message.Request),
-    handleLookup(Registry.Message.Response))
+  private val bindings = new Bindings(request, respond)
 
   private val channelMessages =
     new ConcurrentHashMap[String, ListBuffer[Message[Registry.Message.type]]]
@@ -128,21 +130,30 @@ class Registry {
     val (remote, Message(_, properties, message)) = remoteMessage
     (properties get Registry.Message.Request,
      properties get Registry.Message.Response,
+     properties get Registry.Message.Failure,
      properties get Registry.Message.Channel,
      properties get Registry.Message.Close) match {
-      case (Some(Seq(name)), None, Some(Seq(channelName)), None) =>
+      case (Some(Seq(name)), None, None, Some(Seq(channelName)), None) =>
         channelMessages.put(channelName, ListBuffer.empty)
         bindings processRequest (
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
-      case (None, Some(Seq(name)), Some(Seq(channelName)), None) =>
+      case (None, Some(Seq(name)), None, Some(Seq(channelName)), None) =>
         bindings processResponse (
-          message, name, Registry.AbstractionRef(name, remote, channelName, this))
+          Success(message),
+          name,
+          Registry.AbstractionRef(name, remote, channelName, this))
 
-      case (None, None, Some(Seq(channelName)), None) =>
+      case (None, None, Some(Seq(name)), Some(Seq(channelName)), None) =>
+        bindings processResponse (
+          Failure(RemoteAccessException.deserialize(message.toString(0, message.length))),
+          name,
+          Registry.AbstractionRef(name, remote, channelName, this))
+
+      case (None, None, None, Some(Seq(channelName)), None) =>
         channels get (channelName, remote) foreach { _ doReceive message }
 
-      case (None, None, None, Some(Seq(channelName))) =>
+      case (None, None, None, None, Some(Seq(channelName))) =>
         channels get (channelName, remote) foreach { channels close (_, notifyRemote = false) }
 
       case _ =>
@@ -150,16 +161,22 @@ class Registry {
     }
   }
 
-  private def handleLookup(method: String)(
-      abstraction: Registry.AbstractionRef, message: MessageBuffer) = {
-    connections send (
-      abstraction.remote,
-      Message(
-        Registry.Message,
-        Map(
-          method -> Seq(abstraction.name),
-          Registry.Message.Channel -> Seq(abstraction.channel.name)),
-        message))
+  private def request(abstraction: Registry.AbstractionRef, message: MessageBuffer) =
+    send(Registry.Message.Request, abstraction, message)
+
+  private def respond(abstraction: Registry.AbstractionRef, message: Try[MessageBuffer]) = {
+    message match {
+      case Success(message) =>
+        send(
+          Registry.Message.Response,
+          abstraction,
+          message)
+      case Failure(exception) =>
+        send(
+          Registry.Message.Failure,
+          abstraction,
+          MessageBuffer.fromString(RemoteAccessException.serialize(exception)))
+    }
 
     Option(channelMessages get abstraction.channelAnchor) foreach { messages =>
       messages synchronized {
@@ -169,6 +186,16 @@ class Registry {
       }
     }
   }
+
+  private def send(method: String, abstraction: Registry.AbstractionRef, message: MessageBuffer) =
+    connections send (
+      abstraction.remote,
+      Message(
+        Registry.Message,
+        Map(
+          method -> Seq(abstraction.name),
+          Registry.Message.Channel -> Seq(abstraction.channel.name)),
+        message))
 
 
   def bindValue[T](name: String)(function: T)(

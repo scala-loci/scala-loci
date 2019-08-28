@@ -137,11 +137,11 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
       listener.run()
       dummyListener.run()
 
-      client0.send(client0.remotes(0), ChannelMessage("dummyChannel", "Test", None, MessageBuffer fromString "just a test"))
+      client0.send(client0.remotes(0), ChannelMessage(ChannelMessage.Type.Update, "Test", None, MessageBuffer fromString "just a test"))
 
       server.run()
 
-      client1.send(client1.remotes(1), ChannelMessage("dummyChannel", "Test", None, MessageBuffer fromString "another test"))
+      client1.send(client1.remotes(1), ChannelMessage(ChannelMessage.Type.Update, "Test", None, MessageBuffer fromString "another test"))
 
 
       events should have size 11

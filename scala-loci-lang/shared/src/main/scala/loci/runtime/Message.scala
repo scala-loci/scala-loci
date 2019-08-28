@@ -77,27 +77,39 @@ object CloseMessage {
 }
 
 object ChannelMessage {
-  def apply(messageType: String, channel: String, abstraction: Option[String],
+  type Type = Type.Value
+
+  object Type extends Enumeration {
+    val Request = Value("Request")
+    val Call = Value("Call")
+    val Response = Value("Response")
+    val Failure = Value("Failure")
+    val Update = Value("Update")
+  }
+
+  def apply(messageType: Type, channel: String, abstraction: Option[String],
       payload: MessageBuffer): Message[Method] = {
-    val attrs = Map("Type" -> Seq(messageType), "Channel" -> Seq(channel))
+    val attrs = Map("Type" -> Seq(messageType.toString), "Channel" -> Seq(channel))
     val attrsAbstraction = (abstraction map { "Abstraction" -> Seq(_) }).toSeq
     Message(Content, attrs ++ attrsAbstraction, payload)
   }
 
-  def unapply(message: Message[Method]): Option[(String, String, Option[String], MessageBuffer)] =
+  def unapply(message: Message[Method]): Option[(Type, String, Option[String], MessageBuffer)] =
     (message.method,
-     message.properties get "Type",
+     message.properties get "Type" map {
+       _ map { messageType => Type.values find { _.toString == messageType } }
+     },
      message.properties get "Channel",
      message.properties get "Abstraction") match {
       case (Content,
-          Some(Seq(messageType)),
+          Some(Seq(Some(messageType))),
           Some(Seq(channel)),
           Some(Seq(abstraction))) =>
         Some((messageType, channel, Some(abstraction), message.payload))
       case (Content,
-          Some(Seq(messageType)),
+          Some(Seq(Some(messageType))),
           Some(Seq(channel)),
-          _) =>
+          None) =>
         Some((messageType, channel, None, message.payload))
       case _ =>
         None
