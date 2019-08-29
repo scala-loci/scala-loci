@@ -180,7 +180,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     val definedTransmittables = mutable.ListBuffer(definedTransmittableTrees.foldLeft(
         List.empty[(TransmittableInfo, Tree)]) { (transmittables, tree) =>
       val fullyExpandedTree = tree.fullyExpanded
-      val info = TransmittableInfo(tree)
+      val info = TransmittableInfo(fullyExpandedTree)
       val existing = transmittables firstWithInfo info
 
       existing foreach { existingTree =>
