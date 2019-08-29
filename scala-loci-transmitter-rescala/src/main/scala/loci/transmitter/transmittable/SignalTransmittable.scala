@@ -7,16 +7,13 @@ import _root_.rescala.interface.RescalaInterface
 import _root_.rescala.reactives.{Signal, Signals, Var}
 import loci.contexts.Immediate.Implicits.global
 
-import scala.language.higherKinds
-
 protected[transmitter] trait SignalTransmittable {
-  implicit def rescalaSignalTransmittable
-      [S[T, St <: Struct] <: Signal[T, St], T, I, U, St <: Struct](implicit
-      scheduler: Scheduler[St],
+  implicit def rescalaSignalTransmittable[T, I, U, S <: Struct](implicit
+      scheduler: Scheduler[S],
       transmittable: Transmittable[(Option[T], Option[String]), I, (Option[U], Option[String])])
-  : ConnectedTransmittable.Proxy[S[T, St], I, Signal[U, St]] {
-      type Proxy = Signal[U, St]
-      type Internal = Var[U, St]
+  : ConnectedTransmittable.Proxy[Signal[T, S], I, Signal[U, S]] {
+      type Proxy = Signal[U, S]
+      type Internal = Var[U, S]
       type Message = transmittable.Type
   } = {
     val interface = RescalaInterface.interfaceFor(scheduler)
@@ -69,7 +66,7 @@ protected[transmitter] trait SignalTransmittable {
       direct = (signal, context) => signal,
 
       proxy = (future, context) => {
-        implicit val serializer: ReSerializable[Var[U, St]] = ReSerializable.noSerializer
+        implicit val serializer: ReSerializable[Var[U, S]] = ReSerializable.noSerializer
         Signals.fromFuture(future).flatten
       })
   }

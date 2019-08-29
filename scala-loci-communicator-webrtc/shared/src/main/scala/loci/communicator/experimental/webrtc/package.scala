@@ -2,7 +2,7 @@ package loci
 package communicator
 package experimental
 
-import loci.transmitter.TransformingTransmittable
+import loci.transmitter._
 
 import webrtc.WebRTC.Update
 import webrtc.WebRTC.IncrementalUpdate
@@ -11,92 +11,86 @@ import webrtc.WebRTC.InitialSession
 import webrtc.WebRTC.SessionUpdate
 import webrtc.WebRTC.CompleteSession
 
-package object webrtc {
-  type UpdateRepresentation =
-    ((String, String), (String, String), (String, String, Double))
+package webrtc {
+  protected[webrtc] trait WebRTCUpdateTransmittable {
+    implicit val transmittableUpdate: TransformingTransmittable[
+        Update,
+        (Option[(String, String)], Option[(String, String)], Option[(String, String, Double)]),
+        Update] =
+      TransformingTransmittable(
+        provide = (value, context) => value match {
+          case CompleteSession(descType, sdp) =>
+            (Some((descType, sdp)), None, None)
+          case InitialSession(descType, sdp) =>
+            (None, Some((descType, sdp)), None)
+          case SessionUpdate(candidate, sdpMid, sdpMLineIndex) =>
+            (None, None, Some((candidate, sdpMid, sdpMLineIndex)))
+        },
+        receive = (value, context) => value match {
+          case (Some((descType, sdp)), _, _) =>
+            CompleteSession(descType, sdp)
+          case (_, Some((descType, sdp)), _) =>
+            InitialSession(descType, sdp)
+          case (_, _, Some((candidate, sdpMid, sdpMLineIndex))) =>
+            SessionUpdate(candidate, sdpMid, sdpMLineIndex)
+          case _ =>
+            throw new RemoteAccessException("Invalid WebRTC update")
+        })
+  }
 
-  implicit val transmittableUpdate: TransformingTransmittable[
-      Update, UpdateRepresentation, Update] =
-    TransformingTransmittable(
-      provide = (value, context) => value match {
-        case value @ CompleteSession(descType, sdp) =>
-          ((descType, sdp), null, null)
-        case value @ InitialSession(descType, sdp) =>
-          (null, (descType, sdp), null)
-        case value @ SessionUpdate(candidate, sdpMid, sdpMLineIndex) =>
-          (null, null, (candidate, sdpMid, sdpMLineIndex))
-      },
-      receive = (value, context) => value match {
-        case ((descType, sdp), _, _) =>
-          CompleteSession(descType, sdp)
-        case (_, (descType, sdp), _) if value != null =>
-          InitialSession(descType, sdp)
-        case (_, _, (candidate, sdpMid, sdpMLineIndex)) if value != null =>
-          SessionUpdate(candidate, sdpMid, sdpMLineIndex)
-      })
+  protected[webrtc] trait WebRTCUpdateTransmittables extends WebRTCUpdateTransmittable {
+    implicit val transmittableIncrementalUpdate: TransformingTransmittable[
+        IncrementalUpdate,
+        (Option[(String, String)], Option[(String, String, Double)]),
+        IncrementalUpdate] =
+      TransformingTransmittable(
+        provide = (value, context) => value match {
+          case InitialSession(descType, sdp) =>
+            (Some((descType, sdp)), None)
+          case SessionUpdate(candidate, sdpMid, sdpMLineIndex) =>
+            (None, Some((candidate, sdpMid, sdpMLineIndex)))
+        },
+        receive = (value, context) => value match {
+          case (Some((descType, sdp)), _) =>
+            InitialSession(descType, sdp)
+          case (_, Some((candidate, sdpMid, sdpMLineIndex))) =>
+            SessionUpdate(candidate, sdpMid, sdpMLineIndex)
+          case _ =>
+            throw new RemoteAccessException("Invalid WebRTC update")
+        })
 
+    implicit val transmittableCompleteUpdate: TransformingTransmittable[
+        CompleteUpdate,
+        (String, String),
+        CompleteUpdate] =
+      TransformingTransmittable(
+        provide = (value, context) => value match {
+          case CompleteSession(descType, sdp) =>
+            (descType, sdp)
+        },
+        receive = (value, context) => value match {
+          case (descType, sdp) =>
+            CompleteSession(descType, sdp)
+        })
+  }
+}
 
-  type IncrementalUpdateRepresentation =
-    ((String, String), (String, String, Double))
-
-  implicit val transmittableIncrementalUpdate: TransformingTransmittable[
-      IncrementalUpdate, IncrementalUpdateRepresentation, IncrementalUpdate] =
-    TransformingTransmittable(
-      provide = (value, context) => value match {
-        case value @ InitialSession(descType, sdp) =>
-          ((descType, sdp), null)
-        case value @ SessionUpdate(candidate, sdpMid, sdpMLineIndex) =>
-          (null, (candidate, sdpMid, sdpMLineIndex))
-      },
-      receive = (value, context) => value match {
-        case ((descType, sdp), _) if value != null =>
-          InitialSession(descType, sdp)
-        case (_, (candidate, sdpMid, sdpMLineIndex)) if value != null =>
-          SessionUpdate(candidate, sdpMid, sdpMLineIndex)
-      })
-
-
-  type CompleteUpdateRepresentation = (String, String)
-
-  implicit val transmittableCompleteUpdate: TransformingTransmittable[
-      CompleteUpdate, CompleteUpdateRepresentation, CompleteUpdate] =
-    TransformingTransmittable(
-      provide = (value, context) => value match {
-        case value @ CompleteSession(descType, sdp) => (descType, sdp)
-      },
-      receive = (value, context) =>
-        CompleteSession(value._1, value._2))
-
-
-  type InitialSessionRepresentation = (String, String)
-
+package object webrtc extends webrtc.WebRTCUpdateTransmittables {
   implicit val transmittableInitialSession: TransformingTransmittable[
-    InitialSession, InitialSessionRepresentation, InitialSession] =
+    InitialSession, (String, String), InitialSession] =
     TransformingTransmittable(
-      provide = (value, context) =>
-        (value.descType, value.sdp),
-      receive = (value, context) =>
-        InitialSession(value._1, value._2))
-
-
-  type SessionUpdateRepresentation = (String, String, Double)
+      provide = (value, context) => (value.descType, value.sdp),
+      receive = (value, context) => InitialSession(value._1, value._2))
 
   implicit val transmittableSessionUpdate: TransformingTransmittable[
-      SessionUpdate, SessionUpdateRepresentation, SessionUpdate] =
+      SessionUpdate, (String, String, Double), SessionUpdate] =
     TransformingTransmittable(
-      provide = (value, context) =>
-        (value.candidate, value.sdpMid, value.sdpMLineIndex),
-      receive = (value, context) =>
-        SessionUpdate(value._1, value._2, value._3))
-
-
-  type CompleteSessionRepresentation = (String, String)
+      provide = (value, context) => (value.candidate, value.sdpMid, value.sdpMLineIndex),
+      receive = (value, context) => SessionUpdate(value._1, value._2, value._3))
 
   implicit val transmittableCompleteSession: TransformingTransmittable[
-      CompleteSession, CompleteSessionRepresentation, CompleteSession] =
+      CompleteSession, (String, String), CompleteSession] =
     TransformingTransmittable(
-      provide = (value, context) =>
-        (value.descType, value.sdp),
-      receive = (value, context) =>
-        CompleteSession(value._1, value._2))
+      provide = (value, context) => (value.descType, value.sdp),
+      receive = (value, context) => CompleteSession(value._1, value._2))
 }

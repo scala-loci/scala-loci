@@ -132,10 +132,9 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
       receive = (value, context) =>
         if (value == null) null else Right(context delegate value.right.get))
 
-  implicit def future[B, I, R, T]
+  implicit def future[B, I, R]
     (implicit
-       transmittable: Transmittable[(Option[B], Option[String]), I, T],
-       ev: T <:< (Option[R], Option[String]))
+       transmittable: Transmittable[(Option[B], Option[String]), I, (Option[R], Option[String])])
   : ConnectedTransmittable.Proxy[Future[B], I, Future[R]] {
       type Proxy = Future[R]
       type Internal = Promise[R]

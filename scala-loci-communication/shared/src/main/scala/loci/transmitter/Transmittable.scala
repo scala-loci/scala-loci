@@ -33,13 +33,13 @@ object Transmittables {
 
 
 @implicitNotFound("${B} is not transmittable")
-sealed trait Transmittable[B, I, R] extends Transmittable.Delegating {
-  type Base = B
+sealed trait Transmittable[-B, I, +R] extends Transmittable.Delegating {
+  type Base = B @uncheckedVariance
   type Intermediate = I
-  type Result = R
+  type Result = R @uncheckedVariance
   type Proxy
   type Transmittables <: transmitter.Transmittables
-  type Type = Transmittable.Aux[Base, Intermediate, Result, Proxy, Transmittables]
+  type Type = Transmittable.Aux[Base, Intermediate, Result, Proxy, Transmittables] @uncheckedVariance
 
   val transmittables: Transmittables
 
@@ -62,7 +62,7 @@ object Transmittable extends
 
   sealed trait Delegating
 
-  type Aux[B, I, R, P, T <: Transmittables] = Transmittable[B, I, R] {
+  type Aux[-B, I, +R, P, T <: Transmittables] = Transmittable[B, I, R] {
     type Proxy = P
     type Transmittables = T
   }

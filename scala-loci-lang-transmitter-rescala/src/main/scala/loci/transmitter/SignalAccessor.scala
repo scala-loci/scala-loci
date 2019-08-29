@@ -6,16 +6,14 @@ import _root_.rescala.interface.RescalaInterface
 import _root_.rescala.macros.cutOutOfUserComputation
 import _root_.rescala.reactives.Signal
 
-import scala.language.higherKinds
-
 protected[transmitter] trait SignalAccessor {
   private final val asLocalId = 0
 
-  implicit class RescalaSignalMultipleAccessor
-      [Sig[T, St <: Struct] <: Signal[T, St], St <: Struct, V, R, T, L](
-       value: V from R)(implicit
-       ev: Transmission[V, R, Sig[T, St], L, Multiple],
-       val scheduler: Scheduler[St]) extends RemoteAccessor {
+  implicit class RescalaSignalMultipleAccessor[S <: Struct, V, R, T, L](
+    value: V from R)(implicit
+    ev: Transmission[V, R, Signal[T, S], L, Multiple],
+    val scheduler: Scheduler[S])
+      extends RemoteAccessor {
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.{Signal, Var, transaction}
@@ -37,11 +35,11 @@ protected[transmitter] trait SignalAccessor {
       }
   }
 
-  implicit class RescalaSignalOptionalAccessor
-      [Sig[T, St <: Struct] <: Signal[T, St], St <: Struct, V, R, T, L](
-       value: V from R)(implicit
-       ev: Transmission[V, R, Sig[T, St], L, Optional],
-       val scheduler: Scheduler[St]) extends RemoteAccessor {
+  implicit class RescalaSignalOptionalAccessor[S <: Struct, V, R, T, L](
+    value: V from R)(implicit
+    ev: Transmission[V, R, Signal[T, S], L, Optional],
+    val scheduler: Scheduler[S])
+      extends RemoteAccessor {
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.{Signal, Var, transaction}
@@ -63,11 +61,11 @@ protected[transmitter] trait SignalAccessor {
       }
   }
 
-  implicit class RescalaSignalSingleAccessor
-      [Sig[T, St <: Struct] <: Signal[T, St], St <: Struct, V, R, T, L](
-       value: V from R)(implicit
-       ev: Transmission[V, R, Sig[T, St], L, Single],
-       val scheduler: Scheduler[St]) extends RemoteAccessor {
+  implicit class RescalaSignalSingleAccessor[S <: Struct, V, R, T, L](
+    value: V from R)(implicit
+    ev: Transmission[V, R, Signal[T, S], L, Single],
+    val scheduler: Scheduler[S])
+      extends RemoteAccessor {
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.Signal

@@ -3,7 +3,7 @@ package transmitter
 
 import loci.language._
 
-abstract class Transmission[V, R, T, L, M] private[loci] {
+abstract class Transmission[V, R, +T, L, M] private[loci] {
   private[loci] def cache[B <: AnyRef](id: Any, body: => B): B
   private[loci] val remoteJoined: Notification[Remote[R]]
   private[loci] val remoteLeft: Notification[Remote[R]]
