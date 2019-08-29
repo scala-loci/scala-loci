@@ -13,27 +13,25 @@ protected[transmitter] trait SignalTransmittable {
   implicit def rescalaSignalTransmittable
       [S[T, St <: Struct] <: Signal[T, St], T, I, U, St <: Struct](implicit
       scheduler: Scheduler[St],
-      transmittable: Transmittable[(T, String, Boolean), I, (U, String, Boolean)])
+      transmittable: Transmittable[(Option[T], Option[String]), I, (Option[U], Option[String])])
   : ConnectedTransmittable.Proxy[S[T, St], I, Signal[U, St]] {
       type Proxy = Signal[U, St]
       type Internal = Var[U, St]
       type Message = transmittable.Type
   } = {
-    val ignoredValue = null.asInstanceOf[T]
-    val ignoredString = null.asInstanceOf[String]
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     ConnectedTransmittable.Proxy(
       provide = (value, context) => {
         val signal =
           (value
-            map { (_, ignoredString, false) }
-            recover { case throwable => (ignoredValue, throwable.toString, false) }
-            withDefault { (ignoredValue, ignoredString, true) })
+            map { value => Some(value) -> None }
+            recover { case exception => None -> Some(RemoteAccessException.serialize(exception)) }
+            withDefault { None -> None })
 
         val observer = signal observe context.endpoint.send
 
-        context.endpoint.closed notify { _ => observer.remove }
+        context.endpoint.closed notify { _ => observer.remove() }
 
         signal.readValueOnce
       },
@@ -43,22 +41,23 @@ protected[transmitter] trait SignalTransmittable {
 
         val signal = interface.transaction() { _ => interface.Var.empty[U] }
 
-        def update(signal: interface.Var[U], value: (U, String, Boolean)) =
+        def update(signal: interface.Var[U], value: (Option[U], Option[String])) =
           value match {
-            case (value, `ignoredString`, false) =>
+            case (Some(value), _) =>
               signal set value
-            case (_, message, false) =>
+
+            case (_, Some(value)) =>
               interface.transaction(signal) { implicit turn =>
-                signal admitPulse Pulse.Exceptional(
-                  new rescala.RemoteReactiveFailure(message))
+                signal.admitPulse(Pulse.Exceptional(RemoteAccessException.deserialize(value)))
               }
+
             case _  =>
-              signal.setEmpty
+              signal.setEmpty()
           }
 
         context.endpoint.closed notify { _ =>
-          signal.setEmpty
-          signal.disconnect
+          signal.setEmpty()
+          signal.disconnect()
         }
 
         update(signal, value)
