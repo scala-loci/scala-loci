@@ -49,7 +49,7 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
     if (!result.isUnderflow)
       result.throwException
 
-    new String(array, 0, charBuffer.position)
+    new String(array, 0, charBuffer.position())
   }
 
   @inline def asByteBuffer: ByteBuffer =

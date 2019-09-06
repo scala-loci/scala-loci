@@ -7,7 +7,7 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
   behavior of "Message"
 
   implicit class cleanOp(string: String) {
-    def clean = string.lines map { _.stripMargin } mkString "\r\n"
+    def clean = string.linesIterator map { _.stripMargin } mkString "\r\n"
   }
 
   implicit class toStringCompleteOp(buffer: MessageBuffer) {
