@@ -57,11 +57,11 @@ class ImplicitContext[C <: blackbox.Context](val c: C) extends Preprocessor[C] {
       }
 
       tree match {
-        case Apply(fun @ Apply(_, _), args) =>
-          processBlock(fun) map { treeCopy.Apply(tree, _, args) }
-
         case tree @ Apply(fun, _) if blockExpr(fun) =>
           processImplicitContext(tree)
+
+        case Apply(fun @ Apply(_, _), args) =>
+          processBlock(fun) map { treeCopy.Apply(tree, _, args) }
 
         case _ =>
           None
