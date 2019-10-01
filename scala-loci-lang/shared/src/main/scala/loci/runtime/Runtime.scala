@@ -147,13 +147,13 @@ class Runtime[P](
         remoteConnections connect (connector, peer)
     }
 
+    listeners foreach { case (listener, peer) =>
+      remoteConnections listen (listener, peer)
+    }
+
     future foreach { requiredConnectedRemotes =>
       val remotes = optionalConnectors map { case (connector, peer) =>
         remoteConnections connect (connector, peer)
-      }
-
-      listeners foreach { case (listener, peer) =>
-        remoteConnections listen (listener, peer)
       }
 
       remoteConnections.terminated notify { _ =>
