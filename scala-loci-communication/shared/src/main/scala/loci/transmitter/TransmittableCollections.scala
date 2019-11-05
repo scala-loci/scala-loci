@@ -141,6 +141,8 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
       type Message = transmittable.Type
     } =
     ConnectedTransmittable.Proxy(
+      internal = Promise[R],
+
       provide = (value, context) => {
         value.value match {
           case Some(Success(value)) =>
@@ -165,9 +167,7 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
         }
       },
 
-      receive = (value, context) => {
-        val promise = Promise[R]
-
+      receive = (promise, value, context) => {
         def update(value: (Option[R], Option[String])) =
           value match {
             case (Some(value), _) =>
@@ -188,13 +188,11 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
         context.endpoint.closed notify { _ =>
           promise.tryFailure(new RemoteAccessException(RemoteAccessException.ChannelClosed))
         }
-
-        promise
       },
 
       direct = (promise, context) => promise.future,
 
-      proxy = (future, context) => future flatMap { _.future })
+      proxy = (promise, context) => promise.future)
 }
 
 trait TransmittableCollections extends TransmittableGeneralCollections {

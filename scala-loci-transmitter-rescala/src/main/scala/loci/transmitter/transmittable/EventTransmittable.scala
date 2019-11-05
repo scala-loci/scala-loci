@@ -2,10 +2,9 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.core.{Pulse, ReSerializable, Scheduler, Struct}
+import _root_.rescala.core.{Pulse, Scheduler, Struct}
 import _root_.rescala.interface.RescalaInterface
-import _root_.rescala.reactives.{Event, Evt, Signals}
-import loci.contexts.Immediate.Implicits.global
+import _root_.rescala.reactives.{Event, Evt}
 
 protected[transmitter] trait EventTransmittable {
   implicit def rescalaEventTransmittable[T, I, U, S <: Struct](implicit
@@ -19,6 +18,8 @@ protected[transmitter] trait EventTransmittable {
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     ConnectedTransmittable.Proxy(
+      internal = interface.Evt[U],
+
       provide = (value, context) => {
         val observer =
           (value
@@ -31,10 +32,8 @@ protected[transmitter] trait EventTransmittable {
         None -> None
       },
 
-      receive = (value, context) => {
-        val event = interface.Evt[U]
-
-        context.endpoint.receive notify {
+      receive = (event, value, context) => {
+       context.endpoint.receive notify {
           _ match {
             case (Some(value), _) =>
               event.fire(value)
@@ -49,15 +48,10 @@ protected[transmitter] trait EventTransmittable {
         }
 
         context.endpoint.closed notify { _ => event.disconnect }
-
-        event
       },
 
       direct = (event, context) => event,
 
-      proxy = (future, context) => {
-        implicit val serializer: ReSerializable[Evt[U, S]] = ReSerializable.noSerializer
-        Signals.fromFuture(future).flatten
-      })
+      proxy = (event, context) => event)
   }
 }

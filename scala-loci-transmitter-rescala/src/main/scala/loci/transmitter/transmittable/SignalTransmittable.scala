@@ -4,8 +4,7 @@ package transmittable
 
 import _root_.rescala.core.{Pulse, ReSerializable, Scheduler, Struct}
 import _root_.rescala.interface.RescalaInterface
-import _root_.rescala.reactives.{Signal, Signals, Var}
-import loci.contexts.Immediate.Implicits.global
+import _root_.rescala.reactives.{Signal, Var}
 
 protected[transmitter] trait SignalTransmittable {
   implicit def rescalaSignalTransmittable[T, I, U, S <: Struct](implicit
@@ -19,6 +18,11 @@ protected[transmitter] trait SignalTransmittable {
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     ConnectedTransmittable.Proxy(
+      internal = {
+        implicit val serializer: ReSerializable[U] = ReSerializable.noSerializer
+        interface.transaction() { _ => interface.Var.empty[U] }
+      },
+
       provide = (value, context) => {
         val signal =
           (value
@@ -33,11 +37,7 @@ protected[transmitter] trait SignalTransmittable {
         signal.readValueOnce
       },
 
-      receive = (value, context) => {
-        implicit val serializer: ReSerializable[U] = ReSerializable.noSerializer
-
-        val signal = interface.transaction() { _ => interface.Var.empty[U] }
-
+      receive = (signal, value, context) => {
         def update(signal: interface.Var[U], value: (Option[U], Option[String])) =
           value match {
             case (Some(value), _) =>
@@ -59,15 +59,10 @@ protected[transmitter] trait SignalTransmittable {
 
         update(signal, value)
         context.endpoint.receive notify { update(signal, _) }
-
-        signal
       },
 
       direct = (signal, context) => signal,
 
-      proxy = (future, context) => {
-        implicit val serializer: ReSerializable[Var[U, S]] = ReSerializable.noSerializer
-        Signals.fromFuture(future).flatten
-      })
+      proxy = (signal, context) => signal)
   }
 }

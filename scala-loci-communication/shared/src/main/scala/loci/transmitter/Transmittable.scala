@@ -305,5 +305,41 @@ object ConnectedTransmittable {
           proxy(value map { value => receive(context receive value, ctx) },  ctx)
         }
       }
+
+    def apply[B, R, P, N, B0, I0, R0, P0, T0 <: Transmittables](
+        internal: => N,
+        provide: (B, Context[B0, I0, R0, P0, T0]) => B0,
+        receive: (N, R0, Context[B0, I0, R0, P0, T0]) => Unit,
+        direct: (N, Context[B0, I0, R0, P0, T0]) => R,
+        proxy: (N, Context[B0, I0, R0, P0, T0]) => P)(
+      implicit
+        message: Transmittable.Aux.Resolution[B0, I0, R0, P0, T0]) =
+      new Proxy[B, I0, R] {
+        type Message = Transmittable.Aux[B0, I0, R0, P0, T0]
+        type Internal = N
+        type Proxy = P
+
+        val transmittables = new Transmittables.Message(message.transmittable)
+
+        def buildIntermediate(value: Base)(
+            implicit context: Context.Providing[Transmittables]) =
+          context provide provide(value, new Context)
+
+        def buildResult(value: Intermediate)(
+            implicit context: Context.Receiving[Transmittables]) = {
+          val ctx = new Context
+          val inst = internal
+          receive(inst, context receive value, ctx)
+          direct(inst, ctx)
+        }
+
+        def buildProxy(value: Future[Intermediate])(
+            implicit context: Context.Receiving[Transmittables]) = {
+          val ctx = new Context
+          val inst = internal
+          value foreach { value => receive(inst, context receive value, ctx) }
+          proxy(inst, ctx)
+        }
+      }
   }
 }
