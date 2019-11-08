@@ -3,7 +3,7 @@ package loci
 import loci.language._
 
 import scala.annotation.compileTimeOnly
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.language.experimental.macros
 import scala.language.{higherKinds, implicitConversions}
 
@@ -40,7 +40,7 @@ object Instance {
       case instance: runtime.Instance[P] => instance.terminate()
       case _ => throw new runtime.PeerImplementationError
     }
-    def terminated: Future[Unit] = instance match {
+    def terminated: Notice.Steady[Unit] = instance match {
       case instance: runtime.Instance[P] => instance.terminated
       case _ => throw new runtime.PeerImplementationError
     }

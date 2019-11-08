@@ -1,21 +1,19 @@
 package loci
 package runtime
 
-import scala.concurrent.{Future, Promise}
-
 class Instance[P](
     val values: PlacedValues,
     val remoteConnections: RemoteConnections)
   extends loci.Instance[P](0) {
 
-  private val doTerminated = Promise[Unit]
+  private val doTerminated = Notice.Steady[Unit]
 
-  remoteConnections.terminated notify { _ => doTerminated.trySuccess(()) }
+  remoteConnections.terminated foreach { _ => doTerminated.trySet() }
 
   if (remoteConnections.isTerminated)
-    doTerminated.trySuccess(())
+    doTerminated.trySet()
 
   def terminate(): Unit = remoteConnections.terminate()
 
-  val terminated: Future[Unit] = doTerminated.future
+  val terminated: Notice.Steady[Unit] = doTerminated.notice
 }

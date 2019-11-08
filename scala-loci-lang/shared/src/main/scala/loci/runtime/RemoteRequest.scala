@@ -19,10 +19,10 @@ final class RemoteRequest[V, R, T, L, M, U](
     else
       body
 
-  @inline private[loci] val remoteJoined: Notification[Remote[R]] =
+  @inline private[loci] val remoteJoined: Notice.Stream[Remote[R]] =
     system.remoteJoined(peer, remotes, earlyAccess = true)
 
-  @inline private[loci] val remoteLeft: Notification[Remote[R]] =
+  @inline private[loci] val remoteLeft: Notice.Stream[Remote[R]] =
     system.remoteLeft(peer, remotes, earlyAccess = true)
 
   @inline private[loci] def remotesReferences: Seq[Remote[R]] =

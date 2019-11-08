@@ -3,54 +3,44 @@ package communicator
 
 import scala.util.Try
 import scala.util.Success
-import scala.util.control.NonFatal
-import scala.concurrent.ExecutionContext.defaultReporter
-import java.util.concurrent.atomic.AtomicBoolean
+import scala.concurrent.ExecutionContext
 
-sealed trait ConnectionSetup[+P <: ProtocolCommon] {
-  protected trait Handler[-T <: ProtocolCommon] {
-    def notify(connection: Try[Connection[T]]): Unit
-  }
-}
+sealed trait ConnectionSetup[+P <: ProtocolCommon]
 
 trait Connector[+P <: ProtocolCommon] extends ConnectionSetup[P] {
-  final def connect(failureReporter: Throwable => Unit = defaultReporter)
+  final def connect(failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
       (handler: Try[Connection[P]] => Unit): Unit = {
-    val applyHandler = new AtomicBoolean(true)
-    connect(new Handler[P] {
-      def notify(connection: Try[Connection[P]]) =
-        if (applyHandler getAndSet false)
-          try handler(connection)
-          catch { case NonFatal(exception) => failureReporter(exception) }
-    })
+    val connected = Notice.Steady[Try[Connection[P]]]
+    connected.notice foreach handler
+    connect(connected)
   }
 
-  protected def connect(handler: Handler[P]): Unit
+  protected type Connected[-C <: ProtocolCommon] = Notice.Steady.Source[Try[Connection[C]]]
+
+  protected def connect(connectionEstablished: Connected[P]): Unit
 }
 
 trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
-  final def startListening(failureReporter: Throwable => Unit = defaultReporter)
-      (handler: Try[Connection[P]] => Unit): Try[Listening] =
-    startListening(new Handler[P] {
-      def notify(connection: Try[Connection[P]]) =
-        try handler(connection)
-        catch { case NonFatal(exception) => failureReporter(exception) }
-    })
+  final def startListening(failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
+      (handler: Try[Connection[P]] => Unit): Try[Listening] = {
+    val connected = Notice.Stream[Try[Connection[P]]]
+    connected.notice foreach handler
+    startListening(connected)
+  }
 
-  protected def startListening(handler: Handler[P]): Try[Listening]
+  protected type Connected[-C <: ProtocolCommon] = Notice.Stream.Source[Try[Connection[C]]]
+
+  protected def startListening(connectionEstablished: Connected[P]): Try[Listening]
 
   final def firstConnection: Connector[P] = new Connector[P] {
-    private val applyHandler = new AtomicBoolean(true)
-
-    protected def connect(handler: Handler[P]): Unit = {
+    protected def connect(connected: Connected[P]): Unit = {
       var firstConnection: Connection[P] = null
       var listening: Try[Listening] = null
 
       listening = startListening() {
         case success @ Success(connection) =>
-          if (applyHandler getAndSet false) {
-            handler notify success
-            connection.closed notify { _ =>
+          if (connected.trySet(success)) {
+            connection.closed foreach { _ =>
               if (listening != null)
                 listening foreach { _.stopListening }
             }

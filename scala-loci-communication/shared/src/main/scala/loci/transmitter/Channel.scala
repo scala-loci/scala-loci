@@ -2,8 +2,8 @@ package loci
 package transmitter
 
 trait Channel {
-  val receive: Notification[MessageBuffer]
-  val closed: Notification[Unit]
+  val receive: Notice.Stream[MessageBuffer]
+  val closed: Notice.Steady[Unit]
 
   def send(message: MessageBuffer): Unit
   def close(): Unit

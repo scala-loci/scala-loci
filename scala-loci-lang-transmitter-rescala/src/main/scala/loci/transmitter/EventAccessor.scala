@@ -28,8 +28,8 @@ protected[transmitter] trait EventAccessor {
 
         def update() = mapping.set(value.remotes zip value.retrieveValues)
 
-        value.remoteJoined notify { _ => update() }
-        value.remoteLeft notify { _ => update() }
+        value.remoteJoined foreach { _ => update() }
+        value.remoteLeft foreach { _ => update() }
         update()
 
         mapping
@@ -64,8 +64,8 @@ protected[transmitter] trait EventAccessor {
 
         def update() = option.set(value.retrieveValue)
 
-        value.remoteJoined notify { _ => update() }
-        value.remoteLeft notify { _ => update() }
+        value.remoteJoined foreach { _ => update() }
+        value.remoteLeft foreach { _ => update() }
         update()
 
         option

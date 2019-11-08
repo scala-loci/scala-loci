@@ -7,5 +7,5 @@ trait RemoteRef extends Equals {
   def protocol: ProtocolCommon
   def connected: Boolean
   def disconnect(): Unit
-  val disconnected: Notification[Unit]
+  val disconnected: Notice.Steady[Unit]
 }

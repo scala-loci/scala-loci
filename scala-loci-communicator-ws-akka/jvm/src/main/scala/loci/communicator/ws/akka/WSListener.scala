@@ -74,13 +74,13 @@ private object WSListener {
 
   class IntegratedRoute[P <: WS: WSProtocolFactory](properties: WS.Properties)
       extends WebSocketRoute with Listener[P] {
-    private val handlers = new ConcurrentLinkedQueue[Handler[P]]
+    private val connected = new ConcurrentLinkedQueue[Connected[P]]
 
     private def route(authenticatedName: Option[String]) =
       webSocketRoute(this, authenticatedName, properties) { connection =>
-        val iterator = handlers.iterator
+        val iterator = connected.iterator
         while (iterator.hasNext)
-          iterator.next notify connection
+          iterator.next fire connection
       }
 
     def apply(authenticatedName: String) = route(Some(authenticatedName))
@@ -89,10 +89,10 @@ private object WSListener {
 
     def apply(v: RequestContext) = route(None)(v)
 
-    protected def startListening(handler: Handler[P]): Try[Listening] = {
-      handlers add handler
+    protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
+      connected add connectionEstablished
       Success(new Listening {
-        def stopListening(): Unit = handlers remove handler
+        def stopListening(): Unit = connected remove connectionEstablished
       })
     }
   }
@@ -100,7 +100,7 @@ private object WSListener {
   protected sealed abstract class BoundRoute[P <: WS: WSProtocolFactory](
       properties: WS.Properties) extends Listener[P] {
     private var running: Future[Http.ServerBinding] = _
-    private val handlers = new ConcurrentLinkedQueue[Handler[P]]
+    private val connected = new ConcurrentLinkedQueue[Connected[P]]
 
     protected def bindRoute(
         http: HttpExt, port: Int, interface: String)(
@@ -111,24 +111,24 @@ private object WSListener {
         webSocketRoute(this, None, properties)(connectionEstablished),
         interface, port)
 
-    protected def notifyHandlers(connection: Try[Connection[P]]) = {
-      val iterator = handlers.iterator
+    protected def connectionEstablished(connection: Try[Connection[P]]) = {
+      val iterator = connected.iterator
       while (iterator.hasNext)
-        iterator.next notify connection
+        iterator.next fire connection
     }
 
-    protected def startListening(handler: Handler[P]): Try[Listening] =
+    protected def startListening(connectionEstablished: Connected[P]): Try[Listening] =
       WSActorSystem synchronized {
-        if (handlers.isEmpty)
+        if (connected.isEmpty)
           starting
 
-        handlers add handler
+        connected add connectionEstablished
 
         Success(new Listening {
           def stopListening(): Unit = WSActorSystem synchronized {
-            handlers remove handler
+            connected remove connectionEstablished
 
-            if (handlers.isEmpty) {
+            if (connected.isEmpty) {
               stopping
               running foreach { _.unbind }
               running = null
@@ -150,7 +150,7 @@ private object WSListener {
       extends BoundRoute(properties) {
 
     protected def starting() =
-      bindRoute(http, port, interface) { notifyHandlers(_) }
+      bindRoute(http, port, interface)(connectionEstablished)
 
     protected def stopping() = { }
   }
@@ -165,9 +165,9 @@ private object WSListener {
       bindRoute(Http(), port, interface) { connection =>
         connection foreach { connection =>
           WSActorSystem.retrieve
-          connection.closed notify { _ => WSActorSystem.release }
+          connection.closed foreach { _ => WSActorSystem.release }
         }
-        notifyHandlers(connection)
+        connectionEstablished(connection)
       }
     }
 

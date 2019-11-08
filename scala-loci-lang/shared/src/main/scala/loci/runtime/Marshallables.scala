@@ -1,11 +1,10 @@
 package loci
 package runtime
 
-import loci.contexts.Immediate.Implicits.global
 import loci.transmitter._
 
 import scala.concurrent.Future
-import scala.util.Success
+import scala.util.{Success, Try}
 
 object Marshallables {
   object unit extends Marshallable[Unit, Unit, Future[Unit]] {
@@ -13,8 +12,8 @@ object Marshallables {
       MessageBuffer.empty
     def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
       Success(())
-    def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef) =
-      value map { _ => () }
+    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+      (value map { _ map { _ => () } }).toFutureFromTry
     def connected = false
   }
 
@@ -24,8 +23,8 @@ object Marshallables {
       nothing
     def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
       nothing
-    def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef) =
-      value map { _ => nothing }
+    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+      (value map { _ map { _ => nothing } }).toFutureFromTry
     def connected = false
   }
 }

@@ -1,11 +1,10 @@
 package loci
 package transmitter
 
-import loci.contexts.Immediate.Implicits.global
-
 import scala.annotation.unchecked.uncheckedVariance
 import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.concurrent.Future
+import scala.util.Try
 
 
 final class /[D <: Transmittable.Delegating, T <: Transmittable[_, _, _]](
@@ -51,7 +50,7 @@ sealed trait Transmittable[-B, I, +R] extends Transmittable.Delegating {
   def buildResult(value: Intermediate)(
     implicit context: Context.Receiving[Transmittables]): Result
 
-  def buildProxy(value: Future[Intermediate])(
+  def buildProxy(value: Notice.Steady[Try[Intermediate]])(
     implicit context: Context.Receiving[Transmittables]): Proxy
 }
 
@@ -146,8 +145,8 @@ object IdenticallyTransmittable {
     def buildResult(value: Intermediate)(
       implicit context: Context.Receiving[Transmittables]) = value
 
-    def buildProxy(value: Future[Intermediate])(
-      implicit context: Context.Receiving[Transmittables]) = value
+    def buildProxy(value: Notice.Steady[Try[Intermediate]])(
+      implicit context: Context.Receiving[Transmittables]) = value.toFutureFromTry
   }
 }
 
@@ -174,9 +173,9 @@ object TransformingTransmittable {
           implicit context: Context.Receiving[Transmittables]) =
         receive(value, new Context(context.remote))
 
-      def buildProxy(value: Future[Intermediate])(
+      def buildProxy(value: Notice.Steady[Try[Intermediate]])(
           implicit context: Context.Receiving[Transmittables]) =
-        value map buildResult
+        (value map { _ map buildResult }).toFutureFromTry
     }
 }
 
@@ -224,9 +223,9 @@ object DelegatingTransmittable {
           implicit context: Context.Receiving[Transmittables]) =
         receive(value, new ReceivingContext)
 
-      def buildProxy(value: Future[Intermediate])(
+      def buildProxy(value: Notice.Steady[Try[Intermediate]])(
           implicit context: Context.Receiving[Transmittables]) =
-        value map buildResult
+        (value map { _ map buildResult }).toFutureFromTry
     }
 }
 
@@ -262,9 +261,9 @@ object ConnectedTransmittable {
           implicit context: Context.Receiving[Transmittables]) =
         receive(context receive value, new Context)
 
-      def buildProxy(value: Future[Intermediate])(
+      def buildProxy(value: Notice.Steady[Try[Intermediate]])(
           implicit context: Context.Receiving[Transmittables]) =
-        value map buildResult
+        (value map { _ map buildResult }).toFutureFromTry
     }
 
 
@@ -279,7 +278,7 @@ object ConnectedTransmittable {
         provide: (B, Context[B0, I0, R0, P0, T0]) => B0,
         receive: (R0, Context[B0, I0, R0, P0, T0]) => N,
         direct: (N, Context[B0, I0, R0, P0, T0]) => R,
-        proxy: (Future[N], Context[B0, I0, R0, P0, T0]) => P)(
+        proxy: (Notice.Steady[Try[N]], Context[B0, I0, R0, P0, T0]) => P)(
       implicit
         message: Transmittable.Aux.Resolution[B0, I0, R0, P0, T0]) =
       new Proxy[B, I0, R] {
@@ -299,10 +298,10 @@ object ConnectedTransmittable {
           direct(receive(context receive value, ctx), ctx)
         }
 
-        def buildProxy(value: Future[Intermediate])(
+        def buildProxy(value: Notice.Steady[Try[Intermediate]])(
             implicit context: Context.Receiving[Transmittables]) = {
           val ctx = new Context
-          proxy(value map { value => receive(context receive value, ctx) },  ctx)
+          proxy(value map { _ map { value => receive(context receive value, ctx) } },  ctx)
         }
       }
 
@@ -333,11 +332,11 @@ object ConnectedTransmittable {
           direct(inst, ctx)
         }
 
-        def buildProxy(value: Future[Intermediate])(
+        def buildProxy(value: Notice.Steady[Try[Intermediate]])(
             implicit context: Context.Receiving[Transmittables]) = {
           val ctx = new Context
           val inst = internal
-          value foreach { value => receive(inst, context receive value, ctx) }
+          value foreach { _ foreach { value => receive(inst, context receive value, ctx) } }
           proxy(inst, ctx)
         }
       }

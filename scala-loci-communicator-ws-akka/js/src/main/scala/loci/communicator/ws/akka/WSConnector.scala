@@ -13,7 +13,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
   url: String, properties: WS.Properties)
     extends Connector[P] {
 
-  protected def connect(handler: Handler[P]) = {
+  protected def connect(connectionEstablished: Connected[P]) = {
 
     val socket = new dom.WebSocket(url)
 
@@ -36,7 +36,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
 
       implicitly[WSProtocolFactory[P]] make (url, host, port, this, tls, tls, tls) match {
         case Failure(exception) =>
-          handler notify Failure(exception)
+          connectionEstablished set Failure(exception)
 
         case Success(ws) =>
 
@@ -45,34 +45,34 @@ private class WSConnector[P <: WS: WSProtocolFactory](
           var timeoutHandle: SetTimeoutHandle = null
           var intervalHandle: SetIntervalHandle = null
 
-          val resetTimeout = Notifier[Unit]
-          val resetInterval = Notifier[Unit]
+          val resetTimeout = Notice.Stream[Unit]
+          val resetInterval = Notice.Stream[Unit]
 
 
           // connection interface
 
-          val doClosed = Notifier[Unit]
-          val doReceive = Notifier[MessageBuffer]
+          val doClosed = Notice.Steady[Unit]
+          val doReceive = Notice.Stream[MessageBuffer]
 
           val connection = new Connection[P] {
             val protocol = ws
-            val closed = doClosed.notification
-            val receive = doReceive.notification
+            val closed = doClosed.notice
+            val receive = doReceive.notice
 
             def open = socket.readyState == dom.WebSocket.OPEN
             def send(data: MessageBuffer) = {
               socket send data.backingArrayBuffer
-              resetInterval()
+              resetInterval.fire()
             }
             def close() = socket.close()
           }
 
-          handler notify Success(connection)
+          connectionEstablished set Success(connection)
 
 
           // heartbeat
 
-          resetTimeout.notification notify { _ =>
+          resetTimeout.notice foreach { _ =>
             if (timeoutHandle != null)
               clearTimeout(timeoutHandle)
             timeoutHandle = setTimeout(properties.heartbeatTimeout) {
@@ -80,7 +80,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
             }
           }
 
-          resetInterval.notification notify { _ =>
+          resetInterval.notice foreach { _ =>
             if (intervalHandle != null)
               clearInterval(intervalHandle)
             intervalHandle = setInterval(properties.heartbeatDelay) {
@@ -88,8 +88,8 @@ private class WSConnector[P <: WS: WSProtocolFactory](
             }
           }
 
-          resetTimeout()
-          resetInterval()
+          resetTimeout.fire()
+          resetInterval.fire()
 
 
           // socket listeners
@@ -97,35 +97,34 @@ private class WSConnector[P <: WS: WSProtocolFactory](
           socket.onmessage = { event: dom.MessageEvent =>
             event.data match {
               case data: ArrayBuffer =>
-                doReceive(MessageBuffer wrapArrayBuffer data)
+                doReceive fire (MessageBuffer wrapArrayBuffer data)
 
               case data: dom.Blob =>
                 val reader = new dom.FileReader
                 reader.onload = { event: dom.Event =>
-                  doReceive(MessageBuffer wrapArrayBuffer
-                    event.target.asInstanceOf[js.Dynamic]
-                         .result.asInstanceOf[ArrayBuffer])
+                  doReceive fire (MessageBuffer wrapArrayBuffer
+                    event.target.asInstanceOf[js.Dynamic].result.asInstanceOf[ArrayBuffer])
                 }
                 reader readAsArrayBuffer data
 
               case _ =>
             }
-            resetTimeout()
+            resetTimeout.fire()
           }
 
           socket.onclose = { event: dom.CloseEvent =>
-            handler notify Failure(
+            connectionEstablished set Failure(
               new ConnectionException("connection closed: " + event.reason))
 
             clearInterval(intervalHandle)
             clearTimeout(timeoutHandle)
-            doClosed()
+            doClosed.set()
           }
       }
     }
 
     socket.onerror = { event: dom.Event =>
-      handler notify Failure(
+      connectionEstablished set Failure(
         new ConnectionException("connection closed: connection error"))
 
       socket.close()

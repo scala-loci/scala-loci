@@ -35,7 +35,7 @@ private object WSConnector {
     new WSConnector[P](
       Http(), properties, webSocketRequest, {
         case Success(connection) =>
-          connection.closed notify { _ => WSActorSystem.release }
+          connection.closed foreach { _ => WSActorSystem.release }
         case _ =>
           WSActorSystem.release
       })
@@ -49,19 +49,19 @@ private object WSConnector {
     materializer: Materializer)
       extends Connector[P] {
 
-    def connect(handler: Handler[P]) = {
+    def connect(connectionEstablished: Connected[P]) = {
       val protocolPromise = Promise[P]
 
-      def connectionEstablished(connection: Try[Connection[P]]) = {
+      def connected(connection: Try[Connection[P]]) = {
         webSocketConnectionEstablished(connection)
-        handler notify connection
+        connectionEstablished set connection
       }
 
       val (future, _) =
         try http singleWebSocketRequest (
           webSocketRequest,
           WSHandler handleWebSocket (
-            protocolPromise.future, properties, connectionEstablished))
+            protocolPromise.future, properties, connected))
         catch {
           case NonFatal(exception) => (Future failed exception, ())
         }
@@ -81,17 +81,17 @@ private object WSConnector {
               WSConnector.this, isAuthenticated, isEncrypted, isProtected,
               Some(Right(response)), Left(certificates))  match {
             case Failure(exception) =>
-              connectionEstablished(Failure(exception))
+              connected(Failure(exception))
 
             case Success(ws) =>
               protocolPromise success ws
           }
 
         case Success(InvalidUpgradeResponse(_, cause)) =>
-          connectionEstablished(Failure(new ConnectionException(cause)))
+          connected(Failure(new ConnectionException(cause)))
 
         case Failure(exception) =>
-          connectionEstablished(Failure(exception))
+          connected(Failure(exception))
       }
     }
   }

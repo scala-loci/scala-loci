@@ -17,7 +17,7 @@ private class TCPListener(
   port: Int, interface: String, properties: TCP.Properties)
     extends Listener[TCP] {
 
-  protected def startListening(handler: Handler[TCP]): Try[Listening] =
+  protected def startListening(connectionEstablished: Connected[TCP]): Try[Listening] =
     try {
       val running = new AtomicBoolean(true)
       val socket = new ServerSocket(port, 0, InetAddress.getByName(interface))
@@ -38,7 +38,7 @@ private class TCPListener(
                 executor execute new Runnable {
                   def run = TCPHandler handleConnection (
                     connection, properties, TCPListener.this, { connection =>
-                      handler notify Success(connection)
+                      connectionEstablished fire Success(connection)
                     })
                 }
             }
@@ -46,7 +46,7 @@ private class TCPListener(
             case exception: SocketException =>
               if (running getAndSet false) {
                 terminate
-                handler notify Failure(exception)
+                connectionEstablished fire Failure(exception)
               }
           }
       }.start

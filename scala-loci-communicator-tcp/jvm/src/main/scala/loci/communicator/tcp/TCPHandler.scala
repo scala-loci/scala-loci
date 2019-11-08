@@ -54,8 +54,8 @@ private object TCPHandler {
     // connection interface
 
     val isOpen = new AtomicBoolean(true)
-    val doClosed = Notifier[Unit]
-    val doReceive = Notifier[MessageBuffer]
+    val doClosed = Notice.Steady[Unit]
+    val doReceive = Notice.Stream[MessageBuffer]
 
     val connection = new Connection[TCP] {
       val protocol = new TCP {
@@ -67,8 +67,8 @@ private object TCPHandler {
         val integrityProtected = false
       }
 
-      val closed = doClosed.notification
-      val receive = doReceive.notification
+      val closed = doClosed.notice
+      val receive = doReceive.notice
 
       def open = isOpen.get
 
@@ -101,7 +101,7 @@ private object TCPHandler {
           ignoreIOException { socket.close }
 
           isOpen set false
-          doClosed()
+          doClosed.set()
         }
       }
     }
@@ -154,7 +154,7 @@ private object TCPHandler {
               size -= 1
             }
 
-            doReceive(MessageBuffer wrapArray arrayBuilder.result)
+            doReceive fire (MessageBuffer wrapArray arrayBuilder.result)
           }
           else
             connection.close

@@ -32,11 +32,11 @@ object Registry {
   private final case class Channel(
       name: String, anchor: String, remote: RemoteRef, registry: Registry)
         extends transmitter.Channel with Channels.Channel {
-    val doReceive = Notifier[MessageBuffer]
-    val doClosed = Notifier[Unit]
+    val doReceive = Notice.Stream[MessageBuffer]
+    val doClosed = Notice.Steady[Unit]
 
-    val receive = doReceive.notification
-    val closed = doClosed.notification
+    val receive = doReceive.notice
+    val closed = doClosed.notice
 
     def send(message: MessageBuffer) = registry send (this, message)
     def close() = registry.channels close (this, notifyRemote = true)
@@ -69,9 +69,9 @@ class Registry {
   private val channelMessages =
     new ConcurrentHashMap[String, ListBuffer[Message[Registry.Message.type]]]
 
-  val remoteJoined: Notification[RemoteRef] = connections.remoteJoined
+  val remoteJoined: Notice.Stream[RemoteRef] = connections.remoteJoined
 
-  val remoteLeft: Notification[RemoteRef] = connections.remoteLeft
+  val remoteLeft: Notice.Stream[RemoteRef] = connections.remoteLeft
 
   def remotes: List[RemoteRef] = connections.remotes
 
@@ -92,7 +92,7 @@ class Registry {
           Map(Registry.Message.Close -> Seq(channel.name)),
           MessageBuffer.empty))
 
-    channel.doClosed()
+    channel.doClosed.set()
   }
 
 
@@ -119,14 +119,14 @@ class Registry {
       connections send (channel.remote, message)
   }
 
-  connections.remoteLeft notify { remote =>
+  connections.remoteLeft foreach { remote =>
     channels close remote
     bindings.channelsClosed
   }
 
   connections.run
 
-  connections.receive notify { remoteMessage =>
+  connections.receive foreach { remoteMessage =>
     val (remote, Message(_, properties, message)) = remoteMessage
     (properties get Registry.Message.Request,
      properties get Registry.Message.Response,
@@ -151,7 +151,7 @@ class Registry {
           Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, None, None, Some(Seq(channelName)), None) =>
-        channels get (channelName, remote) foreach { _ doReceive message }
+        channels get (channelName, remote) foreach { _.doReceive fire message }
 
       case (None, None, None, None, Some(Seq(channelName))) =>
         channels get (channelName, remote) foreach { channels close (_, notifyRemote = false) }

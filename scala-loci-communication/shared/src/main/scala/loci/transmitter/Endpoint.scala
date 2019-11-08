@@ -2,8 +2,8 @@ package loci
 package transmitter
 
 trait Endpoint[T, U] {
-  val closed: Notification[Unit]
+  val closed: Notice.Steady[Unit]
   def close(): Unit
   def send(value: T): Unit
-  val receive: Notification[U]
+  val receive: Notice.Stream[U]
 }

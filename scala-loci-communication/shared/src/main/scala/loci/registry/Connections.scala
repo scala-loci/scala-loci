@@ -18,11 +18,11 @@ object Connections {
   private final case class RemoteRef(
       id: Long, protocol: Protocol)(
       connections: Connections[_]) extends transmitter.RemoteRef {
-    val doDisconnected = Notifier[Unit]
+    val doDisconnected = Notice.Steady[Unit]
 
     def connected = connections isConnected this
     def disconnect() = connections disconnect this
-    val disconnected = doDisconnected.notification
+    val disconnected = doDisconnected.notice
   }
 }
 
@@ -69,11 +69,9 @@ class Connections[M: Message.Method]
         handler(Failure(exception))
     }
 
-  remoteLeft notify {
-    _ match {
-      case remote: Connections.RemoteRef =>
-        remote.doDisconnected()
-      case _ =>
-    }
+  remoteLeft foreach {
+    case remote: Connections.RemoteRef =>
+      remote.doDisconnected.set()
+    case _ =>
   }
 }

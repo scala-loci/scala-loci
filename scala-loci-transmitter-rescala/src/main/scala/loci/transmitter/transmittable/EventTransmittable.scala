@@ -27,27 +27,25 @@ protected[transmitter] trait EventTransmittable {
             recover { case exception => Some(None -> Some(RemoteAccessException.serialize(exception))) }
             observe context.endpoint.send)
 
-        context.endpoint.closed notify { _ => observer.remove() }
+        context.endpoint.closed foreach { _ => observer.remove() }
 
         None -> None
       },
 
       receive = (event, value, context) => {
-       context.endpoint.receive notify {
-          _ match {
-            case (Some(value), _) =>
-              event.fire(value)
+        context.endpoint.receive foreach {
+          case (Some(value), _) =>
+            event.fire(value)
 
-            case (_, Some(value)) =>
-              interface.transaction(event) { implicit turn =>
-                event.admitPulse(Pulse.Exceptional(RemoteAccessException.deserialize(value)))
-              }
+          case (_, Some(value)) =>
+            interface.transaction(event) { implicit turn =>
+              event.admitPulse(Pulse.Exceptional(RemoteAccessException.deserialize(value)))
+            }
 
-            case _ =>
-          }
+          case _ =>
         }
 
-        context.endpoint.closed notify { _ => event.disconnect }
+        context.endpoint.closed foreach { _ => event.disconnect }
       },
 
       direct = (event, context) => event,

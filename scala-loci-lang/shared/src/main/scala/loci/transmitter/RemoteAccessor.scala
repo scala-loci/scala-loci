@@ -67,8 +67,8 @@ object RemoteAccessor {
         ev: Transmission[V, R, T, L, _]) {
 
       def cache[B <: AnyRef](id: Any)(body: => B): B = ev.cache(id, body)
-      val remoteJoined: Notification[Remote[R]] = ev.remoteJoined
-      val remoteLeft: Notification[Remote[R]] = ev.remoteLeft
+      val remoteJoined: Notice.Stream[Remote[R]] = ev.remoteJoined
+      val remoteLeft: Notice.Stream[Remote[R]] = ev.remoteLeft
       def remotes: Seq[Remote[R]] = ev.remotesReferences
       def retrieveValues: Seq[T] = ev.retrieveValues
     }

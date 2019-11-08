@@ -1,17 +1,14 @@
 package loci
 package transmitter
 
-import loci.contexts.Immediate.Implicits.global
-
 import scala.util.Try
 import scala.annotation.implicitNotFound
-import scala.concurrent.Future
 
 @implicitNotFound("${B} is not marshallable")
 trait Marshallable[B, R, P] {
   def marshal(value: B, abstraction: AbstractionRef): MessageBuffer
   def unmarshal(value: MessageBuffer, abstraction: AbstractionRef): Try[R]
-  def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef): P
+  def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef): P
 
   type Type = Marshallable[B, R, P]
 
@@ -52,11 +49,11 @@ object Marshallable {
         serializer deserialize value map transmittable.buildResult
       }
 
-      def unmarshal(value: Future[MessageBuffer], abstraction: AbstractionRef) = {
+      def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) = {
         implicit val context = contextBuilder(
           transmittable.transmittables, abstraction, ContextBuilder.receiving)
         transmittable buildProxy (
-          value transform (v => (serializer deserialize v).get, identity))
+          value map { _ flatMap serializer.deserialize })
       }
     }
 }

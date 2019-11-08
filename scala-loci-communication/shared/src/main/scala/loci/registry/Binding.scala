@@ -5,14 +5,13 @@ import transmitter.AbstractionRef
 import transmitter.Marshallable
 import transmitter.RemoteRef
 import scala.util.Try
-import scala.concurrent.Future
 
 trait Binding[T] {
   type RemoteCall
   val name: String
   def dispatch(function: RemoteRef => T, message: MessageBuffer, abstraction: AbstractionRef)
     : Try[MessageBuffer]
-  def call(abstraction: AbstractionRef)(handler: MessageBuffer => Future[MessageBuffer])
+  def call(abstraction: AbstractionRef)(handler: MessageBuffer => Notice.Steady[Try[MessageBuffer]])
     : RemoteCall
 }
 
@@ -47,7 +46,7 @@ trait ValueBindingBuilder {
 
         def call(
             abstraction: AbstractionRef)(
-            handler: MessageBuffer => Future[MessageBuffer]) =
+            handler: MessageBuffer => Notice.Steady[Try[MessageBuffer]]) =
           res.unmarshal(handler(MessageBuffer.empty), abstraction)
       }
     }

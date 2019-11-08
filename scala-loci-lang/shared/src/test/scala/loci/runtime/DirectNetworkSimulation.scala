@@ -5,6 +5,7 @@ import loci.communicator._
 import loci.runtime.DirectConnectionSimulation.SimulationProtocol
 
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.ExecutionContext
 import scala.util.{Random, Success}
 
 object DirectConnectionSimulation {
@@ -44,8 +45,8 @@ trait DirectConnectionSimulation {
       extends Connection[SimulationProtocol] {
     var connection: DirectConnection = _
     var isOpen = true
-    val doClosed = Notifier[Unit]
-    val doReceive = Notifier[MessageBuffer]
+    val doClosed = Notice.Steady[Unit](ExecutionContext.defaultReporter)
+    val doReceive = Notice.Stream[MessageBuffer](ExecutionContext.defaultReporter)
 
     val protocol = new Protocol
         with SetupInfo with SecurityInfo with SymmetryInfo with Bidirectional {
@@ -54,23 +55,23 @@ trait DirectConnectionSimulation {
       val integrityProtected = false
       val authenticated = false
     }
-    val closed = doClosed.notification
-    val receive = doReceive.notification
+    val closed = doClosed.notice
+    val receive = doReceive.notice
 
     def open = isOpen
 
     def close() = {
       isOpen = false
-      doClosed()
+      doClosed.set()
       events += this -> { () =>
         connection.isOpen = false
-        connection.doClosed()
+        connection.doClosed.set()
       }
       evaluateEvents()
     }
 
     def send(data: MessageBuffer) = {
-      events += this -> { () => connection.doReceive(data) }
+      events += this -> { () => connection.doReceive.fire(data) }
       evaluateEvents()
     }
   }
@@ -83,21 +84,21 @@ class NetworkListener(
 
   protected val random = new Random(seed.toLong)
 
-  protected val handlers = ListBuffer.empty[Handler[SimulationProtocol]]
+  protected val connected = ListBuffer.empty[Connected[SimulationProtocol]]
 
   def createConnector = new Connector[SimulationProtocol] {
-    protected def connect(handler: Handler[SimulationProtocol]) = {
+    protected def connect(connectionEstablished: Connected[SimulationProtocol]) = {
       val connection0 = new DirectConnection(NetworkListener.this)
       val connection1 = new DirectConnection(this)
       connection0.connection = connection1
       connection1.connection = connection0
-      handlers foreach { _ notify Success(connection0) }
-      handler notify Success(connection1)
+      connected foreach { _ fire Success(connection0) }
+      connectionEstablished set Success(connection1)
     }
   }
 
-  protected def startListening(handler: Handler[SimulationProtocol]) = {
-    handlers += handler
+  protected def startListening(connectionEstablished: Connected[SimulationProtocol]) = {
+    connected += connectionEstablished
     Success(new Listening {
       def stopListening() = { }
     })
@@ -112,13 +113,13 @@ class NetworkConnector(
   protected val random = new Random(seed.toLong)
 
   val first = new Connector[SimulationProtocol] {
-    protected def connect(handler: Handler[SimulationProtocol]) =
-      handler notify Success(connection0)
+    protected def connect(connectionEstablished: Connected[SimulationProtocol]) =
+      connectionEstablished set Success(connection0)
   }
 
   val second = new Connector[SimulationProtocol] {
-    protected def connect(handler: Handler[SimulationProtocol]) =
-      handler notify Success(connection1)
+    protected def connect(connectionEstablished: Connected[SimulationProtocol]) =
+      connectionEstablished set Success(connection1)
   }
 
   protected val connection0: DirectConnection = new DirectConnection(first)

@@ -10,7 +10,7 @@ import loci.transmitter.{RemoteAccessException, RemoteRef}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.{ExecutionContext, Future}
 import scala.ref.WeakReference
 import scala.util.{Failure, Success, Try}
 
@@ -28,7 +28,7 @@ class System(
     executionContext: ExecutionContext,
     remoteConnections: RemoteConnections,
     singleConnectedRemotes: Seq[Remote.Reference],
-    connectingRemotes: Seq[Future[Remote.Reference]]) {
+    connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]]) {
 
   private implicit val context: ExecutionContext = executionContext
 
@@ -84,13 +84,13 @@ class System(
   private def isConnected(remote: Remote.Reference): Boolean =
     remoteConnections isConnected remote
 
-  private val doRemoteJoined = Notifier[Remote.Reference]
+  private val doRemoteJoined = Notice.Stream[Remote.Reference]
 
-  private val doRemoteJoinedEarly = Notifier[Remote.Reference]
+  private val doRemoteJoinedEarly = Notice.Stream[Remote.Reference]
 
-  private val doRemoteLeft = Notifier[Remote.Reference]
+  private val doRemoteLeft = Notice.Stream[Remote.Reference]
 
-  private val doRemoteLeftEarly = Notifier[Remote.Reference]
+  private val doRemoteLeftEarly = Notice.Stream[Remote.Reference]
 
   private val singleRemotes = (singleConnectedRemotes flatMap { remote =>
     remote.signature.bases map { _ -> remote }
@@ -120,11 +120,11 @@ class System(
       }
 
   private def remoteNotification(
-      earlyNotification: Notification[Remote.Reference],
-      lateNotification: Notification[Remote.Reference],
+      earlyNotification: Notice.Stream[Remote.Reference],
+      lateNotification: Notice.Stream[Remote.Reference],
       peer: Peer.Signature,
       remotes: Seq[RemoteRef],
-      earlyAccess: Boolean): Notification[Remote.Reference] = {
+      earlyAccess: Boolean): Notice.Stream[Remote.Reference] = {
     val notification =
       if (earlyAccess)
         earlyNotification
@@ -142,17 +142,17 @@ class System(
   private[runtime] def remoteJoined(
       peer: Peer.Signature,
       remotes: Seq[RemoteRef],
-      earlyAccess: Boolean): Notification[Remote.Reference] =
+      earlyAccess: Boolean): Notice.Stream[Remote.Reference] =
     remoteNotification(
-      doRemoteJoinedEarly.notification, doRemoteJoined.notification,
+      doRemoteJoinedEarly.notice, doRemoteJoined.notice,
       peer, remotes, earlyAccess)
 
   private[runtime] def remoteLeft(
       peer: Peer.Signature,
       remotes: Seq[RemoteRef],
-      earlyAccess: Boolean): Notification[Remote.Reference] =
+      earlyAccess: Boolean): Notice.Stream[Remote.Reference] =
     remoteNotification(
-      doRemoteLeftEarly.notification, doRemoteLeft.notification,
+      doRemoteLeftEarly.notice, doRemoteLeft.notice,
       peer, remotes, earlyAccess)
 
 
@@ -271,7 +271,7 @@ class System(
         bufferedSend(channel, CloseMessage(channel.name))
 
       context execute new Runnable {
-        def run() = channel.doClosed()
+        def run() = channel.doClosed.set()
       }
     }
   }
@@ -325,31 +325,31 @@ class System(
     dispatcher.dispatch(StartedMessageDispatch(remote))
   }
 
-  remoteConnections.remoteJoined notify { remote =>
-    doRemoteJoinedEarly(remote)
+  remoteConnections.remoteJoined foreach { remote =>
+    doRemoteJoinedEarly.fire(remote)
     dispatcher.dispatch(StartedMessageDispatch(remote))
   }
 
-  remoteConnections.remoteLeft notify { remote =>
-    doRemoteLeftEarly(remote)
+  remoteConnections.remoteLeft foreach { remote =>
+    doRemoteLeftEarly.fire(remote)
     context execute new Runnable {
       def run() = {
-        doRemoteLeft(remote)
-        remote.doDisconnected()
+        doRemoteLeft.fire(remote)
+        remote.doDisconnected.set()
       }
     }
     closeChannels(remote)
   }
 
-  remoteConnections.constraintsViolated notify { _ =>
+  remoteConnections.constraintsViolated foreach { _ =>
     remoteConnections.terminate()
   }
 
-  remoteConnections.terminated notify { _ =>
+  remoteConnections.terminated foreach { _ =>
     (mainThread getAndSet None) foreach { _.interrupt }
   }
 
-  remoteConnections.receive notify { remoteMessage =>
+  remoteConnections.receive foreach { remoteMessage =>
     val (remote, message) = remoteMessage
     dispatcher.dispatch(MessageDispatch(remote, message))
   }
@@ -381,7 +381,7 @@ class System(
       case StartedMessage() =>
         if (Option(startedRemotes.putIfAbsent(remote, remote)).isEmpty)
           context execute new Runnable {
-            def run() = doRemoteJoined(remote)
+            def run() = doRemoteJoined.fire(remote)
           }
 
           if (singleConnectedRemotes.nonEmpty) {
@@ -447,7 +447,7 @@ class System(
         }
 
       case ChannelMessage(ChannelMessage.Type.Update, channelName, None, payload) =>
-        getChannel(channelName, remote) foreach { _.doReceive(payload) }
+        getChannel(channelName, remote) foreach { _.doReceive.fire(payload) }
 
       case CloseMessage(channelName) =>
         getChannel(channelName, remote) foreach { closeChannel(_, notifyRemote = false) }
@@ -491,26 +491,26 @@ class System(
 
         val value = new System.ValueCell[T] {
           lazy val value = {
-            val promise = Promise[MessageBuffer]
+            val response = Notice.Steady[Try[MessageBuffer]]
 
             if (isConnected(remote)) {
               channelResponseHandlers.put(
                 channel,
-                placedValue.result.connected -> { promise tryComplete _ })
+                placedValue.result.connected -> { response.trySet(_) })
 
-              channel.closed notify { _ =>
-                promise tryFailure new RemoteAccessException(RemoteAccessException.ChannelClosed)
+              channel.closed foreach { _ =>
+                response.trySet(Failure(new RemoteAccessException(RemoteAccessException.ChannelClosed)))
               }
 
               if (!isChannelOpen(channel))
-                promise tryFailure new RemoteAccessException(RemoteAccessException.ChannelClosed)
+                response.trySet(Failure(new RemoteAccessException(RemoteAccessException.ChannelClosed)))
               else
                 sendRequest(ChannelMessage.Type.Request, reference)
             }
             else
-              promise tryFailure new RemoteAccessException(RemoteAccessException.RemoteDisconnected)
+              response.trySet(Failure(new RemoteAccessException(RemoteAccessException.RemoteDisconnected)))
 
-            placedValue.result.unmarshal(promise.future, reference)
+            placedValue.result.unmarshal(response.notice, reference)
           }
         }
 

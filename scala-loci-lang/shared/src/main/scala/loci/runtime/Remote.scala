@@ -17,14 +17,14 @@ object Remote {
 
     private[runtime] val isConnected = new AtomicBoolean(true)
     private[runtime] val isAuthenticated = new AtomicBoolean(protocol.authenticated)
-    private[runtime] val doDisconnected = Notifier[Unit]
+    private[runtime] val doDisconnected = Notice.Steady[Unit]
 
     def asReference = this
     def authenticated = isAuthenticated.get
     def authenticate() = isAuthenticated set true
     def connected = isConnected.get
     def disconnect() = remoteConnections disconnect this
-    val disconnected = doDisconnected.notification
+    val disconnected = doDisconnected.notice
   }
 
   @compileTimeOnly("Call only allowed in multitier code. Use `remote.asRemote[P]` instead.")

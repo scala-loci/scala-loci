@@ -35,14 +35,14 @@ class RuntimeSpec extends FlatSpec with Matchers {
         { (ties, context, connections, connected, connecting) =>
           events += Server(New)
 
-          connections.receive notify { remoteMessage =>
+          connections.receive foreach { remoteMessage =>
             val (_, Message(_, properties, payload)) = remoteMessage
             events += Server(Receive(properties("Type"), payload.toString(0, payload.length)))
           }
 
-          connections.constraintsViolated notify { _ => events += Server(ConstraintsViolated) }
+          connections.constraintsViolated foreach { _ => events += Server(ConstraintsViolated) }
 
-          connections.remoteJoined notify { remote =>
+          connections.remoteJoined foreach { remote =>
             connections send (
               remote,
               ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from server"))
@@ -66,12 +66,12 @@ class RuntimeSpec extends FlatSpec with Matchers {
         { (ties, context, connections, connected, connecting) =>
           events += Client0(New)
 
-          connections.receive notify { remoteMessage =>
+          connections.receive foreach { remoteMessage =>
             val (_, Message(_, properties, payload)) = remoteMessage
             events += Client0(Receive(properties("Type"), payload toString (0, payload.length)))
           }
 
-          connections.constraintsViolated notify { _ => events += Client0(ConstraintsViolated) }
+          connections.constraintsViolated foreach { _ => events += Client0(ConstraintsViolated) }
 
           connections send (
             connections.remotes.head,
@@ -94,12 +94,12 @@ class RuntimeSpec extends FlatSpec with Matchers {
         { (ties, context, connections, connected, connecting) =>
           events += Client1(New)
 
-          connections.receive notify { remoteMessage =>
+          connections.receive foreach { remoteMessage =>
             val (_, Message(_, properties, payload)) = remoteMessage
             events += Client1(Receive(properties("Type"), payload toString (0, payload.length)))
           }
 
-          connections.constraintsViolated notify { _ => events += Client1(ConstraintsViolated) }
+          connections.constraintsViolated foreach { _ => events += Client1(ConstraintsViolated) }
 
           connections send (
             connections.remotes.head,

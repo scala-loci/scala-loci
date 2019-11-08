@@ -120,7 +120,7 @@ object SourceGenerator {
           |            abstraction: AbstractionRef) = $dispatch
           |        def call(
           |            abstraction: AbstractionRef)(
-          |            handler: MessageBuffer => Future[MessageBuffer]) =
+          |            handler: MessageBuffer => Notice.Steady[Try[MessageBuffer]]) =
           |          ($typedArgs) =>
           |            res.unmarshal(handler($marshalling), abstraction)
           |      }
@@ -138,7 +138,6 @@ object SourceGenerator {
            |import transmitter.Marshallable
            |import transmitter.RemoteRef
            |import scala.util.Try
-           |import scala.concurrent.Future
            |
            |trait FunctionsBindingBuilder extends ValueBindingBuilder {
            |${builders.mkString}

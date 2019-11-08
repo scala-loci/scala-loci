@@ -6,7 +6,8 @@ import loci.messaging._
 
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
-import scala.concurrent.{CanAwait, ExecutionContext, Future, Promise}
+import scala.concurrent.{CanAwait, ExecutionContext, TimeoutException}
+import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 class Runtime[P](
@@ -17,11 +18,11 @@ class Runtime[P](
     system: Runtime.SystemFactory)
   extends loci.Runtime[P] {
 
-  private val doStarted = Notifier[Instance[P]]
+  private val doStarted = Notice.Stream[Instance[P]]
 
-  private val doInstance = Promise[Instance[P]]
+  private val doInstance = Notice.Steady[Instance[P]]
 
-  private val doTerminated = Promise[Unit]
+  private val doTerminated = Notice.Steady[Unit]
 
   private val remoteConnections = new RemoteConnections(peer, ties)
 
@@ -36,8 +37,6 @@ class Runtime[P](
 
     val instances = mutable.ListBuffer.empty[Instance[P]]
   }
-
-  private implicit val executionContext: ExecutionContext = contexts.Immediate.global
 
   @throws[IllegalArgumentException](
     "if the connection setup does not respect the tie specification")
@@ -103,7 +102,7 @@ class Runtime[P](
           }
         }
         else {
-          remoteConnections.terminated notify { _ => terminate() }
+          remoteConnections.terminated foreach { _ => terminate() }
 
           if (remoteConnections.isTerminated)
             terminate()
@@ -114,7 +113,7 @@ class Runtime[P](
       catch {
         case NonFatal(e) =>
           state.terminate()
-          doTerminated.success(())
+          doTerminated.set()
           throw e
       }
 
@@ -142,55 +141,71 @@ class Runtime[P](
       case Right(connector) => connector
     }
 
-    val future = Future.traverse(requiredConnectors) {
-      case (connector, peer) =>
-        remoteConnections connect (connector, peer)
+    val requiredConnectedRemotes = requiredConnectors map {
+      case (connector, peer) => remoteConnections connect (connector, peer)
     }
 
-    future foreach { requiredConnectedRemotes =>
-      val remotes = optionalConnectors map { case (connector, peer) =>
-        remoteConnections connect (connector, peer)
-      }
+    val flatInit = Notice.Steady[Try[Seq[Remote.Reference]]]
+    flatInit.set(Success(Seq.empty))
 
-      listeners foreach { case (listener, peer) =>
-        remoteConnections listen (listener, peer)
-      }
-
-      remoteConnections.terminated notify { _ =>
-        state.synchronized {
-          val index = state.instances indexWhere { _.remoteConnections eq remoteConnections }
-          if (index != -1)
-            state.instances.remove(index)
-        }
-      }
-
-      context execute new Runnable {
-        def run() = {
-          val instance = state.synchronized {
-            if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {
-              val values = system(
-                ties, context, remoteConnections,
-                requiredListenedRemotes ++ requiredConnectedRemotes, remotes)
-
-              val instance = new Instance[P](values, remoteConnections)
-              state.instances += instance
-              Some(instance)
+    val flatRequiredConnectedRemotes = requiredConnectedRemotes.foldRight(flatInit) {
+      case (connected, flattened) =>
+        val result = Notice.Steady[Try[Seq[Remote.Reference]]]
+        flattened.notice foreach { list =>
+          if (list.isSuccess)
+            connected foreach { connected =>
+              result.set(connected flatMap { connected => list map { connected +: _ } })
             }
-            else
-              None
-          }
-
-          instance foreach { instance =>
-            doStarted(instance)
-            doInstance.trySuccess(instance)
-          }
+          else
+            result.set(list)
         }
-      }
+        result
     }
 
-    future.failed foreach { exception =>
-      context reportFailure exception
-      remoteConnections.terminate()
+    flatRequiredConnectedRemotes.notice foreach {
+      case Success(requiredConnectedRemotes) =>
+        val remotes = optionalConnectors map { case (connector, peer) =>
+          remoteConnections connect (connector, peer)
+        }
+
+        listeners foreach { case (listener, peer) =>
+          remoteConnections listen (listener, peer)
+        }
+
+        remoteConnections.terminated foreach { _ =>
+          state.synchronized {
+            val index = state.instances indexWhere { _.remoteConnections eq remoteConnections }
+            if (index != -1)
+              state.instances.remove(index)
+          }
+        }
+
+        context execute new Runnable {
+          def run() = {
+            val instance = state.synchronized {
+              if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {
+                val values = system(
+                  ties, context, remoteConnections,
+                  requiredListenedRemotes ++ requiredConnectedRemotes, remotes)
+
+                val instance = new Instance[P](values, remoteConnections)
+                state.instances += instance
+                Some(instance)
+              }
+              else
+                None
+            }
+
+            instance foreach { instance =>
+              doStarted.fire(instance)
+              doInstance.trySet(instance)
+            }
+          }
+        }
+
+      case Failure(exception) =>
+        context.reportFailure(exception)
+        remoteConnections.terminate()
     }
   }
 
@@ -201,25 +216,28 @@ class Runtime[P](
       state.instances.clear
 
       remoteConnections.terminate()
-      doTerminated.success(())
+      doTerminated.set()
     }
   }
 
-  val terminated: Future[Unit] = doTerminated.future
+  val terminated: Notice.Steady[Unit] = doTerminated.notice
 
-  val started: Notification[Instance[P]] = doStarted.notification
+  val started: Notice.Stream[Instance[P]] = doStarted.notice
 
-  val instance: Future[Instance[P]] = doInstance.future
+  val instance: Notice.Steady[Instance[P]] = doInstance.notice
 
   def instances: Seq[Instance[P]] = state.synchronized {
     state.instances.toList
   }
 
+  @throws(classOf[TimeoutException])
+  @throws(classOf[InterruptedException])
   override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = {
     terminated ready atMost
     this
   }
 
+  @throws(classOf[Exception])
   override def result(atMost: Duration)(implicit permit: CanAwait): Unit =
     terminated result atMost
 }
@@ -238,7 +256,7 @@ object Runtime {
      ExecutionContext,
      RemoteConnections,
      Seq[Remote.Reference],
-     Seq[Future[Remote.Reference]]) => PlacedValues
+     Seq[Notice.Steady[Try[Remote.Reference]]]) => PlacedValues
 
   @throws[IllegalArgumentException](
     "if the connection setup does not respect the tie specification")

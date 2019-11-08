@@ -5,8 +5,8 @@ import loci.language._
 
 abstract class Transmission[V, R, +T, L, M] private[loci] {
   private[loci] def cache[B <: AnyRef](id: Any, body: => B): B
-  private[loci] val remoteJoined: Notification[Remote[R]]
-  private[loci] val remoteLeft: Notification[Remote[R]]
+  private[loci] val remoteJoined: Notice.Stream[Remote[R]]
+  private[loci] val remoteLeft: Notice.Stream[Remote[R]]
   private[loci] def remotesReferences: Seq[Remote[R]]
   private[loci] def retrieveValues: Seq[T]
 }

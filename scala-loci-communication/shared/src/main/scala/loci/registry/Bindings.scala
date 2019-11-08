@@ -5,10 +5,10 @@ import transmitter.AbstractionRef
 import transmitter.Channel
 import transmitter.RemoteAccessException
 import transmitter.RemoteRef
+
+import scala.util.Failure
 import scala.util.Try
 import java.util.concurrent.ConcurrentHashMap
-
-import scala.concurrent.Promise
 
 class Bindings[A <: AbstractionRef](
     request: (A, MessageBuffer) => Unit,
@@ -18,7 +18,7 @@ class Bindings[A <: AbstractionRef](
     String, (MessageBuffer, A) => Try[MessageBuffer]]
 
   private val responseHandlers = new ConcurrentHashMap[
-    Channel, Promise[MessageBuffer]]
+    Channel, Notice.Steady.Source[Try[MessageBuffer]]]
 
   def bind[T](binding: Binding[T])(function: RemoteRef => T): Unit =
     bindings put (binding.name, binding.dispatch(function, _, _))
@@ -26,15 +26,15 @@ class Bindings[A <: AbstractionRef](
   def lookup[T](binding: Binding[T], abstraction: A): binding.RemoteCall =
     binding.call(abstraction) { message =>
       val channel = abstraction.channel
-      val promise = Promise[MessageBuffer]
+      val response = Notice.Steady[Try[MessageBuffer]]
 
       if (abstraction.remote.connected)
-        responseHandlers put (channel, promise)
+        responseHandlers put (channel, response)
       else
         channelsClosed
 
       request(abstraction, message)
-      promise.future
+      response.notice
     }
 
   def processRequest(
@@ -45,14 +45,14 @@ class Bindings[A <: AbstractionRef](
 
   def processResponse(
       message: Try[MessageBuffer], name: String, abstraction: A): Unit =
-    Option(responseHandlers remove abstraction.channel) foreach { _ complete message }
+    Option(responseHandlers remove abstraction.channel) foreach { _.set(message) }
 
   def channelsClosed(): Unit = {
     val iterator = responseHandlers.entrySet.iterator
     while (iterator.hasNext) {
       val entry = iterator.next
       if (!entry.getKey.open) {
-        entry.getValue tryFailure new RemoteAccessException(RemoteAccessException.RemoteDisconnected)
+        entry.getValue.trySet(Failure(new RemoteAccessException(RemoteAccessException.RemoteDisconnected)))
         iterator.remove
       }
     }

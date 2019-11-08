@@ -42,12 +42,12 @@ private object WSPlayListener {
 
           Future successful (ws match {
             case Failure(exception) =>
-              notifyHandlers(Failure(exception))
+              connectionEstablished(Failure(exception))
               Left(Results.NotFound)
 
             case Success(ws) =>
               Right(WSPlayHandler handleWebSocket (
-                Future successful ws, properties, notifyHandlers))
+                Future successful ws, properties, connectionEstablished))
           })
         }
 
@@ -65,19 +65,19 @@ private object WSPlayListener {
           webSocket(Left(None))(request)
       }
 
-      private val handlers = new ConcurrentLinkedQueue[Handler[P]]
+      private val connected = new ConcurrentLinkedQueue[Connected[P]]
 
-      private def notifyHandlers(connection: Try[Connection[P]]) = {
-        val iterator = handlers.iterator
+      private def connectionEstablished(connection: Try[Connection[P]]) = {
+        val iterator = connected.iterator
         while (iterator.hasNext)
-          iterator.next notify connection
+          iterator.next fire connection
       }
 
-      protected def startListening(handler: Handler[P]): Try[Listening] = {
-        handlers add handler
+      protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
+        connected add connectionEstablished
 
         Success(new Listening {
-          def stopListening(): Unit = handlers remove handler
+          def stopListening(): Unit = connected remove connectionEstablished
         })
       }
     }

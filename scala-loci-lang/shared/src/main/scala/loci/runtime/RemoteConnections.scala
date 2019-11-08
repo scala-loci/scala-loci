@@ -8,7 +8,6 @@ import loci.messaging.{ConnectionsBase, Message}
 import loci.transmitter.RemoteAccessException
 
 import scala.collection.mutable.ListBuffer
-import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}
 
 class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie])
@@ -37,20 +36,20 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
 
   protected val state = new State
 
-  private val doConstraintsSatisfied = Notifier[Unit]
+  private val doConstraintsSatisfied = Notice.Stream[Unit]
 
-  private val doConstraintsViolated = Notifier[RemoteAccessException]
+  private val doConstraintsViolated = Notice.Stream[Unit]
 
-  def constraintsSatisfied: Notification[Unit] = doConstraintsSatisfied.notification
+  def constraintsSatisfied: Notice.Stream[Unit] = doConstraintsSatisfied.notice
 
-  def constraintsViolated: Notification[RemoteAccessException] = doConstraintsViolated.notification
+  def constraintsViolated: Notice.Stream[Unit] = doConstraintsViolated.notice
 
   def connect(
       connector: Connector[ConnectionsBase.Protocol],
-      remotePeer: Peer.Signature): Future[Remote.Reference] = {
-    val promise = Promise[Remote.Reference]
-    connectWithCallback(connector, remotePeer) { promise complete _ }
-    promise.future
+      remotePeer: Peer.Signature): Notice.Steady[Try[Remote.Reference]] = {
+    val connected = Notice.Steady[Try[Remote.Reference]]
+    connectWithCallback(connector, remotePeer)(connected.set)
+    connected.notice
   }
 
   def connectWithCallback(
@@ -67,14 +66,14 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
               state.createId(), remotePeer)(
               connection.protocol, this)
 
-            var closedHandler: Notifiable[_] = null
-            var receiveHandler: Notifiable[_] = null
+            var closedHandler: Notice[_] = null
+            var receiveHandler: Notice[_] = null
 
-            closedHandler = connection.closed notify { _ =>
+            closedHandler = connection.closed foreach { _ =>
               handler(Failure(terminatedException))
             }
 
-            receiveHandler = connection.receive notify { data =>
+            receiveHandler = connection.receive foreach { data =>
               sync {
                 state.potentials -= remotePeer
 
@@ -133,9 +132,9 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
       if (!isTerminated) {
         val listening = listener.startListening() {
           case Success(connection) =>
-            var receiveHandler: Notifiable[_] = null
+            var receiveHandler: Notice[_] = null
 
-            receiveHandler = connection.receive notify { data =>
+            receiveHandler = connection.receive foreach { data =>
               if (receiveHandler != null)
                 receiveHandler.remove()
 
@@ -241,9 +240,9 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
       val constraintsSatisfiedAfter = constraintViolations.isEmpty
 
       if (!constraintsSatisfiedBefore && constraintsSatisfiedAfter)
-        afterSync { doConstraintsSatisfied() }
+        afterSync { doConstraintsSatisfied.fire() }
       if (constraintsSatisfiedBefore && !constraintsSatisfiedAfter)
-        afterSync { doConstraintsViolated(violatedException) }
+        afterSync { doConstraintsViolated.fire() }
 
       result
     }

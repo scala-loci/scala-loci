@@ -42,21 +42,21 @@ trait ConnectionsBase[R, M] {
 
   protected val state: BaseState
 
-  private val doRemoteJoined = Notifier[R]
+  private val doRemoteJoined = Notice.Stream[R]
 
-  private val doRemoteLeft = Notifier[R]
+  private val doRemoteLeft = Notice.Stream[R]
 
-  private val doTerminated = Notifier[List[R]]
+  private val doTerminated = Notice.Steady[List[R]]
 
-  private val doReceive = Notifier[(R, M)]
+  private val doReceive = Notice.Stream[(R, M)]
 
-  val remoteJoined: Notification[R] = doRemoteJoined.notification
+  val remoteJoined: Notice.Stream[R] = doRemoteJoined.notice
 
-  val remoteLeft: Notification[R] = doRemoteLeft.notification
+  val remoteLeft: Notice.Stream[R] = doRemoteLeft.notice
 
-  val terminated: Notification[List[R]] = doTerminated.notification
+  val terminated: Notice.Steady[List[R]] = doTerminated.notice
 
-  val receive: Notification[(R, M)] = doReceive.notification
+  val receive: Notice.Stream[(R, M)] = doReceive.notice
 
   def remotes: List[R] = state.remotes.asScala.toList
 
@@ -70,7 +70,7 @@ trait ConnectionsBase[R, M] {
   def run(): Unit =
     sync {
       if (!state.isTerminated && !state.isRunning) {
-        state.messages foreach { doReceive(_) }
+        state.messages foreach doReceive.fire
         state.messages.clear
         state.run
       }
@@ -88,7 +88,7 @@ trait ConnectionsBase[R, M] {
         afterSync {
           connections foreach { case (_, connection) => connection.close }
           listeners foreach { _.stopListening }
-          doTerminated(remotes)
+          doTerminated set remotes
 
           state.remotes.clear
           state.connections.clear
@@ -110,11 +110,11 @@ trait ConnectionsBase[R, M] {
   private def doBufferedReceive(remote: R, message: M): Unit =
     if (!state.isTerminated) {
       if (state.isRunning)
-        doReceive((remote, message))
+        doReceive fire (remote -> message)
       else
         sync {
           if (state.isRunning)
-            doReceive((remote, message))
+            doReceive fire (remote -> message)
           else
             state.messages += remote -> message
         }
@@ -172,16 +172,16 @@ trait ConnectionsBase[R, M] {
         state.connections put (remote, connection)
         state.remotes add remote
 
-        afterSync { doRemoteJoined(remote) }
+        afterSync { doRemoteJoined fire remote }
 
-        var receiveHandler: Notifiable[_] = null
-        var closedHandler: Notifiable[_] = null
+        var receiveHandler: Notice[_] = null
+        var closedHandler: Notice[_] = null
 
-        receiveHandler = connection.receive notify {
+        receiveHandler = connection.receive foreach {
           deserializeMessage(_) map { doBufferedReceive(remote, _) }
         }
 
-        closedHandler = connection.closed notify { _ =>
+        closedHandler = connection.closed foreach { _ =>
           if (receiveHandler != null)
             receiveHandler.remove
           if (closedHandler != null)
@@ -207,7 +207,7 @@ trait ConnectionsBase[R, M] {
       if (state.connections containsKey remote) {
         state.remotes remove remote
         state.connections remove remote
-        afterSync { doRemoteLeft(remote) }
+        afterSync { doRemoteLeft fire remote }
       }
     }
 }

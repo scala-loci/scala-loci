@@ -11,16 +11,16 @@ private class TCPConnector(
   host: String, port: Int, properties: TCP.Properties)
     extends Connector[TCP] {
 
-  protected def connect(handler: Handler[TCP]): Unit = {
+  protected def connect(connectionEstablished: Connected[TCP]): Unit = {
     new Thread() {
       override def run =
         try TCPHandler handleConnection (
           new Socket(host, port), properties, TCPConnector.this, { connection =>
-            handler notify Success(connection)
+            connectionEstablished set Success(connection)
           })
         catch {
           case NonFatal(exception) =>
-            handler notify Failure(exception)
+            connectionEstablished set Failure(exception)
         }
     }.start    
   }

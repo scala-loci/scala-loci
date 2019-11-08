@@ -61,8 +61,8 @@ private abstract class WSAbstractHandler[M] {
 
     val promises = Queue.empty[Promise[Option[(Unit, M)]]]
     val isOpen = new AtomicBoolean(true)
-    val doClosed = Notifier[Unit]
-    val doReceive = Notifier[MessageBuffer]
+    val doClosed = Notice.Steady[Unit]
+    val doReceive = Notice.Stream[MessageBuffer]
 
     def connectionOpen = isOpen.get
 
@@ -82,7 +82,7 @@ private abstract class WSAbstractHandler[M] {
         isOpen set false
         promises foreach { _ trySuccess None }
         promises.clear
-        doClosed()
+        doClosed.set()
       }
     }
 
@@ -90,8 +90,8 @@ private abstract class WSAbstractHandler[M] {
       val connection = new Connection[P] {
         val protocol = ws
 
-        val closed = doClosed.notification
-        val receive = doReceive.notification
+        val closed = doClosed.notice
+        val receive = doReceive.notice
 
         def open = connectionOpen
         def send(data: MessageBuffer) = connectionSend(data)
@@ -127,7 +127,7 @@ private abstract class WSAbstractHandler[M] {
       processMessage(message) foreach {
         _ onComplete {
           case Success(data) =>
-            doReceive(MessageBuffer wrapArray data.toArray)
+            doReceive fire (MessageBuffer wrapArray data.toArray)
           case Failure(_) =>
             connectionClose
         }

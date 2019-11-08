@@ -40,11 +40,11 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
         client0 -> Client0.apply _, client1 -> Client1.apply _,
         node0 -> Node.apply _, node1 -> Node.apply _) foreach {
       case (peer, event) =>
-        peer.remoteJoined notify { _ => events += event(Joined) }
-        peer.remoteLeft notify { _ => events += event(Left) }
-        peer.constraintsSatisfied notify { _ => events += event(ConstraintsSatisfied) }
-        peer.constraintsViolated notify { _ => events += event(ConstraintsViolated) }
-        peer.receive notify { remoteMessage =>
+        peer.remoteJoined foreach { _ => events += event(Joined) }
+        peer.remoteLeft foreach { _ => events += event(Left) }
+        peer.constraintsSatisfied foreach { _ => events += event(ConstraintsSatisfied) }
+        peer.constraintsViolated foreach { _ => events += event(ConstraintsViolated) }
+        peer.receive foreach { remoteMessage =>
           val (_, Message(_, _, payload)) = remoteMessage
           events += event(Receive(payload.toString(0, payload.length)))
         }

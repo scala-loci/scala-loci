@@ -14,10 +14,10 @@ final class GatewayConnection[R, M](
   @inline private[loci] def cache[B <: AnyRef](id: Any, body: => B): B =
     system.cache((peerId, id), body)
 
-  @inline private[loci] val remoteJoined: Notification[Remote[R]] =
+  @inline private[loci] val remoteJoined: Notice.Stream[Remote[R]] =
     system.remoteJoined(peer, Seq.empty, earlyAccess = false)
 
-  @inline private[loci] val remoteLeft: Notification[Remote[R]] =
+  @inline private[loci] val remoteLeft: Notice.Stream[Remote[R]] =
     system.remoteLeft(peer, Seq.empty, earlyAccess = false)
 
   @inline private[loci] def remoteReferences: Seq[Remote[R]] =

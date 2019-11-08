@@ -22,20 +22,20 @@ protected[transmitter] trait RescalaGateway {
      @cutOutOfUserComputation lazy val joined: Event[Remote[R]] =
       gateway.cache(joinedId) {
         val event = Evt[Remote[R]]
-        gateway.remoteJoined notify event.fire
+        gateway.remoteJoined foreach event.fire
         event
       }
 
      @cutOutOfUserComputation lazy val left: Event[Remote[R]] =
       gateway.cache(leftId) {
         val event = Evt[Remote[R]]
-        gateway.remoteLeft notify event.fire
+        gateway.remoteLeft foreach event.fire
         event
       }
 
     protected def update(update: => Unit) = {
-      gateway.remoteJoined notify { _ => update }
-      gateway.remoteLeft notify { _ => update }
+      gateway.remoteJoined foreach { _ => update }
+      gateway.remoteLeft foreach { _ => update }
     }
   }
 

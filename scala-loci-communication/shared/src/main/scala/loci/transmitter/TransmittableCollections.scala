@@ -183,9 +183,9 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
 
         update(value)
 
-        context.endpoint.receive notify { update(_) }
+        context.endpoint.receive foreach update
 
-        context.endpoint.closed notify { _ =>
+        context.endpoint.closed foreach { _ =>
           promise.tryFailure(new RemoteAccessException(RemoteAccessException.ChannelClosed))
         }
       },

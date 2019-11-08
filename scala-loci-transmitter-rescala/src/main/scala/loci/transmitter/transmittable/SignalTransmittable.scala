@@ -32,7 +32,7 @@ protected[transmitter] trait SignalTransmittable {
 
         val observer = signal observe context.endpoint.send
 
-        context.endpoint.closed notify { _ => observer.remove() }
+        context.endpoint.closed foreach { _ => observer.remove() }
 
         signal.readValueOnce
       },
@@ -52,13 +52,13 @@ protected[transmitter] trait SignalTransmittable {
               signal.setEmpty()
           }
 
-        context.endpoint.closed notify { _ =>
+        context.endpoint.closed foreach { _ =>
           signal.setEmpty()
           signal.disconnect()
         }
 
         update(signal, value)
-        context.endpoint.receive notify { update(signal, _) }
+        context.endpoint.receive foreach { update(signal, _) }
       },
 
       direct = (signal, context) => signal,
