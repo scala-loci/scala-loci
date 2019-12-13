@@ -162,14 +162,14 @@ class Runtime[P](
         result
     }
 
+    listeners foreach { case (listener, peer) =>
+      remoteConnections listen (listener, peer)
+    }
+
     flatRequiredConnectedRemotes.notice foreach {
       case Success(requiredConnectedRemotes) =>
         val remotes = optionalConnectors map { case (connector, peer) =>
           remoteConnections connect (connector, peer)
-        }
-
-        listeners foreach { case (listener, peer) =>
-          remoteConnections listen (listener, peer)
         }
 
         remoteConnections.terminated foreach { _ =>
