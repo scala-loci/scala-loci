@@ -175,6 +175,26 @@ class TopClass
 }
 
 
+@multitier trait SuperModule {
+  @peer type A
+  @peer type B <: A
+
+  val buffer = on[A] local { implicit! => mutable.ListBuffer.empty[String] }
+
+  on[A] { implicit! => buffer += "super a.0" }
+  on[B] { implicit! => buffer += "super b.0" }
+  on[A] { implicit! => buffer += "super a.1" }
+  on[B] { implicit! => buffer += "super b.1" }
+}
+
+@multitier object SubModule extends SuperModule {
+  on[A] { implicit! => buffer += "sub a.0" }
+  on[B] { implicit! => buffer += "sub b.0" }
+  on[A] { implicit! => buffer += "sub a.1" }
+  on[B] { implicit! => buffer += "sub b.1" }
+}
+
+
 class MacroExpansionSpec extends FlatSpec with Matchers {
   behavior of "Macro Expansion"
 
@@ -578,6 +598,22 @@ class MacroExpansionSpec extends FlatSpec with Matchers {
     new NestedMultitierModules.q.$loci$peer$Peer {
       def $loci$sys$create = emptySystem(this)
     }.b.i should be (16)
+  }
+
+  it should "correctly compile derived multitier modules" in {
+    new SubModule.`<placed values of loci.language.impl.SubModule>` {
+      def $loci$sys$create = emptySystem(this)
+    }.buffer should be (null)
+
+    new SubModule.$loci$peer$A {
+      def $loci$sys$create = emptySystem(this)
+    }.buffer should contain theSameElementsInOrderAs Seq(
+      "super a.0", "super a.1", "sub a.0", "sub a.1")
+
+    new SubModule.$loci$peer$B {
+      def $loci$sys$create = emptySystem(this)
+    }.buffer should contain theSameElementsInOrderAs Seq(
+      "super a.0", "super b.0", "super a.1", "super b.1", "sub a.0", "sub b.0", "sub a.1","sub b.1")
   }
 
   it should "correctly instantiate peer " in {

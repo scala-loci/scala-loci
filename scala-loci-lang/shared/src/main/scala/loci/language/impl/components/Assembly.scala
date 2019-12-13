@@ -107,7 +107,11 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
       // inherit implementation for peer bases defined in the same module
       val inheritedBases = bases collect {
-        case Peer.InheritedBase(_, name, tree) if !tree.isEmpty => tq"$name"
+        case Peer.InheritedBase(_, name, tq"$expr.$_") =>
+          tq"$expr.$name"
+        case Peer.InheritedBase(tpe, name, _) =>
+          val tq"$expr.$_" = createTypeTree(tpe.underlying, NoPosition)
+          tq"$expr.$name"
       }
 
       // collect values placed on the peer
