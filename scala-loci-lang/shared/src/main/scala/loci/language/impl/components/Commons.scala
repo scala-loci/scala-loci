@@ -272,6 +272,12 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
       else
         symbol.annotations
 
+    def ancestors: List[Symbol] =
+      if (symbol.owner != NoSymbol)
+        symbol.owner :: symbol.owner.ancestors
+      else
+        List.empty
+
     def nameInEnclosing: String = {
       val name = symbol.fullName
       val tpe =

@@ -311,11 +311,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           val message = s"${tpe.typeArgs.head} is not transmittable"
           val rhs = tree getOrElse q"${trees.implicitly}[${createTypeTree(tpe, pos)}]"
 
+          rhs foreach { internal.setPos(_, NoPosition) }
+
           Left(
             Seq(
-              q"${Flag.SYNTHETIC} final def $resolutionName(): ${definitions.UnitTpe} = $rhs",
+              q"${Flag.SYNTHETIC} def $resolutionName(): ${definitions.UnitTpe} = $rhs",
               q"$resolutionName()",
-              q"@${types.compileTimeOnly}($message) ${Flag.SYNTHETIC} final def $errorName(): ${definitions.UnitTpe} = ()",
+              q"@${types.compileTimeOnly}($message) ${Flag.SYNTHETIC} def $errorName(): ${definitions.UnitTpe} = ()",
               q"$errorName()")
             map atPos(pos))
         }
@@ -466,6 +468,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     val (placedValueNames, dispatchValueClauses, accessorValues) = (placedValues map {
       case (symbol, peer, res, subjective, arg) =>
+        val ancestors = symbol.ancestors
         val signature = methodSignature(symbol, res)
         val hasArguments = arg =:!= definitions.UnitTpe
         val hasResult = res =:!= definitions.UnitTpe && res =:!= definitions.NothingTpe
@@ -476,7 +479,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         val transmittablesRequired = requiredTransmittables contains symbol
 
         val pos = (module.tree.impl.parents
-          collectFirst { case tree if tree.symbol == symbol.owner => tree.pos }
+          collectFirst { case tree if ancestors contains tree.symbol => tree.pos }
           getOrElse symbol.pos)
 
         // find an inherited inheritedPlacedValueplaced value with the same signature
@@ -651,11 +654,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         Seq.empty
 
       case (info, (symbol, _, implementationName)) =>
+        val ancestors = symbol.ancestors
         val definedTransmittable = definedTransmittables firstWithAccessInfo info
         val transmittableType = types.resolution mapArgs { args => List(info.base, args(1), info.base, info.proxy) :+ args.last }
 
         val pos = (module.tree.impl.parents
-          collectFirst { case tree if tree.symbol == symbol.owner => tree.pos }
+          collectFirst { case tree if ancestors contains tree.symbol => tree.pos }
           getOrElse symbol.pos)
 
         resolveTransmittables(
