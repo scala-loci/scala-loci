@@ -181,10 +181,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         List.empty[(TransmittableInfo, Tree)]) { (transmittables, tree) =>
       val fullyExpandedTree = tree.fullyExpanded
       val info = TransmittableInfo(fullyExpandedTree)
-      val existing = transmittables firstWithInfo info
+      val existing = transmittables firstWithAccessInfo info
 
-      existing foreach { existingTree =>
-        if (!(fullyExpandedTree equalsStructure existingTree))
+      existing foreach { case (existingInfo, _) =>
+        if (info.signature != existingInfo.signature)
           c.abort(tree.pos, "Incoherent transmittables")
       }
 
@@ -350,7 +350,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     def marshallable(info: TransmittableInfo, tree: Tree, pos: Position, name: Either[(TermName, TermName), TermName]) = {
       val dummyTransmittableTree = DummyTransmittable(tree) != DummyTransmittable.None
       val marshallables =
-        if (dummyTransmittableTree)
+        if (dummyTransmittableTree && name.isLeft)
           definedMarshallables.iterator ++ declaredMarshallables.iterator
         else
           definedMarshallables.iterator

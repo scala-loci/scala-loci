@@ -363,7 +363,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   private object typeTreeExpander extends Transformer {
     override def transform(tree: Tree): Tree = tree match {
       case tree: TypeTree =>
-        retyper.createTypeTree(tree.tpe, tree.pos) match {
+        retyper.createTypeTree(tree.tpe map { _.dealias }, tree.pos) match {
           case tree: TypeTree => tree
           case tree => transform(tree)
         }
