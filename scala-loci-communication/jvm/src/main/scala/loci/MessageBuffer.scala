@@ -52,8 +52,8 @@ final class MessageBuffer private (val backingArray: Array[Byte])
     new MessageBuffer(array)
   }
 
-  @inline def toString(offset: Int, length: Int): String =
-    new String(backingArray, offset, length, StandardCharsets.UTF_8)
+  @inline def toString(offset: Int, count: Int): String =
+    new String(backingArray, offset, count, StandardCharsets.UTF_8)
 
   @inline def asByteBuffer: ByteBuffer =
     ByteBuffer wrap backingArray

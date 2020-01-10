@@ -2,8 +2,10 @@ package loci
 
 import scala.annotation.compileTimeOnly
 import scala.collection.mutable
+import scala.scalajs.js
 import scala.scalajs.js.typedarray.ArrayBuffer
 import scala.scalajs.js.typedarray.Int8Array
+import scala.scalajs.js.typedarray.Uint8Array
 import scala.scalajs.js.typedarray.TypedArrayBuffer
 import scala.scalajs.js.typedarray.TypedArrayBufferOps._
 import java.nio.CharBuffer
@@ -56,27 +58,38 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
     new MessageBuffer(backingArrayBuffer slice (offset, offset + count))
   }
 
-  @inline def toString(offset: Int, length: Int): String = {
-    val decoder = StandardCharsets.UTF_8.newDecoder
-      .onMalformedInput(CodingErrorAction.REPLACE)
-      .onUnmappableCharacter(CodingErrorAction.REPLACE)
+  @inline def toString(offset: Int, count: Int): String = {
+    if (offset < 0 || count < 0 || offset > length - count)
+      throw new IndexOutOfBoundsException(s"offset $offset, count $count, length $length")
 
-    val size = (length * decoder.maxCharsPerByte.toDouble).toInt
-    val array = new Array[Char](size)
-    val charBuffer = CharBuffer wrap array
+    if (count == 0)
+      ""
+    else if (!(js isUndefined js.Dynamic.global.TextDecoder)) {
+      val decoder = js.Dynamic.newInstance(js.Dynamic.global.TextDecoder)()
+      (decoder decode new Uint8Array(backingArrayBuffer, offset, count)).asInstanceOf[String]
+    }
+    else {
+      val decoder = StandardCharsets.UTF_8.newDecoder
+        .onMalformedInput(CodingErrorAction.REPLACE)
+        .onUnmappableCharacter(CodingErrorAction.REPLACE)
 
-    val byteBuffer = asByteBuffer
-    byteBuffer position offset
-    byteBuffer limit (offset + length)
-    var result = decoder decode (byteBuffer, charBuffer, true)
+      val size = (count * decoder.maxCharsPerByte.toDouble).toInt
+      val array = new Array[Char](size)
+      val charBuffer = CharBuffer wrap array
 
-    if (!result.isUnderflow)
-      result.throwException
-    result = decoder flush charBuffer
-    if (!result.isUnderflow)
-      result.throwException
+      val byteBuffer = asByteBuffer
+      byteBuffer position offset
+      byteBuffer limit (offset + count)
+      var result = decoder decode (byteBuffer, charBuffer, true)
 
-    new String(array, 0, charBuffer.position())
+      if (!result.isUnderflow)
+        result.throwException
+      result = decoder flush charBuffer
+      if (!result.isUnderflow)
+        result.throwException
+
+      new String(array, 0, charBuffer.position())
+    }
   }
 
   @inline def asByteBuffer: ByteBuffer =
@@ -93,16 +106,23 @@ object MessageBuffer {
   @compileTimeOnly("`wrapArray` only available on the JVM")
   def wrapArray(array: Array[Byte]): MessageBuffer = ???
 
-  def fromString(string: String): MessageBuffer = {
-    val array = string getBytes StandardCharsets.UTF_8
-    val bufferArray = new Int8Array(array.length)
-    var i = 0
-    while (i < array.length) {
-      bufferArray(i) = array(i)
-      i += 1
+  def fromString(string: String): MessageBuffer =
+    if (string.isEmpty)
+      empty
+    else if (!(js isUndefined js.Dynamic.global.TextEncoder)) {
+      val encoder = js.Dynamic.newInstance(js.Dynamic.global.TextEncoder)()
+      new MessageBuffer((encoder encode string).asInstanceOf[Uint8Array].buffer)
     }
-    new MessageBuffer(bufferArray.buffer)
-  }
+    else {
+      val array = string getBytes StandardCharsets.UTF_8
+      val bufferArray = new Int8Array(array.length)
+      var i = 0
+      while (i < array.length) {
+        bufferArray(i) = array(i)
+        i += 1
+      }
+      new MessageBuffer(bufferArray.buffer)
+    }
 
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
     if (!buffer.hasArrayBuffer) {
