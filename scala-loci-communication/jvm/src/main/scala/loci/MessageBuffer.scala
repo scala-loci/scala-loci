@@ -1,17 +1,40 @@
 package loci
 
 import scala.annotation.compileTimeOnly
+import scala.collection.mutable
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
 final class MessageBuffer private (val backingArray: Array[Byte])
-    extends IndexedSeq[Byte] {
+    extends mutable.IndexedSeq[Byte] {
   @compileTimeOnly("`backingArrayBuffer` only available in JS")
   def backingArrayBuffer: Any = ???
 
   @inline def length: Int = backingArray.length
 
-  @inline def apply(index: Int): Byte = backingArray(index)
+  @inline def apply(index: Int) = {
+    if (index < 0  || index >= length)
+      throw new IndexOutOfBoundsException(s"index $index")
+
+    backingArray(index)
+  }
+
+  @inline def update(index: Int, element: Byte) = {
+    if (index < 0  || index >= length)
+      throw new IndexOutOfBoundsException(s"index $index")
+
+    backingArray(index) = element
+  }
+
+  @inline def update(offset: Int, buffer: MessageBuffer, bufferOffset: Int, count: Int) = {
+    if (offset < 0 || bufferOffset < 0 || count < 0 ||
+        offset > length - count || bufferOffset > buffer.length - count)
+      throw new IndexOutOfBoundsException(
+        s"offset $offset, length $length, " +
+        s"buffer offset ${bufferOffset}, buffer length ${buffer.length}, count $count")
+
+    System arraycopy (buffer.backingArray, bufferOffset, backingArray, offset, count)
+  }
 
   @inline def concat(buffer: MessageBuffer): MessageBuffer = {
     val array = new Array[Byte](length + buffer.length)
@@ -20,9 +43,12 @@ final class MessageBuffer private (val backingArray: Array[Byte])
     new MessageBuffer(array)
   }
 
-  @inline def copy(offset: Int, length: Int): MessageBuffer = {
-    val array = new Array[Byte](length)
-    System arraycopy (backingArray, offset, array, 0, length)
+  @inline def copy(offset: Int, count: Int): MessageBuffer = {
+    if (offset < 0 || count < 0 || offset > length - count)
+      throw new IndexOutOfBoundsException(s"offset $offset, count $count, length $length")
+
+    val array = new Array[Byte](count)
+    System arraycopy (backingArray, offset, array, 0, count)
     new MessageBuffer(array)
   }
 
@@ -35,6 +61,8 @@ final class MessageBuffer private (val backingArray: Array[Byte])
 
 object MessageBuffer {
   def empty: MessageBuffer = new MessageBuffer(Array.emptyByteArray)
+
+  def allocate(length: Int): MessageBuffer = new MessageBuffer(new Array(length))
 
   def fromString(string: String): MessageBuffer =
     new MessageBuffer(string getBytes StandardCharsets.UTF_8)

@@ -1,6 +1,7 @@
 package loci
 
 import scala.annotation.compileTimeOnly
+import scala.collection.mutable
 import scala.scalajs.js.typedarray.ArrayBuffer
 import scala.scalajs.js.typedarray.Int8Array
 import scala.scalajs.js.typedarray.TypedArrayBuffer
@@ -11,13 +12,35 @@ import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
 final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
-    extends IndexedSeq[Byte] {
+    extends mutable.IndexedSeq[Byte] {
   @compileTimeOnly("`backingArray` only available on the JVM")
-  def backingArray: Seq[Byte] = ???
+  def backingArray: Array[Byte] = ???
 
   @inline def length = backingArrayBuffer.byteLength
 
-  @inline def apply(index: Int) = array(index)
+  @inline def apply(index: Int) = {
+    if (index < 0  || index >= length)
+      throw new IndexOutOfBoundsException(s"index $index")
+
+    array(index)
+  }
+
+  @inline def update(index: Int, element: Byte) = {
+    if (index < 0  || index >= length)
+      throw new IndexOutOfBoundsException(s"index $index")
+
+    array(index) = element
+  }
+
+  @inline def update(offset: Int, buffer: MessageBuffer, bufferOffset: Int, count: Int) = {
+    if (offset < 0 || bufferOffset < 0 || count < 0 ||
+      offset > length - count || bufferOffset > buffer.length - count)
+      throw new IndexOutOfBoundsException(
+        s"offset $offset, length $length, " +
+        s"buffer offset ${bufferOffset}, buffer length ${buffer.length}, count $count")
+
+    array set (new Int8Array(buffer.backingArrayBuffer, bufferOffset, count), offset)
+  }
 
   @inline def concat(buffer: MessageBuffer): MessageBuffer = {
     val bufferArray = new Int8Array(length + buffer.length)
@@ -26,8 +49,12 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
     new MessageBuffer(bufferArray.buffer)
   }
 
-  @inline def copy(offset: Int, length: Int): MessageBuffer =
-    new MessageBuffer(backingArrayBuffer slice (offset, offset + length))
+  @inline def copy(offset: Int, count: Int): MessageBuffer = {
+    if (offset < 0 || count < 0 || offset > length - count)
+      throw new IndexOutOfBoundsException(s"offset $offset, count $count, length $length")
+
+    new MessageBuffer(backingArrayBuffer slice (offset, offset + count))
+  }
 
   @inline def toString(offset: Int, length: Int): String = {
     val decoder = StandardCharsets.UTF_8.newDecoder
@@ -60,6 +87,8 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
 
 object MessageBuffer {
   def empty: MessageBuffer = new MessageBuffer(new ArrayBuffer(0))
+
+  def allocate(length: Int): MessageBuffer = new MessageBuffer(new ArrayBuffer(length))
 
   @compileTimeOnly("`wrapArray` only available on the JVM")
   def wrapArray(array: Array[Byte]): MessageBuffer = ???
