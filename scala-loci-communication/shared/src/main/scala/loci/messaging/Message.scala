@@ -3,8 +3,32 @@ package messaging
 
 import scala.util.Try
 
-case class Message[M](
-  method: M, properties: Map[String, Seq[String]], payload: MessageBuffer)
+case class Message[M: Message.Method](
+    method: M,
+    properties: Map[String, Seq[String]],
+    payload: MessageBuffer) {
+  override def toString: String = {
+    val builder = new StringBuilder
+
+    builder ++= "["
+    builder ++= implicitly[Message.Method[M]] apply method
+
+    if (properties.nonEmpty) {
+      builder ++= " {"
+      val entries = properties map { case (key, values) => s"$key: ${values mkString ","}" }
+      builder ++= entries mkString "; "
+      builder ++= "}"
+    }
+
+    if (payload.nonEmpty) {
+      builder ++= ": "
+      builder ++= payload.toString
+    }
+
+    builder ++= "]"
+    builder.toString
+  }
+}
 
 object Message {
   trait Method[M] {
@@ -43,10 +67,10 @@ object Message {
 
     if (message.payload.nonEmpty) {
       builder ++= "\r\n"
-      (MessageBuffer fromString builder.toString) concat message.payload
+      (MessageBuffer encodeString builder.toString) concat message.payload
     }
     else
-      MessageBuffer fromString builder.toString
+      MessageBuffer encodeString builder.toString
   }
 
   def deserialize[M: Method](buffer: MessageBuffer): Try[Message[M]] = Try {
@@ -89,7 +113,7 @@ object Message {
     var payload = MessageBuffer.empty
     var properties = Map.empty[String, Seq[String]]
 
-    def parseString = buffer toString (mark, offset - mark - 1)
+    def parseString = buffer decodeString (mark, offset - mark - 1)
 
     def makeMethod() = {
       method = parseString.trim

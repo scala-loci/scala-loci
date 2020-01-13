@@ -50,6 +50,6 @@ protected[transmitter] trait EventTransmittable {
 
       direct = (event, context) => event,
 
-      proxy = (event, context) => event)
+      proxy = (event, completion, context) => event)
   }
 }

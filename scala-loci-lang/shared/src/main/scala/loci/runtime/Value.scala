@@ -4,7 +4,10 @@ package runtime
 import scala.collection.mutable
 
 object Value {
-  case class Signature(name: String, module: String, path: List[String])
+  case class Signature(name: String, module: String, path: List[String]) {
+    override def toString: String =
+      if (path.isEmpty) s"$module.$name" else s"${path mkString "."}.$module.$name"
+  }
 
   object Signature {
     def serialize(signature: Signature): String =
@@ -53,5 +56,7 @@ object Value {
       extends transmitter.AbstractionRef {
     lazy val channel = system.obtainChannel(channelName, channelAnchor, remote)
     def derive(name: String) = Reference(s"$channelName:$name", channelAnchor, remote, system)
+
+    override def toString: String = s"[channel:$channelName]$remote"
   }
 }

@@ -28,24 +28,45 @@ class Bindings[A <: AbstractionRef](
       val channel = abstraction.channel
       val response = Notice.Steady[Try[MessageBuffer]]
 
-      if (abstraction.remote.connected)
-        responseHandlers put (channel, response)
-      else
+      responseHandlers.put(channel, response)
+
+      if (!abstraction.remote.connected)
         channelsClosed
+
+      logging.trace(s"sending remote access for $abstraction")
 
       request(abstraction, message)
       response.notice
     }
 
   def processRequest(
-      message: MessageBuffer, name: String, abstraction: A): Unit =
-    Option(bindings get name) foreach { dispatch =>
-      respond(abstraction, dispatch(message, abstraction))
+      message: MessageBuffer, name: String, abstraction: A): Unit = {
+    logging.trace(s"handling remote access for $abstraction")
+
+    val value = logging.tracing run (bindings get name match {
+      case null =>
+        Failure(new RemoteAccessException(s"request for $abstraction could not be dispatched"))
+      case dispatch =>
+        dispatch(message, abstraction)
+    })
+
+    value.failed foreach { exception =>
+      logging.warn("local exception upon remote access propagated to remote instance", exception)
     }
+
+    logging.trace(s"sending remote access response for $abstraction")
+
+    respond(abstraction, value)
+  }
 
   def processResponse(
       message: Try[MessageBuffer], name: String, abstraction: A): Unit =
-    Option(responseHandlers remove abstraction.channel) foreach { _.set(message) }
+    responseHandlers remove abstraction.channel match {
+      case null =>
+        logging.warn(s"unprocessed message for $abstraction [no handler]: $message")
+      case response =>
+        response.set(message)
+    }
 
   def channelsClosed(): Unit = {
     val iterator = responseHandlers.entrySet.iterator

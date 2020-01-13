@@ -5,6 +5,8 @@ import Transmittable.Delegating
 import Transmittables.{ Delegates, Message, None }
 import java.util.concurrent.atomic.AtomicLong
 
+import scala.util.{ Failure, Success }
+
 trait ContextBuilder[T <: Transmittables] {
   def apply(
      transmittables: T,  abstraction: AbstractionRef,
@@ -83,6 +85,8 @@ object ContextBuilder {
           }
 
           val endpoint = new Endpoint[B, R] {
+            val doReceive = Notice.Stream[R]
+
             val closed = messagingAbstraction.channel.closed
 
             def close() = messagingAbstraction.channel.close()
@@ -90,8 +94,16 @@ object ContextBuilder {
             def send(value: B) =
               messagingAbstraction.channel send serialize(value)
 
-            val receive = messagingAbstraction.channel.receive collect
-              (Function unlift { deserialize(_).toOption })
+            val receive = doReceive.notice
+
+            messagingAbstraction.channel.receive foreach { value =>
+              deserialize(value) match {
+                case Failure(exception) =>
+                  logging.warn(s"unprocessed channel message: $value", exception)
+                case Success(value) =>
+                  doReceive.fire(value)
+              }
+            }
           }
         }
       }

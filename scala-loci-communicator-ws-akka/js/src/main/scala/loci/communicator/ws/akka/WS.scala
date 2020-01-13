@@ -19,7 +19,7 @@ trait WS extends
   val host: Option[String]
   val port: Option[Int]
 
-  override def toString = s"TCP($url, $host, $port)"
+  override def toString = s"WS($url, $host, $port)"
 }
 
 object WS extends WSSetupFactory {

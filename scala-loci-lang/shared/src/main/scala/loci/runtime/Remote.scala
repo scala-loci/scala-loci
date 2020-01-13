@@ -25,6 +25,8 @@ object Remote {
     def connected = isConnected.get
     def disconnect() = remoteConnections disconnect this
     val disconnected = doDisconnected.notice
+
+    override def toString: String = s"remote#$id($signature[$protocol])"
   }
 
   @compileTimeOnly("Call only allowed in multitier code. Use `remote.asRemote[P]` instead.")

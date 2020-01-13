@@ -63,6 +63,16 @@ protected[transmitter] trait SignalTransmittable {
 
       direct = (signal, context) => signal,
 
-      proxy = (signal, context) => signal)
+      proxy = (signal, completion, context) => {
+        completion foreach {
+          _.failed foreach { exception =>
+            interface.transaction(signal) { implicit turn =>
+              signal.admitPulse(Pulse.Exceptional(exception))
+            }
+          }
+        }
+
+        signal
+      })
   }
 }

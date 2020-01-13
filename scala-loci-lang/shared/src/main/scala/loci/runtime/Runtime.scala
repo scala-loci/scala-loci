@@ -92,16 +92,28 @@ class Runtime[P](
             throw new IllegalArgumentException(
               "only one tie of single or optional type can be listened to")
 
+          logging.info(s"multitier runtime started for peer $peer " +
+            "creating a new peer instance for every incoming connection")
+
           val (listener, peerType) = listeners.head
 
-          remoteConnections.listenWithCallback(
-              listener, peerType, createDesignatedInstance = true) { connection =>
-            connection map { case (remote, remoteConnections) =>
-              runPeer(remoteConnections, Seq(remote), Seq.empty, connectors)
+          val listening =
+            remoteConnections.listenWithCallback(
+                listener, peerType, createDesignatedInstance = true) {
+              case Success((remote, remoteConnections)) =>
+                runPeer(remoteConnections, Seq(remote), Seq.empty, connectors)
+              case Failure(exception) =>
+                logging.warn("establishing connection failed", exception)
             }
+
+          listening.failed foreach { exception =>
+            logging.error("could not listen for remote instances", exception)
           }
         }
         else {
+          logging.info(s"multitier runtime started for peer $peer " +
+            "creating a single peer instance")
+
           remoteConnections.terminated foreach { _ => terminate() }
 
           if (remoteConnections.isTerminated)
@@ -109,6 +121,8 @@ class Runtime[P](
           else
             runPeer(remoteConnections, Seq.empty, listeners, connectors)
         }
+
+        state.run()
       }
       catch {
         case NonFatal(e) =>
@@ -116,8 +130,6 @@ class Runtime[P](
           doTerminated.set()
           throw e
       }
-
-      state.run()
   }
 
   private def runPeer(
@@ -142,7 +154,16 @@ class Runtime[P](
     }
 
     val requiredConnectedRemotes = requiredConnectors map {
-      case (connector, peer) => remoteConnections connect (connector, peer)
+      case (connector, peer) =>
+        val reference = remoteConnections.connect(connector, peer)
+
+        reference foreach {
+          case Success(_) =>
+          case Failure(exception) =>
+            logging.error("could not connect to remote instance", exception)
+        }
+
+        reference
     }
 
     val flatInit = Notice.Steady[Try[Seq[Remote.Reference]]]
@@ -163,13 +184,30 @@ class Runtime[P](
     }
 
     listeners foreach { case (listener, peer) =>
-      remoteConnections listen (listener, peer)
+      val listening =
+        remoteConnections.listenWithCallback(listener, peer) {
+          case Success(_) =>
+          case Failure(exception) =>
+            logging.warn("establishing connection failed", exception)
+        }
+
+      listening.failed foreach { exception =>
+        logging.warn("could not listen for remote instances", exception)
+      }
     }
 
     flatRequiredConnectedRemotes.notice foreach {
       case Success(requiredConnectedRemotes) =>
         val remotes = optionalConnectors map { case (connector, peer) =>
-          remoteConnections connect (connector, peer)
+          val reference = remoteConnections.connect(connector, peer)
+
+          reference foreach {
+            case Success(_) =>
+            case Failure(exception) =>
+              logging.warn("could not connect to remote instance", exception)
+          }
+
+          reference
         }
 
         remoteConnections.terminated foreach { _ =>
@@ -180,7 +218,7 @@ class Runtime[P](
           }
         }
 
-        context execute new Runnable {
+        logging.tracing(context) execute new Runnable {
           def run() = {
             val instance = state.synchronized {
               if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {
@@ -211,6 +249,8 @@ class Runtime[P](
 
   def terminate(): Unit = state.synchronized {
     if (!state.isTerminated) {
+      logging.info("multitier runtime terminated")
+
       state.terminate()
       state.instances foreach { _.terminate() }
       state.instances.clear

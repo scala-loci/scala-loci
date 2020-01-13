@@ -6,7 +6,7 @@ import org.scalatest._
 
 import scala.collection.mutable.ListBuffer
 
-class RemoteConnectionsSpec extends FlatSpec with Matchers {
+class RemoteConnectionsSpec extends FlatSpec with Matchers with NoLogging {
   val dummySig = Peer.Signature.deserialize("[Dummy,[],[[Peer,[],[]]],Module]").get
   val serverSig = Peer.Signature.deserialize("[MyServer,[],[[Server,[],[[Peer,[],[]]]]],Module]").get
   val superServerSig = Peer.Signature.deserialize("[Server,[],[[Peer,[],[]]],Module]").get
@@ -46,7 +46,7 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
         peer.constraintsViolated foreach { _ => events += event(ConstraintsViolated) }
         peer.receive foreach { remoteMessage =>
           val (_, Message(_, _, payload)) = remoteMessage
-          events += event(Receive(payload.toString(0, payload.length)))
+          events += event(Receive(payload.decodeString))
         }
     }
 
@@ -137,11 +137,11 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers {
       listener.run()
       dummyListener.run()
 
-      client0.send(client0.remotes(0), ChannelMessage(ChannelMessage.Type.Update, "Test", None, MessageBuffer fromString "just a test"))
+      client0.send(client0.remotes(0), ChannelMessage(ChannelMessage.Type.Update, "Test", None, MessageBuffer encodeString "just a test"))
 
       server.run()
 
-      client1.send(client1.remotes(1), ChannelMessage(ChannelMessage.Type.Update, "Test", None, MessageBuffer fromString "another test"))
+      client1.send(client1.remotes(1), ChannelMessage(ChannelMessage.Type.Update, "Test", None, MessageBuffer encodeString "another test"))
 
 
       events should have size 11

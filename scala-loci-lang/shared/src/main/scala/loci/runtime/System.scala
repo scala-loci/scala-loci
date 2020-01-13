@@ -12,6 +12,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{ExecutionContext, Future}
 import scala.ref.WeakReference
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
 
 object System {
@@ -46,6 +47,8 @@ class System(
   private def doMain(): Unit = main foreach { main =>
     mainThread synchronized {
       if (!doneMain) {
+        import logging.tracingExecutionContext
+
         implicit val context: ExecutionContext =
           if (separateMainThread)
             contexts.Queued.create
@@ -59,6 +62,7 @@ class System(
           try { main() }
           catch {
             case _: InterruptedException if remoteConnections.isTerminated =>
+            case NonFatal(exception) => logging.reportException(exception)
           }
         }
       }
@@ -66,6 +70,8 @@ class System(
   }
 
   def start(): Unit = {
+    logging.info("multitier system started")
+
     dispatcher ignoreDispatched PendingConstruction
 
     if (singleConnectedRemotes.isEmpty)
@@ -163,7 +169,11 @@ class System(
   private[runtime] def connect(
       peer: Peer.Signature,
       connector: Connector[messaging.ConnectionsBase.Protocol]): Unit =
-    remoteConnections.connect(connector, peer)
+    remoteConnections.connect(connector, peer) foreach {
+      case Success(_) =>
+      case Failure(exception) =>
+        logging.warn("could not connect to remote instance", exception)
+    }
 
 
 
@@ -270,7 +280,7 @@ class System(
       if (notifyRemote)
         bufferedSend(channel, CloseMessage(channel.name))
 
-      context execute new Runnable {
+      logging.tracing(context) execute new Runnable {
         def run() = channel.doClosed.set()
       }
     }
@@ -316,8 +326,10 @@ class System(
       }
     }
 
-    if (!queued)
+    if (!queued) {
+      logging.trace(s"send update to ${channel.remote}: $message")
       remoteConnections send (channel.remote, message)
+    }
   }
 
   remoteConnections.remotes foreach { remote =>
@@ -332,8 +344,10 @@ class System(
 
   remoteConnections.remoteLeft foreach { remote =>
     doRemoteLeftEarly.fire(remote)
-    context execute new Runnable {
+    logging.tracing(context) execute new Runnable {
       def run() = {
+        logging.trace(s"remote left: $remote")
+
         doRemoteLeft.fire(remote)
         remote.doDisconnected.set()
       }
@@ -342,10 +356,12 @@ class System(
   }
 
   remoteConnections.constraintsViolated foreach { _ =>
+    logging.error("tie constraints violated")
     remoteConnections.terminate()
   }
 
   remoteConnections.terminated foreach { _ =>
+    logging.info("multitier system terminated")
     (mainThread getAndSet None) foreach { _.interrupt }
   }
 
@@ -379,10 +395,13 @@ class System(
 
     def run() = message match {
       case StartedMessage() =>
-        if (Option(startedRemotes.putIfAbsent(remote, remote)).isEmpty)
-          context execute new Runnable {
+        if (Option(startedRemotes.putIfAbsent(remote, remote)).isEmpty) {
+          logging.trace(s"remote joined: $remote")
+
+          logging.tracing(context) execute new Runnable {
             def run() = doRemoteJoined.fire(remote)
           }
+        }
 
           if (singleConnectedRemotes.nonEmpty) {
             pendingSingleConnectedRemotes.remove(remote)
@@ -397,30 +416,42 @@ class System(
           payload) =>
         val signature = Value.Signature.deserialize(abstraction)
         val reference = Value.Reference(channelName, channelName, remote, System.this)
-        context execute new Runnable {
+        logging.tracing(context) execute new Runnable {
           def run() = {
             val messages = ListBuffer.empty[Message[Method]]
             channelMessages.put(channelName, messages)
 
-            val result = values.$loci$dispatch(payload, signature, reference)
+            logging.trace(s"handling remote access for $signature from $remote over channel $channelName")
+
+            val result = logging.tracing run values.$loci$dispatch(payload, signature, reference)
 
             if (messageType == ChannelMessage.Type.Request) {
               val message = result match {
                 case Success(payload) =>
                   ChannelMessage(ChannelMessage.Type.Response, channelName, None, payload)
                 case Failure(exception) =>
-                  val payload = MessageBuffer.fromString(RemoteAccessException.serialize(exception))
+                  logging.debug("propagating exception upon remote access to remote instance", exception)
+                  val payload = MessageBuffer.encodeString(RemoteAccessException.serialize(exception))
                   ChannelMessage(ChannelMessage.Type.Failure, channelName, None, payload)
               }
+
+              logging.trace(s"sending remote access response for $signature to $remote over channel $channelName")
 
               remoteConnections send (remote, message)
 
               messages synchronized {
-                messages foreach { remoteConnections send (reference.remote, _) }
+                messages foreach { message =>
+                  logging.trace(s"send update to $remote: $message")
+                  remoteConnections send (remote, message)
+                }
                 messages.clear()
                 channelMessages.remove(channelName)
               }
             }
+            else
+              result.failed foreach { exception =>
+                logging.warn("local exception upon remote access", exception)
+              }
 
             channelMessages.remove(channelName)
           }
@@ -431,28 +462,50 @@ class System(
           channelName,
           None,
           payload) =>
-        getChannel(channelName, remote) foreach { channel =>
-          Option(channelResponseHandlers remove channel) foreach { case (connected, handler) =>
-            val message =
-              if (messageType == ChannelMessage.Type.Response)
-                Success(payload)
-              else
-                Failure(RemoteAccessException.deserialize(payload.toString(0, payload.length)))
+        getChannel(channelName, remote) match {
+          case None =>
+            logging.warn(s"unprocessed message [channel not open]: $message")
 
-            handler(message)
+          case Some(channel) =>
+            channelResponseHandlers remove channel match {
+              case null =>
+                logging.warn(s"unprocessed message [no handler]: $message")
 
-            if (!connected)
-              closeChannel(channel, notifyRemote = false)
-          }
+              case (connected, handler) =>
+                val buffer =
+                  if (messageType == ChannelMessage.Type.Response) {
+                    logging.trace(s"received response upon remote access from $remote over channel $channelName: $message")
+                    Success(payload)
+                  }
+                  else {
+                    val exception = RemoteAccessException.deserialize(payload.decodeString)
+                    logging.debug("received exception upon remote access", exception)
+                    Failure(exception)
+                  }
+
+                handler(buffer)
+
+                if (!connected)
+                  closeChannel(channel, notifyRemote = false)
+            }
         }
 
       case ChannelMessage(ChannelMessage.Type.Update, channelName, None, payload) =>
-        getChannel(channelName, remote) foreach { _.doReceive.fire(payload) }
+        getChannel(channelName, remote) match {
+          case None =>
+            logging.warn(s"unprocessed message [channel not open]: $message")
+
+          case Some(channel) =>
+            logging.trace(s"received update from $remote: $message")
+            channel.doReceive.fire(payload)
+        }
 
       case CloseMessage(channelName) =>
+        logging.trace(s"received update from $remote: $message")
         getChannel(channelName, remote) foreach { closeChannel(_, notifyRemote = false) }
 
       case _ =>
+        logging.warn(s"unprocessed message: $message")
     }
   }
 
@@ -463,7 +516,11 @@ class System(
       remotes: Seq[RemoteRef],
       requestResult: Boolean): Seq[T] = {
 
-    def sendRequest(messageType: ChannelMessage.Type, reference: Value.Reference) =
+    def sendRequest(messageType: ChannelMessage.Type, reference: Value.Reference) = {
+      logging.trace(
+        s"sending remote access for ${placedValue.signature} to ${reference.remote} " +
+        s"over channel ${reference.channelName}")
+
       remoteConnections send (
         reference.remote,
         ChannelMessage(
@@ -471,20 +528,28 @@ class System(
           reference.channelName,
           Some(Value.Signature.serialize(placedValue.signature)),
           placedValue.arguments.marshal(arguments, reference)))
+    }
 
     def createReference(remote: Remote.Reference) = {
       val id = java.util.UUID.randomUUID.toString
       Value.Reference(id, id, remote, this)
     }
 
+    val references = remoteReferences(peer, remotes, earlyAccess = true)
+
+    if (placedValue.stable && placedValue.result.connected)
+      logging.trace(s"accessing remote value [cached] for ${placedValue.signature} on [${references mkString ", "}]")
+    else
+      logging.trace(s"accessing remote value [uncached] for ${placedValue.signature} on [${references mkString ", "}]")
+
     if (!requestResult && (!placedValue.stable || !placedValue.result.connected)) {
-      remoteReferences(peer, remotes, earlyAccess = true) foreach { remote =>
+      references foreach { remote =>
         sendRequest(ChannelMessage.Type.Call, createReference(remote))
       }
       Seq.empty
     }
     else
-      remoteReferences(peer, remotes, earlyAccess = true) map { remote =>
+      references map { remote =>
         val remoteSignature = remote -> placedValue.signature
         val reference = createReference(remote)
         val channel = reference.channel
@@ -514,11 +579,17 @@ class System(
           }
         }
 
-        if (placedValue.stable && placedValue.result.connected)
-          (Option(pushedValues.putIfAbsent(remoteSignature, value)) getOrElse value match {
+        if (placedValue.stable && placedValue.result.connected) {
+          val cached = Option[System.ValueCell[_]](pushedValues.putIfAbsent(remoteSignature, value))
+
+          if (cached.nonEmpty)
+            logging.trace(s"using cached remote value for ${placedValue.signature} on $remote")
+
+          (cached getOrElse value match {
             case value: System.ValueCell[T] @unchecked =>
               value.value
           }): T
+        }
         else
           value.value
       }

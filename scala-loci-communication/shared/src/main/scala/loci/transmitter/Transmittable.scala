@@ -310,7 +310,7 @@ object ConnectedTransmittable {
         provide: (B, Context[B0, I0, R0, P0, T0]) => B0,
         receive: (N, R0, Context[B0, I0, R0, P0, T0]) => Unit,
         direct: (N, Context[B0, I0, R0, P0, T0]) => R,
-        proxy: (N, Context[B0, I0, R0, P0, T0]) => P)(
+        proxy: (N, Notice.Steady[Try[Unit]], Context[B0, I0, R0, P0, T0]) => P)(
       implicit
         message: Transmittable.Aux.Resolution[B0, I0, R0, P0, T0]) =
       new Proxy[B, I0, R] {
@@ -336,8 +336,10 @@ object ConnectedTransmittable {
             implicit context: Context.Receiving[Transmittables]) = {
           val ctx = new Context
           val inst = internal
+          val completion = value map { _ map { _ => () } }
+          val result = proxy(inst, completion, ctx)
           value foreach { _ foreach { value => receive(inst, context receive value, ctx) } }
-          proxy(inst, ctx)
+          result
         }
       }
   }

@@ -71,7 +71,7 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
     }
 
     dispatchings foreach { dispatching =>
-      context execute new Runnable {
+      logging.tracing(context) execute new Runnable {
         def run() = {
           var throwable: Throwable = null
 
@@ -81,8 +81,8 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
               case NonFatal(exception) =>
                 if (throwable == null)
                   throwable = exception
-                // else
-                //   throwable addSuppressed exception
+                else
+                  throwable.addSuppressed(exception)
             }
           }
 

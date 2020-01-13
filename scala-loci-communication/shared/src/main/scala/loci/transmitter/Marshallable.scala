@@ -3,6 +3,7 @@ package transmitter
 
 import scala.util.Try
 import scala.annotation.implicitNotFound
+import scala.util.control.NonFatal
 
 @implicitNotFound("${B} is not marshallable")
 trait Marshallable[B, R, P] {
@@ -37,23 +38,38 @@ object Marshallable {
         case _ => false
       }
 
-      def marshal(value: B, abstraction: AbstractionRef) = {
-        implicit val context = contextBuilder(
-          transmittable.transmittables, abstraction, ContextBuilder.sending)
-        serializer serialize (transmittable buildIntermediate value)
-      }
+      def marshal(value: B, abstraction: AbstractionRef) =
+        try {
+          implicit val context = contextBuilder(
+            transmittable.transmittables, abstraction, ContextBuilder.sending)
+          serializer serialize (transmittable buildIntermediate value)
+        }
+        catch {
+          case NonFatal(exception) =>
+            throw new RemoteAccessException(s"marshalling failed: $value").initCause(exception)
+        }
 
-      def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) = {
-        implicit val context = contextBuilder(
-          transmittable.transmittables, abstraction, ContextBuilder.receiving)
-        serializer deserialize value map transmittable.buildResult
-      }
+      def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
+        try {
+          implicit val context = contextBuilder(
+            transmittable.transmittables, abstraction, ContextBuilder.receiving)
+          serializer deserialize value map transmittable.buildResult
+        }
+        catch {
+          case NonFatal(exception) =>
+            throw new RemoteAccessException(s"unmarshalling failed: $value").initCause(exception)
+        }
 
-      def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) = {
-        implicit val context = contextBuilder(
-          transmittable.transmittables, abstraction, ContextBuilder.receiving)
-        transmittable buildProxy (
-          value map { _ flatMap serializer.deserialize })
-      }
+      def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+        try {
+          implicit val context = contextBuilder(
+            transmittable.transmittables, abstraction, ContextBuilder.receiving)
+          transmittable buildProxy (
+            value map { _ flatMap serializer.deserialize })
+        }
+        catch {
+          case NonFatal(exception) =>
+            throw new RemoteAccessException("unmarshalling failed: could not create proxy object").initCause(exception)
+        }
     }
 }

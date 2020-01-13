@@ -6,7 +6,7 @@ import org.scalatest._
 
 import scala.collection.mutable
 
-class RuntimeSpec extends FlatSpec with Matchers {
+class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
   case object New
   case object ConstraintsViolated
 
@@ -37,7 +37,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
           connections.receive foreach { remoteMessage =>
             val (_, Message(_, properties, payload)) = remoteMessage
-            events += Server(Receive(properties("Type"), payload.toString(0, payload.length)))
+            events += Server(Receive(properties("Type"), payload.decodeString))
           }
 
           connections.constraintsViolated foreach { _ => events += Server(ConstraintsViolated) }
@@ -45,7 +45,7 @@ class RuntimeSpec extends FlatSpec with Matchers {
           connections.remoteJoined foreach { remote =>
             connections send (
               remote,
-              ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from server"))
+              ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from server"))
           }
 
           val instance = new ServerClientApp.$loci$peer$Client {
@@ -68,14 +68,14 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
           connections.receive foreach { remoteMessage =>
             val (_, Message(_, properties, payload)) = remoteMessage
-            events += Client0(Receive(properties("Type"), payload toString (0, payload.length)))
+            events += Client0(Receive(properties("Type"), payload.decodeString))
           }
 
           connections.constraintsViolated foreach { _ => events += Client0(ConstraintsViolated) }
 
           connections send (
             connections.remotes.head,
-            ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from client0"))
+            ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client0"))
 
           val instance = new ServerClientApp.$loci$peer$Server {
             protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
@@ -96,14 +96,14 @@ class RuntimeSpec extends FlatSpec with Matchers {
 
           connections.receive foreach { remoteMessage =>
             val (_, Message(_, properties, payload)) = remoteMessage
-            events += Client1(Receive(properties("Type"), payload toString (0, payload.length)))
+            events += Client1(Receive(properties("Type"), payload.decodeString))
           }
 
           connections.constraintsViolated foreach { _ => events += Client1(ConstraintsViolated) }
 
           connections send (
             connections.remotes.head,
-            ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer fromString "hello from client1"))
+            ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client1"))
 
           val instance = new ServerClientApp.$loci$peer$Server {
             protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)

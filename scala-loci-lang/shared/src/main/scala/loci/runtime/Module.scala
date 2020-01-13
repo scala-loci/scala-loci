@@ -6,7 +6,10 @@ import transmitter.Parser._
 import scala.util.Try
 
 object Module {
-  case class Signature(name: String, path: List[String])
+  case class Signature(name: String, path: List[String]) {
+    override def toString: String =
+      if (path.isEmpty) name else s"${path mkString "."}.$name"
+  }
 
   object Signature {
     def apply(outer: Signature, value: String): Signature =

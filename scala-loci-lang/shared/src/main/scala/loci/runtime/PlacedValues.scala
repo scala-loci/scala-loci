@@ -13,7 +13,7 @@ trait PlacedValues {
       signature: Value.Signature,
       reference: Value.Reference): Try[MessageBuffer] =
     Failure(new transmitter.RemoteAccessException(
-      s"Request for ${Value.Signature.serialize(signature)} could not be dispatched"))
+      s"request for ${Value.Signature.serialize(signature)} could not be dispatched"))
 }
 
 object PlacedValues {

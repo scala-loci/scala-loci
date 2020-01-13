@@ -50,6 +50,8 @@ object Registry {
       AbstractionRef(this.name, remote, s"$channelName:$name", channelAnchor, registry)
 
     lazy val channel = registry.channels obtain (channelName, channelAnchor, remote)
+
+    override def toString: String = s"$name#[channel:$channelName]$remote"
   }
 
   private object AbstractionRef {
@@ -80,10 +82,21 @@ class Registry {
   def terminate(): Unit = connections.terminate
 
 
+  connections.remoteJoined foreach { remote =>
+    logging.trace(s"remote joined: $remote")
+  }
+
+  connections.remoteLeft foreach { remote =>
+    logging.trace(s"remote left: $remote")
+  }
+
+
   private def createChannel(name: String, anchorDefault: String, remote: RemoteRef) =
     Registry.Channel(name, anchorDefault, remote, this)
 
   private def closeChannel(channel: Registry.Channel, notifyRemote: Boolean) = {
+    logging.trace(s"closing channel ${channel.name}")
+
     if (notifyRemote)
       bufferedSend(
         channel,
@@ -115,8 +128,10 @@ class Registry {
       }
     }
 
-    if (!queued)
+    if (!queued) {
+      logging.trace(s"send update for channel ${channel.name} to ${channel.remote}: ${message.payload}")
       connections send (channel.remote, message)
+    }
   }
 
   connections.remoteLeft foreach { remote =>
@@ -139,25 +154,35 @@ class Registry {
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, Some(Seq(name)), None, Some(Seq(channelName)), None) =>
+        logging.debug(s"received response upon remote access for $channelName from $remote: $message")
         bindings processResponse (
           Success(message),
           name,
           Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, None, Some(Seq(name)), Some(Seq(channelName)), None) =>
+        val exception = RemoteAccessException.deserialize(message.decodeString)
+        logging.debug("received exception upon remote access", exception)
         bindings processResponse (
-          Failure(RemoteAccessException.deserialize(message.toString(0, message.length))),
+          Failure(exception),
           name,
           Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, None, None, Some(Seq(channelName)), None) =>
-        channels get (channelName, remote) foreach { _.doReceive fire message }
+        channels get (channelName, remote) match {
+          case None =>
+            logging.warn(s"unprocessed message for channel $channelName from $remote: $message")
+          case Some(channel) =>
+            logging.trace(s"received update for channel $channelName from $remote: $message")
+            channel.doReceive fire message
+        }
 
       case (None, None, None, None, Some(Seq(channelName))) =>
+        logging.trace(s"received update for channel $channelName from $remote: $message")
         channels get (channelName, remote) foreach { channels close (_, notifyRemote = false) }
 
       case _ =>
-        // unknown message
+        logging.warn(s"unprocessed message from $remote: $message")
     }
   }
 
@@ -175,12 +200,15 @@ class Registry {
         send(
           Registry.Message.Failure,
           abstraction,
-          MessageBuffer.fromString(RemoteAccessException.serialize(exception)))
+          MessageBuffer.encodeString(RemoteAccessException.serialize(exception)))
     }
 
     Option(channelMessages get abstraction.channelAnchor) foreach { messages =>
       messages synchronized {
-        messages foreach { connections send (abstraction.remote, _) }
+        messages foreach { message =>
+          logging.trace(s"send update for channel ${abstraction.channel} to ${abstraction.remote}: ${message.payload}")
+          connections send (abstraction.remote, message)
+        }
         messages.clear
         channelMessages.remove(abstraction.channelAnchor)
       }
@@ -248,10 +276,10 @@ class Registry {
       handler: Try[RemoteRef] => Unit): Unit =
     connections.connect(connector)(handler)
 
-  def listen(listener: Listener[Connections.Protocol]): Unit =
+  def listen(listener: Listener[Connections.Protocol]): Try[Unit] =
     listenWithCallback(listener) { _ => }
 
   def listenWithCallback(listener: Listener[Connections.Protocol])(
-      handler: Try[RemoteRef] => Unit): Unit =
+      handler: Try[RemoteRef] => Unit): Try[Unit] =
     connections.listen(listener)(handler)
 }

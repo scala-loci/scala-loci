@@ -13,8 +13,11 @@ import scala.util.{Failure, Success, Try}
 class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie])
   extends ConnectionsBase[Remote.Reference, Message[Method]] {
 
-  protected def deserializeMessage(message: MessageBuffer) =
-    Message.deserialize(message)
+  protected def deserializeMessage(message: MessageBuffer) = {
+    val result = Message.deserialize[Method](message)
+    result.failed foreach { logging.warn("could not parse message", _) }
+    result
+  }
 
   protected def serializeMessage(message: Message[Method]) =
     Message.serialize(message)
@@ -101,26 +104,33 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
               }
             }
 
+            logging.trace(s"connecting to remote $remotePeer")
+
             connection send serializeMessage(
               RequestMessage(
                 Peer.Signature.serialize(remotePeer),
                 Peer.Signature.serialize(peer)))
 
           case Failure(exception) =>
+            logging.trace(s"connecting to remote failed: $remotePeer", exception)
             handler(Failure(exception))
         }
       }
-      else
+      else {
+        logging.trace(s"connection refused due to tie constraints: $remotePeer")
         handler(Failure(violatedException))
+      }
     }
-    else
+    else {
+      logging.trace(s"connection refused after connection system shutdown: $remotePeer")
       handler(Failure(terminatedException))
+    }
   }
 
   def listen(
       listener: Listener[ConnectionsBase.Protocol],
       remotePeer: Peer.Signature,
-      createDesignatedInstance: Boolean = false): Unit =
+      createDesignatedInstance: Boolean = false): Try[Unit] =
     listenWithCallback(listener, remotePeer, createDesignatedInstance) { _ => }
 
   def listenWithCallback(
@@ -252,8 +262,10 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
   def constraintViolationsConnecting(peer: Peer.Signature): Option[Peer.Signature] = {
     val peerCounts = connections(includePotentials = true) count { _ == peer }
 
-    if (!checkConstraints(peer, 1 + peerCounts))
+    if (!checkConstraints(peer, 1 + peerCounts)) {
+      logging.trace(s"Constraints violated for single checked peer $peer")
       Some(peer)
+    }
     else
       None
   }
@@ -265,9 +277,15 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
         case (peer, list) => (peer, list.size)
       })
 
-    (peerCounts collect { case (peer, count)
-      if !checkConstraints(peer, count) => peer
-    }).toSet
+    val violations =
+      (peerCounts collect { case (peer, count)
+        if !checkConstraints(peer, count) => peer
+      }).toSet
+
+    if (violations.nonEmpty)
+      logging.trace(s"Constraints violated for [${violations mkString ", "}]")
+
+    violations
   }
 
   private def connections(includePotentials: Boolean): Seq[Peer.Signature] = {
@@ -275,6 +293,15 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
     val potentialPeers =
       if (includePotentials) synchronized { state.potentials }
       else Seq.empty
+
+    logging.trace({
+      val connectedPeers =
+        s"checking constraints for connected remote peer instances with types [${remotePeers mkString ", "}]"
+      if (includePotentials)
+        s"$connectedPeers and connecting remote peer instances with types [${potentialPeers mkString ", "}]"
+      else
+        connectedPeers
+    })
 
     (remotePeers ++ potentialPeers) flatMap { _.bases }
   }

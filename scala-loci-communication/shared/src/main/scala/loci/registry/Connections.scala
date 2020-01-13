@@ -23,14 +23,19 @@ object Connections {
     def connected = connections isConnected this
     def disconnect() = connections disconnect this
     val disconnected = doDisconnected.notice
+
+    override def toString: String = s"remote#$id[$protocol]"
   }
 }
 
 class Connections[M: Message.Method]
     extends ConnectionsBase[RemoteRef, Message[M]] {
 
-  protected def deserializeMessage(message: MessageBuffer) =
-    Message deserialize message
+  protected def deserializeMessage(message: MessageBuffer) = {
+    val result = Message deserialize message
+    result.failed foreach { logging.warn("could not parse message", _) }
+    result
+  }
 
   protected def serializeMessage(message: Message[M]) =
     Message serialize message

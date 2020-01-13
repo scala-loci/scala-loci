@@ -195,7 +195,7 @@ class TopClass
 }
 
 
-class MacroExpansionSpec extends FlatSpec with Matchers {
+class MacroExpansionSpec extends FlatSpec with Matchers with NoLogging {
   behavior of "Macro Expansion"
 
   implicit class StaticTypeAssertion[T](v: T) {

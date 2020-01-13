@@ -52,11 +52,18 @@ final class MessageBuffer private (val backingArray: Array[Byte])
     new MessageBuffer(array)
   }
 
-  @inline def toString(offset: Int, count: Int): String =
+  @inline def decodeString(offset: Int, count: Int): String =
     new String(backingArray, offset, count, StandardCharsets.UTF_8)
+
+  @inline def decodeString: String =
+    decodeString(0, length)
 
   @inline def asByteBuffer: ByteBuffer =
     ByteBuffer wrap backingArray
+
+  override def toString: String =
+    MessageBufferEncoding.byteBufferToString(asByteBuffer, 0, length, fatal = true) getOrElse
+      MessageBufferEncoding.messageBufferToHexString(this)
 }
 
 object MessageBuffer {
@@ -64,7 +71,7 @@ object MessageBuffer {
 
   def allocate(length: Int): MessageBuffer = new MessageBuffer(new Array(length))
 
-  def fromString(string: String): MessageBuffer =
+  def encodeString(string: String): MessageBuffer =
     new MessageBuffer(string getBytes StandardCharsets.UTF_8)
 
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
@@ -79,7 +86,8 @@ object MessageBuffer {
     else
       new MessageBuffer(buffer.array)
 
-  def wrapArray(array: Array[Byte]): MessageBuffer = new MessageBuffer(array)
+  def wrapArray(array: Array[Byte]): MessageBuffer =
+    new MessageBuffer(array)
 
   @compileTimeOnly("`wrapArrayBuffer` only available in JS")
   def wrapArrayBuffer(arrayBuffer: Any): MessageBuffer = ???

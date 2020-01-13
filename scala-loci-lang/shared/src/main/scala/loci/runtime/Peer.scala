@@ -47,6 +47,12 @@ object Peer {
         case _ =>
           None
       }
+
+    override def toString: String =
+      if (parents.isEmpty)
+        s"$module.$name"
+      else
+        s"$module.$name<:{${parents mkString ","}}"
   }
 
   object Signature {

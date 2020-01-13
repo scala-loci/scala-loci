@@ -70,6 +70,8 @@ trait ConnectionsBase[R, M] {
   def run(): Unit =
     sync {
       if (!state.isTerminated && !state.isRunning) {
+        logging.trace("connection system started")
+
         state.messages foreach doReceive.fire
         state.messages.clear
         state.run
@@ -79,6 +81,8 @@ trait ConnectionsBase[R, M] {
   def terminate(): Unit =
     sync {
       if (!state.isTerminated) {
+        logging.trace("connection system terminated")
+
         val remotes = state.remotes.asScala.toList
         val connections = state.connections.asScala.toSeq
         val listeners = state.listeners.toSeq
@@ -103,9 +107,14 @@ trait ConnectionsBase[R, M] {
 
   def send(remote: R, message: M): Unit =
     if (!state.isTerminated)
-      Option(state.connections get remote) foreach {
-        _ send serializeMessage(message)
+      state.connections get remote match {
+        case null =>
+          logging.warn(s"message not sent to unconnected remote $remote: $message")
+        case connection =>
+          connection send serializeMessage(message)
       }
+    else
+      logging.warn(s"message not sent after connection system shutdown to remote $remote: $message")
 
   private def doBufferedReceive(remote: R, message: M): Unit =
     if (!state.isTerminated) {
@@ -169,6 +178,8 @@ trait ConnectionsBase[R, M] {
       remote: R, connection: Connection[ConnectionsBase.Protocol]): Try[Unit] =
     sync {
       if (!isTerminated) {
+        logging.info(s"established connection to remote $remote")
+
         state.connections put (remote, connection)
         state.remotes add remote
 
@@ -205,6 +216,8 @@ trait ConnectionsBase[R, M] {
   protected def removeConnection(remote: R): Unit =
     sync {
       if (state.connections containsKey remote) {
+        logging.info(s"terminated connection to remote $remote")
+
         state.remotes remove remote
         state.connections remove remote
         afterSync { doRemoteLeft fire remote }

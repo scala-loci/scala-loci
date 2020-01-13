@@ -3,15 +3,11 @@ package messaging
 
 import org.scalatest._
 
-class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValues {
+class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValues with NoLogging {
   behavior of "Message"
 
   implicit class cleanOp(string: String) {
     def clean = string.linesIterator map { _.stripMargin } mkString "\r\n"
-  }
-
-  implicit class toStringCompleteOp(buffer: MessageBuffer) {
-    def toStringComplete = buffer.toString(0, buffer.size)
   }
 
   case object TestMessage {
@@ -19,7 +15,7 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
   }
 
   it should "serialize messages correctly" in {
-    (Message serialize Message(TestMessage, Map("a" -> Seq("0"), "b" -> Seq("1")), MessageBuffer.empty)).toStringComplete should
+    (Message serialize Message(TestMessage, Map("a" -> Seq("0"), "b" -> Seq("1")), MessageBuffer.empty)).decodeString should
       (be ("""TestMessage
              |a: 0
              |b: 1
@@ -29,7 +25,7 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
              |a: 0
              |""".clean))
 
-    (Message serialize Message(TestMessage, Map("a" -> Seq("0", "1")), MessageBuffer fromString "dummy")).toStringComplete should
+    (Message serialize Message(TestMessage, Map("a" -> Seq("0", "1")), MessageBuffer encodeString "dummy")).decodeString should
       (be ("""TestMessage
              |a: 0
              |a: 1
@@ -41,29 +37,29 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
              |
              |dummy""".clean))
 
-    (Message serialize Message(TestMessage, Map.empty, MessageBuffer.empty)).toStringComplete should
+    (Message serialize Message(TestMessage, Map.empty, MessageBuffer.empty)).decodeString should
       be ("""TestMessage
              |""".clean)
 
-    (Message serialize Message(TestMessage, Map.empty, MessageBuffer fromString "dummy\r")).toStringComplete should
+    (Message serialize Message(TestMessage, Map.empty, MessageBuffer encodeString "dummy\r")).decodeString should
       be ("""TestMessage
              |
              |dummy""".clean + "\r")
 
-    (Message serialize Message(TestMessage, Map.empty, MessageBuffer fromString "dummy\n")).toStringComplete should
+    (Message serialize Message(TestMessage, Map.empty, MessageBuffer encodeString "dummy\n")).decodeString should
       be ("""TestMessage
              |
              |dummy""".clean + "\n")
   }
 
   it should "deserialize messages correctly" in {
-    val a = (Message deserialize[TestMessage.type] (MessageBuffer fromString "TestMessage")).success.value
+    val a = (Message deserialize[TestMessage.type] (MessageBuffer encodeString "TestMessage")).success.value
 
     a.method should be (TestMessage)
     a.payload should be (empty)
     a.properties.toSeq should have size 0
 
-    val b = (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    val b = (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | a: 0""".clean)).success.value
 
@@ -71,7 +67,7 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
     b.payload should be (empty)
     b.properties should be (Map("a" -> Seq("0")))
 
-    val c = (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    val c = (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | a: 0
         | b: 0
@@ -81,7 +77,7 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
     c.payload should be (empty)
     c.properties should be (Map("a" -> Seq("0"), "b" -> Seq("0")))
 
-    val d = (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    val d = (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | a: 0
         | a: 1
@@ -93,7 +89,7 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
     d.payload should be (empty)
     d.properties should be (Map("a" -> Seq("0", "1"), "b" -> Seq("0")))
 
-    val e = (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    val e = (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | a: 0
         | a: 1
@@ -104,26 +100,26 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
         |""".clean)).success.value
 
     e.method should be (TestMessage)
-    e.payload.toStringComplete should be ("\r\n")
+    e.payload.decodeString should be ("\r\n")
     e.properties should be (Map("a" -> Seq("0", "1", "2"), "b" -> Seq("0")))
   }
 
   it should "not deserialize messages incorrectly" in {
-    (Message deserialize[TestMessage.type] (MessageBuffer fromString "Dummy")).failure.exception should have message "Invalid message: invalid method"
+    (Message deserialize[TestMessage.type] (MessageBuffer encodeString "Dummy")).failure.exception should have message "Invalid message: invalid method"
 
-    (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | : 0
         | b: 0
         |""".clean)).failure.exception should have message "Invalid message: empty key"
 
-    (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | a:
         | b: 0
         |""".clean)).failure.exception should have message "Invalid message: empty value"
 
-    (Message deserialize[TestMessage.type] (MessageBuffer fromString
+    (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage
         | a
         | b: 0

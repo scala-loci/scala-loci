@@ -192,7 +192,10 @@ trait TransmittableGeneralCollections extends TransmittableNonNullableCollection
 
       direct = (promise, context) => promise.future,
 
-      proxy = (promise, context) => promise.future)
+      proxy = (promise, completion, context) => {
+        completion foreach { _.failed foreach promise.failure }
+        promise.future
+      })
 }
 
 trait TransmittableCollections extends TransmittableGeneralCollections {

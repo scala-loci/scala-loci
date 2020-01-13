@@ -33,13 +33,13 @@ trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
   protected def startListening(connectionEstablished: Connected[P]): Try[Listening]
 
   final def firstConnection: Connector[P] = new Connector[P] {
-    protected def connect(connected: Connected[P]): Unit = {
+    protected def connect(connectionEstablished: Connected[P]): Unit = {
       var firstConnection: Connection[P] = null
       var listening: Try[Listening] = null
 
       listening = startListening() {
         case success @ Success(connection) =>
-          if (connected.trySet(success)) {
+          if (connectionEstablished.trySet(success)) {
             connection.closed foreach { _ =>
               if (listening != null)
                 listening foreach { _.stopListening }
@@ -51,7 +51,8 @@ trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
           else
               connection.close
 
-        case _ =>
+        case failure =>
+          connectionEstablished.trySet(failure)
       }
 
       if (firstConnection != null && !firstConnection.open)

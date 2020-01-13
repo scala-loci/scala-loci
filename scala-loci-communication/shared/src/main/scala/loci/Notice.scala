@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Awaitable, CanAwait, ExecutionContext, Future, Promise, TimeoutException}
+import scala.concurrent.{Awaitable, CanAwait, Future, Promise, TimeoutException}
 import scala.language.higherKinds
 import scala.util.Try
 
@@ -107,7 +107,7 @@ object Notice {
       extends Source[T](notice)
 
     def apply[T]: NoticeSource[T] =
-      apply(ExecutionContext.defaultReporter)
+      apply(logging.reportException)
     def apply[T](failureReporter: FailureReporter): NoticeSource[T] =
       new NoticeSource(new Stream(failureReporter))
   }
@@ -207,7 +207,7 @@ object Notice {
       extends Source[T](notice)
 
     def apply[T]: NoticeSource[T] =
-      apply(ExecutionContext.defaultReporter)
+      apply(logging.reportException)
     def apply[T](failureReporter: FailureReporter): NoticeSource[T] =
       new NoticeSource(new Steady(failureReporter))
   }
@@ -263,7 +263,7 @@ object Notice {
       extends Source[T](notice, init)
 
     def apply[T](init: T): NoticeSource[T] =
-      apply(init, ExecutionContext.defaultReporter)
+      apply(init, logging.reportException)
     def apply[T](init: T, failureReporter: FailureReporter): NoticeSource[T] =
       new NoticeSource(new Varying(failureReporter), init)
   }

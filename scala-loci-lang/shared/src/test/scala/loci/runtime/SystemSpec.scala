@@ -4,7 +4,7 @@ package runtime
 import org.scalatest._
 import scala.util.Success
 
-class SystemSpec extends FlatSpec with Matchers {
+class SystemSpec extends FlatSpec with Matchers with NoLogging {
   behavior of "System"
 
   it should "handle remote access correctly" in {

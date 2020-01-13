@@ -25,6 +25,9 @@ val macrodeclaration = libraryDependencies +=
 val scalatest = libraryDependencies +=
   "org.scalatest" %%% "scalatest" % "3.0.8" % "test"
 
+val scribe = libraryDependencies +=
+  "com.outr" %%% "scribe" % "2.7.9"
+
 val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
@@ -89,8 +92,8 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
   in file("scala-loci-lang")
   settings (normalizedName := "scala-loci-lang",
             retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration, scalatest)
-  dependsOn lociCommunication)
+            macroparadise, macrodeclaration, scribe, scalatest)
+  dependsOn lociCommunication % "compile->compile;test->test")
 
 lazy val lociLangJVM = lociLang.jvm
 lazy val lociLangJS = lociLang.js
@@ -102,7 +105,7 @@ lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
   settings (normalizedName := "scala-loci-communication",
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
-            macrodeclaration, scalatest))
+            macrodeclaration, scribe, scalatest))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js

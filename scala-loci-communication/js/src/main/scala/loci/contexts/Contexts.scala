@@ -2,38 +2,38 @@ package loci
 package contexts
 
 import scala.util.control.NonFatal
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
+import scala.scalajs.concurrent.JSExecutionContext
 
 object Pooled {
-  lazy val global = scala.scalajs.concurrent.JSExecutionContext.queue
+  lazy val global: ExecutionContextExecutor =
+    new logging.ReportingExecutionContext(JSExecutionContext.queue)
 
   object Implicits {
-    implicit lazy val global = Pooled.global
+    implicit lazy val global: ExecutionContext = Pooled.global
   }
 }
 
 object Immediate {
   lazy val global: ExecutionContextExecutor = new ExecutionContextExecutor {
-    private[this] val report = ExecutionContext.defaultReporter
-
     def execute(runnable: Runnable) =
-      try runnable.run
+      try runnable.run()
       catch { case NonFatal(exception) => reportFailure(exception) }
 
-    def reportFailure(throwable: Throwable) = report(throwable)
+    def reportFailure(throwable: Throwable) = logging.reportException(throwable)
   }
 
   object Implicits {
-    implicit lazy val global = Immediate.global
+    implicit lazy val global: ExecutionContext = Immediate.global
   }
 }
 
 object Queued {
   lazy val global = create
-  def create = scala.scalajs.concurrent.JSExecutionContext.queue
+  def create: ExecutionContextExecutor =
+    new logging.ReportingExecutionContext(JSExecutionContext.queue)
 
   object Implicits {
-    implicit lazy val global = Queued.global
+    implicit lazy val global: ExecutionContext = Queued.global
   }
 }

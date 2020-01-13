@@ -82,7 +82,7 @@ object Parser {
 
       if (index == -1)
         throw new IllegalArgumentException("Malformed signature: "+
-          s"Unexpected empty tag name '$tag' but expected one of ${tags.mkString("'", "', '", "'")}")
+          s"Unexpected tag name '$tag' but expected one of ${tags.mkString("'", "', '", "'")}")
 
       index -> new Deserializer(content, first + 1, end)
     }

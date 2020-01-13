@@ -7,16 +7,18 @@ import io.circe.syntax._
 import loci.transmitter.Serializable
 import scala.util.Failure
 import scala.util.Success
+import scala.util.Try
 
 object circe {
   implicit def circeBasedSerializable[T]
       (implicit enc: Encoder[T], dec: Decoder[T]) = new Serializable[T] {
     override def serialize(value: T) =
-      MessageBuffer.fromString(value.asJson.noSpaces)
+      MessageBuffer.encodeString(value.asJson.noSpaces)
     override def deserialize(value: MessageBuffer) =
-      decode[T](value toString (0, value.length)) match {
-        case Left(error) => Failure(error)
-        case Right(res) => Success(res)
+      Try { decode[T](value.decodeString) } match {
+        case Success(Right(result)) => Success(result)
+        case Success(Left(error)) => Failure(error)
+        case Failure(exception) => Failure(exception)
       }
   }
 }

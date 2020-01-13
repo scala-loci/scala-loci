@@ -7,9 +7,9 @@ import scala.util.Try
 package object Testing {
   implicit object IntSerializable extends Serializable[Int] {
     def serialize(value: Int) =
-      MessageBuffer.fromString(value.toString)
+      MessageBuffer.encodeString(value.toString)
     def deserialize(value: MessageBuffer) =
-      Try { value.toString(0, value.length).toInt }
+      Try { value.decodeString.toInt }
   }
 
   implicit class MultipleAccessor[V, R, T, L](value: V from R)(
