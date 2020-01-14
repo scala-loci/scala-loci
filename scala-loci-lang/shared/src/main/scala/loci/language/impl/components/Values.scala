@@ -505,6 +505,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             if tree.symbol.isTerm &&
                !tree.symbol.isConstructor &&
                (!tree.symbol.isSynthetic || !tree.symbol.asTerm.isParamWithDefault) =>
+            logging.debug(s" Collecting ${tree.symbol}")
+
             splitValOrDefDef(tree) { (tree, peer, _, _, modality, specialized) =>
               PlacedValueDef(tree.symbol, tree, Some(peer), modality) +:
               (specialized map { case (rhs, peer) =>
@@ -516,6 +518,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             }
 
           case tree: ValDef if tree.symbol.asTerm.isParamAccessor =>
+            logging.debug(s" Collecting parameter ${tree.name}")
+
             if (!(tree.mods hasFlag Flag.BYNAMEPARAM) && !(tree.mods hasFlag Flag.IMPLICIT))
               c.abort(tree.pos, "Multitier module arguments must be call-by-name or implicit")
 
@@ -525,6 +529,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             Seq(ModuleValue(tree.symbol, tree))
 
           case tree: ValDef =>
+            logging.debug(s" Collecting value ${tree.name}")
+
             splitValOrDefDef(tree) { (tree, peer, tpe, tpt, modality, specialized) =>
               erase(
                 tree.rhs, tree.symbol,
@@ -534,12 +540,23 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             }
 
           case tree: ModuleDef if isMultitierModule(tree.symbol.info, tree.pos) =>
+            logging.debug(s" Collecting multitier module ${tree.name}")
             splitMultitierModule(tree)
 
           case tree: ClassDef if isMultitierModule(tree.symbol.companion.info, tree.pos) =>
+            logging.debug(s" Collecting multitier module companion ${tree.name}")
             splitMultitierModuleCompanionClass(tree)
 
-          case tree @ (_: MemberDef | _: Import) =>
+          case tree: MemberDef =>
+            if (tree.symbol != NoSymbol)
+              logging.debug(s" Collecting ${tree.symbol}")
+            else
+              logging.debug(s" Collecting ${tree.name}")
+
+            Seq(ModuleValue(tree.symbol, tree))
+
+          case tree: Import =>
+            logging.debug(" Collecting import statement")
             Seq(ModuleValue(tree.symbol, tree))
 
           case tree @ q"$_[..$_](...$exprss)"
@@ -549,6 +566,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                   tree.symbol.owner == symbols.Placed) =>
             decomposePlacementType(tree.tpe, EmptyTree, NoSymbol, tree.pos, moduleDefinition = true) match {
               case Placed(peer, _, _, modality) =>
+                logging.debug(s" Collecting expression placed on ${peer.name}")
                 erase(
                   stripPlacementSyntax(tree), NoSymbol,
                   peer, definitions.UnitTpe, TypeTree(definitions.UnitTpe), modality,
@@ -556,23 +574,27 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                   identity)
 
               case _ =>
+                logging.debug(" Collecting non-placed expression")
                 Seq(PlacedValueDef(NoSymbol, tree, None, Modality.None))
             }
 
           case tree =>
+            logging.debug(" Collecting non-placed expression")
             Seq(PlacedValueDef(NoSymbol, tree, None, Modality.None))
         }
     }) ++ concreteStubs
   }
 
   // erase implicit conversion that lifts standard values to placed values
-  def processLiftedPlacedValues(records: List[Any]): List[Any] =
-    records process {
+  def processLiftedPlacedValues(records: List[Any]): List[Any] = {
+    var count = 0
+    val result = records process {
       case record @ PlacedValue(_, _, _, _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
             case q"$_[..$_](...$exprss)"
                 if tree.nonEmpty && (symbols.lifts contains tree.symbol) =>
+              count += 1
               exprss.head.head
 
             case _ =>
@@ -583,9 +605,18 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         record.copy(tree = transformer transform record.tree)
     }
 
+    if (count == 1)
+      logging.debug(s" Lifted $count non-placed value to a placed value")
+    else
+      logging.debug(s" Lifted $count non-placed values to placed values")
+
+    result
+  }
+
   // validate types of placed values
   def validatePlacedValues(records: List[Any]): List[Any] = {
     // validate placement types
+    logging.debug(" Validating types of placed values")
     records foreach {
       case PlacedValueDef(symbol, tree, Some(_), modality) =>
         // ensure local placed values do not override non-local placed values
@@ -660,6 +691,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       }
     }
 
+    logging.debug(" Validating accesses of placed values")
+
     records foreach {
       case ModuleValue(_, _: ValOrDefDef) =>
       case ModuleValue(symbol, tree) if !isMultitierModule(symbol.info, tree.pos) =>
@@ -673,7 +706,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
   }
 
   // fix self and super references to the enclosing module
-  def fixEnclosingReferences(records: List[Any]): List[Any] =
+  def fixEnclosingReferences(records: List[Any]): List[Any] = {
+    logging.debug(" Processing references to definitions of the multitier module after expansion")
+
     (records
       // fix references to expanding module that will be wrong
       // after moving the code to an inner trait
@@ -736,6 +771,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         case value: PlacedValueDef =>
           value.copy(tree = fixEnclosingReferences(value.tree, names.placedValues(module.symbol)))
       })
+  }
 
   private def fixEnclosingReferences(tree: Tree, enclosingName: TypeName) = {
     object transformer extends Transformer {

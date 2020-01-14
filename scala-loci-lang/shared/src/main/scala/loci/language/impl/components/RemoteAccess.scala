@@ -82,8 +82,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
 
-  def widenRemoteNarrowing(records: List[Any]): List[Any] =
-    records process {
+  def widenRemoteNarrowing(records: List[Any]): List[Any] = {
+    var count = 0
+    val result = records process {
       case record @ PlacedValue(_, _, _, _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
@@ -91,6 +92,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 if tree.nonEmpty &&
                    tree.symbol != null &&
                    tree.symbol.owner == symbols.Narrow =>
+              count += 1
               transform(exprss.head.head)
 
             case _ =>
@@ -100,6 +102,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         record.copy(tree = transformer transform record.tree)
     }
+
+    logging.debug(s" Eliminated $count syntactic ${if (count == 1) "from" else "froms"} for explicit remote value access")
+    result
+  }
 
   def createMarshallables(records: List[Any]): List[Any] = {
     val moduleName = uniqueName(module.symbol)
@@ -366,6 +372,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       def deferredMarshallableImplementation(deferredMarshallableName: TermName, expr: Tree) =
         if (!(implementedMarshallables contains deferredMarshallableName)) {
+          logging.debug(s"  Implementing deferred marshallable for ${info.base} ~> ${info.proxy}")
+
           implementedMarshallables += deferredMarshallableName
           Seq(atPos(pos) {
             q"@$annotation ${Flag.SYNTHETIC} protected[this] def $deferredMarshallableName = $expr" })
@@ -380,6 +388,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         map { case (_, accessorName, implementationName) =>
           name match {
             case Left((_, _)) =>
+              logging.debug("  " +
+                s"Reusing${if (dummyTransmittableTree) " deferred " else " "}marshallable " +
+                s"for ${info.base} ~> ${info.proxy}")
               (q"$accessorName", q"$implementationName", Seq.empty)
             case Right(deferredMarshallableName) =>
               (EmptyTree, EmptyTree, deferredMarshallableImplementation(deferredMarshallableName, q"$accessorName"))
@@ -425,6 +436,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
             name match {
               case Left((marshallableName, _)) =>
+                logging.debug(s"  Creating marshallable for ${info.base} ~> ${info.proxy}")
+
                 definedMarshallables += info -> ((NoSymbol, marshallableName, marshallableName))
 
                 (q"$marshallableName",
@@ -439,6 +452,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           else
             name match {
               case Left((marshallableName, deferredMarshallableName)) =>
+                logging.debug(s"  Deferring marshallable for ${info.base} ~> ${info.proxy}")
+
                 declaredMarshallables += info -> ((NoSymbol, marshallableName, deferredMarshallableName))
 
                 val marshallableType = types.marshallable mapArgs { _ => List(info.base, info.result, info.proxy) }
@@ -477,6 +492,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         val argTransmittableType = types.resolution mapArgs { args => List(arg, args(1), arg) ++ args.drop(3) }
         val resTransmittableType = types.resolution mapArgs { res :: _.tail }
         val transmittablesRequired = requiredTransmittables contains symbol
+
+        logging.debug(s" Processing${if (symbol.owner != module.classSymbol) " inherited " else " "}placed value $signature")
 
         val pos = (module.tree.impl.parents
           collectFirst { case tree if ancestors contains tree.symbol => tree.pos }
@@ -649,6 +666,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     }).unzip3
 
     // resolve or construct marshallables whose instantiation was deferred to sub modules
+    logging.debug(" Processing deferred marshallables of super modules")
     val marshallableValues = declaredMarshallables.toList flatMap {
       case (_, (NoSymbol, _, _)) =>
         Seq.empty
@@ -910,7 +928,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
        argumentsType)
     }
 
-    records process {
+    var count = 0
+    val result = records process {
       case record @ PlacedValue(_, _, Some(peer), _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
@@ -931,6 +950,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               internal.setType(tree, tpe)
 
             case q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
+              count += 1
+
               val index = checkForTransmission(tree, peer)
 
               val (value, signature, remotes, remotesType) =
@@ -952,6 +973,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             case _ =>
               (extractRemoteCall(tree)
                 map { case (value, signature, remotes, remotesType) =>
+                  count += 1
+
                   val (placedValue, placedValuePeer, arguments, _) =
                     extractRemoteAccess(value, peer, remotesType)
 
@@ -970,6 +993,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         record.copy(tree = transformer transform record.tree)
     }
+
+    logging.debug(s" Processed $count remote ${if (count == 1) "access" else "accesses"}")
+
+    result
   }
 
   private def checkForTransmission[T](tree: Tree, peer: Symbol): Int = {

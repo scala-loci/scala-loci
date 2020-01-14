@@ -27,6 +27,8 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
   case class Initialized(tree: ImplDef)
 
   def instantiateNestedModules(records: List[Any]): List[Any] = {
+    logging.debug(" Validating the type of the multitier module")
+
     module.tree.impl.parents foreach { parent =>
       if (!(multitierModules contains parent.symbol) &&
           !isMultitierModule(parent) &&
@@ -42,8 +44,7 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
 
       case _ if tree.tpe != NoType =>
         val symbol = tree.tpe match {
-          case RefinedType(Seq(tpe0, tpe1), _)
-            if tpe0.typeSymbol == module.classSymbol =>
+          case RefinedType(Seq(tpe0, tpe1), _) if tpe0.typeSymbol == module.classSymbol =>
             tpe1.typeSymbol
           case tpe =>
             tpe.typeSymbol
@@ -118,7 +119,15 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
             case (ClassDef(_, _, _, _), ValueLevel(name))  => Some(name -> module.self)
             case _ => None
           }
-          expandMultitierModule(annotatedTree, name)
+
+          logging.debug(s" Expanding nested multitier module ${tree.symbol.fullName}")
+
+          val expandedTree = expandMultitierModule(annotatedTree, name)
+
+          logging.debug(" Nested multitier module expanded")
+          logging.debug(s" Continuing expansion of multitier module ${module.symbol.fullName}")
+
+          expandedTree
 
         case tree: ImplDef if tree.symbol != module.symbol && tree.symbol != module.classSymbol =>
           withLevel(NoLevel) { super.transform(tree) }
@@ -127,6 +136,8 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
           super.transform(tree)
       }
     }
+
+    logging.debug(" Checking nested multitier modules")
 
     records :+ Initialized(transformer transform module.tree match { case tree: ImplDef => tree })
   }

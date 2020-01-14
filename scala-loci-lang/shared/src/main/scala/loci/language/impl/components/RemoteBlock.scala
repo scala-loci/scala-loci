@@ -265,6 +265,11 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
 
         internal.setInfo(module.classSymbol, info)
 
+        if (liftedDefinitions.size == 1)
+          logging.debug(s" Lifted ${liftedDefinitions.size} nested remote block to a top-level definition")
+        else
+          logging.debug(s" Lifted ${liftedDefinitions.size} nested remote blocks to top-level definitions")
+
         result
     }
 }

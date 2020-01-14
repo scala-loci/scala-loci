@@ -22,8 +22,9 @@ class Subjectivity[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   import commons._
   import values._
 
-  def processLocalSubjectiveAccess(records: List[Any]): List[Any] =
-    records process {
+  def processLocalSubjectiveAccess(records: List[Any]): List[Any] = {
+    var count = 0
+    val result = records process {
       case record @ PlacedValue(_, _, _, _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
@@ -32,6 +33,8 @@ class Subjectivity[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                    tree.symbol == symbols.to =>
               decomposePlacementType(expr.tpe.widen, EmptyTree, expr.symbol, expr.pos, moduleDefinition = false) match {
                 case Placed(_, _, _, Modality.Subjective(_)) =>
+                  count += 1
+
                   val value = transform(expr)
                   val remote = transform(exprss.head.head)
 
@@ -51,4 +54,9 @@ class Subjectivity[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         record.copy(tree = transformer transform record.tree)
     }
+
+    logging.debug(s" Processed $count local ${if (count == 1) "access" else "accesses"} to subjective values")
+
+    result
+  }
 }

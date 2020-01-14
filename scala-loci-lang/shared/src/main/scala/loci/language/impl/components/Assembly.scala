@@ -30,6 +30,8 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   case class Assembly(tree: ImplDef)
 
   def assemblePeerImplementation(records: List[Any]): List[Any] = {
+    logging.debug(" Assembling expanded multitier module")
+
     val (placedValuesImpl, signatureImpl, moduleImpl, selfType) = {
       // inherit implementation for placed values defined in the module bases
       val placedValuesBases =

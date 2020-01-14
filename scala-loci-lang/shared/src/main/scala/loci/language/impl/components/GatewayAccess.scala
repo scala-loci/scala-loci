@@ -25,12 +25,15 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
   import moduleInfo._
   import values._
 
-  def processGatewayAccess(records: List[Any]): List[Any] =
-    records process {
+  def processGatewayAccess(records: List[Any]): List[Any] = {
+    var count = 0
+    val result = records process {
       case record @ PlacedValue(_, _, _, _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
             case tree @ q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.remoteGateway =>
+              count += 1
+
               val index = checkForConnection(tree)
 
               val pos = exprss.head.head.pos
@@ -62,6 +65,11 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
         record.copy(tree = transformer transform record.tree)
     }
 
+    logging.debug(s" Processed $count remote connection state ${if (count == 1) "query" else "queries"}")
+
+    result
+  }
+
   private def peerSignature(tpe: Type, pos: Position) = {
     object transformer extends Transformer {
       override def transform(tree: Tree): Tree = tree match {
@@ -77,7 +85,7 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     Select(transformer transform qualifier, name)
   }
 
-  private def checkForConnection[T](tree: Tree): Int = {
+  private def checkForConnection(tree: Tree): Int = {
     val q"$_[..$_](...$exprss)" = tree
 
     if (exprss.size != 2 || exprss.head.size != 1)

@@ -35,6 +35,8 @@ object Engine {
       outerCode: ctx.universe.ImplDef,
       outerName: List[(String, ctx.universe.TermName)],
       factories: Seq[Component.AnyFactory]): Engine.Result[ctx.type] = {
+    val logging = Logging(ctx)
+
     val resolved = Components.resolve(factories) match {
       case Components.Resolved(factories) =>
         factories
@@ -47,6 +49,26 @@ object Engine {
       resolved.foldLeft(create(ctx)(code, outerCode, outerName, factories, List.empty)) { (engine, factory) =>
         create(ctx)(code, outerCode, outerName, factories, engine.components :+ factory(engine))
       }
+
+    if (logging.debugEnabled) {
+      logging.debug("Multitier components")
+      val namedComponents = engine.components map { component =>
+        name(component) -> component
+      }
+      val length = (namedComponents.iterator map { case (componentName, _ ) =>
+        componentName.length
+      }).max
+
+      namedComponents foreach { case (componentName, component) =>
+        val name = s" $componentName"
+        val phases = component.phases map { _.name } mkString ", "
+
+        if (phases.isEmpty)
+          logging.debug(name)
+        else
+          logging.debug(s"$name ${" " * (length - componentName.length)} [phases: $phases]")
+      }
+    }
 
     val phases = Phases.sort(engine.components flatMap { _.phases }) match {
       case Phases.Sorted(phases) =>
@@ -65,8 +87,30 @@ object Engine {
           s"Dependency to non-existent phase `$name`")
     }
 
+    if (logging.debugEnabled) {
+      logging.debug("Multitier expansion phases")
+      val length = (phases.iterator map { _.name.length }).max
+
+      phases foreach { phase =>
+        val name = s" ${phase.name}"
+        val constraints =
+          Seq("after: " -> phase.after, "before: " -> phase.before) flatMap {
+            case (_, set) if set.isEmpty => None
+            case (string, set) => Some(s"$string${set mkString ", "}")
+          }
+
+        if (constraints.isEmpty)
+          logging.debug(name)
+        else
+          logging.debug(s"$name ${" " * (length - phase.name.length)} [${constraints mkString "; "}]")
+      }
+    }
+
     val result =
-      phases.foldLeft(List.empty[Any]) { (list, phase) => phase transform list }
+      phases.foldLeft(List.empty[Any]) { (list, phase) =>
+        logging.debug(s"Running multitier expansion phase ${phase.name}")
+        phase transform list
+      }
 
     Result(engine, result)
   }
@@ -87,20 +131,21 @@ object Engine {
 
       def require[Comp[C <: blackbox.Context] <: Component[C]](factory: Component.Factory[Comp]) =
         (components collectFirst factory.asInstance) getOrElse {
-          val simpleName = factory.getClass.getSimpleName
-          val name =
-            if (simpleName endsWith "$")
-              simpleName.substring(0, simpleName.length - 1)
-            else
-              simpleName
-
           ctx.abort(ctx.enclosingPosition, s"$initFailed: " +
-            s"Required unavailable component $name")
+            s"Required unavailable component ${name(factory)}")
         }
 
       def run(code: c.universe.ImplDef, name: Option[(String, c.universe.TermName)]) =
         Engine.runNested(ctx)(code, outerMultitierCode, name.toList ++ outerMultitierName, factories)
     }
+
+  private def name(ref: AnyRef) = {
+    val name = ref.getClass.getSimpleName
+    if (name endsWith "$")
+      name.dropRight(1)
+    else
+      name
+  }
 
   private val initFailed = "Multitier macro engine initialization failed"
 }

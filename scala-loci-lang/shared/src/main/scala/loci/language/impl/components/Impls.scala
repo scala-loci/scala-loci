@@ -29,7 +29,9 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   import values._
 
 
-  def liftNestedImplementations(records: List[Any]): List[Any] =
+  def liftNestedImplementations(records: List[Any]): List[Any] = {
+    logging.debug(" Lifting nested classes, traits and objects to top-level definitions")
+
     (records
       flatProcess {
         case ModuleValue(symbol, tree: ImplDef) =>
@@ -49,6 +51,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         case value: PlacedValue =>
           value.copy(tree = typeTreeLifter transform value.tree)
       })
+  }
 
   private def lift(tree: Tree): (Option[Tree], Option[Tree]) =
     lift(tree, q"${module.self}")
@@ -62,8 +65,10 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       case tree: ImplDef if isMultitierModule(tree.symbol.info, tree.pos) =>
         Some(tree) -> None
       case tree: ModuleDef =>
+        logging.debug(s" Lifting object ${tree.symbol.fullName}")
         liftModule(tree, valuePrefix)
       case tree: ClassDef =>
+        logging.debug(s" Lifting ${if (tree.mods hasFlag Flag.TRAIT) "trait" else "class"} ${tree.symbol.fullName}")
         liftClass(tree, valuePrefix)
       case tree: TypeDef =>
         Some(tree) -> None

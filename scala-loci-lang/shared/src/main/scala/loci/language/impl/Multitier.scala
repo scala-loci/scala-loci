@@ -5,6 +5,7 @@ package impl
 import scala.collection.mutable
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
+import scala.util.Properties
 
 object Multitier {
   def compilationFailure(message: String): Unit = macro compilationFailureImpl
@@ -23,6 +24,8 @@ object Multitier {
 
 class Multitier(val c: blackbox.Context) {
   import c.universe._
+
+  val logging = Logging(c)
 
   def annotation(annottees: Tree*): Tree = {
     val multitierAnnotationType = c.mirror.staticClass("_root_.loci.multitier").toType
@@ -93,6 +96,10 @@ class Multitier(val c: blackbox.Context) {
 
           val retyper = c.retyper
 
+          logging.info(
+            s"Expanding multitier code for ${c.internal.enclosingOwner.fullName}.${annottee.name} " +
+            s"in ${c.enclosingPosition.source.file.path}")
+
           val preprocessedAnnottee = Preprocessor.run(c)(
             annottee,
             Seq(MultitierTypes, AbstractValues, ImplicitContext))
@@ -124,7 +131,9 @@ class Multitier(val c: blackbox.Context) {
 
             (records
               collectFirst { case assembly.Assembly(annottee) =>
-                retyper untypecheckAll annottee
+                val tree = retyper untypecheckAll annottee
+                logging.debug(s"Multitier code expanded for ${c.internal.enclosingOwner.fullName}.${annottee.name}")
+                tree
               }
               getOrElse annottee)
           }
@@ -147,6 +156,13 @@ class Multitier(val c: blackbox.Context) {
       }
       else
         annottee
+
+    logging.code({
+      val name = s"${c.internal.enclosingOwner.fullName}.${annottee.name}"
+      val code = (processedAnnotee.toString.linesWithSeparators map { "  " + _ }).mkString
+      s"Expanded code for multitier module $name: " +
+      s"${Properties.lineSeparator}$code"
+    })
 
     (companion.headOption
       map { companion => q"$processedAnnotee; $companion"}
@@ -359,6 +375,8 @@ class Multitier(val c: blackbox.Context) {
   private def improveMacroErrorReporting(annottee: Tree): PartialFunction[Throwable, Tree] = {
     case e: Throwable
         if e.getClass.getCanonicalName == "scala.reflect.macros.runtime.AbortMacroException" =>
+
+      logging.debug(s" Expansion failed: ${e.getMessage}")
 
       val pos = readPosField(e)
 

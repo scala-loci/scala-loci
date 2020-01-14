@@ -21,6 +21,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   val retyper = engine.c.retyper
 
+  val logging = Logging(engine.c)
+
   def expandMultitierModule(tree: ImplDef, name: Option[(String, TermName)]): ImplDef = {
     val result = engine.run(tree, name)
     val assembly = result.engine.require(Assembly)

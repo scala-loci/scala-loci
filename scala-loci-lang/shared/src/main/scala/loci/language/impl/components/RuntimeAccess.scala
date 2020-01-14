@@ -22,16 +22,17 @@ class RuntimeAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
   import commons._
   import values._
 
-  def processRuntimeAccess(records: List[Any]): List[Any] =
-    records process {
+  def processRuntimeAccess(records: List[Any]): List[Any] = {
+    var count = 0
+    val result = records process {
       case record @ PlacedValue(_, _, _, _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
-            case q"$_.$name[..$tpts](...$exprss)" if tree.symbol.owner == symbols.multitier =>
-              if (name == names.running || name == names.terminate)
-                q"$$loci$$sys.$name[..$tpts](...$exprss)"
-              else
-                super.transform(tree)
+            case q"$_.$name[..$tpts](...$exprss)"
+                if tree.symbol.owner == symbols.multitier &&
+                  (name == names.running || name == names.terminate) =>
+              count += 1
+              q"$$loci$$sys.$name[..$tpts](...$exprss)"
 
             case _ =>
               super.transform(tree)
@@ -40,4 +41,9 @@ class RuntimeAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
 
         record.copy(tree = transformer transform record.tree)
     }
+
+    logging.debug(s" Processed $count multitier runtime ${if (count == 1) "query" else "queries"}")
+
+    result
+  }
 }
