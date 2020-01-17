@@ -5,9 +5,9 @@ enablePlugins(GitVersioning)
 
 git.useGitDescribe in ThisBuild := true
 
-scalaVersion in ThisBuild := "2.12.8"
+scalaVersion in ThisBuild := "2.12.10"
 
-crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.8")
+crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.10")
 
 organization in ThisBuild := "de.tuda.stg"
 
