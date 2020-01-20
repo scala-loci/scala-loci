@@ -58,6 +58,9 @@ val play = libraryDependencies ++= Seq(
 val scalajsDom = libraryDependencies +=
   "org.scala-js" % "scalajs-dom" % "0.9.7" cross ScalaJSCrossVersion.binary
 
+val javalin = libraryDependencies +=
+  "io.javalin" % "javalin" % "3.6.0"
+
 
 lazy val loci = (project
   in file(".")
@@ -73,7 +76,7 @@ lazy val lociJVM = (project
              lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
-             lociCommunicationJVM))
+             lociCommunicationJVM, lociCommunicatorWsJavalinJVM))
 
 lazy val lociJS = (project
   in file(".js")
@@ -84,7 +87,7 @@ lazy val lociJS = (project
              lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
              lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
-             lociCommunicationJS))
+             lociCommunicationJS, lociCommunicatorWsJavalinJS))
 
 
 lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
@@ -184,6 +187,17 @@ lazy val lociCommunicatorWs = (crossProject(JSPlatform, JVMPlatform)
 
 lazy val lociCommunicatorWsJVM = lociCommunicatorWs.jvm
 lazy val lociCommunicatorWsJS = lociCommunicatorWs.js
+
+
+lazy val lociCommunicatorWsJavalin = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Dummy
+  in file("scala-loci-communicator-ws-javalin")
+  settings (normalizedName := "scala-loci-communicator-ws-javalin",
+            javalin, scalajsDom)
+  dependsOn lociCommunication)
+
+lazy val lociCommunicatorWsJavalinJVM = lociCommunicatorWsJavalin.jvm
+lazy val lociCommunicatorWsJavalinJS = lociCommunicatorWsJavalin.js
 
 
 lazy val lociCommunicatorWsPlay = (crossProject(JSPlatform, JVMPlatform)
