@@ -7,13 +7,21 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.net.Socket
 import java.net.SocketException
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
+
 import scala.collection.mutable.ArrayBuilder
 
 private object TCPHandler {
   locally(TCPHandler)
+
+
+  val executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
+    override def newThread(r: Runnable): Thread = {
+      val thr = Executors.defaultThreadFactory().newThread(r)
+      thr.setDaemon(true)
+      thr
+    }
+  })
 
   def handleConnection(
       socket: Socket,
@@ -41,8 +49,7 @@ private object TCPHandler {
 
     val delay = properties.heartbeatDelay.toMillis
     val timeout = properties.heartbeatTimeout.toMillis.toInt
-    val executor = Executors.newSingleThreadScheduledExecutor
-
+    var heartbeatTask: ScheduledFuture[_] = null
 
     // control codes
 
@@ -53,7 +60,8 @@ private object TCPHandler {
 
     // connection interface
 
-    val isOpen = new AtomicBoolean(true)
+    var isOpen = true
+    val socketLock = new Object()
     val doClosed = Notice.Steady[Unit]
     val doReceive = Notice.Stream[MessageBuffer]
 
@@ -70,10 +78,10 @@ private object TCPHandler {
       val closed = doClosed.notice
       val receive = doReceive.notice
 
-      def open = isOpen.get
+      def open: Boolean = socketLock.synchronized(isOpen)
 
-      def send(data: MessageBuffer) =
-        if (open) outputStream synchronized {
+      def send(data: MessageBuffer) = socketLock synchronized {
+        if (isOpen)
           try {
             val size = data.length
             outputStream write Array(
@@ -89,39 +97,43 @@ private object TCPHandler {
           catch { case _: IOException => close }
         }
 
-      def close() = isOpen synchronized {
-        if (open) {
+      def close() = socketLock synchronized {
+        if (isOpen) {
           def ignoreIOException(body: => Unit) =
             try body catch { case _: IOException => }
 
-          executor.shutdown
+          isOpen = false
+
+          if (heartbeatTask != null) heartbeatTask.cancel(true)
 
           ignoreIOException { socket.shutdownOutput }
           ignoreIOException { while (inputStream.read != -1) { } }
           ignoreIOException { socket.close }
 
-          isOpen set false
           doClosed.set()
         }
       }
     }
 
-    connectionEstablished(connection)
-
-
     // heartbeat
 
     socket setSoTimeout timeout
 
-    executor scheduleWithFixedDelay (new Runnable {
-      def run = outputStream synchronized {
-        try {
-          outputStream write heartbeat
-          outputStream.flush
-        }
-        catch { case _: IOException => connection.close }
+    heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
+      def run = socketLock synchronized {
+        if (isOpen)
+          try {
+            outputStream write heartbeat
+            outputStream.flush
+          }
+          catch {case _: IOException => connection.close}
       }
     }, delay, delay, TimeUnit.MILLISECONDS)
+
+
+    connectionEstablished(connection)
+
+
 
 
     // frame parsing
