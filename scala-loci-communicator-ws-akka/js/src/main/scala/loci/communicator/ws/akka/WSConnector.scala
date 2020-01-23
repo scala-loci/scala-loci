@@ -113,9 +113,6 @@ private class WSConnector[P <: WS: WSProtocolFactory](
           }
 
           socket.onclose = { event: dom.CloseEvent =>
-            connectionEstablished set Failure(
-              new ConnectionException("connection closed: " + event.reason))
-
             clearInterval(intervalHandle)
             clearTimeout(timeoutHandle)
             doClosed.set()
@@ -124,9 +121,6 @@ private class WSConnector[P <: WS: WSProtocolFactory](
     }
 
     socket.onerror = { event: dom.Event =>
-      connectionEstablished set Failure(
-        new ConnectionException("connection closed: connection error"))
-
       socket.close()
     }
   }

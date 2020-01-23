@@ -187,12 +187,12 @@ private class WebRTCChannelConnector(
         }
 
         channel.onclose = { event: dom.Event =>
-          connectionEstablished set Failure(new ConnectionException("channel closed"))
+          connectionEstablished trySet Failure(new ConnectionException("channel closed"))
           connection.close
         }
 
         channel.onerror = { event: dom.Event =>
-          connectionEstablished set Failure(new ConnectionException("channel closed"))
+          connectionEstablished trySet Failure(new ConnectionException("channel closed"))
           connection.close
         }
 
@@ -223,17 +223,17 @@ private class WebRTCChannelConnector(
   
           channel.onopen = { _: dom.Event =>
             js.timers clearTimeout handle
-            connectionEstablished set Success(connection)
+            connectionEstablished trySet Success(connection)
           }
   
         case RTCDataChannelState.open =>
-          connectionEstablished set Success(connection)
+          connectionEstablished trySet Success(connection)
 
         case RTCDataChannelState.closing | RTCDataChannelState.closed =>
-          connectionEstablished set Failure(new ConnectionException("channel closed"))
+          connectionEstablished trySet Failure(new ConnectionException("channel closed"))
       }
     }
     else
-      connectionEstablished set Failure(new ConnectionException("channel unreliable"))
+      connectionEstablished trySet Failure(new ConnectionException("channel unreliable"))
   }
 }
