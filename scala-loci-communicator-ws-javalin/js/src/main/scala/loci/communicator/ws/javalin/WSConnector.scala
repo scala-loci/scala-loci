@@ -84,7 +84,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
             if (intervalHandle != null)
               clearInterval(intervalHandle)
             intervalHandle = setInterval(properties.heartbeatDelay) {
-              socket send "\uD83D\uDC93❤"
+              socket send "\uD83D\uDC93"
             }
           }
 

@@ -23,9 +23,13 @@ trait WS extends
 }
 
 object WS extends WSSetupFactory {
+  def unapply(ws: WS) = Some((ws.path, ws.host, ws.port))
 
   case class Properties(heartbeatDelay: FiniteDuration = 3.seconds,
                         heartbeatTimeout: FiniteDuration = 10.seconds)
+
+  def apply(javalin: Javalin, path: String): Listener[WS] =
+    apply(javalin, path, Properties())
 
   def apply(javalin: Javalin, path: String, properties: Properties): Listener[WS] =
     new Listener[WS] {

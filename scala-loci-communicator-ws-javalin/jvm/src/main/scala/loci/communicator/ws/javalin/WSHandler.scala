@@ -1,10 +1,10 @@
-package loci.communicator.ws.javalin
+package loci
+package communicator
+package ws.javalin
 
-import java.util.concurrent.{Executors, ThreadFactory, TimeUnit}
+import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
 
-import io.javalin.websocket.{WsBinaryMessageContext, WsBinaryMessageHandler, WsCloseContext, WsCloseHandler, WsConnectContext, WsConnectHandler, WsHandler, WsMessageContext, WsMessageHandler}
-import loci.communicator.{Connection, ConnectionSetup}
-import loci.{MessageBuffer, Notice}
+import io.javalin.websocket._
 
 import scala.util.{Success, Try}
 
@@ -19,46 +19,48 @@ private object WSHandler {
     }
   })
 
+  val connectionAttributeKey = "loci.communicator.ws.javalin.Connection"
+
+  def connectionAttribute(
+      ctx: WsContext,
+      connection: Connection[WS],
+      doReceive: Notice.Stream.Source[MessageBuffer],
+      resetTimeout: () => Unit) =
+    ctx.attribute(connectionAttributeKey, (connection, doReceive, resetTimeout))
+
+  def connectionAttribute(ctx: WsContext) =
+    ctx.attribute[(Connection[WS], Notice.Stream.Source[MessageBuffer], () => Unit)](connectionAttributeKey)
 
   def handleConnection(
-                        wsHandler: WsHandler,
-                        wsPath: String,
-                        properties: WS.Properties,
-                        connectionSetup: ConnectionSetup[WS],
-                        connectionEstablished: Try[Connection[WS]] => Unit): Unit = {
-
-
-
-    val doClosed  = Notice.Steady[Unit]
-    val doReceive = Notice.Stream[MessageBuffer]
-
-    var connection : Connection[WS] = null
-
+      wsHandler: WsHandler,
+      wsPath: String,
+      properties: WS.Properties,
+      connectionSetup: ConnectionSetup[WS],
+      connectionEstablished: Try[Connection[WS]] => Unit): Unit = {
     wsHandler.onConnect(new WsConnectHandler {
-      override def handleConnect(wsCtx: WsConnectContext): Unit = {
-
+      override def handleConnect(ctx: WsConnectContext): Unit = {
 
         // heartbeat
+
         val timeout   = properties.heartbeatTimeout.toMillis.toInt
         val delay     = properties.heartbeatDelay.toMillis
         val heartbeat = "\uD83D\uDC93"
 
-        wsCtx.session.setIdleTimeout(timeout)
+        val heartbeatTask = executor.scheduleWithFixedDelay(
+          new Runnable { def run = ctx.send(heartbeat) },
+          delay, delay, TimeUnit.MILLISECONDS)
 
-        val heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
-          def run = {
-            wsCtx.send(heartbeat)
-          }
-        }, delay, delay, TimeUnit.MILLISECONDS)
+        var timeoutTask: ScheduledFuture[_] = null
+
 
         // connection interface
 
         var isOpen     = true
         val socketLock = new Object()
+        val doClosed   = Notice.Steady[Unit]
+        val doReceive  = Notice.Stream[MessageBuffer]
 
-
-        connection = new Connection[WS] {
-
+        val connection = new Connection[WS] {
           val protocol = new WS {
             val path               = wsPath
             val setup              = connectionSetup
@@ -74,15 +76,15 @@ private object WSHandler {
 
           def send(data: MessageBuffer) = socketLock.synchronized {
             if (open) {
-              wsCtx.send(data.asByteBuffer)
+              ctx.send(data.asByteBuffer)
             }
           }
 
           def close() = socketLock.synchronized {
             if (open) {
-
               heartbeatTask.cancel(true)
-              wsCtx.session.close()
+              timeoutTask.cancel(true)
+              ctx.session.close()
 
               isOpen = false
               doClosed.set()
@@ -90,26 +92,53 @@ private object WSHandler {
           }
         }
 
-        connectionEstablished(Success(connection))
+        def resetTimeout(): Unit = {
+          if (timeoutTask != null)
+            timeoutTask.cancel(true)
 
+          timeoutTask = executor.schedule(
+            new Runnable { def run = connection.close() },
+            timeout, TimeUnit.MILLISECONDS)
+        }
+
+        resetTimeout()
+
+        connectionAttribute(ctx, connection, doReceive, resetTimeout)
+
+        connectionEstablished(Success(connection))
       }
     })
+
 
     // frame parsing
 
     wsHandler.onMessage(new WsMessageHandler {
-      override def handleMessage(ctx: WsMessageContext): Unit = () //heartbeat
+      override def handleMessage(ctx: WsMessageContext): Unit = {
+        val (_, _, resetTimeout) = connectionAttribute(ctx)
+        resetTimeout()
+      }
     })
 
     wsHandler.onBinaryMessage(new WsBinaryMessageHandler {
       override def handleBinaryMessage(ctx: WsBinaryMessageContext): Unit = {
-        doReceive.fire(MessageBuffer.wrapArray(ctx.data()))
+        val (_, doReceive, resetTimeout) = connectionAttribute(ctx)
+        resetTimeout()
+
+        val data =
+          if (ctx.offset == 0 && ctx.length == ctx.data.length)
+            ctx.data
+          else
+            ctx.data.slice(ctx.offset, ctx.length)
+
+        doReceive.fire(MessageBuffer.wrapArray(data))
       }
     })
 
     wsHandler.onClose(new WsCloseHandler {
-      override def handleClose(ctx: WsCloseContext): Unit =
-        if(connection!= null) connection.close()
+      override def handleClose(ctx: WsCloseContext): Unit = {
+        val (connection, _, _) = connectionAttribute(ctx)
+        connection.close()
+      }
     })
   }
 }

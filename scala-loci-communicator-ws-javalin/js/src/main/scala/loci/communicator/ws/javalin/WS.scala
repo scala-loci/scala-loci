@@ -25,6 +25,8 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
+  def apply(javalin: Javalin, path: String): Listener[WS] = ???
+
   def apply(javalin: Javalin, path: String, properties: Properties): Listener[WS] = ???
 
 
