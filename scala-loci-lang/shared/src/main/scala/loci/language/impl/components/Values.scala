@@ -517,6 +517,18 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               })
             }
 
+          case tree: DefDef if tree.symbol.isConstructor =>
+            logging.debug(s" Collecting ${tree.symbol}")
+
+            tree.vparamss foreach {
+              _ foreach { tree =>
+                if (!(tree.mods hasFlag Flag.BYNAMEPARAM) && !(tree.mods hasFlag Flag.IMPLICIT))
+                  c.abort(tree.pos, "Multitier module arguments must be call-by-name or implicit")
+              }
+            }
+
+            Seq(ModuleValue(tree.symbol, tree))
+
           case tree: ValDef if tree.symbol.asTerm.isParamAccessor =>
             logging.debug(s" Collecting parameter ${tree.name}")
 
