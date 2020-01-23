@@ -77,8 +77,47 @@ class Multitier(val c: blackbox.Context) {
     }
     val isRecursiveExpansion = recursionCount > 2
 
+    val constructorParams = mutable.ListBuffer.empty[List[List[ValDef]]]
+
     val (annottee, companion) = annottees match {
-      case (annottee: ImplDef) :: companion => (annottee, companion)
+      case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) :: companion =>
+        def reducedFlags(mods: Modifiers): Modifiers = {
+          val reducedFlags =
+            Seq(Flag.ARTIFACT, Flag.BYNAMEPARAM, Flag.CONTRAVARIANT, Flag.COVARIANT,
+                Flag.FINAL, Flag.IMPLICIT, Flag.LOCAL, Flag.MUTABLE, Flag.OVERRIDE,
+                Flag.PARAM, Flag.PARAMACCESSOR, Flag.PRIVATE, Flag.PROTECTED, Flag.SYNTHETIC)
+              .foldLeft(NoFlags) { (flagAcc, flag) =>
+                if (mods hasFlag flag) flagAcc | flag else flagAcc
+              }
+          Modifiers(reducedFlags, mods.privateWithin, mods.annotations)
+        }
+
+        val body = impl.body map {
+          case tree @ DefDef(mods, termNames.CONSTRUCTOR, tparams, _, tpt, rhs) =>
+            constructorParams += tree.vparamss
+
+            val vparamss = tree.vparamss map {
+              _ map {
+                case tree @ ValDef(mods, name, tpt, rhs) =>
+                  if ((mods hasFlag Flag.DEFAULTPARAM) && rhs.nonEmpty)
+                    treeCopy.ValDef(tree, reducedFlags(mods), name, tpt, EmptyTree)
+                  else
+                    tree
+              }
+            }
+
+            treeCopy.DefDef(tree, mods, termNames.CONSTRUCTOR, tparams, vparamss, tpt, rhs)
+
+          case tree =>
+            tree
+        }
+
+        treeCopy.ClassDef(annottees.head, mods, tpname, tparams,
+          treeCopy.Template(impl, parents, self, body)) -> companion
+
+      case (annottee: ModuleDef) :: companion =>
+        annottee -> companion
+
       case _ =>
         c.abort(c.enclosingPosition,
           "multitier annotation only applicable to classes, traits or objects")
@@ -157,16 +196,35 @@ class Multitier(val c: blackbox.Context) {
       else
         annottee
 
+    val recoveredAnnottee = processedAnnotee match {
+      case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) =>
+        val body = impl.body map {
+          case tree @ DefDef(mods, termNames.CONSTRUCTOR, tparams, _, tpt, rhs)
+              if constructorParams.nonEmpty =>
+            val vparamss = constructorParams.remove(0)
+            treeCopy.DefDef(tree, mods, termNames.CONSTRUCTOR, tparams, vparamss, tpt, rhs)
+
+          case tree =>
+            tree
+        }
+
+        treeCopy.ClassDef(annottees.head, mods, tpname, tparams,
+          treeCopy.Template(impl, parents, self, body))
+
+      case _ =>
+        processedAnnotee
+    }
+
     logging.code({
       val name = s"${c.internal.enclosingOwner.fullName}.${annottee.name}"
-      val code = (processedAnnotee.toString.linesWithSeparators map { "  " + _ }).mkString
+      val code = (recoveredAnnottee.toString.linesWithSeparators map { "  " + _ }).mkString
       s"Expanded code for multitier module $name: " +
-      s"${Properties.lineSeparator}$code"
+        s"${Properties.lineSeparator}$code"
     })
 
     (companion.headOption
-      map { companion => q"$processedAnnotee; $companion"}
-      getOrElse processedAnnotee)
+      map { companion => q"$recoveredAnnottee; $companion"}
+      getOrElse recoveredAnnottee)
   }
 
   private def fixAnnotteeSymbols(annottee: Tree) = {
