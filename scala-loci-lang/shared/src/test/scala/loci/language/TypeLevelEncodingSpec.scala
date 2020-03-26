@@ -168,6 +168,26 @@ class TypeLevelEncodingSpec extends FlatSpec with Matchers with NoLogging {
         // this, however, is only checked during macro expansion
         val f = b0.asLocalFromAll
         f.staticAssertType[Seq[Future[Int]]]
+
+        val g = g0.asLocalFromAll
+        g.staticAssertType[Seq[Future[Nothing]]]
+
+        val h = g4.asLocalFromAll
+        h.staticAssertType[Seq[Future[Nothing]]]
+
+        val i = g4.from[MobileClient].asLocal
+        i.staticAssertType[Option[Future[Nothing]]]
+
+        val j = (g4 from client).asLocal
+        j.staticAssertType[Future[Nothing]]
+
+        val k = (g4 from (client, client)).asLocalFromAll
+        k.staticAssertType[Seq[Future[Nothing]]]
+
+        // `h0.asLocal` should not work since `h0` is local
+        // this, however, is only checked during macro expansion
+        val l = h0.asLocalFromAll
+        l.staticAssertType[Seq[Future[Nothing]]]
       }
 
 

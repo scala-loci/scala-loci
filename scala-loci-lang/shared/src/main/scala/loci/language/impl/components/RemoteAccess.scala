@@ -164,18 +164,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     // extract all implicitly constructed transmittables for all remote accesses
     val definedTransmittableTrees = records flatMap {
       case PlacedValue(_, tree, Some(peer), _) =>
-        tree collect {
+        (tree collect {
           case tree @ q"$_[..$_](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
             val index = checkForTransmission(tree, peer)
             val q"$_[..$_](...$transmissionExprss)" = exprss(1)(index)
-
-            if (transmissionExprss.isEmpty ||
-                transmissionExprss.head.size < 4 ||
-                transmissionExprss.head(3).tpe <:!< types.transmittable)
-              c.abort(tree.pos, "Unexpected transmission value")
-
-            transmissionExprss.head(3)
-        }
+            transmissionExprss.headOption.toList flatMap { _ filter { _.tpe <:< types.transmittable } }
+        }).flatten
 
       case _ =>
         List.empty
@@ -399,9 +393,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         getOrElse {
           if (!dummyTransmittableTree) {
             val transmittables = memberType(tree.tpe, names.transmittables)
+            val transmittableTypes = List(info.base, info.intermediate, info.result, info.proxy, transmittables)
+            val resolutionType = types.resolution mapArgs { args => transmittableTypes }
             val serializableType = types.serializable mapArgs { _ => List(info.intermediate) }
-            val resolutionTypes = List(info.base, info.intermediate, info.result)
-            val marshallableTypes = List(info.base, info.intermediate, info.result, info.proxy, transmittables)
 
             def contextBuilders(tpe: Type): Tree = tpe.typeArgs match {
               case Seq(tail, head) =>
@@ -429,8 +423,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               }
             }
 
-            val expr = q"""${trees.marshallable}[..$marshallableTypes](
-              ${trees.resolution}[..$resolutionTypes]($tree),
+            val expr = q"""${trees.marshallable}[..$transmittableTypes](
+              new $resolutionType($tree),
               ${trees.implicitly}[${createTypeTree(serializableType, pos)}],
               ${contextBuilder(tree.tpe)})"""
 
@@ -1016,10 +1010,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     exprss(1) foreach { expr =>
       if (expr.tpe real_<:< types.transmission) {
         val q"$_[..$params](...$_)" = expr
-        if (params.size < 10)
-          c.abort(tree.pos, "Unexpected transmission value")
 
-        val value = params(4).tpe
+        val value =
+          if (params.size < 11)
+            definitions.NothingTpe
+          else
+            params(4).tpe
 
         val Seq(placedValue, placedPeer, _, to, _) =
           extractTag(expr.tpe, types.transmission, tree.pos).typeArgs

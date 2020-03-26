@@ -6,8 +6,6 @@ import scala.concurrent.duration.{ Duration, FiniteDuration }
 trait TransmittablePrimitives extends TransmittableDummy {
   this: Transmittable.type =>
 
-  final implicit def nothing: IdenticallyTransmittable[Nothing] =
-    IdenticallyTransmittable()
   final implicit def unit: IdenticallyTransmittable[Unit] =
     IdenticallyTransmittable()
   final implicit def boolean: IdenticallyTransmittable[Boolean] =
