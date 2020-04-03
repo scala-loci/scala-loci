@@ -4,11 +4,19 @@ package transmitter
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
 
-class DummyImplicit
-
 object DummyImplicit {
-  implicit def dummy: DummyImplicit = new DummyImplicit
-  implicit def noDummy: DummyImplicit = macro NoDummyImplicit.skip
+  class Resolvable private[DummyImplicit]
+
+  object Resolvable {
+    implicit def dummy: Resolvable = new Resolvable
+    implicit def noDummy: Resolvable = macro NoDummyImplicit.skip
+  }
+
+  class Unresolvable private[DummyImplicit]
+
+  object Unresolvable {
+    implicit def noDummy: Unresolvable = macro NoDummyImplicit.skip
+  }
 }
 
 object NoDummyImplicit {

@@ -10,7 +10,7 @@ trait TransmittableDummy {
   this: Transmittable.type =>
 
   @compileTimeOnly("Value is not transmittable")
-  final implicit def resolutionFailure[T](implicit ev: DummyImplicit): Transmittable[T, T, T] {
+  final implicit def resolutionFailure[T](implicit ev: DummyImplicit.Resolvable): Transmittable[T, T, T] {
     type Proxy = Future[T]
     type Transmittables = Transmittables.None
   } = macro TransmittableResolutionFailure[T]

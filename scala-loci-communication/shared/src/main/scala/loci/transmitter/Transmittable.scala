@@ -2,7 +2,7 @@ package loci
 package transmitter
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.annotation.implicitNotFound
+import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.concurrent.Future
 import scala.util.Try
 
@@ -93,7 +93,17 @@ object Transmittable extends
     final class Resolution[B, I, R, P, T <: Transmittables](
       val transmittable: Aux[B, I, R, P, T]) extends AnyVal
 
-    sealed trait ResolutionDefault {
+    sealed trait ResolutionFailure {
+      @compileTimeOnly("Value is not transmittable")
+      implicit def resolutionFailure[B, I, R, P, T <: Transmittables](implicit
+        dummy: DummyImplicit.Unresolvable)
+      : Resolution[B, I, R, P, T] = {
+        locally(dummy)
+        throw new NotImplementedError
+      }
+    }
+
+    sealed trait ResolutionDefault extends ResolutionFailure {
       implicit def default[B, I, R, P, T <: Transmittables](implicit
         singleton: SingletonValue[B, I, R, Aux[B, I, R, P, T]])
       : Resolution[B, I, R, P, T] =
@@ -107,7 +117,17 @@ object Transmittable extends
     }
   }
 
-  object Delegating {
+  sealed trait DelegatingFailure {
+    @compileTimeOnly("Delegation is not transmittable")
+    implicit def resolutionFailure[D <: Delegating](implicit
+      dummy: DummyImplicit.Unresolvable)
+    : Delegating.Resolution[D] = {
+      locally(dummy)
+      throw new NotImplementedError
+    }
+  }
+
+  object Delegating extends DelegatingFailure {
     final class Resolution[D <: Delegating](
       val transmittables: D) extends AnyVal
 

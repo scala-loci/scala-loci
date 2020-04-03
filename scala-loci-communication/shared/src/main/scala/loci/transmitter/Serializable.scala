@@ -17,7 +17,7 @@ object Serializable {
     serializable
 
   @compileTimeOnly("Value is not serializable")
-  final implicit def resolutionFailure[T](implicit ev: DummyImplicit): Serializable[T] =
+  final implicit def resolutionFailure[T](implicit ev: DummyImplicit.Resolvable): Serializable[T] =
     macro SerializableResolutionFailure[T]
 
   @compileTimeOnly("Value is not serializable")
