@@ -4,6 +4,7 @@ package transmitter
 import scala.annotation.unchecked.uncheckedVariance
 import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.concurrent.Future
+import scala.language.experimental.macros
 import scala.util.Try
 
 
@@ -78,14 +79,23 @@ object Transmittable extends
     IdenticallyTransmittable()
 
 
-  @implicitNotFound("${B} is not transmittable")
-  final class SingletonValue[B, I, R, +V] private (val value: V) extends AnyVal
+  sealed trait Bottom[T]
 
-  object SingletonValue {
+  object Bottom {
+    @compileTimeOnly("loci.transmitter.Transmittable.Bottom is not transmittable")
+    implicit def resolutionFailure[T]: IdenticallyTransmittable[Bottom[T]] =
+      IdenticallyTransmittable()
+  }
+
+
+  @implicitNotFound("${B} is not transmittable")
+  final class DependantValue[B, I, R, +V] private (val value: V) extends AnyVal
+
+  object DependantValue {
     implicit def singletonValue[B, I, R](implicit
       transmittable: Transmittable[B, I, R])
-    : SingletonValue[B, I, R, transmittable.Type] =
-      new SingletonValue(transmittable.self)
+    : DependantValue[B, I, R, transmittable.Type] =
+      new DependantValue(transmittable.self)
   }
 
   object Aux {
@@ -105,15 +115,21 @@ object Transmittable extends
 
     sealed trait ResolutionDefault extends ResolutionFailure {
       implicit def default[B, I, R, P, T <: Transmittables](implicit
-        singleton: SingletonValue[B, I, R, Aux[B, I, R, P, T]])
+        dependant: DependantValue[B, I, R, Aux[B, I, R, P, T]])
       : Resolution[B, I, R, P, T] =
-        new Resolution(singleton.value)
+        new Resolution(dependant.value)
     }
 
-    object Resolution extends ResolutionDefault {
+    sealed trait ResolutionNothing extends ResolutionDefault {
       implicit def nothing
       : Resolution[Nothing, Nothing, Nothing, Future[Nothing], Transmittables.None] =
         new Resolution[Nothing, Nothing, Nothing, Future[Nothing], Transmittables.None](Transmittable.nothing)
+    }
+
+    object Resolution extends ResolutionNothing {
+      implicit def macroGenerated[B, I, R, P, T <: Transmittables](implicit
+        dummy: DummyImplicit.Resolvable)
+      : Resolution[B, I, R, P, T] = macro TransmittableResolution[B, I, R, P, T]
     }
   }
 

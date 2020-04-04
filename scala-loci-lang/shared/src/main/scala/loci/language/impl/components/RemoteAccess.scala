@@ -168,7 +168,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           case tree @ q"$_[..$_](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
             val index = checkForTransmission(tree, peer)
             val q"$_[..$_](...$transmissionExprss)" = exprss(1)(index)
-            transmissionExprss.headOption.toList flatMap { _ filter { _.tpe <:< types.transmittable } }
+            transmissionExprss.headOption.toList flatMap {
+              _ map extractTransmittable filter { _.nonEmpty }
+            }
         }).flatten
 
       case _ =>
@@ -244,15 +246,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               transmittablesRequired))) {
           val resolvedTransmittable = definedTransmittable orElse {
             if (unresolvedTransmittables forall { _ =:!= transmittableType }) {
-              val tree = c inferImplicitValue transmittableType match {
-                case q"$_[..$_]($expr)" if expr.tpe <:< types.transmittable =>
-                  expr
-                case q"$_[..$_]($_[..$_]($expr))" if expr.tpe <:< types.transmittable =>
-                  expr
-                case _ =>
-                  EmptyTree
-              }
-
+              val tree = extractTransmittable(c inferImplicitValue transmittableType)
               tree foreach { internal.setPos(_, NoPosition) }
 
               val fullyExpandedTree = tree.fullyExpanded
@@ -1046,6 +1040,19 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         "Exactly one transmission value required")
 
     result
+  }
+
+  private val nothingTransmittable = c typecheck trees.nothingTransmittable
+
+  private def extractTransmittable(resolution: Tree) = resolution match {
+    case q"new $_[..$_]($expr)" if expr.tpe <:< types.transmittable =>
+      expr
+    case q"$_[..$_]($_[..$_]($expr))" if expr.tpe <:< types.transmittable =>
+      expr
+    case tree if tree.nonEmpty && tree.symbol.owner == symbols.resolutionNothing =>
+      nothingTransmittable
+    case _ =>
+      EmptyTree
   }
 
   private def methodSignature(symbol: MethodSymbol, returnType: Type) = {

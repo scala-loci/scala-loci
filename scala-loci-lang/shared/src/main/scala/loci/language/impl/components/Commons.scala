@@ -60,6 +60,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val Block = symbolOf[Placement.Block[_, PlacedValue]]
     val Capture = symbolOf[Placement.Capture[_, PlacedValue]]
     val placement = symbolOf[Placement.type]
+    val resolutionNothing = symbolOf[transmitter.Transmittable.Aux.ResolutionNothing]
     val transmittableDummy = symbolOf[transmitter.TransmittableDummy]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
@@ -136,8 +137,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val multiple = q"${names.root}.loci.runtime.Peer.Tie.Multiple"
     val optional = q"${names.root}.loci.runtime.Peer.Tie.Optional"
     val single = q"${names.root}.loci.runtime.Peer.Tie.Single"
-    val unitMarshallable = q"${names.root}.loci.transmitter.Marshallable.unit"
+    val nothingTransmittable = q"${names.root}.loci.transmitter.Transmittable.nothing"
     val nothingMarshallable = q"${names.root}.loci.transmitter.Marshallable.nothing"
+    val unitMarshallable = q"${names.root}.loci.transmitter.Marshallable.unit"
     val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
     val delegating = q"${names.root}.loci.transmitter.ContextBuilder.delegating"
     val messaging = q"${names.root}.loci.transmitter.ContextBuilder.messaging"
