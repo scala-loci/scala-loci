@@ -208,7 +208,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
       val liftedMods = liftMods(tree.symbol, tree.mods)
       val mods = Modifiers(
-        Flag.FINAL | Flag.LAZY | (if (liftedMods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
+        Flag.FINAL | (if (liftedMods hasFlag Flag.PROTECTED) Flag.PROTECTED else NoFlags),
         liftedMods.privateWithin)
 
       val reference = atPos(tree.pos) {
