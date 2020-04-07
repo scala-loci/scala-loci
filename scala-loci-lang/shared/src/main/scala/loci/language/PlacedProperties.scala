@@ -2,20 +2,15 @@ package loci
 package language
 
 import scala.annotation.implicitNotFound
-import scala.language.higherKinds
 
 
 sealed trait Subjectivity[-T, U]
 
 sealed trait SubjectivityDefault {
-  implicit def default[T]: Subjectivity[T, T] = erased
+  implicit def default[T, U](implicit ev: Local[U] =:= T): Subjectivity[T, U] = erased(ev)
 }
 
-sealed trait SubjectivityLocal extends SubjectivityDefault {
-  implicit def local[T, _Local_[T] <: Local[T]]: Subjectivity[_Local_[T], T] = erased
-}
-
-object Subjectivity extends SubjectivityLocal {
+object Subjectivity extends SubjectivityDefault {
   implicit def subjective[T, P]: Subjectivity[T per P, T] = erased
 }
 
