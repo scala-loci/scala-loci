@@ -10,23 +10,7 @@ import loci.contexts.Immediate.Implicits.global
 
 import scala.util.{Failure, Success}
 
-trait TransmittableNonNullableCollections extends TransmittableDummy {
-  this: Transmittable.type =>
-
-  final implicit def nonNullableTraversable[B, I, R, V[T] <: TraversableLike[T, V[T]]]
-    (implicit
-        transmittable: Transmittable[B, I, R],
-        cbfI: CanBuildFrom[V[B], I, V[I]],
-        cbfR: CanBuildFrom[V[I], R, V[R]])
-  : DelegatingTransmittable[V[B], V[I], V[R]] {
-      type Delegates = transmittable.Type
-    } =
-    DelegatingTransmittable(
-      provide = (value, context) => value map { context delegate _ },
-      receive = (value, context) => value map { context delegate _ })
-}
-
-trait TransmittableGeneralCollections extends TransmittableNonNullableCollections {
+trait TransmittableGeneralCollections extends TransmittableDummy {
   this: Transmittable.type =>
 
   final implicit def traversable[B, I, R, V[T] >: Null <: TraversableLike[T, V[T]]]
