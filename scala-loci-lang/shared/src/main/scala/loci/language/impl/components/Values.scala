@@ -272,15 +272,12 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             else {
               // collect a list of peer-specific specialized implementations
               val specializations = splitPlacementSyntax(valOrDefDef.rhs) map { tree =>
-                if (tree.tpe <:!< definitions.NothingTpe && tree.tpe <:!< definitions.NullTpe)
-                  decomposePlacementType(tree.tpe, EmptyTree, valOrDefDef.symbol, tree.pos, moduleDefinition = true) match {
-                    case Placed(peer, _, _, modality) =>
-                      (stripPlacementSyntax(tree), peer, modality)
-                    case _ =>
-                      c.abort(tree.pos, "Unexpected non-placed definition")
-                  }
-                else
-                  (tree, peer, modality)
+                decomposePlacementType(tree.tpe, EmptyTree, valOrDefDef.symbol, tree.pos, moduleDefinition = true) match {
+                  case Placed(peer, _, _, modality) =>
+                    (stripPlacementSyntax(tree), peer, modality)
+                  case _ =>
+                    (tree, peer, modality)
+                }
               }
 
               // ensure that peer-specific specialized implementations agree on their modalities
