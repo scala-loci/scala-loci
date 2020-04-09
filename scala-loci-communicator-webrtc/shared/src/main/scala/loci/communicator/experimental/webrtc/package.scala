@@ -2,14 +2,9 @@ package loci
 package communicator
 package experimental
 
-import loci.transmitter._
+import webrtc.WebRTC._
 
-import webrtc.WebRTC.Update
-import webrtc.WebRTC.IncrementalUpdate
-import webrtc.WebRTC.CompleteUpdate
-import webrtc.WebRTC.InitialSession
-import webrtc.WebRTC.SessionUpdate
-import webrtc.WebRTC.CompleteSession
+import transmitter._
 
 package webrtc {
   protected[webrtc] trait WebRTCUpdateTransmittable {

@@ -1,9 +1,9 @@
 package loci
 package runtime
 
-import java.util.concurrent.atomic.AtomicBoolean
+import communicator.ProtocolCommon
 
-import loci.communicator.ProtocolCommon
+import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.annotation.compileTimeOnly
 
@@ -21,9 +21,9 @@ object Remote {
 
     def asReference = this
     def authenticated = isAuthenticated.get
-    def authenticate() = isAuthenticated set true
+    def authenticate() = isAuthenticated.set(true)
     def connected = isConnected.get
-    def disconnect() = remoteConnections disconnect this
+    def disconnect() = remoteConnections.disconnect(this)
     val disconnected = doDisconnected.notice
 
     override def toString: String = s"remote#$id($signature[$protocol])"

@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import loci.Testing._
+import Testing._
 
 @multitier object ServerClientApp {
   @peer type Server <: { type Tie <: Multiple[Client] }

@@ -2,6 +2,7 @@ package loci
 package runtime
 
 import org.scalatest._
+
 import scala.util.Success
 
 class SystemSpec extends FlatSpec with Matchers with NoLogging {
@@ -9,7 +10,7 @@ class SystemSpec extends FlatSpec with Matchers with NoLogging {
 
   it should "handle remote access correctly" in {
     for (seed <- 0 to 5) {
-      val listener = new NetworkListener(deferred = true)
+      val listener = new NetworkListener(deferred = true, seed)
 
       var serverSystem: System = null
       var client0System: System = null
@@ -35,7 +36,7 @@ class SystemSpec extends FlatSpec with Matchers with NoLogging {
         ServerClientApp.$loci$peer$sig$Client,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
-        (connect[ServerClientApp.Server] { listener.createConnector }).setup(
+        (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
         { (ties, context, connections, connected, connecting) =>
@@ -51,7 +52,7 @@ class SystemSpec extends FlatSpec with Matchers with NoLogging {
         ServerClientApp.$loci$peer$sig$Client,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
-        (connect[ServerClientApp.Server] { listener.createConnector }).setup(
+        (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
         { (ties, context, connections, connected, connecting) =>

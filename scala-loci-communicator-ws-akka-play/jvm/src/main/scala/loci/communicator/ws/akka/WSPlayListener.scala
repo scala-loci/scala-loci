@@ -2,16 +2,14 @@ package loci
 package communicator
 package ws.akka
 
-import play.api.mvc.WebSocket
-import play.api.mvc.RequestHeader
-import play.api.mvc.Security.AuthenticatedRequest
-import play.api.mvc.Results
 import java.net.URI
 import java.util.concurrent.ConcurrentLinkedQueue
+
+import play.api.mvc.Security.AuthenticatedRequest
+import play.api.mvc.{RequestHeader, Results, WebSocket}
+
 import scala.concurrent.Future
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
+import scala.util.{Failure, Success, Try}
 
 private object WSPlayListener {
   locally(WSPlayListener)
@@ -20,7 +18,7 @@ private object WSPlayListener {
     new Listener[P] with WebSocketHandler {
       private def webSocket(authenticated: Either[Option[String], Any]) =
         WebSocket { request =>
-          val uri = new URI("dummy://" + request.host)
+          val uri = new URI(s"dummy://${request.host}")
           val host = uri.getHost
           val port = uri.getPort
 
@@ -70,14 +68,14 @@ private object WSPlayListener {
       private def connectionEstablished(connection: Try[Connection[P]]) = {
         val iterator = connected.iterator
         while (iterator.hasNext)
-          iterator.next fire connection
+          iterator.next().fire(connection)
       }
 
       protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
-        connected add connectionEstablished
+        connected.add(connectionEstablished)
 
         Success(new Listening {
-          def stopListening(): Unit = connected remove connectionEstablished
+          def stopListening(): Unit = connected.remove(connectionEstablished)
         })
       }
     }

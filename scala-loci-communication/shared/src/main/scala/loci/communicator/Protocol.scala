@@ -1,8 +1,7 @@
 package loci
 package communicator
 
-import java.security.cert.Certificate
-import java.security.cert.X509Certificate
+import java.security.cert.{Certificate, X509Certificate}
 
 trait Protocol {
   final def get[T: ProtocolInfo]: Option[T] =

@@ -250,8 +250,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               tree foreach { internal.setPos(_, NoPosition) }
 
               val fullyExpandedTree = tree.fullyExpanded
-              val transmittable = TransmittableInfo(fullyExpandedTree) -> fullyExpandedTree
-              Some(transmittable)
+              Some(TransmittableInfo(fullyExpandedTree) -> fullyExpandedTree)
             }
             else
               None
@@ -874,7 +873,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           ""
       }
 
-      val (placedValueName, argumentsType, subjective) =
+      val (placedValueName, _, subjective) =
         PlacedValues.resolve(path, tree.symbol, tree.pos)
 
       val peerType = tree.tpe.finalResultType.widen.asSeenFrom(module.classSymbol).typeArgs(1)
@@ -912,8 +911,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       (placedValue,
        placedValuePeer,
-       arguments(tree.symbol.asMethod.paramLists, exprss),
-       argumentsType)
+       arguments(tree.symbol.asMethod.paramLists, exprss))
     }
 
     var count = 0
@@ -942,11 +940,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
               val index = checkForTransmission(tree, peer)
 
-              val (value, signature, remotes, remotesType) =
+              val (value, _, remotes, remotesType) =
                 extractRemoteCall(exprss.head.head) getOrElse
                 extractSelection(exprss.head.head)
 
-              val (placedValue, placedValuePeer, arguments, argumentsType) =
+              val (placedValue, placedValuePeer, arguments) =
                 extractRemoteAccess(value, peer, remotesType)
 
               val exprs = exprss(1).updated(
@@ -960,10 +958,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
             case _ =>
               (extractRemoteCall(tree)
-                map { case (value, signature, remotes, remotesType) =>
+                map { case (value, _, remotes, remotesType) =>
                   count += 1
 
-                  val (placedValue, placedValuePeer, arguments, _) =
+                  val (placedValue, placedValuePeer, arguments) =
                     extractRemoteAccess(value, peer, remotesType)
 
                   atPos(value.pos) {
@@ -987,7 +985,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     result
   }
 
-  private def checkForTransmission[T](tree: Tree, peer: Symbol): Int = {
+  private def checkForTransmission(tree: Tree, peer: Symbol): Int = {
     val q"$_[..$_](...$exprss)" = tree
 
     if (exprss.size != 2 || exprss.head.size != 1)

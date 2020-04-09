@@ -130,7 +130,7 @@ object Engine {
       val outerMultitierName = outerName
 
       def require[Comp[C <: blackbox.Context] <: Component[C]](factory: Component.Factory[Comp]) =
-        (components collectFirst factory.asInstance) getOrElse {
+        components collectFirst factory.asInstance getOrElse {
           ctx.abort(ctx.enclosingPosition, s"$initFailed: " +
             s"Required unavailable component ${name(factory)}")
         }

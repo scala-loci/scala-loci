@@ -4,10 +4,11 @@ package ws.akka
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.HttpExt
-import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.ws.WebSocketRequest
+import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
+
 import scala.concurrent.duration._
 
 trait WS extends
@@ -30,7 +31,7 @@ object WS extends WSSetupFactory {
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
   private[akka] def ??? =
-    sys error "WebSocket communicator method only available on the JVM"
+    sys.error("WebSocket communicator method only available on the JVM")
 
   def apply(
     http: HttpExt, port: Int)(implicit

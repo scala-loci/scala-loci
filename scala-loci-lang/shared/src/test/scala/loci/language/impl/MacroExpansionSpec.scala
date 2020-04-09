@@ -2,7 +2,8 @@ package loci
 package language
 package impl
 
-import loci.Testing._
+import Testing._
+
 import org.scalatest._
 
 import scala.collection.mutable
@@ -90,7 +91,7 @@ class TopClass
 
     @multitier object a extends A
     @multitier object b extends A {
-      def create = new b
+      def create() = new b
     }
     class b private
   }

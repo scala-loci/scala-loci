@@ -38,7 +38,7 @@ object Phases {
             flatMap { phase =>
               phase.before ++ phase.after collect {
                 case name if name != "*" =>
-                  if (name startsWith "?") Left(name substring 1) else Right(name)
+                  if (name startsWith "?") Left(name.substring(1)) else Right(name)
               }
             }
             collectFirst {

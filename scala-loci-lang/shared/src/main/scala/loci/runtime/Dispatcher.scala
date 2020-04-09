@@ -1,9 +1,9 @@
 package loci
 package runtime
 
-import scala.util.control.NonFatal
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext
+import scala.util.control.NonFatal
 
 trait Dispatch[D <: Dispatch[D]] extends Runnable {
   def blockedBy(dispatch: D): Boolean
@@ -18,7 +18,7 @@ trait Undispatchable[D <: Dispatch[D]] { this: Dispatch[D] =>
 }
 
 class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
-  private val dispatches = ListBuffer.empty[(D, Boolean)]
+  private val dispatches = mutable.ListBuffer.empty[(D, Boolean)]
 
   def dispatch(dispatch: D*): Unit = dispatches synchronized {
     dispatch foreach { dispatches += _ -> false }
@@ -35,7 +35,7 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
 
     val pendings = dispatches collect { case (dispatch, true) => dispatch }
 
-    val dispatchings = ListBuffer.empty[ListBuffer[D]]
+    val dispatchings = mutable.ListBuffer.empty[mutable.ListBuffer[D]]
 
     dispatches transform { case (dispatch, running) =>
       dispatch match {
@@ -47,11 +47,11 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
           if (!running) {
             if (!(dispatch blockedBy pendings)) {
               dispatchings filter dispatch.blockedBy match {
-                case ListBuffer() =>
-                  dispatchings += ListBuffer(dispatch)
+                case mutable.ListBuffer() =>
+                  dispatchings += mutable.ListBuffer(dispatch)
                   dispatch -> true
 
-                case ListBuffer(dispatching) =>
+                case mutable.ListBuffer(dispatching) =>
                   dispatching += dispatch
                   dispatch -> true
 
@@ -71,7 +71,7 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
     }
 
     dispatchings foreach { dispatching =>
-      logging.tracing(context) execute new Runnable {
+      logging.tracing(context).execute(new Runnable {
         def run() = {
           var throwable: Throwable = null
 
@@ -91,7 +91,7 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
           if (throwable != null)
             throw throwable
         }
-      }
+      })
     }
   }
 }

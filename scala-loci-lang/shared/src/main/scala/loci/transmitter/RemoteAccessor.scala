@@ -1,10 +1,10 @@
 package loci
 package transmitter
 
-import loci.contexts.Immediate.Implicits.global
+import contexts.Immediate.Implicits.global
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 object RemoteAccessor {
   trait Default { this: language.PlacedValue.type =>

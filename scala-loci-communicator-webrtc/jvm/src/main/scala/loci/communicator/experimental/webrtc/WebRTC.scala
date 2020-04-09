@@ -2,9 +2,7 @@ package loci
 package communicator
 package experimental.webrtc
 
-import org.scalajs.dom.experimental.webrtc.RTCConfiguration
-import org.scalajs.dom.experimental.webrtc.RTCOfferOptions
-import org.scalajs.dom.experimental.webrtc.RTCDataChannel
+import org.scalajs.dom.experimental.webrtc._
 
 trait WebRTC extends
     Protocol with
@@ -17,7 +15,7 @@ trait WebRTC extends
 object WebRTC extends WebRTCUpdate {
   def unapply(webRTC: WebRTC) = true
 
-  private def ??? = sys error "WebRTC communicator only available in JS"
+  private def ??? = sys.error("WebRTC communicator only available in JS")
 
   trait Connector extends communicator.Connector[WebRTC] {
     def use(update: IncrementalUpdate): Unit

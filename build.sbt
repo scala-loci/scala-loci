@@ -1,5 +1,5 @@
-import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 import org.scalajs.sbtplugin.ScalaJSCrossVersion
+import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
 
 enablePlugins(GitVersioning)
 
@@ -20,10 +20,10 @@ val macroparadise = addCompilerPlugin(
   "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
 
 val macrodeclaration = libraryDependencies +=
-  scalaOrganization.value % "scala-reflect" % scalaVersion.value % "provided"
+  scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.0.8" % "test"
+  "org.scalatest" %%% "scalatest" % "3.0.8" % Test
 
 val scribe = libraryDependencies +=
   "com.outr" %%% "scribe" % "2.7.9"
@@ -48,12 +48,12 @@ val circe = libraryDependencies ++= Seq(
   "io.circe" %%% "circe-parser" % "0.11.1")
 
 val akkaHttp = libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
-  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % "provided")
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
+  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided)
 
 val play = libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % "provided",
-  "com.typesafe.play" %% "play" % "[2.5,2.7)" % "provided")
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
+  "com.typesafe.play" %% "play" % "[2.5,2.7)" % Provided)
 
 val scalajsDom = libraryDependencies +=
   "org.scala-js" % "scalajs-dom" % "0.9.7" cross ScalaJSCrossVersion.binary

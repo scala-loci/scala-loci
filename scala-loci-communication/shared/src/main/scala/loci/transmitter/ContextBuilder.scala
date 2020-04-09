@@ -2,20 +2,24 @@ package loci
 package transmitter
 
 import Transmittable.Delegating
-import Transmittables.{ Delegates, Message, None }
+import Transmittables.{Delegates, Message, None}
+
 import java.util.concurrent.atomic.AtomicLong
 
-import scala.util.{ Failure, Success }
+import scala.annotation.implicitNotFound
+import scala.util.{Failure, Success}
 
+@implicitNotFound("Message for some transmittable not serializable: ${T}")
 trait ContextBuilder[T <: Transmittables] {
   def apply(
      transmittables: T,  abstraction: AbstractionRef,
-     direction: ContextBuilder.Direction, index: Long = 0l)
+     direction: ContextBuilder.Direction, index: Long = 0L)
   : ContextBuilder.Context[T]
 }
 
 object ContextBuilder {
   sealed class Direction private[ContextBuilder]
+
   val sending = new Direction
   val receiving = new Direction
 
@@ -57,7 +61,7 @@ object ContextBuilder {
           direction)
 
         new Context[M](
-            abstraction.remote, transmittables, index + 1l,
+            abstraction.remote, transmittables, index + 1L,
             new Contexts.SingleMessage(context, index)) with
           Context.Endpoint.MessageImpl[B, I, R, P, T] {
 
@@ -65,7 +69,7 @@ object ContextBuilder {
           val receivingTurn = new AtomicLong(1)
 
           def serialize(value: B) = {
-            val turn = sendingTurn.getAndIncrement
+            val turn = sendingTurn.getAndIncrement()
             val directedTurn = if (direction == sending) s"+$turn" else s"-$turn"
             implicit val context = contextBuilder(
               transmittable.transmittables,
@@ -75,7 +79,7 @@ object ContextBuilder {
           }
 
           def deserialize(value: MessageBuffer) = {
-            val turn = receivingTurn.getAndIncrement
+            val turn = receivingTurn.getAndIncrement()
             val directedTurn = if (direction == sending) s"-$turn" else s"+$turn"
             implicit val context = contextBuilder(
               transmittable.transmittables,
@@ -92,7 +96,7 @@ object ContextBuilder {
             def close() = messagingAbstraction.channel.close()
 
             def send(value: B) =
-              messagingAbstraction.channel send serialize(value)
+              messagingAbstraction.channel.send(serialize(value))
 
             val receive = doReceive.notice
 
@@ -118,8 +122,7 @@ object ContextBuilder {
           transmittables: Delegates[D], abstraction: AbstractionRef,
           direction: Direction, index: Long) = {
         val context = contextBuilders(transmittables, abstraction, direction, index)
-        new Context[Delegates[D]](
-            abstraction.remote, transmittables, context.index, context) with
+        new Context[Delegates[D]](abstraction.remote, transmittables, context.index, context) with
           Context.Endpoint.DelegatesImpl[D]
       }
     }
@@ -129,8 +132,7 @@ object ContextBuilder {
       def apply(
           transmittables: None, abstraction: AbstractionRef,
           direction: Direction, index: Long) =
-        new Context[None](
-            abstraction.remote, transmittables, index, Contexts.None) with
+        new Context[None](abstraction.remote, transmittables, index, Contexts.None) with
           Context.Endpoint.NoneImpl
     }
 }

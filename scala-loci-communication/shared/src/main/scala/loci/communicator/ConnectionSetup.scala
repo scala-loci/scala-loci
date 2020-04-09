@@ -1,9 +1,8 @@
 package loci
 package communicator
 
-import scala.util.Try
-import scala.util.Success
 import scala.concurrent.ExecutionContext
+import scala.util.{Success, Try}
 
 sealed trait ConnectionSetup[+P <: ProtocolCommon]
 
@@ -42,21 +41,21 @@ trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
           if (connectionEstablished.trySet(success)) {
             connection.closed foreach { _ =>
               if (listening != null)
-                listening foreach { _.stopListening }
+                listening foreach { _.stopListening() }
             }
             if (listening != null && !connection.open)
-              listening foreach { _.stopListening }
+              listening foreach { _.stopListening() }
             firstConnection = connection
           }
           else
-              connection.close
+            connection.close()
 
         case failure =>
           connectionEstablished.trySet(failure)
       }
 
       if (firstConnection != null && !firstConnection.open)
-        listening foreach { _.stopListening }
+        listening foreach { _.stopListening() }
     }
   }
 }

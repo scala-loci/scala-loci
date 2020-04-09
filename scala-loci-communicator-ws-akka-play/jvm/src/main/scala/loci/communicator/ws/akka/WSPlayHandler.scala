@@ -2,10 +2,9 @@ package loci
 package communicator
 package ws.akka
 
-import play.api.http.websocket.Message
-import play.api.http.websocket.TextMessage
-import play.api.http.websocket.BinaryMessage
 import akka.util.ByteString
+import play.api.http.websocket.{BinaryMessage, Message, TextMessage}
+
 import scala.concurrent.Future
 import scala.util.Try
 

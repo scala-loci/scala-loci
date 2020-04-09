@@ -1,16 +1,13 @@
 package loci
 package registry
 
-import messaging.ConnectionsBase
-import messaging.Message
-import communicator.Connection
-import communicator.Connector
-import communicator.Listener
+import communicator.{Connection, Connector, Listener}
+import messaging.{ConnectionsBase, Message}
 import transmitter.RemoteRef
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
+
 import java.util.concurrent.atomic.AtomicLong
+
+import scala.util.{Failure, Success, Try}
 
 object Connections {
   type Protocol = ConnectionsBase.Protocol
@@ -20,8 +17,8 @@ object Connections {
       connections: Connections[_]) extends transmitter.RemoteRef {
     val doDisconnected = Notice.Steady[Unit]
 
-    def connected = connections isConnected this
-    def disconnect() = connections disconnect this
+    def connected = connections.isConnected(this)
+    def disconnect() = connections.disconnect(this)
     val disconnected = doDisconnected.notice
 
     override def toString: String = s"remote#$id[$protocol]"
@@ -42,7 +39,7 @@ class Connections[M: Message.Method]
 
   protected class State extends BaseState {
     private val counter = new AtomicLong(1)
-    def createId = counter.getAndIncrement
+    def createId() = counter.getAndIncrement()
   }
 
   protected val state = new State
@@ -67,7 +64,7 @@ class Connections[M: Message.Method]
     connection match {
       case Success(connection) =>
         val remote = Connections.RemoteRef(
-          state.createId, connection.protocol)(this)
+          state.createId(), connection.protocol)(this)
         handler(addConnection(remote, connection) map { _ => remote })
 
       case Failure(exception) =>

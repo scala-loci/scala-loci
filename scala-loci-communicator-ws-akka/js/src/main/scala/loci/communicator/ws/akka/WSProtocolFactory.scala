@@ -2,10 +2,9 @@ package loci
 package communicator
 package ws.akka
 
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
 import java.security.cert.Certificate
+
+import scala.util.{Failure, Success, Try}
 
 private sealed trait WSProtocolFactory[P <: WS] {
   def make(url: String, host: Option[String], port: Option[Int],

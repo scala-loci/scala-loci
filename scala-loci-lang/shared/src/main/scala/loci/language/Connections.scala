@@ -1,9 +1,9 @@
 package loci
 package language
 
-import loci.communicator._
-import loci.messaging._
-import loci.runtime.Peer
+import communicator._
+import messaging._
+import runtime.Peer
 
 sealed trait Connections { self =>
   def setup(peer: Peer.Signature, peers: List[Peer.Signature]):
@@ -19,9 +19,9 @@ sealed trait Connections { self =>
 
         ((selfSetup.keySet ++ otherSetup.keySet) map { key =>
           val (selfListeners, selfConnectors) =
-            selfSetup getOrElse (key, (List.empty, List.empty))
+            selfSetup.getOrElse(key, (List.empty, List.empty))
           val (setupListeners, setupConnectors) =
-            otherSetup getOrElse (key, (List.empty, List.empty))
+            otherSetup.getOrElse(key, (List.empty, List.empty))
           key -> (
             (selfListeners ++ setupListeners) ->
             (selfConnectors ++ setupConnectors))

@@ -33,9 +33,7 @@ object Components {
       factory: Component.AnyFactory,
       path: List[Component.AnyFactory]): ResolveResult =
     if (factory != null && !(path contains factory))
-      mapResult(expandFactories(factory.requires, factory :: path)) {
-        _ :+ factory
-      }
+      mapResult(expandFactories(factory.requires, factory :: path)) { _ :+ factory }
     else
       CyclicDependency(path map { factory =>
         val name = factory.getClass.getSimpleName

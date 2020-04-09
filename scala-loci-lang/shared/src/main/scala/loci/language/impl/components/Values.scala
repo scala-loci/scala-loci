@@ -1048,7 +1048,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       (mods hasFlag Flag.PRIVATE) ||
       (mods hasFlag Flag.PROTECTED)
 
-    // remove `private` and `local` flags since the cannot be used in conjunction
+    // remove `private` and `local` flags since they cannot be used in conjunction
     // with `privateWithin` (as opposed to the `protected` flag)
     Modifiers(
       (mods withoutFlags (Flag.PRIVATE | Flag.LOCAL)).flags,
@@ -1103,7 +1103,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     var foundAdditionals = true
     while (foundAdditionals) {
       foundAdditionals = false
-      multitierInitializations foreach { case (symbol, initializations) =>
+      multitierInitializations foreach { case (_, initializations) =>
         val additionals =
           (initializations flatMap multitierInitializations.get).flatten -- initializations
         if (additionals.nonEmpty) {

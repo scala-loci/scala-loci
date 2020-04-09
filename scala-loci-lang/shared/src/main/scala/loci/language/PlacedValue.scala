@@ -48,16 +48,13 @@ object RemoteSbj {
 sealed trait CommonSuperType[-T, -U, R]
 
 sealed trait CommonSuperTypeFallback {
-  implicit def fallback[T, U]
-    : CommonSuperType[T, T, U] = erased
+  implicit def fallback[T, U]: CommonSuperType[T, T, U] = erased
 }
 
 sealed trait CommonSuperTypeDefault extends CommonSuperTypeFallback {
-  implicit def default[T]
-    : CommonSuperType[T, T, T] = erased
+  implicit def default[T]: CommonSuperType[T, T, T] = erased
 }
 
 object CommonSuperType extends CommonSuperTypeDefault {
-  implicit def local[T, _Local_[T] <: Local[T]]
-    : CommonSuperType[_Local_[T], _Local_[T], _Local_[T]] = erased
+  implicit def local[T, _Local_[T] <: Local[T]]: CommonSuperType[_Local_[T], _Local_[T], _Local_[T]] = erased
 }

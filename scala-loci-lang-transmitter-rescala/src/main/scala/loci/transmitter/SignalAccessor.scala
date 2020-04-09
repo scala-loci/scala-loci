@@ -18,10 +18,9 @@ protected[transmitter] trait SignalAccessor {
 
     import interface.{Signal, Var, transaction}
 
-     @cutOutOfUserComputation lazy val asLocal: Signal[Seq[(Remote[R], Signal[T])]] =
+    @cutOutOfUserComputation lazy val asLocalFromAll: Signal[Seq[(Remote[R], Signal[T])]] =
       value.cache(asLocalId) {
-        implicit val serializer: ReSerializable[Seq[(Remote[R], Signal[T])]] =
-          ReSerializable.noSerializer
+        implicit val serializer = ReSerializable.noSerializer[Seq[(Remote[R], Signal[T])]]
 
         val mapping = transaction() { _ => Var(Seq.empty[(Remote[R], Signal[T])]) }
 
@@ -44,10 +43,9 @@ protected[transmitter] trait SignalAccessor {
 
     import interface.{Signal, Var, transaction}
 
-     @cutOutOfUserComputation lazy val asLocal: Signal[Option[T]] =
+    @cutOutOfUserComputation lazy val asLocal: Signal[Option[T]] =
       value.cache(asLocalId) {
-        implicit val serializer: ReSerializable[Option[Signal[T]]] =
-          ReSerializable.noSerializer
+        implicit val serializer = ReSerializable.noSerializer[Option[Signal[T]]]
 
         val option = transaction() { _ => Var(Option.empty[Signal[T]]) }
 
@@ -70,7 +68,7 @@ protected[transmitter] trait SignalAccessor {
 
     import interface.Signal
 
-     @cutOutOfUserComputation lazy val asLocal: Signal[T] =
+    @cutOutOfUserComputation lazy val asLocal: Signal[T] =
       value.retrieveValue
   }
 }

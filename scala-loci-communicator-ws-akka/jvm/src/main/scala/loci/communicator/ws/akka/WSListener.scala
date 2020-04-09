@@ -2,20 +2,18 @@ package loci
 package communicator
 package ws.akka
 
-import akka.actor.ActorSystem
-import akka.stream.Materializer
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.HttpExt
-import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.RequestContext
-import akka.http.scaladsl.server.Route
-import akka.http.scaladsl.model.headers
-import scala.concurrent.Future
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
-import scala.concurrent.ExecutionContext.Implicits.global
 import java.util.concurrent.ConcurrentLinkedQueue
+
+import akka.actor.ActorSystem
+import akka.http.scaladsl.{Http, HttpExt}
+import akka.http.scaladsl.model.headers
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.{RequestContext, Route}
+import akka.stream.Materializer
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.util.{Failure, Success, Try}
 
 private object WSListener {
   locally(WSListener)
@@ -28,13 +26,10 @@ private object WSListener {
     extractUpgradeToWebSocket { webSocket =>
       extractRequest { request =>
         extractMaterializer { implicit materializer =>
-          val ip = request.header[headers.`Remote-Address`] flatMap {
-            _.address.toIP
-          }
+          val ip = request.header[headers.`Remote-Address`] flatMap { _.address.toIP }
 
-          val SecurityProperties(
-              isAuthenticated, isProtected, isEncrypted, certificates) =
-            SecurityProperties(request, authenticatedName.nonEmpty)
+          val WSSecurityProperties(isAuthenticated, isProtected, isEncrypted, certificates) =
+            WSSecurityProperties(request, authenticatedName.nonEmpty)
 
           implicitly[WSProtocolFactory[P]] make (
               request.uri.toString,
@@ -48,9 +43,9 @@ private object WSListener {
               reject
 
             case Success(ws) =>
-              complete (
-                webSocket handleMessages (
-                  WSHandler handleWebSocket (
+              complete(
+                webSocket.handleMessages(
+                  WSHandler.handleWebSocket(
                     Future successful ws, properties, connectionEstablished)))
           }
         }
@@ -80,7 +75,7 @@ private object WSListener {
       webSocketRoute(this, authenticatedName, properties) { connection =>
         val iterator = connected.iterator
         while (iterator.hasNext)
-          iterator.next fire connection
+          iterator.next().fire(connection)
       }
 
     def apply(authenticatedName: String) = route(Some(authenticatedName))
@@ -90,7 +85,7 @@ private object WSListener {
     def apply(v: RequestContext) = route(None)(v)
 
     protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
-      connected add connectionEstablished
+      connected.add(connectionEstablished)
       Success(new Listening {
         def stopListening(): Unit = connected remove connectionEstablished
       })
@@ -107,30 +102,30 @@ private object WSListener {
         connectionEstablished: Try[Connection[P]] => Unit)(implicit
         actorRefFactory: ActorSystem,
         materializer: Materializer) =
-      running = http bindAndHandle (
+      running = http.bindAndHandle(
         webSocketRoute(this, None, properties)(connectionEstablished),
         interface, port)
 
     protected def connectionEstablished(connection: Try[Connection[P]]) = {
       val iterator = connected.iterator
       while (iterator.hasNext)
-        iterator.next fire connection
+        iterator.next().fire(connection)
     }
 
     protected def startListening(connectionEstablished: Connected[P]): Try[Listening] =
       WSActorSystem synchronized {
         if (connected.isEmpty)
-          starting
+          starting()
 
-        connected add connectionEstablished
+        connected.add(connectionEstablished)
 
         Success(new Listening {
           def stopListening(): Unit = WSActorSystem synchronized {
-            connected remove connectionEstablished
+            connected.remove(connectionEstablished)
 
             if (connected.isEmpty) {
-              stopping
-              running foreach { _.unbind }
+              stopping()
+              running foreach { _.unbind() }
               running = null
             }
           }
@@ -160,17 +155,17 @@ private object WSListener {
       extends BoundRoute(properties) {
 
     protected def starting() = {
-      implicit val (actorSystem, actorMaterializer) = WSActorSystem.retrieve
+      implicit val (actorSystem, actorMaterializer) = WSActorSystem.retrieve()
 
       bindRoute(Http(), port, interface) { connection =>
         connection foreach { connection =>
-          WSActorSystem.retrieve
-          connection.closed foreach { _ => WSActorSystem.release }
+          WSActorSystem.retrieve()
+          connection.closed foreach { _ => WSActorSystem.release() }
         }
         connectionEstablished(connection)
       }
     }
 
-    protected def stopping() = WSActorSystem.release
+    protected def stopping() = WSActorSystem.release()
   }
 }

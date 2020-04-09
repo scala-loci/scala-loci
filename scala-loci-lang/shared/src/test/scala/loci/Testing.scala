@@ -1,10 +1,10 @@
 package loci
 
-import loci.transmitter._
+import transmitter._
 
 import scala.util.Try
 
-package object Testing {
+object Testing {
   implicit object IntSerializable extends Serializable[Int] {
     def serialize(value: Int) =
       MessageBuffer.encodeString(value.toString)

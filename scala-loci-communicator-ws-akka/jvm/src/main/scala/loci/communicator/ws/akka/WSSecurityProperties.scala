@@ -2,19 +2,17 @@ package loci
 package communicator
 package ws.akka
 
-import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.model.Uri
-import akka.http.scaladsl.model.HttpMessage
-import akka.http.scaladsl.model.HttpRequest
-import akka.http.scaladsl.model.HttpResponse
-import akka.http.scaladsl.model.ws.WebSocketRequest
 import java.security.cert.Certificate
 
-private case class SecurityProperties(
+import akka.http.scaladsl.model.{HttpMessage, HttpRequest, HttpResponse, Uri}
+import akka.http.scaladsl.model.headers._
+import akka.http.scaladsl.model.ws.WebSocketRequest
+
+private case class WSSecurityProperties(
   isAuthenticated: Boolean, isProtected: Boolean, isEncrypted: Boolean,
   certificates: Seq[Certificate])
 
-private object SecurityProperties {
+private object WSSecurityProperties {
   final val HTTPS = "https"
   final val WSS = "wss"
   final val NoProtocol = "NONE" // TLSv1, etc.
@@ -22,14 +20,14 @@ private object SecurityProperties {
   final val NoEncryptionFragment = "WITH_NULL"
 
   def apply(request: WebSocketRequest, response: HttpResponse,
-      authenticated: Boolean): SecurityProperties =
+      authenticated: Boolean): WSSecurityProperties =
     create(request.uri, response, authenticated)
 
-  def apply(request: HttpRequest, authenticated: Boolean): SecurityProperties =
+  def apply(request: HttpRequest, authenticated: Boolean): WSSecurityProperties =
     create(request.uri, request, authenticated)
 
   private def create(uri: Uri, message: HttpMessage, authenticated: Boolean)
-    : SecurityProperties = {
+    : WSSecurityProperties = {
 
     val tls = uri.scheme == HTTPS || uri.scheme == WSS
 
@@ -44,12 +42,9 @@ private object SecurityProperties {
       val isProtected = tls
       val isEncrypted = tls && !(cipher contains NoEncryptionFragment)
 
-      SecurityProperties(
-        authenticated || isAuthenticated, isProtected, isEncrypted, certificates)
+      WSSecurityProperties(authenticated || isAuthenticated, isProtected, isEncrypted, certificates)
     }
 
-    properties getOrElse {
-      SecurityProperties(authenticated, tls, tls, Seq.empty)
-    }
+    properties getOrElse { WSSecurityProperties(authenticated, tls, tls, Seq.empty) }
   }
 }

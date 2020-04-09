@@ -2,20 +2,14 @@ package loci
 package communicator
 package ws.akka
 
-import akka.stream.Materializer
-import akka.stream.ConnectionException
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.HttpExt
-import akka.http.scaladsl.model.ws.WebSocketRequest
-import akka.http.scaladsl.model.ws.ValidUpgrade
-import akka.http.scaladsl.model.ws.InvalidUpgradeResponse
-import scala.concurrent.Future
-import scala.concurrent.Promise
+import akka.http.scaladsl.{Http, HttpExt}
+import akka.http.scaladsl.model.ws.{InvalidUpgradeResponse, ValidUpgrade, WebSocketRequest}
+import akka.stream.{ConnectionException, Materializer}
+
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Future, Promise}
+import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
-import scala.util.Try
-import scala.util.Failure
-import scala.util.Success
 
 private object WSConnector {
   locally(WSConnector)
@@ -31,13 +25,13 @@ private object WSConnector {
   def apply[P <: WS: WSProtocolFactory](
       webSocketRequest: WebSocketRequest,
       properties: WS.Properties) = {
-    implicit val (actorSystem, actorMaterializer) = WSActorSystem.retrieve
+    implicit val (actorSystem, actorMaterializer) = WSActorSystem.retrieve()
     new WSConnector[P](
       Http(), properties, webSocketRequest, {
         case Success(connection) =>
-          connection.closed foreach { _ => WSActorSystem.release }
+          connection.closed foreach { _ => WSActorSystem.release() }
         case _ =>
-          WSActorSystem.release
+          WSActorSystem.release()
       })
   }
 
@@ -54,14 +48,13 @@ private object WSConnector {
 
       def connected(connection: Try[Connection[P]]) = {
         webSocketConnectionEstablished(connection)
-        connectionEstablished set connection
+        connectionEstablished.set(connection)
       }
 
       val (future, _) =
-        try http singleWebSocketRequest (
+        try http.singleWebSocketRequest(
           webSocketRequest,
-          WSHandler handleWebSocket (
-            protocolPromise.future, properties, connected))
+          WSHandler.handleWebSocket(protocolPromise.future, properties, connected))
         catch {
           case NonFatal(exception) => (Future failed exception, ())
         }
@@ -70,10 +63,8 @@ private object WSConnector {
         case Success(ValidUpgrade(response, _)) =>
           val uri = webSocketRequest.uri
 
-          val SecurityProperties(
-              isAuthenticated, isProtected, isEncrypted, certificates) =
-            SecurityProperties(
-              webSocketRequest, response, authenticated = false)
+          val WSSecurityProperties(isAuthenticated, isProtected, isEncrypted, certificates) =
+            WSSecurityProperties(webSocketRequest, response, authenticated = false)
 
           implicitly[WSProtocolFactory[P]] make (
               uri.toString,
@@ -84,7 +75,7 @@ private object WSConnector {
               connected(Failure(exception))
 
             case Success(ws) =>
-              protocolPromise success ws
+              protocolPromise.success(ws)
           }
 
         case Success(InvalidUpgradeResponse(_, cause)) =>

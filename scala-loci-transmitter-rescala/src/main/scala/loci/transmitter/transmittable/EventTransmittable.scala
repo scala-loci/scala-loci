@@ -45,7 +45,7 @@ protected[transmitter] trait EventTransmittable {
           case _ =>
         }
 
-        context.endpoint.closed foreach { _ => event.disconnect }
+        context.endpoint.closed foreach { _ => event.disconnect() }
       },
 
       direct = (event, context) => event,

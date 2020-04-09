@@ -1,15 +1,15 @@
 package loci
 package runtime
 
+import communicator.Connector
+import messaging.Message
+import transmitter.{RemoteAccessException, RemoteRef}
+
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
-import loci.communicator.Connector
-import loci.messaging.Message
-import loci.transmitter.{RemoteAccessException, RemoteRef}
-
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.ref.WeakReference
 import scala.util.control.NonFatal
@@ -51,14 +51,14 @@ class System(
 
         implicit val context: ExecutionContext =
           if (separateMainThread)
-            contexts.Queued.create
+            contexts.Queued.create()
           else
             contexts.Immediate.global
 
         doneMain = true
 
         Future {
-          mainThread set Some(Thread.currentThread)
+          mainThread.set(Some(Thread.currentThread))
           try { main() }
           catch {
             case _: InterruptedException if remoteConnections.isTerminated =>
@@ -72,13 +72,13 @@ class System(
   def start(): Unit = {
     logging.info("multitier system started")
 
-    dispatcher ignoreDispatched PendingConstruction
+    dispatcher.ignoreDispatched(PendingConstruction)
 
     if (singleConnectedRemotes.isEmpty)
       doMain()
   }
 
-  def running(): Boolean = !remoteConnections.isTerminated
+  def running: Boolean = !remoteConnections.isTerminated
 
   def terminate(): Unit = remoteConnections.terminate()
 
@@ -88,7 +88,7 @@ class System(
   // remote peer references
 
   private def isConnected(remote: Remote.Reference): Boolean =
-    remoteConnections isConnected remote
+    remoteConnections.isConnected(remote)
 
   private val doRemoteJoined = Notice.Stream[Remote.Reference]
 
@@ -233,7 +233,7 @@ class System(
   private val channelResponseHandlers =
     new ConcurrentHashMap[Channel, (Boolean, Try[MessageBuffer] => Unit)]
   private val channelMessages =
-    new ConcurrentHashMap[String, ListBuffer[Message[Method]]]
+    new ConcurrentHashMap[String, mutable.ListBuffer[Message[Method]]]
   private val pushedValues =
     new ConcurrentHashMap[(Remote[Any], Value.Signature), System.ValueCell[_]]
   private val subjectiveValues =
@@ -280,9 +280,9 @@ class System(
       if (notifyRemote)
         bufferedSend(channel, CloseMessage(channel.name))
 
-      logging.tracing(context) execute new Runnable {
+      logging.tracing(context).execute(new Runnable {
         def run() = channel.doClosed.set()
-      }
+      })
     }
   }
 
@@ -316,7 +316,7 @@ class System(
     if (isChannelOpen(channel))
       bufferedSend(channel, ChannelMessage(ChannelMessage.Type.Update, channel.name, None, payload))
 
-  def bufferedSend(channel: Channel, message: Message[Method]): Unit = {
+  private def bufferedSend(channel: Channel, message: Message[Method]): Unit = {
     val queued = Option(channelMessages get channel.anchor) exists { messages =>
       messages synchronized {
         val queued = channelMessages containsKey channel.anchor
@@ -328,7 +328,7 @@ class System(
 
     if (!queued) {
       logging.trace(s"send update to ${channel.remote}: $message")
-      remoteConnections send (channel.remote, message)
+      remoteConnections.send(channel.remote, message)
     }
   }
 
@@ -344,14 +344,14 @@ class System(
 
   remoteConnections.remoteLeft foreach { remote =>
     doRemoteLeftEarly.fire(remote)
-    logging.tracing(context) execute new Runnable {
+    logging.tracing(context).execute(new Runnable {
       def run() = {
         logging.trace(s"remote left: $remote")
 
         doRemoteLeft.fire(remote)
         remote.doDisconnected.set()
       }
-    }
+    })
     closeChannels(remote)
   }
 
@@ -362,7 +362,7 @@ class System(
 
   remoteConnections.terminated foreach { _ =>
     logging.info("multitier system terminated")
-    (mainThread getAndSet None) foreach { _.interrupt }
+    mainThread.getAndSet(None) foreach { _.interrupt() }
   }
 
   remoteConnections.receive foreach { remoteMessage =>
@@ -381,7 +381,7 @@ class System(
 
     def blockedBy(dispatch: SystemDispatch) = false
 
-    def run() = remoteConnections send (remote, StartedMessage())
+    def run() = remoteConnections.send(remote, StartedMessage())
   }
 
   case class MessageDispatch(remote: Remote.Reference, message: Message[Method])
@@ -398,16 +398,16 @@ class System(
         if (Option(startedRemotes.putIfAbsent(remote, remote)).isEmpty) {
           logging.trace(s"remote joined: $remote")
 
-          logging.tracing(context) execute new Runnable {
+          logging.tracing(context).execute(new Runnable {
             def run() = doRemoteJoined.fire(remote)
-          }
+          })
         }
 
-          if (singleConnectedRemotes.nonEmpty) {
-            pendingSingleConnectedRemotes.remove(remote)
-            if (pendingSingleConnectedRemotes.isEmpty)
-              doMain()
-          }
+        if (singleConnectedRemotes.nonEmpty) {
+          pendingSingleConnectedRemotes.remove(remote)
+          if (pendingSingleConnectedRemotes.isEmpty)
+            doMain()
+        }
 
       case ChannelMessage(
           messageType @ (ChannelMessage.Type.Request | ChannelMessage.Type.Call),
@@ -416,14 +416,14 @@ class System(
           payload) =>
         val signature = Value.Signature.deserialize(abstraction)
         val reference = Value.Reference(channelName, channelName, remote, System.this)
-        logging.tracing(context) execute new Runnable {
+        logging.tracing(context).execute(new Runnable {
           def run() = {
-            val messages = ListBuffer.empty[Message[Method]]
+            val messages = mutable.ListBuffer.empty[Message[Method]]
             channelMessages.put(channelName, messages)
 
             logging.trace(s"handling remote access for $signature from $remote over channel $channelName")
 
-            val result = logging.tracing run values.$loci$dispatch(payload, signature, reference)
+            val result = logging.tracing run { values.$loci$dispatch(payload, signature, reference) }
 
             if (messageType == ChannelMessage.Type.Request) {
               val message = result match {
@@ -437,12 +437,12 @@ class System(
 
               logging.trace(s"sending remote access response for $signature to $remote over channel $channelName")
 
-              remoteConnections send (remote, message)
+              remoteConnections.send(remote, message)
 
               messages synchronized {
                 messages foreach { message =>
                   logging.trace(s"send update to $remote: $message")
-                  remoteConnections send (remote, message)
+                  remoteConnections.send(remote, message)
                 }
                 messages.clear()
                 channelMessages.remove(channelName)
@@ -455,7 +455,7 @@ class System(
 
             channelMessages.remove(channelName)
           }
-        }
+        })
 
       case ChannelMessage(
           messageType @ (ChannelMessage.Type.Response | ChannelMessage.Type.Failure),
@@ -467,7 +467,7 @@ class System(
             logging.warn(s"unprocessed message [channel not open]: $message")
 
           case Some(channel) =>
-            channelResponseHandlers remove channel match {
+            channelResponseHandlers.remove(channel) match {
               case null =>
                 logging.warn(s"unprocessed message [no handler]: $message")
 
@@ -521,7 +521,7 @@ class System(
         s"sending remote access for ${placedValue.signature} to ${reference.remote} " +
         s"over channel ${reference.channelName}")
 
-      remoteConnections send (
+      remoteConnections.send(
         reference.remote,
         ChannelMessage(
           messageType,

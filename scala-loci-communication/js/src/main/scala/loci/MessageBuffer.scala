@@ -1,21 +1,16 @@
 package loci
 
-import scala.annotation.compileTimeOnly
-import scala.collection.mutable
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
-import scala.scalajs.js
-import scala.scalajs.js.Dynamic._
-import scala.scalajs.js.TypeError
-import scala.scalajs.js.JavaScriptException
-import scala.scalajs.js.typedarray.ArrayBuffer
-import scala.scalajs.js.typedarray.Int8Array
-import scala.scalajs.js.typedarray.Uint8Array
-import scala.scalajs.js.typedarray.TypedArrayBuffer
-import scala.scalajs.js.typedarray.TypedArrayBufferOps._
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
+
+import scala.annotation.compileTimeOnly
+import scala.collection.mutable
+import scala.scalajs.js
+import scala.scalajs.js.Dynamic._
+import scala.scalajs.js.{JavaScriptException, TypeError}
+import scala.scalajs.js.typedarray.TypedArrayBufferOps._
+import scala.scalajs.js.typedarray.{ArrayBuffer, Int8Array, TypedArrayBuffer, Uint8Array}
+import scala.util.{Failure, Success, Try}
 
 final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
     extends mutable.IndexedSeq[Byte] {
@@ -45,13 +40,13 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
         s"offset $offset, length $length, " +
         s"buffer offset ${bufferOffset}, buffer length ${buffer.length}, count $count")
 
-    array set (new Int8Array(buffer.backingArrayBuffer, bufferOffset, count), offset)
+    array.set(new Int8Array(buffer.backingArrayBuffer, bufferOffset, count), offset)
   }
 
   @inline def concat(buffer: MessageBuffer): MessageBuffer = {
     val bufferArray = new Int8Array(length + buffer.length)
-    bufferArray set (array, 0)
-    bufferArray set (buffer.array, length)
+    bufferArray.set(array, 0)
+    bufferArray.set(buffer.array, length)
     new MessageBuffer(bufferArray.buffer)
   }
 
@@ -59,7 +54,7 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
     if (offset < 0 || count < 0 || offset > length - count)
       throw new IndexOutOfBoundsException(s"offset $offset, count $count, length $length")
 
-    new MessageBuffer(backingArrayBuffer slice (offset, offset + count))
+    new MessageBuffer(backingArrayBuffer.slice(offset, offset + count))
   }
 
   @inline def decodeString(offset: Int, count: Int): String = {
@@ -118,19 +113,19 @@ object MessageBuffer {
       val byteBuffer = MessageBufferEncoding.stringToByteBuffer(string) {
         TypedArrayBuffer wrap new ArrayBuffer(_)
       }
-      new MessageBuffer(byteBuffer.arrayBuffer slice (0, byteBuffer.position))
+      new MessageBuffer(byteBuffer.arrayBuffer.slice(0, byteBuffer.position))
     }
 
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
     if (!buffer.hasArrayBuffer) {
-      val duplicate = buffer.duplicate
-      duplicate position 0
-      duplicate limit buffer.capacity
+      val duplicate = buffer.duplicate()
+      duplicate.position(0)
+      duplicate.limit(buffer.capacity)
       var pos = duplicate.remaining
       val bufferArray = new Int8Array(pos)
       while (pos > 0) {
         pos -= 1
-        bufferArray(pos) = buffer get pos
+        bufferArray(pos) = buffer.get(pos)
       }
       new MessageBuffer(bufferArray.buffer)
     }

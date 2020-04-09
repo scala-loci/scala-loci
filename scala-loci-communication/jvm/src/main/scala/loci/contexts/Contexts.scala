@@ -1,11 +1,10 @@
 package loci
 package contexts
 
+import java.util.concurrent.{Executors, ThreadFactory}
+
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.util.control.NonFatal
-import scala.concurrent.ExecutionContext
-import scala.concurrent.ExecutionContextExecutor
-import java.util.concurrent.Executors
-import java.util.concurrent.ThreadFactory
 
 object Pooled {
   lazy val global: ExecutionContextExecutor =
@@ -31,8 +30,9 @@ object Immediate {
 }
 
 object Queued {
-  lazy val global = create
-  def create: ExecutionContextExecutor =
+  lazy val global = create()
+
+  def create(): ExecutionContextExecutor =
     ExecutionContext.fromExecutorService(
       Executors.newSingleThreadExecutor(new ThreadFactory {
         def newThread(runnable: Runnable) = {
@@ -47,7 +47,7 @@ object Queued {
                     logging.reportException(exception)
               }
           })
-          thread setDaemon true
+          thread.setDaemon(true)
           thread
         }
       }),

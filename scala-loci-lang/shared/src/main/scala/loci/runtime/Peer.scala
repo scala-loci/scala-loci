@@ -24,7 +24,7 @@ object Peer {
 
   case class Signature(name: String, parents: List[Signature], module: Module.Signature)
       extends PartiallyOrdered[Signature] {
-    if (parents exists { _.module.name != module.name})
+    if (parents exists { _.module.name != module.name })
       throw new IllegalArgumentException("Base peer signature for different multitier module")
 
     def bases: Set[Signature] =

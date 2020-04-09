@@ -1,7 +1,8 @@
 package loci
 package language
 
-import loci.Testing._
+import Testing._
+
 import org.scalatest._
 
 import scala.concurrent.Future

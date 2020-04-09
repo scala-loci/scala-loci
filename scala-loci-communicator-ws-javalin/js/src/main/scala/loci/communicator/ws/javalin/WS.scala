@@ -25,11 +25,10 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
+  private def ??? = sys.error("WebSocket communicator method only available on the JVM")
+
   def apply(javalin: Javalin, path: String): Listener[WS] = ???
-
   def apply(javalin: Javalin, path: String, properties: Properties): Listener[WS] = ???
-
-
 
   def apply(url: String): Connector[WS] =
     new WSConnector[WS](url, Properties())

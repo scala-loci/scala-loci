@@ -1,6 +1,6 @@
 package loci
 
-import loci.language._
+import language._
 
 import scala.annotation.compileTimeOnly
 import scala.concurrent.ExecutionContext
@@ -35,11 +35,14 @@ class Instance[P] private[loci] (dummy: Int) {
 
 object Instance {
   final implicit class Ops[P](instance: Instance[P]) {
-    def retrieve[T](retrievable: Retrievable[T]): T = macro language.impl.Instance.retrieve
+    def retrieve[T](retrievable: Retrievable[T]): T =
+      macro language.impl.Instance.retrieve
+
     def terminate(): Unit = instance match {
       case instance: runtime.Instance[P] => instance.terminate()
       case _ => throw new runtime.PeerImplementationError
     }
+
     def terminated: Notice.Steady[Unit] = instance match {
       case instance: runtime.Instance[P] => instance.terminated
       case _ => throw new runtime.PeerImplementationError

@@ -1,14 +1,11 @@
 package loci
 package registry
 
-import transmitter.AbstractionRef
-import transmitter.Channel
-import transmitter.RemoteAccessException
-import transmitter.RemoteRef
+import transmitter._
 
-import scala.util.Failure
-import scala.util.Try
 import java.util.concurrent.ConcurrentHashMap
+
+import scala.util.{Failure, Try}
 
 class Bindings[A <: AbstractionRef](
     request: (A, MessageBuffer) => Unit,
@@ -21,7 +18,7 @@ class Bindings[A <: AbstractionRef](
     Channel, Notice.Steady.Source[Try[MessageBuffer]]]
 
   def bind[T](binding: Binding[T])(function: RemoteRef => T): Unit =
-    bindings put (binding.name, binding.dispatch(function, _, _))
+    bindings.put(binding.name, binding.dispatch(function, _, _))
 
   def lookup[T](binding: Binding[T], abstraction: A): binding.RemoteCall =
     binding.call(abstraction) { message =>
@@ -31,7 +28,7 @@ class Bindings[A <: AbstractionRef](
       responseHandlers.put(channel, response)
 
       if (!abstraction.remote.connected)
-        channelsClosed
+        channelsClosed()
 
       logging.trace(s"sending remote access for $abstraction")
 
@@ -43,12 +40,14 @@ class Bindings[A <: AbstractionRef](
       message: MessageBuffer, name: String, abstraction: A): Unit = {
     logging.trace(s"handling remote access for $abstraction")
 
-    val value = logging.tracing run (bindings get name match {
-      case null =>
-        Failure(new RemoteAccessException(s"request for $abstraction could not be dispatched"))
-      case dispatch =>
-        dispatch(message, abstraction)
-    })
+    val value = logging.tracing run {
+      bindings get name match {
+        case null =>
+          Failure(new RemoteAccessException(s"request for $abstraction could not be dispatched"))
+        case dispatch =>
+          dispatch(message, abstraction)
+      }
+    }
 
     value.failed foreach { exception =>
       logging.warn("local exception upon remote access propagated to remote instance", exception)
@@ -61,7 +60,7 @@ class Bindings[A <: AbstractionRef](
 
   def processResponse(
       message: Try[MessageBuffer], name: String, abstraction: A): Unit =
-    responseHandlers remove abstraction.channel match {
+    responseHandlers.remove(abstraction.channel) match {
       case null =>
         logging.warn(s"unprocessed message for $abstraction [no handler]: $message")
       case response =>
@@ -71,10 +70,10 @@ class Bindings[A <: AbstractionRef](
   def channelsClosed(): Unit = {
     val iterator = responseHandlers.entrySet.iterator
     while (iterator.hasNext) {
-      val entry = iterator.next
+      val entry = iterator.next()
       if (!entry.getKey.open) {
         entry.getValue.trySet(Failure(new RemoteAccessException(RemoteAccessException.RemoteDisconnected)))
-        iterator.remove
+        iterator.remove()
       }
     }
   }

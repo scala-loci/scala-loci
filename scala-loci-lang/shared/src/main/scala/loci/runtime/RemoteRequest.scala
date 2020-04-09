@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import loci.transmitter.RemoteRef
+import transmitter.RemoteRef
 
 final class RemoteRequest[V, R, T, L, M, U](
   arguments: U,

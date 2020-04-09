@@ -3,6 +3,7 @@ package language
 package impl
 
 import Testing._
+
 import org.scalatest._
 
 class MacroExpansionJVMSpec extends FlatSpec with Matchers {

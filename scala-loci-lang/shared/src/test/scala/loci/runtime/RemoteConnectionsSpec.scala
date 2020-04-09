@@ -1,10 +1,11 @@
 package loci
 package runtime
 
-import loci.messaging.Message
+import messaging.Message
+
 import org.scalatest._
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 
 class RemoteConnectionsSpec extends FlatSpec with Matchers with NoLogging {
   val dummySig = Peer.Signature.deserialize("[Dummy,[],[[Peer,[],[]]],Module]").get
@@ -34,7 +35,7 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers with NoLogging {
     val node0 = new RemoteConnections(nodeSig, Map(nodeSig -> Peer.Tie.Single))
     val node1 = new RemoteConnections(nodeSig, Map(nodeSig -> Peer.Tie.Single))
 
-    val events = ListBuffer.empty[Any]
+    val events = mutable.ListBuffer.empty[Any]
 
     Seq(server -> Server.apply _,
         client0 -> Client0.apply _, client1 -> Client1.apply _,
@@ -61,7 +62,7 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers with NoLogging {
     val listener = new NetworkListener
 
     server.listen(listener, clientSig)
-    client0.connect(listener.createConnector, serverSig)
+    client0.connect(listener.createConnector(), serverSig)
     client0.terminate()
 
 
@@ -81,7 +82,7 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers with NoLogging {
     val listener = new NetworkListener
 
     server.listen(listener, clientSig)
-    client0.connect(listener.createConnector, serverSig)
+    client0.connect(listener.createConnector(), serverSig)
     server.terminate()
 
     events should have size 6
@@ -129,10 +130,10 @@ class RemoteConnectionsSpec extends FlatSpec with Matchers with NoLogging {
 
       server.listen(listener, clientSig)
       dummy.listen(dummyListener, clientSig)
-      client0.connect(listener.createConnector, superServerSig)
-      client1.connect(listener.createConnector, serverSig)
-      client1.connect(listener.createConnector, superServerSig)
-      client1.connect(dummyListener.createConnector, dummySig)
+      client0.connect(listener.createConnector(), superServerSig)
+      client1.connect(listener.createConnector(), serverSig)
+      client1.connect(listener.createConnector(), superServerSig)
+      client1.connect(dummyListener.createConnector(), dummySig)
 
       listener.run()
       dummyListener.run()

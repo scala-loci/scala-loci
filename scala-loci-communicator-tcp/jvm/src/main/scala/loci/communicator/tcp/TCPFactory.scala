@@ -35,11 +35,11 @@ trait TCPSetupFactory extends
     try {
       val index = location lastIndexOf ':'
       if (index != -1) {
-        val hostInterface = location substring (0, index)
-        val port = Some((location substring (index + 1)).toInt)
+        val hostInterface = location.substring(0, index)
+        val port = Some(location.substring(index + 1).toInt)
         if (hostInterface.nonEmpty &&
             hostInterface.head == '[' && hostInterface.last == ']')
-          (Some(hostInterface substring (1, hostInterface.length - 1)), port)
+          (Some(hostInterface.substring(1, hostInterface.length - 1)), port)
         else
           (Some(hostInterface), port)
       }

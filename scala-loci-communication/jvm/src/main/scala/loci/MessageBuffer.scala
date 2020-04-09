@@ -1,9 +1,10 @@
 package loci
 
-import scala.annotation.compileTimeOnly
-import scala.collection.mutable
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+
+import scala.annotation.compileTimeOnly
+import scala.collection.mutable
 
 final class MessageBuffer private (val backingArray: Array[Byte])
     extends mutable.IndexedSeq[Byte] {
@@ -33,13 +34,13 @@ final class MessageBuffer private (val backingArray: Array[Byte])
         s"offset $offset, length $length, " +
         s"buffer offset ${bufferOffset}, buffer length ${buffer.length}, count $count")
 
-    System arraycopy (buffer.backingArray, bufferOffset, backingArray, offset, count)
+    System.arraycopy(buffer.backingArray, bufferOffset, backingArray, offset, count)
   }
 
   @inline def concat(buffer: MessageBuffer): MessageBuffer = {
     val array = new Array[Byte](length + buffer.length)
-    System arraycopy (backingArray, 0, array, 0, length)
-    System arraycopy (buffer.backingArray, 0, array, length, buffer.length)
+    System.arraycopy(backingArray, 0, array, 0, length)
+    System.arraycopy(buffer.backingArray, 0, array, length, buffer.length)
     new MessageBuffer(array)
   }
 
@@ -48,7 +49,7 @@ final class MessageBuffer private (val backingArray: Array[Byte])
       throw new IndexOutOfBoundsException(s"offset $offset, count $count, length $length")
 
     val array = new Array[Byte](count)
-    System arraycopy (backingArray, offset, array, 0, count)
+    System.arraycopy(backingArray, offset, array, 0, count)
     new MessageBuffer(array)
   }
 
@@ -77,10 +78,10 @@ object MessageBuffer {
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
     if (!buffer.hasArray) {
       val duplicate = buffer.duplicate
-      duplicate position 0
-      duplicate limit buffer.capacity
+      duplicate.position(0)
+      duplicate.limit(buffer.capacity)
       val array = new Array[Byte](duplicate.remaining)
-      duplicate get array
+      duplicate.get(array)
       new MessageBuffer(array)
     }
     else

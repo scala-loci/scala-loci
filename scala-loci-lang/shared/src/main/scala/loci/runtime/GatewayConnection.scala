@@ -1,8 +1,8 @@
 package loci
 package runtime
 
-import loci.communicator._
-import loci.messaging._
+import communicator._
+import messaging._
 
 final class GatewayConnection[R, M](
   peer: Peer.Signature,

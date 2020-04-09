@@ -2,10 +2,9 @@ package loci
 package communicator
 package ws.javalin
 
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
 import java.security.cert.Certificate
+
+import scala.util.{Failure, Success, Try}
 
 private sealed trait WSProtocolFactory[P <: WS] {
   def make(url: String, host: Option[String], port: Option[Int],
@@ -50,18 +49,18 @@ private object WSProtocolFactory {
         case Left(_certificates) if _certificates.isEmpty =>
           new WS.Secure {
             val path = _url;val host = _host;val port  = _port
-                                             val setup = _setup; val authenticated = _authenticated
+            val setup = _setup; val authenticated = _authenticated
           }
         case Left(_certificates) =>
           new WS.Secure with CertificateAuthentication {
             val path = _url;val host = _host;val port  = _port
-                                             val setup = _setup; val authenticated = _authenticated
+            val setup = _setup; val authenticated = _authenticated
             val certificates = _certificates
           }
         case Right(_name) =>
           new WS.Secure with NameAuthentication {
             val path = _url;val host = _host;val port  = _port
-                                             val setup = _setup; val authenticated = _authenticated
+            val setup = _setup; val authenticated = _authenticated
             val name = _name
           }
       }
@@ -70,14 +69,14 @@ private object WSProtocolFactory {
         case Left(_certificates) if _certificates.isEmpty =>
           new WS {
             val path = _url;val host = _host;val port  = _port
-                                             val setup = _setup; val authenticated = _authenticated
+            val setup = _setup; val authenticated = _authenticated
             val encrypted = _encrypted
             val integrityProtected = _integrityProtected
           }
         case Left(_certificates) =>
           new WS with CertificateAuthentication {
             val path = _url;val host = _host;val port  = _port
-                                             val setup = _setup; val authenticated = _authenticated
+            val setup = _setup; val authenticated = _authenticated
             val encrypted = _encrypted
             val integrityProtected = _integrityProtected
             val certificates = _certificates
@@ -85,7 +84,7 @@ private object WSProtocolFactory {
         case Right(_name) =>
           new WS with NameAuthentication {
             val path = _url;val host = _host;val port  = _port
-                                             val setup = _setup; val authenticated = _authenticated
+            val setup = _setup; val authenticated = _authenticated
             val encrypted = _encrypted
             val integrityProtected = _integrityProtected
             val name = _name

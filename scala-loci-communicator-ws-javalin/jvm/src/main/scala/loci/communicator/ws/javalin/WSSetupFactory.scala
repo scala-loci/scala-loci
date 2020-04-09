@@ -1,14 +1,13 @@
-package loci.communicator.ws.javalin
-
-import loci.communicator.ConnectionSetupFactory.Implementation
-import loci.communicator.{ConnectionSetupFactory, ConnectionSetupParser, SimpleConnectionSetupProperties}
+package loci
+package communicator
+package ws.javalin
 
 import scala.concurrent.duration.FiniteDuration
 
 trait WSSetupFactory extends
-                     Implementation[WS] with
-                     ConnectionSetupParser with
-                     SimpleConnectionSetupProperties { this: WS.type =>
+    ConnectionSetupFactory.Implementation[WS] with
+    ConnectionSetupParser with
+    SimpleConnectionSetupProperties { this: WS.type =>
   val schemes = Seq()
 
   protected def properties(implicit props: ConnectionSetupFactory.Properties) =
@@ -21,5 +20,4 @@ trait WSSetupFactory extends
 
   protected def connector(
       url: String, scheme: String, location: String, properties: Properties) = None
-
 }

@@ -1,7 +1,7 @@
 package loci
 package transmitter
 
-import scala.concurrent.duration.{ Duration, FiniteDuration }
+import scala.concurrent.duration.{Duration, FiniteDuration}
 
 trait TransmittablePrimitives extends TransmittableDummy {
   this: Transmittable.type =>

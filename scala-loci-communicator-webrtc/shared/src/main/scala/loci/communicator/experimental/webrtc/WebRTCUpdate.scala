@@ -2,11 +2,7 @@ package loci
 package communicator
 package experimental.webrtc
 
-import org.scalajs.dom.experimental.webrtc.RTCSdpType
-import org.scalajs.dom.experimental.webrtc.RTCIceCandidate
-import org.scalajs.dom.experimental.webrtc.RTCIceCandidateInit
-import org.scalajs.dom.experimental.webrtc.RTCSessionDescription
-import org.scalajs.dom.experimental.webrtc.RTCSessionDescriptionInit
+import org.scalajs.dom.experimental.webrtc._
 
 protected[webrtc] trait WebRTCUpdate {
   sealed abstract class Update

@@ -2,24 +2,20 @@ package loci
 package communicator
 package tcp
 
-import java.io.IOException
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
-import java.net.Socket
-import java.net.SocketException
+import java.io.{BufferedInputStream, BufferedOutputStream, IOException}
+import java.net.{Socket, SocketException}
 import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
 
-import scala.collection.mutable.ArrayBuilder
+import scala.collection.mutable
 
 private object TCPHandler {
   locally(TCPHandler)
 
-
-  val executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
-    override def newThread(r: Runnable): Thread = {
-      val thr = Executors.defaultThreadFactory().newThread(r)
-      thr.setDaemon(true)
-      thr
+  private val executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
+    override def newThread(runnable: Runnable) = {
+      val thread = Executors.defaultThreadFactory.newThread(runnable)
+      thread.setDaemon(true)
+      thread
     }
   })
 
@@ -78,23 +74,24 @@ private object TCPHandler {
       val closed = doClosed.notice
       val receive = doReceive.notice
 
-      def open: Boolean = socketLock.synchronized(isOpen)
+      def open: Boolean = socketLock synchronized { isOpen }
 
       def send(data: MessageBuffer) = socketLock synchronized {
         if (isOpen)
           try {
             val size = data.length
-            outputStream write Array(
-              head,
-              (size >> 24).toByte,
-              (size >> 16).toByte,
-              (size >> 8).toByte,
-              size.toByte,
-              payload)
-            outputStream write data.backingArray
-            outputStream.flush
+            outputStream.write(
+              Array(
+                head,
+                (size >> 24).toByte,
+                (size >> 16).toByte,
+                (size >> 8).toByte,
+                size.toByte,
+                payload))
+            outputStream.write(data.backingArray)
+            outputStream.flush()
           }
-          catch { case _: IOException => close }
+          catch { case _: IOException => close() }
         }
 
       def close() = socketLock synchronized {
@@ -104,11 +101,12 @@ private object TCPHandler {
 
           isOpen = false
 
-          if (heartbeatTask != null) heartbeatTask.cancel(true)
+          if (heartbeatTask != null)
+            heartbeatTask.cancel(true)
 
-          ignoreIOException { socket.shutdownOutput }
+          ignoreIOException { socket.shutdownOutput() }
           ignoreIOException { while (inputStream.read != -1) { } }
-          ignoreIOException { socket.close }
+          ignoreIOException { socket.close() }
 
           doClosed.set()
         }
@@ -117,23 +115,21 @@ private object TCPHandler {
 
     // heartbeat
 
-    socket setSoTimeout timeout
+    socket.setSoTimeout(timeout)
 
     heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
-      def run = socketLock synchronized {
+      def run()  = socketLock synchronized {
         if (isOpen)
           try {
-            outputStream write heartbeat
-            outputStream.flush
+            outputStream.write(heartbeat)
+            outputStream.flush()
           }
-          catch {case _: IOException => connection.close}
+          catch { case _: IOException => connection.close() }
       }
     }, delay, delay, TimeUnit.MILLISECONDS)
 
 
     connectionEstablished(connection)
-
-
 
 
     // frame parsing
@@ -144,7 +140,7 @@ private object TCPHandler {
       else byte.toByte
     }
 
-    val arrayBuilder = ArrayBuilder.make[Byte]
+    val arrayBuilder = mutable.ArrayBuilder.make[Byte]
 
     try while (true) {
       read match {
@@ -159,25 +155,25 @@ private object TCPHandler {
             (read & 0xff)
 
           if (read == payload && size >= 0) {
-            arrayBuilder.clear
-            arrayBuilder sizeHint size
+            arrayBuilder.clear()
+            arrayBuilder.sizeHint(size)
             while (size > 0) {
               arrayBuilder += read
               size -= 1
             }
 
-            doReceive fire (MessageBuffer wrapArray arrayBuilder.result)
+            doReceive.fire(MessageBuffer wrapArray arrayBuilder.result)
           }
           else
-            connection.close
+            connection.close()
 
         case _ =>
-          connection.close
+          connection.close()
       }
     }
     catch {
       case _: IOException =>
-        connection.close
+        connection.close()
     }
   }
 }

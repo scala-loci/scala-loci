@@ -1,7 +1,7 @@
 package loci
 
-import java.nio.{ByteBuffer, CharBuffer}
 import java.nio.charset.{CharacterCodingException, CodingErrorAction, StandardCharsets}
+import java.nio.{ByteBuffer, CharBuffer}
 
 import scala.util.{Failure, Success, Try}
 
@@ -9,7 +9,7 @@ private object MessageBufferEncoding {
   locally(MessageBufferEncoding)
 
   def byteBufferToString(byteBuffer: ByteBuffer, offset: Int, count: Int, fatal: Boolean): Try[String] = {
-    val decoder = StandardCharsets.UTF_8.newDecoder
+    val decoder = StandardCharsets.UTF_8.newDecoder()
 
     if (!fatal)
       decoder
@@ -41,7 +41,7 @@ private object MessageBufferEncoding {
   }
 
   def stringToByteBuffer(string: String)(allocateByteBuffer: Int => ByteBuffer): ByteBuffer = {
-    val encoder = StandardCharsets.UTF_8.newEncoder
+    val encoder = StandardCharsets.UTF_8.newEncoder()
       .onMalformedInput(CodingErrorAction.REPLACE)
       .onUnmappableCharacter(CodingErrorAction.REPLACE)
 

@@ -1,9 +1,9 @@
 package loci
 package contexts
 
-import scala.util.control.NonFatal
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
 import scala.scalajs.concurrent.JSExecutionContext
+import scala.util.control.NonFatal
 
 object Pooled {
   lazy val global: ExecutionContextExecutor =
@@ -29,8 +29,9 @@ object Immediate {
 }
 
 object Queued {
-  lazy val global = create
-  def create: ExecutionContextExecutor =
+  lazy val global = create()
+
+  def create(): ExecutionContextExecutor =
     new logging.ReportingExecutionContext(JSExecutionContext.queue)
 
   object Implicits {

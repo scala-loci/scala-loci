@@ -2,7 +2,8 @@ package loci
 package transmitter
 
 import Transmittable.Delegating
-import Transmittables.{ Delegates, Message }
+import Transmittables.{Delegates, Message}
+
 import scala.annotation.implicitNotFound
 
 @implicitNotFound("Transmittable[${B}, ${I}, ${R}] not specified in: ${S}")

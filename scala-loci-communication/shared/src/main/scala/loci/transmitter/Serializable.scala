@@ -1,10 +1,10 @@
 package loci
 package transmitter
 
-import scala.util.Try
 import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
+import scala.util.Try
 
 @implicitNotFound("${T} is not serializable")
 trait Serializable[T] {

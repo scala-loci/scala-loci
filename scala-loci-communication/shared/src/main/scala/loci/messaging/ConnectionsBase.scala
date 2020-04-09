@@ -1,20 +1,15 @@
 package loci
 package messaging
 
-import communicator.ProtocolCommon
-import communicator.Bidirectional
-import communicator.Connection
-import communicator.Listening
-import communicator.ConnectionException
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ListBuffer
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
+import communicator._
+
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 object ConnectionsBase {
   type Protocol = ProtocolCommon with Bidirectional
@@ -28,13 +23,13 @@ trait ConnectionsBase[R, M] {
     private val running = new AtomicBoolean(false)
     private val terminated = new AtomicBoolean(false)
 
-    def run() = running set true
-    def terminate() = terminated set true
+    def run() = running.set(true)
+    def terminate() = terminated.set(true)
     def isRunning = running.get && !terminated.get
     def isTerminated = terminated.get
 
-    private[ConnectionsBase] val messages = new ListBuffer[(R, M)]
-    private[ConnectionsBase] val listeners = new ListBuffer[Listening]
+    private[ConnectionsBase] val messages = mutable.ListBuffer.empty[(R, M)]
+    private[ConnectionsBase] val listeners = mutable.ListBuffer.empty[Listening]
     private[ConnectionsBase] val remotes = new ConcurrentLinkedQueue[R]
     private[ConnectionsBase] val connections =
       new ConcurrentHashMap[R, Connection[ConnectionsBase.Protocol]]
@@ -73,8 +68,8 @@ trait ConnectionsBase[R, M] {
         logging.trace("connection system started")
 
         state.messages foreach doReceive.fire
-        state.messages.clear
-        state.run
+        state.messages.clear()
+        state.run()
       }
     }
 
@@ -87,23 +82,23 @@ trait ConnectionsBase[R, M] {
         val connections = state.connections.asScala.toSeq
         val listeners = state.listeners.toSeq
 
-        state.terminate
+        state.terminate()
 
         afterSync {
-          connections foreach { case (_, connection) => connection.close }
-          listeners foreach { _.stopListening }
-          doTerminated set remotes
+          connections foreach { case (_, connection) => connection.close() }
+          listeners foreach { _.stopListening() }
+          doTerminated.set(remotes)
 
-          state.remotes.clear
-          state.connections.clear
-          state.listeners.clear
+          state.remotes.clear()
+          state.connections.clear()
+          state.listeners.clear()
         }
       }
     }
 
   def disconnect(remote: R): Unit =
     if (!state.isTerminated)
-      Option(state.connections get remote) foreach { _.close }
+      Option(state.connections get remote) foreach { _.close() }
 
   def send(remote: R, message: M): Unit =
     if (!state.isTerminated)
@@ -111,7 +106,7 @@ trait ConnectionsBase[R, M] {
         case null =>
           logging.warn(s"message not sent to unconnected remote $remote: $message")
         case connection =>
-          connection send serializeMessage(message)
+          connection.send(serializeMessage(message))
       }
     else
       logging.warn(s"message not sent after connection system shutdown to remote $remote: $message")
@@ -119,11 +114,11 @@ trait ConnectionsBase[R, M] {
   private def doBufferedReceive(remote: R, message: M): Unit =
     if (!state.isTerminated) {
       if (state.isRunning)
-        doReceive fire (remote -> message)
+        doReceive.fire(remote -> message)
       else
         sync {
           if (state.isRunning)
-            doReceive fire (remote -> message)
+            doReceive.fire(remote -> message)
           else
             state.messages += remote -> message
         }
@@ -131,8 +126,8 @@ trait ConnectionsBase[R, M] {
 
   private val syncLock = new ReentrantLock
 
-  private val syncHandlers = new ThreadLocal[ListBuffer[() => Unit]] {
-    override def initialValue = ListBuffer.empty
+  private val syncHandlers = new ThreadLocal[mutable.ListBuffer[() => Unit]] {
+    override def initialValue = mutable.ListBuffer.empty
   }
 
   protected def sync[T](body: => T): T = {
@@ -144,7 +139,7 @@ trait ConnectionsBase[R, M] {
         val handlers = syncHandlers.get
         if (handlers.nonEmpty) {
           val result = handlers.result
-          handlers.clear
+          handlers.clear()
           result foreach { _.apply }
         }
       }
@@ -180,10 +175,10 @@ trait ConnectionsBase[R, M] {
       if (!isTerminated) {
         logging.info(s"established connection to remote $remote")
 
-        state.connections put (remote, connection)
-        state.remotes add remote
+        state.connections.put(remote, connection)
+        state.remotes.add(remote)
 
-        afterSync { doRemoteJoined fire remote }
+        afterSync { doRemoteJoined.fire(remote) }
 
         var receiveHandler: Notice[_] = null
         var closedHandler: Notice[_] = null
@@ -194,15 +189,15 @@ trait ConnectionsBase[R, M] {
 
         closedHandler = connection.closed foreach { _ =>
           if (receiveHandler != null)
-            receiveHandler.remove
+            receiveHandler.remove()
           if (closedHandler != null)
-            closedHandler.remove
+            closedHandler.remove()
           removeConnection(remote)
         }
 
         if (!connection.open) {
-          receiveHandler.remove
-          closedHandler.remove
+          receiveHandler.remove()
+          closedHandler.remove()
           removeConnection(remote)
           Failure(terminatedException)
         }
@@ -218,9 +213,9 @@ trait ConnectionsBase[R, M] {
       if (state.connections containsKey remote) {
         logging.info(s"terminated connection to remote $remote")
 
-        state.remotes remove remote
-        state.connections remove remote
-        afterSync { doRemoteLeft fire remote }
+        state.remotes.remove(remote)
+        state.connections.remove(remote)
+        afterSync { doRemoteLeft.fire(remote) }
       }
     }
 }

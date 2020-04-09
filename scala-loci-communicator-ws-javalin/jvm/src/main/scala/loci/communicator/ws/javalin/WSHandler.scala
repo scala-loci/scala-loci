@@ -11,11 +11,11 @@ import scala.util.{Success, Try}
 private object WSHandler {
   locally(WSHandler)
 
-  val executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
-    override def newThread(r: Runnable): Thread = {
-      val thr = Executors.defaultThreadFactory().newThread(r)
-      thr.setDaemon(true)
-      thr
+  private val executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
+    override def newThread(runnable: Runnable): Thread = {
+      val thread = Executors.defaultThreadFactory.newThread(runnable)
+      thread.setDaemon(true)
+      thread
     }
   })
 
@@ -42,12 +42,12 @@ private object WSHandler {
 
         // heartbeat
 
-        val timeout   = properties.heartbeatTimeout.toMillis.toInt
-        val delay     = properties.heartbeatDelay.toMillis
+        val timeout = properties.heartbeatTimeout.toMillis.toInt
+        val delay = properties.heartbeatDelay.toMillis
         val heartbeat = "\uD83D\uDC93"
 
         val heartbeatTask = executor.scheduleWithFixedDelay(
-          new Runnable { def run = ctx.send(heartbeat) },
+          new Runnable { def run() = ctx.send(heartbeat) },
           delay, delay, TimeUnit.MILLISECONDS)
 
         var timeoutTask: ScheduledFuture[_] = null
@@ -62,25 +62,26 @@ private object WSHandler {
 
         val connection = new Connection[WS] {
           val protocol = new WS {
-            val path               = wsPath
-            val setup              = connectionSetup
-            val authenticated      = false
-            val encrypted          = false
+            val path = wsPath
+            val host = None
+            val port = None
+            val setup = connectionSetup
+            val authenticated = false
+            val encrypted = false
             val integrityProtected = false
           }
 
           val closed  = doClosed.notice
           val receive = doReceive.notice
 
-          override def open: Boolean = socketLock.synchronized(isOpen)
+          override def open: Boolean = socketLock synchronized { isOpen }
 
-          def send(data: MessageBuffer) = socketLock.synchronized {
-            if (open) {
+          def send(data: MessageBuffer) = socketLock synchronized {
+            if (open)
               ctx.send(data.asByteBuffer)
-            }
           }
 
-          def close() = socketLock.synchronized {
+          def close() = socketLock synchronized {
             if (open) {
               heartbeatTask.cancel(true)
               timeoutTask.cancel(true)

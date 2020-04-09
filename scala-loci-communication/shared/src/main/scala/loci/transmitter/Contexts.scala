@@ -2,7 +2,7 @@ package loci
 package transmitter
 
 import Transmittable.Delegating
-import Transmittables.{ Delegates, Message, None }
+import Transmittables.{Delegates, Message, None}
 
 sealed trait Contexts[S <: Transmittables] {
   import Contexts._
@@ -31,7 +31,7 @@ sealed trait Contexts[S <: Transmittables] {
 }
 
 object Contexts {
-  object None extends Contexts[None] { val index = 0l }
+  object None extends Contexts[None] { val index = 0L }
 
   final class SingleMessage[B, I, R, P, T <: Transmittables](
       val context: ContextBuilder.Context[T],

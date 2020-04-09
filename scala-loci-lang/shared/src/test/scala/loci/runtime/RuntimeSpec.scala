@@ -1,7 +1,8 @@
 package loci
 package runtime
 
-import loci.messaging.Message
+import messaging.Message
+
 import org.scalatest._
 
 import scala.collection.mutable
@@ -43,7 +44,7 @@ class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
           connections.constraintsViolated foreach { _ => events += Server(ConstraintsViolated) }
 
           connections.remoteJoined foreach { remote =>
-            connections send (
+            connections.send(
               remote,
               ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from server"))
           }
@@ -60,7 +61,7 @@ class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
         ServerClientApp.$loci$peer$sig$Client,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
-        (connect[ServerClientApp.Server] { listener.createConnector }).setup(
+        (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
         { (ties, context, connections, connected, connecting) =>
@@ -73,7 +74,7 @@ class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
 
           connections.constraintsViolated foreach { _ => events += Client0(ConstraintsViolated) }
 
-          connections send (
+          connections.send(
             connections.remotes.head,
             ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client0"))
 
@@ -88,7 +89,7 @@ class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
         ServerClientApp.$loci$peer$sig$Client,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
-        (connect[ServerClientApp.Server] { listener.createConnector }).setup(
+        (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
         { (ties, context, connections, connected, connecting) =>
@@ -101,7 +102,7 @@ class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
 
           connections.constraintsViolated foreach { _ => events += Client1(ConstraintsViolated) }
 
-          connections send (
+          connections.send(
             connections.remotes.head,
             ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client1"))
 

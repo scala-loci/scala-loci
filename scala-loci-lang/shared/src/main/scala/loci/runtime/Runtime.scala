@@ -1,14 +1,14 @@
 package loci
 package runtime
 
-import loci.communicator._
-import loci.messaging._
+import communicator._
+import messaging._
 
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{CanAwait, ExecutionContext, TimeoutException}
-import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
+import scala.util.{Failure, Success, Try}
 
 class Runtime[P](
     peer: Peer.Signature,
@@ -218,7 +218,7 @@ class Runtime[P](
           }
         }
 
-        logging.tracing(context) execute new Runnable {
+        logging.tracing(context).execute(new Runnable {
           def run() = {
             val instance = state.synchronized {
               if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {
@@ -239,7 +239,7 @@ class Runtime[P](
               doInstance.trySet(instance)
             }
           }
-        }
+        })
 
       case Failure(exception) =>
         context.reportFailure(exception)
@@ -253,7 +253,7 @@ class Runtime[P](
 
       state.terminate()
       state.instances foreach { _.terminate() }
-      state.instances.clear
+      state.instances.clear()
 
       remoteConnections.terminate()
       doTerminated.set()
@@ -273,13 +273,13 @@ class Runtime[P](
   @throws(classOf[TimeoutException])
   @throws(classOf[InterruptedException])
   override def ready(atMost: Duration)(implicit permit: CanAwait): this.type = {
-    terminated ready atMost
+    terminated.ready(atMost)
     this
   }
 
   @throws(classOf[Exception])
   override def result(atMost: Duration)(implicit permit: CanAwait): Unit =
-    terminated result atMost
+    terminated.result(atMost)
 }
 
 object Runtime {

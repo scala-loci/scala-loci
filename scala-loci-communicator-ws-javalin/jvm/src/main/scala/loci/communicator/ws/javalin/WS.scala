@@ -1,32 +1,33 @@
-package loci.communicator.ws.javalin
+package loci
+package communicator
+package ws.javalin
 
 import java.util.function.Consumer
 
 import io.javalin.Javalin
 import io.javalin.websocket.WsHandler
-import loci.communicator
-import loci.communicator.{Bidirectional, Connector, Listener, Listening, Protocol, SecurityInfo, SetupInfo, SymmetryInfo}
 
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 
 trait WS extends
-         Protocol with
-         SetupInfo with
-         SecurityInfo with
-         SymmetryInfo with Bidirectional {
+    Protocol with
+    SetupInfo with
+    SecurityInfo with
+    SymmetryInfo with Bidirectional {
   val path: String
-  val host: Option[String] = None
-  val port: Option[Int]    = None
+  val host: Option[String]
+  val port: Option[Int]
 
-  override def toString = s"JavalinWS($path)"
+  override def toString = s"WS($path, $host, $port)"
 }
 
 object WS extends WSSetupFactory {
   def unapply(ws: WS) = Some((ws.path, ws.host, ws.port))
 
-  case class Properties(heartbeatDelay: FiniteDuration = 3.seconds,
-                        heartbeatTimeout: FiniteDuration = 10.seconds)
+  case class Properties(
+    heartbeatDelay: FiniteDuration = 3.seconds,
+    heartbeatTimeout: FiniteDuration = 10.seconds)
 
   def apply(javalin: Javalin, path: String): Listener[WS] =
     apply(javalin, path, Properties())
@@ -49,7 +50,9 @@ object WS extends WSSetupFactory {
   def apply(url: String): Connector[WS] = ???
   def apply(url: String, properties: Properties): Connector[WS] = ???
 
-  trait Secure extends WS with communicator.Secure
+  trait Secure extends WS with communicator.Secure {
+    override def toString = s"WS.Secure($path, $host, $port)"
+  }
 
   object Secure {
     def unapply(ws: Secure) = Some((ws.path, ws.host, ws.port))

@@ -4,10 +4,11 @@ package ws.akka
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.HttpExt
-import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.ws.WebSocketRequest
+import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
+
 import scala.concurrent.duration._
 
 trait WS extends

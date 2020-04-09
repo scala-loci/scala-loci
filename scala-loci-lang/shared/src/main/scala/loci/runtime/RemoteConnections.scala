@@ -1,13 +1,13 @@
 package loci
 package runtime
 
+import communicator.{Connection, Connector, Listener}
+import messaging.{ConnectionsBase, Message}
+import transmitter.RemoteAccessException
+
 import java.util.concurrent.atomic.AtomicLong
 
-import loci.communicator.{Connection, Connector, Listener}
-import loci.messaging.{ConnectionsBase, Message}
-import loci.transmitter.RemoteAccessException
-
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
 class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie])
@@ -33,8 +33,8 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
 
   protected class State extends BaseState {
     private val counter = new AtomicLong(1)
-    def createId() = counter.getAndIncrement
-    val potentials = new ListBuffer[Peer.Signature]
+    def createId() = counter.getAndIncrement()
+    val potentials = mutable.ListBuffer.empty[Peer.Signature]
   }
 
   protected val state = new State
@@ -106,10 +106,10 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
 
             logging.trace(s"connecting to remote $remotePeer")
 
-            connection send serializeMessage(
+            connection.send(serializeMessage(
               RequestMessage(
                 Peer.Signature.serialize(remotePeer),
-                Peer.Signature.serialize(peer)))
+                Peer.Signature.serialize(peer))))
 
           case Failure(exception) =>
             logging.trace(s"connecting to remote failed: $remotePeer", exception)
@@ -194,7 +194,7 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
                   instance.state.createId(), remotePeer)(
                   connection.protocol, this)
 
-                connection send serializeMessage(AcceptMessage())
+                connection.send(serializeMessage(AcceptMessage()))
 
                 val result = instance.addConnection(remote, connection)
 

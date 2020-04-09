@@ -1,13 +1,14 @@
 package loci
 package transmitter
 
-import scala.collection.generic.CanBuildFrom
-import scala.collection.TraversableLike
-import scala.concurrent.{Future, Promise}
-import scala.reflect.ClassTag
-import scala.language.higherKinds
-import loci.contexts.Immediate.Implicits.global
+import logging.tracingExecutionContext
 
+import scala.collection.TraversableLike
+import scala.collection.generic.CanBuildFrom
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Future, Promise}
+import scala.language.higherKinds
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
 trait TransmittableGeneralCollections extends TransmittableDummy {

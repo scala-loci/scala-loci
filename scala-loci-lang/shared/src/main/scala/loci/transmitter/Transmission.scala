@@ -1,7 +1,7 @@
 package loci
 package transmitter
 
-import loci.language._
+import language._
 
 import scala.concurrent.Future
 

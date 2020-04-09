@@ -11,7 +11,7 @@ case class Message[M: Message.Method](
     val builder = new StringBuilder
 
     builder ++= "["
-    builder ++= implicitly[Message.Method[M]] apply method
+    builder ++= implicitly[Message.Method[M]].apply(method)
 
     if (properties.nonEmpty) {
       builder ++= " {"
@@ -56,7 +56,7 @@ object Message {
   def serialize[M: Method](message: Message[M]): MessageBuffer = {
     val builder = new StringBuilder
 
-    builder ++= implicitly[Method[M]] apply message.method
+    builder ++= implicitly[Method[M]].apply(message.method)
     builder ++= "\r\n"
 
     message.properties foreach { case (key, values) =>
@@ -76,7 +76,7 @@ object Message {
   def deserialize[M: Method](buffer: MessageBuffer): Try[Message[M]] = Try {
     val (method, properties, payload) = parse(buffer)
     Message(
-      implicitly[Method[M]] apply method match {
+      implicitly[Method[M]].apply(method) match {
         case Some(method) => method
         case _ => throwInvalidMethod
       },
@@ -113,7 +113,7 @@ object Message {
     var payload = MessageBuffer.empty
     var properties = Map.empty[String, Seq[String]]
 
-    def parseString = buffer decodeString (mark, offset - mark - 1)
+    def parseString = buffer.decodeString(mark, offset - mark - 1)
 
     def makeMethod() = {
       method = parseString.trim
@@ -129,13 +129,13 @@ object Message {
 
     def makeProperty() = {
       val value = parseString.trim
-      properties += key -> ((properties getOrElse (key, Seq.empty)) :+ value)
+      properties += key -> (properties.getOrElse(key, Seq.empty) :+ value)
       if (value.isEmpty)
         throwEmptyValue
     }
 
     def makePayload() =
-      payload = buffer copy (mark, buffer.length - mark)
+      payload = buffer.copy(mark, buffer.length - mark)
 
     while (offset < buffer.size && state != statePayload) {
       val ch = buffer(offset)
@@ -145,7 +145,7 @@ object Message {
         case `stateHeader` =>
           ch match {
             case '\r' =>
-              makeMethod
+              makeMethod()
               state = stateBeforeKey
             case _  =>
           }
@@ -163,7 +163,7 @@ object Message {
                 throwMissingValue
               state = stateBeforePayload
             case ':' =>
-              makeKey
+              makeKey()
               state = stateValue; mark = offset
             case _  =>
           }
@@ -171,7 +171,7 @@ object Message {
         case `stateValue` =>
           ch match {
             case '\r' =>
-              makeProperty
+              makeProperty()
               state = stateBeforeKey
             case _  =>
           }
@@ -187,10 +187,10 @@ object Message {
     offset += 1
 
     state match {
-      case `stateHeader` => makeMethod
+      case `stateHeader` => makeMethod()
       case `stateKey` => if (parseString.trim.nonEmpty) throwMissingValue
-      case `stateValue` => makeProperty
-      case `statePayload` => makePayload
+      case `stateValue` => makeProperty()
+      case `statePayload` => makePayload()
       case `stateBeforeKey` | `stateBeforePayload` =>
     }
 

@@ -2,7 +2,7 @@ package loci
 package transmitter
 
 import Transmittable.Delegating
-import Transmittables.{ Delegates, Message, None }
+import Transmittables.{Delegates, Message, None}
 
 sealed trait Context[S <: Transmittables] {
   this: ContextBuilder.Context[S] =>

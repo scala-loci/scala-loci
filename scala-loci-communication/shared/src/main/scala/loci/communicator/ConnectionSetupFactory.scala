@@ -18,8 +18,8 @@ object ConnectionSetupFactory {
         collectFirst (Function unlift { scheme =>
           val prefix = scheme + "://"
           val prefixLength = prefix.length
-          if ((url substring (0, prefixLength) compareToIgnoreCase prefix) == 0)
-            Some((scheme, url substring prefixLength))
+          if ((url.substring(0, prefixLength) compareToIgnoreCase prefix) == 0)
+            Some((scheme, url.substring(prefixLength)))
           else
             None
         })

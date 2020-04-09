@@ -3,11 +3,11 @@ package communicator
 package ws.akka
 
 import org.scalajs.dom
-import scala.util.Success
-import scala.util.Failure
+
 import scala.scalajs.js
-import scala.scalajs.js.typedarray.ArrayBuffer
 import scala.scalajs.js.timers._
+import scala.scalajs.js.typedarray.ArrayBuffer
+import scala.util.{Failure, Success}
 
 private class WSConnector[P <: WS: WSProtocolFactory](
   url: String, properties: WS.Properties)
@@ -36,7 +36,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
 
       implicitly[WSProtocolFactory[P]] make (url, host, port, this, tls, tls, tls) match {
         case Failure(exception) =>
-          connectionEstablished set Failure(exception)
+          connectionEstablished.set(Failure(exception))
 
         case Success(ws) =>
 
@@ -61,13 +61,13 @@ private class WSConnector[P <: WS: WSProtocolFactory](
 
             def open = socket.readyState == dom.WebSocket.OPEN
             def send(data: MessageBuffer) = {
-              socket send data.backingArrayBuffer
+              socket.send(data.backingArrayBuffer)
               resetInterval.fire()
             }
             def close() = socket.close()
           }
 
-          connectionEstablished set Success(connection)
+          connectionEstablished.set(Success(connection))
 
 
           // heartbeat
@@ -76,7 +76,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
             if (timeoutHandle != null)
               clearTimeout(timeoutHandle)
             timeoutHandle = setTimeout(properties.heartbeatTimeout) {
-              connection.close
+              connection.close()
             }
           }
 
@@ -84,7 +84,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
             if (intervalHandle != null)
               clearInterval(intervalHandle)
             intervalHandle = setInterval(properties.heartbeatDelay) {
-              socket send "\uD83D\uDC93"
+              socket.send("\uD83D\uDC93")
             }
           }
 
@@ -97,15 +97,15 @@ private class WSConnector[P <: WS: WSProtocolFactory](
           socket.onmessage = { event: dom.MessageEvent =>
             event.data match {
               case data: ArrayBuffer =>
-                doReceive fire (MessageBuffer wrapArrayBuffer data)
+                doReceive.fire(MessageBuffer wrapArrayBuffer data)
 
               case data: dom.Blob =>
                 val reader = new dom.FileReader
                 reader.onload = { event: dom.Event =>
-                  doReceive fire (MessageBuffer wrapArrayBuffer
+                  doReceive.fire(MessageBuffer wrapArrayBuffer
                     event.target.asInstanceOf[js.Dynamic].result.asInstanceOf[ArrayBuffer])
                 }
-                reader readAsArrayBuffer data
+                reader.readAsArrayBuffer(data)
 
               case _ =>
             }

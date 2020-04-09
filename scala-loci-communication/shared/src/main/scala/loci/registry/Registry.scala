@@ -1,21 +1,15 @@
 package loci
 package registry
 
+import communicator.{Connector, Listener}
+import messaging.{Channels, Message}
+import transmitter.{RemoteAccessException, RemoteRef}
+
 import java.util.concurrent.ConcurrentHashMap
 
-import messaging.Message
-import messaging.Channels
-import communicator.Connector
-import communicator.Listener
-import transmitter.RemoteAccessException
-import transmitter.RemoteRef
-
-import scala.collection.mutable.ListBuffer
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
-import scala.concurrent.Promise
-import scala.concurrent.Future
+import scala.collection.mutable
+import scala.concurrent.{Future, Promise}
+import scala.util.{Failure, Success, Try}
 
 object Registry {
   case object Message {
@@ -38,9 +32,9 @@ object Registry {
     val receive = doReceive.notice
     val closed = doClosed.notice
 
-    def send(message: MessageBuffer) = registry send (this, message)
-    def close() = registry.channels close (this, notifyRemote = true)
-    def open = registry.channels isOpen this
+    def send(message: MessageBuffer) = registry.send(this, message)
+    def close() = registry.channels.close(this, notifyRemote = true)
+    def open = registry.channels.isOpen(this)
   }
 
   private final case class AbstractionRef(name: String, remote: RemoteRef,
@@ -49,7 +43,7 @@ object Registry {
     def derive(name: String) =
       AbstractionRef(this.name, remote, s"$channelName:$name", channelAnchor, registry)
 
-    lazy val channel = registry.channels obtain (channelName, channelAnchor, remote)
+    lazy val channel = registry.channels.obtain(channelName, channelAnchor, remote)
 
     override def toString: String = s"$name#[channel:$channelName]$remote"
   }
@@ -69,7 +63,7 @@ class Registry {
   private val bindings = new Bindings(request, respond)
 
   private val channelMessages =
-    new ConcurrentHashMap[String, ListBuffer[Message[Registry.Message.type]]]
+    new ConcurrentHashMap[String, mutable.ListBuffer[Message[Registry.Message.type]]]
 
   val remoteJoined: Notice.Stream[RemoteRef] = connections.remoteJoined
 
@@ -79,7 +73,7 @@ class Registry {
 
   def running: Boolean = !connections.isTerminated
 
-  def terminate(): Unit = connections.terminate
+  def terminate(): Unit = connections.terminate()
 
 
   connections.remoteJoined foreach { remote =>
@@ -130,16 +124,16 @@ class Registry {
 
     if (!queued) {
       logging.trace(s"send update for channel ${channel.name} to ${channel.remote}: ${message.payload}")
-      connections send (channel.remote, message)
+      connections.send(channel.remote, message)
     }
   }
 
   connections.remoteLeft foreach { remote =>
-    channels close remote
-    bindings.channelsClosed
+    channels.close(remote)
+    bindings.channelsClosed()
   }
 
-  connections.run
+  connections.run()
 
   connections.receive foreach { remoteMessage =>
     val (remote, Message(_, properties, message)) = remoteMessage
@@ -149,13 +143,13 @@ class Registry {
      properties get Registry.Message.Channel,
      properties get Registry.Message.Close) match {
       case (Some(Seq(name)), None, None, Some(Seq(channelName)), None) =>
-        channelMessages.put(channelName, ListBuffer.empty)
-        bindings processRequest (
+        channelMessages.put(channelName, mutable.ListBuffer.empty)
+        bindings.processRequest(
           message, name, Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, Some(Seq(name)), None, Some(Seq(channelName)), None) =>
         logging.debug(s"received response upon remote access for $channelName from $remote: $message")
-        bindings processResponse (
+        bindings.processResponse(
           Success(message),
           name,
           Registry.AbstractionRef(name, remote, channelName, this))
@@ -163,23 +157,23 @@ class Registry {
       case (None, None, Some(Seq(name)), Some(Seq(channelName)), None) =>
         val exception = RemoteAccessException.deserialize(message.decodeString)
         logging.debug("received exception upon remote access", exception)
-        bindings processResponse (
+        bindings.processResponse(
           Failure(exception),
           name,
           Registry.AbstractionRef(name, remote, channelName, this))
 
       case (None, None, None, Some(Seq(channelName)), None) =>
-        channels get (channelName, remote) match {
+        channels.get(channelName, remote) match {
           case None =>
             logging.warn(s"unprocessed message for channel $channelName from $remote: $message")
           case Some(channel) =>
             logging.trace(s"received update for channel $channelName from $remote: $message")
-            channel.doReceive fire message
+            channel.doReceive.fire(message)
         }
 
       case (None, None, None, None, Some(Seq(channelName))) =>
         logging.trace(s"received update for channel $channelName from $remote: $message")
-        channels get (channelName, remote) foreach { channels close (_, notifyRemote = false) }
+        channels.get(channelName, remote) foreach { channels.close(_, notifyRemote = false) }
 
       case _ =>
         logging.warn(s"unprocessed message from $remote: $message")
@@ -207,16 +201,16 @@ class Registry {
       messages synchronized {
         messages foreach { message =>
           logging.trace(s"send update for channel ${abstraction.channel} to ${abstraction.remote}: ${message.payload}")
-          connections send (abstraction.remote, message)
+          connections.send(abstraction.remote, message)
         }
-        messages.clear
+        messages.clear()
         channelMessages.remove(abstraction.channelAnchor)
       }
     }
   }
 
   private def send(method: String, abstraction: Registry.AbstractionRef, message: MessageBuffer) =
-    connections send (
+    connections.send(
       abstraction.remote,
       Message(
         Registry.Message,
@@ -268,7 +262,7 @@ class Registry {
 
   def connect(connector: Connector[Connections.Protocol]): Future[RemoteRef] = {
     val promise = Promise[RemoteRef]
-    connectWithCallback(connector) { promise complete _ }
+    connectWithCallback(connector) { promise.complete }
     promise.future
   }
 

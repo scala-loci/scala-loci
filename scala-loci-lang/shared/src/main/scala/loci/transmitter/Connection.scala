@@ -1,9 +1,9 @@
 package loci
 package transmitter
 
-import loci.communicator._
-import loci.language._
-import loci.messaging._
+import communicator._
+import language._
+import messaging._
 
 abstract class Connection[R, M] private[loci] {
   private[loci] def cache[B <: AnyRef](id: Any, body: => B): B

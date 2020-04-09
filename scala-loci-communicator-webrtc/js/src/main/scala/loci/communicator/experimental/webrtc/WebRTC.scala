@@ -2,11 +2,9 @@ package loci
 package communicator
 package experimental.webrtc
 
+import org.scalajs.dom.experimental.webrtc._
+
 import scala.scalajs.js.Array
-import org.scalajs.dom.experimental.webrtc.RTCConfiguration
-import org.scalajs.dom.experimental.webrtc.RTCOfferOptions
-import org.scalajs.dom.experimental.webrtc.RTCDataChannel
-import org.scalajs.dom.experimental.webrtc.RTCIceServer
 
 trait WebRTC extends
     Protocol with

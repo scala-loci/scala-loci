@@ -2,6 +2,7 @@ package loci
 package messaging
 
 import transmitter.RemoteRef
+
 import java.util.concurrent.ConcurrentHashMap
 
 object Channels {
@@ -22,10 +23,10 @@ class Channels[C <: Channels.Channel, R <: RemoteRef](
     val channel = createChannel(name, anchorDefault, remote)
     if (remote.connected) {
       val obtainedChannel =
-        Option(channels putIfAbsent (channelId, channel)) getOrElse channel
+        Option(channels.putIfAbsent(channelId, channel)) getOrElse channel
 
       if (!remote.connected)
-        channels remove obtainedChannel
+        channels.remove(obtainedChannel)
 
       obtainedChannel
     }
@@ -43,15 +44,15 @@ class Channels[C <: Channels.Channel, R <: RemoteRef](
 
   def close(channel: C, notifyRemote: Boolean): Unit = {
     val channelId = (channel.name, channel.remote)
-    Option(channels remove channelId) foreach { closeChannel(_, notifyRemote) }
+    Option(channels.remove(channelId)) foreach { closeChannel(_, notifyRemote) }
   }
 
   def close(remote: R): Unit = {
     val iterator = channels.keySet.iterator
     while (iterator.hasNext)
-      iterator.next match {
+      iterator.next() match {
         case id @ (_, `remote`) =>
-          Option(channels remove id) foreach { closeChannel(_, false) }
+          Option(channels.remove(id)) foreach { closeChannel(_, false) }
         case _ =>
       }
   }

@@ -11,7 +11,8 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
   }
 
   case object TestMessage {
-    implicit def method = messaging.Message.Method(TestMessage -> "TestMessage")
+    implicit def method: Message.Method[TestMessage.type] =
+      messaging.Message.Method(TestMessage -> "TestMessage")
   }
 
   it should "serialize messages correctly" in {
@@ -105,7 +106,8 @@ class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValue
   }
 
   it should "not deserialize messages incorrectly" in {
-    (Message deserialize[TestMessage.type] (MessageBuffer encodeString "Dummy")).failure.exception should have message "Invalid message: invalid method"
+    (Message deserialize[TestMessage.type] (MessageBuffer encodeString "Dummy")).failure.exception should
+      have message "Invalid message: invalid method"
 
     (Message deserialize[TestMessage.type] (MessageBuffer encodeString
       """TestMessage

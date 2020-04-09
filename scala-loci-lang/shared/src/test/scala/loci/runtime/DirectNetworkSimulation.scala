@@ -1,10 +1,10 @@
 package loci
 package runtime
 
-import loci.communicator._
-import loci.runtime.DirectConnectionSimulation.SimulationProtocol
+import communicator._
+import runtime.DirectConnectionSimulation.SimulationProtocol
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext
 import scala.util.{Random, Success}
 
@@ -19,18 +19,18 @@ trait DirectConnectionSimulation {
 
   protected var locked = false
 
-  protected val events = ListBuffer.empty[(DirectConnection, () => Unit)]
+  protected val events = mutable.ListBuffer.empty[(DirectConnection, () => Unit)]
 
   protected def evaluateEvents() =
     if (!deferred && !locked) {
       locked = true
       while (events.nonEmpty) {
-        val (connection, _) = events(random nextInt events.size)
+        val (connection, _) = events(random.nextInt(events.size))
         val index = events indexWhere {
           case (elementConnection, _) => elementConnection == connection
         }
 
-        val (_, event) = events remove index
+        val (_, event) = events.remove(index)
         event()
       }
       locked = false
@@ -84,16 +84,16 @@ class NetworkListener(
 
   protected val random = new Random(seed.toLong)
 
-  protected val connected = ListBuffer.empty[Connected[SimulationProtocol]]
+  protected val connected = mutable.ListBuffer.empty[Connected[SimulationProtocol]]
 
-  def createConnector = new Connector[SimulationProtocol] {
+  def createConnector() = new Connector[SimulationProtocol] {
     protected def connect(connectionEstablished: Connected[SimulationProtocol]) = {
       val connection0 = new DirectConnection(NetworkListener.this)
       val connection1 = new DirectConnection(this)
       connection0.connection = connection1
       connection1.connection = connection0
-      connected foreach { _ fire Success(connection0) }
-      connectionEstablished set Success(connection1)
+      connected foreach { _.fire(Success(connection0)) }
+      connectionEstablished.set(Success(connection1))
     }
   }
 
@@ -114,12 +114,12 @@ class NetworkConnector(
 
   val first = new Connector[SimulationProtocol] {
     protected def connect(connectionEstablished: Connected[SimulationProtocol]) =
-      connectionEstablished set Success(connection0)
+      connectionEstablished.set(Success(connection0))
   }
 
   val second = new Connector[SimulationProtocol] {
     protected def connect(connectionEstablished: Connected[SimulationProtocol]) =
-      connectionEstablished set Success(connection1)
+      connectionEstablished.set(Success(connection1))
   }
 
   protected val connection0: DirectConnection = new DirectConnection(first)

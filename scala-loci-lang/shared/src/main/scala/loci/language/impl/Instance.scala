@@ -305,7 +305,7 @@ class Instance(val c: blackbox.Context) {
 
         val context = (exprs
           collectFirst { case arg if arg.tpe <:< types.executionContext => arg }
-          getOrElse q"${termNames.ROOTPKG}.loci.contexts.Queued.create")
+          getOrElse q"${termNames.ROOTPKG}.loci.contexts.Queued.create()")
 
         val connect = (exprs
           collectFirst { case arg if arg.tpe <:< types.connections => arg }
@@ -695,67 +695,64 @@ class Instance(val c: blackbox.Context) {
         lateSymbols ++= additionals
     }
 
-    val (earlyDefinitions, lateDefinitions) =
-      valueDefinitions.foldRight(List.empty[Tree] -> List.empty[Tree]) {
-        case ((tree, symbol, _, _), (early, late)) =>
-          val getter = if (symbol.getter != NoSymbol) symbol.getter.asTerm else symbol
-          val flags = Flag.SYNTHETIC |
-            (if (getter.isPrivateThis) Flag.PRIVATE | Flag.LOCAL else NoFlags) |
-            (if (getter.isLazy) Flag.LAZY else NoFlags) |
-            (if (getter.isImplicit) Flag.IMPLICIT else NoFlags) |
-            (if (getter.isFinal) Flag.FINAL else NoFlags) |
-            (if (symbol.isVar) Flag.MUTABLE else NoFlags)
+    valueDefinitions.foldRight(List.empty[Tree] -> List.empty[Tree]) {
+      case ((tree, symbol, _, _), (early, late)) =>
+        val getter = if (symbol.getter != NoSymbol) symbol.getter.asTerm else symbol
+        val flags = Flag.SYNTHETIC |
+          (if (getter.isPrivateThis) Flag.PRIVATE | Flag.LOCAL else NoFlags) |
+          (if (getter.isLazy) Flag.LAZY else NoFlags) |
+          (if (getter.isImplicit) Flag.IMPLICIT else NoFlags) |
+          (if (getter.isFinal) Flag.FINAL else NoFlags) |
+          (if (symbol.isVar) Flag.MUTABLE else NoFlags)
 
-          def returnTypeTree(symbol: TermSymbol, tpt: Tree) = {
-            def returnsUnit(symbol: Symbol) =
-              symbol.info.asSeenFrom(placedValues, symbol.owner).finalResultType =:= definitions.UnitTpe
+        def returnTypeTree(symbol: TermSymbol, tpt: Tree) = {
+          def returnsUnit(symbol: Symbol) =
+            symbol.info.asSeenFrom(placedValues, symbol.owner).finalResultType =:= definitions.UnitTpe
+
+          (overriddenSymbols get symbol
+            collect { case symbol if returnsUnit(symbol) => TypeTree(definitions.UnitTpe) }
+            getOrElse tpt)
+        }
+
+        val (overridingTrees, mods) = tree match {
+          case tree @ ValDef(_, name, _, rhs) =>
+            val mods = Modifiers(flags, typeNames.EMPTY, tree.mods.annotations)
+            val tpt = returnTypeTree(symbol, tree.tpt)
+            List(atPos(tree.pos) { ValDef(mods, name, tpt, rhs) }) -> tree.mods
+
+          case tree @ DefDef(_, name, tparams, vparamss, _, rhs) =>
+            val mods = Modifiers(flags, typeNames.EMPTY, tree.mods.annotations)
+            val tpt = returnTypeTree(symbol, tree.tpt)
+            List(atPos(tree.pos) { DefDef(mods, name, tparams, vparamss, tpt, rhs) }) -> tree.mods
+
+          case tree @ ModuleDef(_, name, impl) =>
+            val mods = Modifiers(flags, typeNames.EMPTY, tree.mods.annotations)
+
+            if (allAnnotations(tree.symbol) exists { _.tree.tpe <:< types.multitierModule })
+              c.abort(tree.pos, "multitier module overrides nothing")
 
             (overriddenSymbols get symbol
-              collect { case symbol if returnsUnit(symbol) => TypeTree(definitions.UnitTpe) }
-              getOrElse tpt)
-          }
+              map { symbol =>
+                val objectName = TermName(s"$$loci$$object$$$name")
+                val flags = Flag.SYNTHETIC | Flag.FINAL | Flag.LAZY |
+                  (if (getter.isPrivateThis) Flag.PRIVATE | Flag.LOCAL else NoFlags)
+                List(
+                  atPos(tree.pos) { ModuleDef(mods, objectName, impl) },
+                  atPos(tree.pos) { q"$flags val $name: $objectName.type = $objectName" }) -> Modifiers()
+              }
+              getOrElse List(atPos(tree.pos) { ModuleDef(mods, name, impl) }) -> tree.mods)
 
-          val (overridingTrees, mods) = tree match {
-            case tree @ ValDef(_, name, _, rhs) =>
-              val mods = Modifiers(flags, typeNames.EMPTY, tree.mods.annotations)
-              val tpt = returnTypeTree(symbol, tree.tpt)
-              List(atPos(tree.pos) { ValDef(mods, name, tpt, rhs) }) -> tree.mods
+          case _ =>
+            List(tree) -> Modifiers()
+        }
 
-            case tree @ DefDef(_, name, tparams, vparamss, _, rhs) =>
-              val mods = Modifiers(flags, typeNames.EMPTY, tree.mods.annotations)
-              val tpt = returnTypeTree(symbol, tree.tpt)
-              List(atPos(tree.pos) { DefDef(mods, name, tparams, vparamss, tpt, rhs) }) -> tree.mods
+        if ((mods hasFlag Flag.OVERRIDE) && !(overriddenSymbols contains symbol))
+          c.abort(tree.pos, s"$symbol module overrides nothing")
 
-            case tree @ ModuleDef(_, name, impl) =>
-              val mods = Modifiers(flags, typeNames.EMPTY, tree.mods.annotations)
-
-              if (allAnnotations(tree.symbol) exists { _.tree.tpe <:< types.multitierModule })
-                c.abort(tree.pos, "multitier module overrides nothing")
-
-              (overriddenSymbols get symbol
-                map { symbol =>
-                  val objectName = TermName(s"$$loci$$object$$$name")
-                  val flags = Flag.SYNTHETIC | Flag.FINAL | Flag.LAZY |
-                    (if (getter.isPrivateThis) Flag.PRIVATE | Flag.LOCAL else NoFlags)
-                  List(
-                    atPos(tree.pos) { ModuleDef(mods, objectName, impl) },
-                    atPos(tree.pos) { q"$flags val $name: $objectName.type = $objectName" }) -> Modifiers()
-                }
-                getOrElse List(atPos(tree.pos) { ModuleDef(mods, name, impl) }) -> tree.mods)
-
-            case _ =>
-              List(tree) -> Modifiers()
-          }
-
-          if ((mods hasFlag Flag.OVERRIDE) && !(overriddenSymbols contains symbol))
-            c.abort(tree.pos, s"$symbol module overrides nothing")
-
-          if (lateSymbols contains symbol)
-            early -> (overridingTrees ++ late)
-          else
-            (overridingTrees ++ early) -> late
-      }
-
-    earlyDefinitions -> lateDefinitions
+        if (lateSymbols contains symbol)
+          early -> (overridingTrees ++ late)
+        else
+          (overridingTrees ++ early) -> late
+    }
   }
 }

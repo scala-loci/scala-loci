@@ -1,8 +1,8 @@
 package loci
 package communicator
 
-import scala.util.Try
 import scala.concurrent.duration.Duration
+import scala.util.Try
 
 trait ConnectionSetupParser {
   type Properties

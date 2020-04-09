@@ -1,9 +1,8 @@
 package loci
 package registry
 
-import transmitter.AbstractionRef
-import transmitter.Marshallable
-import transmitter.RemoteRef
+import transmitter._
+
 import scala.util.Try
 
 trait Binding[T] {

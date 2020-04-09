@@ -23,7 +23,7 @@ object TCP extends TCPSetupFactory {
     heartbeatTimeout: FiniteDuration = 10.seconds,
     noDelay: Boolean = true)
 
-  private def ??? = sys error "TCP communicator only available on the JVM"
+  private def ??? = sys.error("TCP communicator only available on the JVM")
 
   def apply(port: Int): Listener[TCP] = ???
   def apply(port: Int, interface: String): Listener[TCP] = ???

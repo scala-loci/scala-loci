@@ -19,10 +19,9 @@ protected[transmitter] trait EventAccessor {
 
     import interface.{Event, Evt, Signal, Var, transaction}
 
-    @cutOutOfUserComputation lazy val asLocal: Signal[Seq[(Remote[R], Event[T])]] =
+    @cutOutOfUserComputation lazy val asLocalFromAll: Signal[Seq[(Remote[R], Event[T])]] =
       value.cache(asLocalId) {
-        implicit val serializer: ReSerializable[Seq[(Remote[R], Event[T])]] =
-          ReSerializable.noSerializer
+        implicit val serializer = ReSerializable.noSerializer[Seq[(Remote[R], Event[T])]]
 
         val mapping = transaction() { _ => Var(Seq.empty[(Remote[R], Event[T])]) }
 
@@ -37,11 +36,11 @@ protected[transmitter] trait EventAccessor {
 
     @cutOutOfUserComputation lazy val asLocalFromAllSeq: Event[(Remote[R], T)] =
       value.cache(asLocalSeqId) {
-        (asLocal map { remoteEvents =>
+        (asLocalFromAll map { remoteEvents =>
           (remoteEvents
             map { case (remote, event) => event map { (remote, _) } }
             reduceOption { _ || _ }
-            getOrElse Evt[Nothing])
+            getOrElse Evt())
         }).flatten
       }
   }
@@ -57,8 +56,7 @@ protected[transmitter] trait EventAccessor {
 
     @cutOutOfUserComputation lazy val asLocal: Signal[Option[Event[T]]] =
       value.cache(asLocalId) {
-        implicit val serializer: ReSerializable[Option[Event[T]]] =
-          ReSerializable.noSerializer
+        implicit val serializer = ReSerializable.noSerializer[Option[Event[T]]]
 
         val option = transaction() { _ => Var(Option.empty[Event[T]]) }
 
@@ -72,9 +70,7 @@ protected[transmitter] trait EventAccessor {
       }
 
     @cutOutOfUserComputation lazy val asLocalSeq: Event[T] =
-      value.cache(asLocalSeqId) {
-        (asLocal map { _ getOrElse Evt[Nothing] }).flatten
-      }
+      value.cache(asLocalSeqId) { (asLocal map { _ getOrElse Evt() }).flatten }
   }
 
   implicit class RescalaEventSingleAccessor[S <: Struct, V, R, T, L](

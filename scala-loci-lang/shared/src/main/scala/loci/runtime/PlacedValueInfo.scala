@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import loci.transmitter.Marshallable
+import transmitter.Marshallable
 
 import scala.annotation.StaticAnnotation
 import scala.annotation.meta.{getter, setter}

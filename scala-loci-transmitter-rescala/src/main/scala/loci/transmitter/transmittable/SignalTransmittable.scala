@@ -19,7 +19,7 @@ protected[transmitter] trait SignalTransmittable {
 
     ConnectedTransmittable.Proxy(
       internal = {
-        implicit val serializer: ReSerializable[U] = ReSerializable.noSerializer
+        implicit val serializer = ReSerializable.noSerializer[U]
         interface.transaction() { _ => interface.Var.empty[U] }
       },
 
@@ -41,7 +41,7 @@ protected[transmitter] trait SignalTransmittable {
         def update(signal: interface.Var[U], value: (Option[U], Option[String])) =
           value match {
             case (Some(value), _) =>
-              signal set value
+              signal.set(value)
 
             case (_, Some(value)) =>
               interface.transaction(signal) { implicit turn =>

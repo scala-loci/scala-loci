@@ -1,5 +1,5 @@
+import sbt.Keys._
 import sbt._
-import Keys._
 
 object SourceGenerator {
   val transmittableTuples =
@@ -11,8 +11,7 @@ object SourceGenerator {
         val tupleArgsI = (0 until i) map { i => s"I$i" } mkString ", "
         val tupleArgsR = (0 until i) map { i => s"R$i" } mkString ", "
 
-        val tupleArgs =
-          s"$tuple[$tupleArgsB], $tuple[$tupleArgsI], $tuple[$tupleArgsR]"
+        val tupleArgs = s"$tuple[$tupleArgsB], $tuple[$tupleArgsI], $tuple[$tupleArgsR]"
 
         val typeArgs = (0 until i) map { i => s"B$i, I$i, R$i" } mkString ", "
 
@@ -70,7 +69,7 @@ object SourceGenerator {
            |""".stripMargin
       )
 
-      files foreach { case (file, content) => IO write (file, content) }
+      files foreach { case (file, content) => IO.write(file, content) }
       files.keys.toSeq
     }
 
@@ -94,7 +93,7 @@ object SourceGenerator {
 
         val marshalling =
           if (i == 0) "MessageBuffer.empty"
-          else s"arg marshal (($args), abstraction)"
+          else s"arg.marshal(($args), abstraction)"
 
         val tupledFunction =
           if (i < 2) s"function(abstraction.remote)"
@@ -134,9 +133,8 @@ object SourceGenerator {
         s"""package loci
            |package registry
            |
-           |import transmitter.AbstractionRef
-           |import transmitter.Marshallable
-           |import transmitter.RemoteRef
+           |import transmitter.{AbstractionRef, Marshallable, RemoteRef}
+           |
            |import scala.util.Try
            |
            |trait FunctionsBindingBuilder extends ValueBindingBuilder {
@@ -145,7 +143,7 @@ object SourceGenerator {
            |""".stripMargin
       )
 
-      files foreach { case (file, content) => IO write (file, content) }
+      files foreach { case (file, content) => IO.write(file, content) }
       files.keys.toSeq
     }
 }
