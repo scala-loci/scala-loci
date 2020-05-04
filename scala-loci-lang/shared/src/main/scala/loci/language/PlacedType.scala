@@ -165,8 +165,6 @@ sealed trait PlacedCleanAny extends PlacedCleanSubjective {
 sealed trait PlacedCleanNothingSubjective extends PlacedCleanAny {
   implicit def nothing[V, L]
     : PlacedClean[V, L, Nothing, Nothing, Nothing] = erased
-  implicit def subjective[V, L, T, U, R](implicit ev: PlacedClean[Nothing on Nothing, L, T, T, U])
-    : PlacedClean[V, L, T per R, T per R, U per R] = erased(ev)
 }
 
 object PlacedClean extends PlacedCleanNothingSubjective {
