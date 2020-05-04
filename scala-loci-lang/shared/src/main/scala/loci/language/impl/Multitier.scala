@@ -79,6 +79,12 @@ class Multitier(val c: blackbox.Context) {
 
     val constructorParams = mutable.ListBuffer.empty[List[List[ValDef]]]
 
+    val expandMultitierMacro =
+      !c.hasErrors &&
+      !isRecursiveExpansion &&
+      !isNestedExpansion &&
+      !hasInstanceOwner(c.internal.enclosingOwner)
+
     val (annottee, companion) = annottees match {
       case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) :: companion =>
         def reducedFlags(mods: Modifiers): Modifiers = {
@@ -124,10 +130,7 @@ class Multitier(val c: blackbox.Context) {
     }
 
     val processedAnnotee: Tree =
-      if (!c.hasErrors &&
-          !isRecursiveExpansion &&
-          !isNestedExpansion &&
-          !hasInstanceOwner(c.internal.enclosingOwner)) {
+      if (expandMultitierMacro) {
         try {
           import preprocessors._
           import components._
@@ -197,7 +200,7 @@ class Multitier(val c: blackbox.Context) {
         annottee
 
     val recoveredAnnottee = processedAnnotee match {
-      case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) =>
+      case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) if expandMultitierMacro =>
         val body = impl.body map {
           case tree @ DefDef(mods, termNames.CONSTRUCTOR, tparams, _, tpt, rhs)
               if constructorParams.nonEmpty =>
@@ -215,12 +218,11 @@ class Multitier(val c: blackbox.Context) {
         processedAnnotee
     }
 
-    logging.code({
+    if (expandMultitierMacro && logging.codeEnabled) {
       val name = s"${c.internal.enclosingOwner.fullName}.${annottee.name}"
       val code = (recoveredAnnottee.toString.linesWithSeparators map { "  " + _ }).mkString
-      s"Expanded code for multitier module $name: " +
-        s"${Properties.lineSeparator}$code"
-    })
+      logging.code(s"Expanded code for multitier module $name:${Properties.lineSeparator}$code")
+    }
 
     (companion.headOption
       map { companion => q"$recoveredAnnottee; $companion"}
