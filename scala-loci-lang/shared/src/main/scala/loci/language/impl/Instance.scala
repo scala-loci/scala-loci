@@ -441,7 +441,11 @@ class Instance(val c: blackbox.Context) {
           else
             NoType
 
-        val placedValues = multitierModuleType member names.placedValues(multitierModuleType.typeSymbol)
+        val placedValues =
+          if (multitierModuleType != NoType)
+            multitierModuleType member names.placedValues(multitierModuleType.typeSymbol)
+          else
+            NoSymbol
 
         if (placedValues.isType) {
           if (self.name != termNames.WILDCARD || self.tpt.tpe != NoType)
