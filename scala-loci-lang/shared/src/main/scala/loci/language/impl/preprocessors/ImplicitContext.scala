@@ -13,18 +13,20 @@ class ImplicitContext[C <: blackbox.Context](val c: C) extends Preprocessor[C] {
   import c.universe._
 
   def process(tree: Tree): Tree = {
+    def implicitContext(tree: Tree): Tree = {
+      val valDef = internal.setPos(
+        ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), TypeTree(), EmptyTree),
+        tree.pos)
+
+      internal.setPos(Function(List(valDef), tree), tree.pos)
+    }
+
     def processImplicitContext(tree: Apply): Option[Tree] = tree match {
       case Apply(_, List(Function(List(arg), _))) if arg.mods hasFlag Flag.IMPLICIT =>
         Some(tree)
 
       case Apply(fun, List(arg)) =>
-        val valDef = internal.setPos(
-          ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), TypeTree(), EmptyTree),
-          arg.pos)
-
-        val function = internal.setPos(Function(List(valDef), arg), arg.pos)
-
-        Some(treeCopy.Apply(tree, fun, List(function)))
+        Some(treeCopy.Apply(tree, fun, List(implicitContext(arg))))
 
       case _ =>
         None
@@ -114,14 +116,34 @@ class ImplicitContext[C <: blackbox.Context](val c: C) extends Preprocessor[C] {
       }
     }
 
+    def processPlacementType(tpt: Tree, tree: Tree): Option[Tree] = {
+      val explicitPlacementType = tpt match {
+        case tq"on[..$_]" => true
+        case tq"loci.on[..$_]" => true
+        case tq"${termNames.ROOTPKG}.loci.on[..$_]" => true
+        case _ => false
+      }
+
+      if (explicitPlacementType && tree.nonEmpty) {
+        val root = internal.setPos(Ident(termNames.ROOTPKG), tree.pos)
+        val loci = internal.setPos(Select(root, TermName("loci")), tree.pos)
+        val placed = internal.setPos(Select(loci, TermName("placed")), tree.pos)
+        Some(internal.setPos(Apply(placed, List(implicitContext(tree))), tree.pos))
+      }
+      else
+        None
+    }
+
     def processStats(stats: List[Tree]): List[Tree] = stats map {
       case tree @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
         treeCopy.DefDef(
-          tree, mods, name, tparams, vparamss, tpt, processValues(rhs) getOrElse rhs)
+          tree, mods, name, tparams, vparamss, tpt,
+          processValues(rhs) orElse processPlacementType(tpt, rhs) getOrElse rhs)
 
       case tree @ ValDef(mods, name, tpt, rhs) =>
         treeCopy.ValDef(
-          tree, mods, name, tpt, processValues(rhs) getOrElse rhs)
+          tree, mods, name, tpt,
+          processValues(rhs) orElse processPlacementType(tpt, rhs) getOrElse rhs)
 
       case tree =>
         processValues(tree) getOrElse tree
