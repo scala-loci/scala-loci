@@ -200,7 +200,9 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         s"$symbolName is not a peer type: @peer type ${symbol.name}"
     })
 
-    if (!underEnclosingExpansion(symbol) && (symbol.owner.info member peer.name) == NoSymbol)
+    if ((symbol.owner.info member peer.name) == NoSymbol &&
+        (!underEnclosingExpansion(symbol) ||
+         !isMultitierModule(symbol.owner.info)))
       c.abort(symbolPos,
         s"no generated peer definition found for peer type $symbolName, " +
         s"maybe ${symbol.owner.fullName} is not multitier: @multitier ${symbol.owner}")
@@ -617,4 +619,11 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         else
           None
     }).flatten
+
+  private def isMultitierModule(tpe: Type) =
+    tpe.finalResultType.baseClasses take 2 exists { symbol =>
+      symbol == module.symbol ||
+      symbol == module.classSymbol ||
+      (symbol.allAnnotations exists { _.tree.tpe <:< types.multitierModule })
+    }
 }
