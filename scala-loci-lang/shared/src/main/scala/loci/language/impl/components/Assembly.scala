@@ -97,7 +97,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       (placedValuesImpl, signatureImpl, moduleImpl, selfType)
     }
 
-    val peerValues = modulePeers flatMap { case Peer(symbol, name, bases, ties) =>
+    val (peerValues, shadowedPeerValues) = (modulePeers map { case Peer(symbol, name, bases, ties) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
       val overriddenBases = module.tree.impl.parents flatMap { base =>
@@ -164,8 +164,8 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       val peerTieSpec =
         q"${Flag.SYNTHETIC} def ${TermName(s"$$loci$$peer$$ties$$${symbol.name}")}: ${types.tieSignature} = ${trees.map}(..$peerTies)"
 
-      Seq(peerImpl, peerSignature, peerTieSpec)
-    }
+      Seq(peerImpl, peerSignature, peerTieSpec) -> overriddenBases.nonEmpty
+    }).unzip
 
     val (peerTypeBodySymbolTrees, moduleValues) = (records collect {
       case ModuleValue(symbol, tree @ TypeDef(mods, name, tparams, rhs))
@@ -200,9 +200,10 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
     val peerTypeBodies = peerTypeBodySymbolTrees.flatten.toMap
 
-    val peerTypeTieTrees = modulePeers flatMap { peer =>
+    val (peerTypeTieTrees, shadowedPeerTieTrees) = (modulePeers map { peer =>
       // collect inherited synthetic peer traits
       val tieName = TypeName(s"$$loci$$peer$$tie$$${peer.symbol.name}")
+
       val parents = module.tree.impl.parents collect {
         case parent if
             parent.tpe =:!= definitions.AnyTpe &&
@@ -253,15 +254,21 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
           Seq(
             q"@$peerAnnotation ${Flag.SYNTHETIC} type ${peer.symbol.name.toTypeName} <: ..$peerParents with $tieName",
             q"${Flag.SYNTHETIC} trait $tieName extends ..$parents { ..$tie }")
-        })
-    }
+        }) -> parents.nonEmpty
+    }).unzip
 
     // create records for new peer implementations
-    val stats = moduleValues ++ peerTypeTieTrees ++ (placedValuesImpl +: signatureImpl +: moduleImpl +: peerValues)
+    val stats = moduleValues ++ peerTypeTieTrees.flatten ++ (placedValuesImpl +: signatureImpl +: moduleImpl +: peerValues.flatten)
 
     // assemble multitier module
+    val nowarn =
+      if ((shadowedPeerValues contains true) || (shadowedPeerTieTrees contains true))
+        nowarnAnnotation.toList
+      else
+        List.empty
+
     val tree = module.tree map { (mods, parents, self, _) =>
-      (mods mapAnnotations { multitierModuleAnnotation :: _ },
+      (mods mapAnnotations { multitierModuleAnnotation :: nowarn ++ _ },
        parents,
        treeCopy.ValDef(self, self.mods, module.self, self.tpt, self.rhs),
        stats)
@@ -285,4 +292,10 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
   private val peerAnnotation =
     internal.setType(q"new ${types.peer}", types.peer)
+
+  private val nowarnAnnotation =
+    types.nowran map { nowarn =>
+      val message = s"msg=shadows trait \\$$loci\\$$peer"
+      internal.setType(q"new $nowarn($message)", nowarn)
+    }
 }

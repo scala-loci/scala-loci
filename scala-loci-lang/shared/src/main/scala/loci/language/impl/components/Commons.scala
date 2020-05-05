@@ -120,6 +120,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val none = typeOf[transmitter.Transmittables.None]
     val compileTimeOnly = typeOf[annotation.compileTimeOnly]
     val placedValues = symbols.placedValues.companion.asType.toType
+    val nowran =
+      try Some(engine.c.mirror.staticClass("_root_.scala.annotation.nowarn").toType)
+      catch { case _: ScalaReflectionException => None }
   }
 
   object trees {
