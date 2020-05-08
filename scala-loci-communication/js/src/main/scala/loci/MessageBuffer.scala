@@ -79,7 +79,7 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
   private def byteBufferToString(offset: Int, count: Int, fatal: Boolean): Try[String] =
     if (count == 0)
       Success("")
-    else if (!(js isUndefined global.TextDecoder)) {
+    else if ((js typeOf global.TextDecoder) != "undefined") {
       val decoder = newInstance(global.TextDecoder)("utf-8", literal(fatal = fatal))
       try Success((decoder decode new Uint8Array(backingArrayBuffer, offset, count)).asInstanceOf[String])
       catch {
@@ -105,7 +105,7 @@ object MessageBuffer {
   def encodeString(string: String): MessageBuffer =
     if (string.isEmpty)
       empty
-    else if (!(js isUndefined global.TextEncoder)) {
+    else if ((js typeOf global.TextEncoder) != "undefined") {
       val encoder = newInstance(global.TextEncoder)()
       new MessageBuffer((encoder encode string).asInstanceOf[Uint8Array].buffer)
     }

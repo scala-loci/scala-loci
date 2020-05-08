@@ -3,11 +3,12 @@ package language
 
 import Testing._
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 
-class TypeLevelEncodingSpec extends FlatSpec with Matchers with NoLogging {
+class TypeLevelEncodingSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Type Level Encoding"
 
   implicit class StaticTypeAssertion[T](v: T) {

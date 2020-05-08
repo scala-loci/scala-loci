@@ -2,13 +2,13 @@ package loci
 package runtime
 
 import communicator.Connector
+import compatibility.jdkCollectionConverters._
 import messaging.Message
 import transmitter.{RemoteAccessException, RemoteRef}
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.ref.WeakReference

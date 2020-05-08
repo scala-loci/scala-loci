@@ -25,7 +25,7 @@ private object WSPlayListener {
           val certificates = request.clientCertificateChain.toSeq.flatten
           val isAuthenticated =
             authenticated.isRight ||
-            authenticated.left.get.nonEmpty ||
+            compatibility.either.left(authenticated).nonEmpty ||
             (request.secure && certificates.nonEmpty)
           val isProtected = request.secure
           val isEncrypted = request.secure

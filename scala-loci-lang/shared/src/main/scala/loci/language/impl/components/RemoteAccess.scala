@@ -52,32 +52,36 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     }
 
     implicit class TraversableTransmittableInfoOps[T](
-        traversable: TraversableOnce[(TransmittableInfo, T)]) {
-      def firstOfBaseType(tpe: Type): Option[(TransmittableInfo, T)] = traversable collectFirst {
-        case value @ (info, _) if info.base =:= tpe => value
-      }
+        iterable: compatibility.IterableOnce[(TransmittableInfo, T)]) {
+      def firstOfBaseType(tpe: Type): Option[(TransmittableInfo, T)] =
+        compatibility.iterable.collectFirst(iterable) {
+          case value @ (info, _) if info.base =:= tpe => value
+        }
 
-      def firstOfArgumentType(tpe: Type): Option[(TransmittableInfo, T)] = traversable collectFirst {
-        case value @ (info, _) if info.base =:= tpe && info.result =:= tpe => value
-      }
+      def firstOfArgumentType(tpe: Type): Option[(TransmittableInfo, T)] =
+        compatibility.iterable.collectFirst(iterable) {
+          case value @ (info, _) if info.base =:= tpe && info.result =:= tpe => value
+        }
 
-      def firstWithAccessInfo(info: TransmittableInfo): Option[(TransmittableInfo, T)] = traversable collectFirst {
-        case value @ (otherInfo, _)
-          if otherInfo.base =:= info.base &&
-             otherInfo.result =:= info.result &&
-             otherInfo.proxy =:= info.proxy =>
-          value
-      }
-
-      def firstWithInfo(info: TransmittableInfo): Option[T] = traversable collectFirst {
-        case (otherInfo, value)
+      def firstWithAccessInfo(info: TransmittableInfo): Option[(TransmittableInfo, T)] =
+        compatibility.iterable.collectFirst(iterable) {
+          case value @ (otherInfo, _)
             if otherInfo.base =:= info.base &&
-               otherInfo.intermediate =:= info.intermediate &&
                otherInfo.result =:= info.result &&
-               otherInfo.proxy =:= info.proxy &&
-               (otherInfo.signature.isEmpty || otherInfo.signature == info.signature) =>
-          value
-      }
+               otherInfo.proxy =:= info.proxy =>
+            value
+        }
+
+      def firstWithInfo(info: TransmittableInfo): Option[T] =
+        compatibility.iterable.collectFirst(iterable) {
+          case (otherInfo, value)
+              if otherInfo.base =:= info.base &&
+                 otherInfo.intermediate =:= info.intermediate &&
+                 otherInfo.result =:= info.result &&
+                 otherInfo.proxy =:= info.proxy &&
+                 (otherInfo.signature.isEmpty || otherInfo.signature == info.signature) =>
+            value
+        }
     }
   }
 
@@ -257,7 +261,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           }
 
           val transmittable =
-            resolvedTransmittable.toRight(Option.empty[Tree]).right.flatMap {
+            compatibility.either.flatMap(resolvedTransmittable.toRight(Option.empty[Tree])) {
               case resolvedTransmittable @ (_, tree) =>
                 val dummyTransmittableTree = DummyTransmittable(tree)
 
@@ -272,7 +276,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             }
 
           if (transmittable.isRight)
-            definedTransmittables += transmittable.right.get
+            definedTransmittables += compatibility.either.right(transmittable)
           else
             unresolvedTransmittables += transmittableType
 
@@ -315,7 +319,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             map atPos(pos))
         }
         else
-          Right(resolvedTransmittables map { _.right.get })
+          Right(resolvedTransmittables map compatibility.either.right)
       }
       else
         Right(Seq.empty)

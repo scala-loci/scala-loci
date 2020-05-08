@@ -104,7 +104,7 @@ private object WSHandler {
 
         resetTimeout()
 
-        connectionAttribute(ctx, connection, doReceive, resetTimeout)
+        connectionAttribute(ctx, connection, doReceive, resetTimeout _)
 
         connectionEstablished(Success(connection))
       }

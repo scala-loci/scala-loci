@@ -1,11 +1,12 @@
 package loci
 package runtime
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.util.Success
 
-class SystemSpec extends FlatSpec with Matchers with NoLogging {
+class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "System"
 
   it should "handle remote access correctly" in {
@@ -42,7 +43,7 @@ class SystemSpec extends FlatSpec with Matchers with NoLogging {
         { (ties, context, connections, connected, connecting) =>
           val instance = new { override val id = 20 } with ServerClientApp.$loci$peer$Client {
             protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
-          }
+          }: @compatibility.nowarn("msg=early initializers")
           client0System = instance.$loci$sys
           instance.$loci$sys.start()
           instance
@@ -58,7 +59,7 @@ class SystemSpec extends FlatSpec with Matchers with NoLogging {
         { (ties, context, connections, connected, connecting) =>
           val instance = new { override val id = 21 } with ServerClientApp.$loci$peer$Client {
             protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
-          }
+          }: @compatibility.nowarn("msg=early initializers")
           client1System = instance.$loci$sys
           instance.$loci$sys.start()
           instance

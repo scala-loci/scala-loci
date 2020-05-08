@@ -1,9 +1,11 @@
 package loci
 package messaging
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.{OptionValues, TryValues}
 
-class MessageSpec extends FlatSpec with Matchers with OptionValues with TryValues with NoLogging {
+class MessageSpec extends AnyFlatSpec with Matchers with OptionValues with TryValues with NoLogging {
   behavior of "Message"
 
   implicit class cleanOp(string: String) {

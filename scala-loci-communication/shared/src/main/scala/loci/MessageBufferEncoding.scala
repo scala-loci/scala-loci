@@ -45,12 +45,7 @@ private object MessageBufferEncoding {
       .onMalformedInput(CodingErrorAction.REPLACE)
       .onUnmappableCharacter(CodingErrorAction.REPLACE)
 
-    // wrong `encoder.maxBytesPerChar` value on Scala.js due to http://github.com/scala-js/scala-js/issues/3922
-    val maxBytesPerChar =
-      if (encoder.maxBytesPerChar == encoder.averageBytesPerChar) 3.0
-      else encoder.maxBytesPerChar.toDouble
-
-    val size = (string.length * maxBytesPerChar).toInt
+    val size = (string.length * encoder.maxBytesPerChar.toDouble).toInt
     val byteBuffer = allocateByteBuffer(size)
     val charBuffer = CharBuffer.wrap(string)
 

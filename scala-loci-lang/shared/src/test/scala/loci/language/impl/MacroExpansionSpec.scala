@@ -4,7 +4,8 @@ package impl
 
 import Testing._
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable
 
@@ -196,7 +197,7 @@ class TopClass
 }
 
 
-class MacroExpansionSpec extends FlatSpec with Matchers with NoLogging {
+class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Macro Expansion"
 
   implicit class StaticTypeAssertion[T](v: T) {
@@ -395,11 +396,19 @@ class MacroExpansionSpec extends FlatSpec with Matchers with NoLogging {
     """@multitier trait mod extends TopModule {
       class C[T](v: T) { def z = top; type X = Int }
 
-      def a = new { val x = 1 } with C[Int](0) { self: C[Int] => type Y = Int; trait T { type U }; def u(x: Int)(y: Int) = x + y }
+      def a = new { val x = 1 } with C[Int](0) { self: C[Int] =>
+        type Y = Int
+        trait T { type U }
+        def u(x: Int)(y: Int) = x + y
+      }: @compatibility.nowarn("msg=early initializers")
 
       trait U { def z = top; type X = Int }
 
-      def b = new { val x = 1 } with U { self: U => type Y = Int; trait T { type U }; def u(x: Int)(y: Int) = x + y }
+      def b = new { val x = 1 } with U { self: U =>
+        type Y = Int
+        trait T { type U }
+        def u(x: Int)(y: Int) = x + y
+      }: @compatibility.nowarn("msg=early initializers")
 
       (new C("")).staticAssertType[C[String]]
       a.staticAssertType[C[Int] { val x: Int; type Y = Int; type T <: { type U }; def u(x: Int)(y: Int): Int}]

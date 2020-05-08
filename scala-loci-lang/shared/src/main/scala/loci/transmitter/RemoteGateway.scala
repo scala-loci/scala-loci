@@ -1,8 +1,8 @@
 package loci
 package transmitter
 
-import communicator._
-import messaging._
+import communicator.Connector
+import messaging.ConnectionsBase
 
 object RemoteGateway {
   trait Default { this: language.Gateway.type =>

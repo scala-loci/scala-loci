@@ -1105,7 +1105,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       foundAdditionals = false
       multitierInitializations foreach { case (_, initializations) =>
         val additionals =
-          (initializations flatMap multitierInitializations.get).flatten -- initializations
+          (initializations.toSet flatMap multitierInitializations.get).flatten -- initializations
         if (additionals.nonEmpty) {
           initializations ++= additionals
           foundAdditionals = true
@@ -1113,16 +1113,16 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       }
     }
 
-    multitierInitializations.toMap mapValues {
-      _.toList sortBy { symbol =>
+    (multitierInitializations.iterator map { case (symbol, initializations) =>
+      symbol -> (initializations.toList sortBy { symbol =>
         if (symbol.isTerm) {
           val termSymbol = symbol.asTerm
           (if (termSymbol.isStable) -1 else 0) + (if (termSymbol.isAccessor) -1 else 0) - 1
         }
         else
           0
-      }
-    }
+      })
+    }).toMap
   }
 
   private val placementTypes = List(

@@ -5,7 +5,7 @@ import language._
 import scala.annotation.compileTimeOnly
 import scala.concurrent.ExecutionContext
 import scala.language.experimental.macros
-import scala.language.{higherKinds, implicitConversions}
+import scala.language.implicitConversions
 
 class Instance[P] private[loci] (dummy: Int) {
   @compileTimeOnly("Multitier peer instantiation must be of the form: multitier start new Instance[P]")

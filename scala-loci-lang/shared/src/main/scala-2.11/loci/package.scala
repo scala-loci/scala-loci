@@ -4,7 +4,6 @@ import loci.messaging._
 
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
-import scala.language.higherKinds
 
 package loci {
   @compileTimeOnly("enable macro paradise to use multitier code")

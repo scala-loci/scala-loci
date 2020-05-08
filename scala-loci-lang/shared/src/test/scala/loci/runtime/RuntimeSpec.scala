@@ -3,11 +3,13 @@ package runtime
 
 import messaging.Message
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable
+import scala.collection.Seq
 
-class RuntimeSpec extends FlatSpec with Matchers with NoLogging {
+class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
   case object New
   case object ConstraintsViolated
 

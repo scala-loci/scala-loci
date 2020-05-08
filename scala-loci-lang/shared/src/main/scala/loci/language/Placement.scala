@@ -2,7 +2,6 @@ package loci
 package language
 
 import scala.annotation.implicitNotFound
-import scala.language.higherKinds
 
 object Placement {
   @implicitNotFound("Expression must be placed on a peer")

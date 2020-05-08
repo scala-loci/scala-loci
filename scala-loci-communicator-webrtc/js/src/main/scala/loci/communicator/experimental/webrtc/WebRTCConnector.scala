@@ -29,7 +29,7 @@ private abstract class WebRTCConnector(
         _(SessionUpdate(event.candidate))
       }
     else
-      update.right foreach {
+      compatibility.either.foreach(update) {
         _(CompleteSession(peerConnection.localDescription))
       }
   }

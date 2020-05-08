@@ -11,7 +11,7 @@ object Peer {
   object Tie extends Enumeration {
     val Multiple, Optional, Single = Value
 
-    def apply(signature: Peer.Signature, ties: Traversable[(Peer.Signature, Tie)]): Option[Tie] =
+    def apply(signature: Peer.Signature, ties: compatibility.Iterable[(Peer.Signature, Tie)]): Option[Tie] =
       ties.foldLeft(Option.empty[Int]) { case (multiplicity, (tieSignature, tieMultiplicity)) =>
         if (tieSignature == signature)
           multiplicity map { _ max tieMultiplicity.id } orElse Some(tieMultiplicity.id)

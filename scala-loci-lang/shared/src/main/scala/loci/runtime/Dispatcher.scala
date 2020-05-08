@@ -8,8 +8,8 @@ import scala.util.control.NonFatal
 trait Dispatch[D <: Dispatch[D]] extends Runnable {
   def blockedBy(dispatch: D): Boolean
 
-  final def blockedBy(dispatches: TraversableOnce[D]): Boolean =
-    dispatches exists blockedBy
+  final def blockedBy(dispatches: compatibility.IterableOnce[D]): Boolean =
+    compatibility.iterable.exists(dispatches) { blockedBy }
 }
 
 trait Undispatchable[D <: Dispatch[D]] { this: Dispatch[D] =>
@@ -30,14 +30,14 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
     next(Seq.empty)
   }
 
-  private def next(executed: Traversable[D]): Unit = dispatches synchronized {
+  private def next(executed: compatibility.Iterable[D]): Unit = dispatches synchronized {
     executed foreach { dispatches -= _ -> true }
 
     val pendings = dispatches collect { case (dispatch, true) => dispatch }
 
     val dispatchings = mutable.ListBuffer.empty[mutable.ListBuffer[D]]
 
-    dispatches transform { case (dispatch, running) =>
+    compatibility.listBuffer.mapInPlace(dispatches) { case (dispatch, running) =>
       dispatch match {
         case _: Undispatchable[D] =>
           pendings += dispatch

@@ -2,7 +2,6 @@ package loci
 package language
 
 import scala.language.experimental.macros
-import scala.language.higherKinds
 
 
 sealed trait PeerType[Q, R, P]

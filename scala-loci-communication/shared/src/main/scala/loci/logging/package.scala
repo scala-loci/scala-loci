@@ -6,7 +6,6 @@ import scribe.{Level, LogRecord, Logger, LoggerSupport, Position}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.experimental.macros
-import scala.language.higherKinds
 import scala.util.Try
 import scala.util.control.NonFatal
 

@@ -4,9 +4,10 @@ package impl
 
 import Testing._
 
-import org.scalatest._
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
 
-class MacroExpansionJVMSpec extends FlatSpec with Matchers {
+class MacroExpansionJVMSpec extends AnyFlatSpec with Matchers {
   behavior of "Macro Expansion"
 
   def emptySystem(peer: runtime.PlacedValues) = new runtime.System(

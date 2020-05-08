@@ -152,7 +152,7 @@ object Parser {
     def toString(builder: StringBuilder): Unit
 
     override def toString: String = {
-      val builder = StringBuilder.newBuilder
+      val builder = new StringBuilder
       toString(builder)
       builder.toString
     }

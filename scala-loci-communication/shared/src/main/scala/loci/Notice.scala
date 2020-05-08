@@ -6,7 +6,6 @@ import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
 import scala.annotation.unchecked.uncheckedVariance
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Awaitable, CanAwait, Future, Promise, TimeoutException}
-import scala.language.higherKinds
 import scala.util.Try
 import scala.util.control.NonFatal
 

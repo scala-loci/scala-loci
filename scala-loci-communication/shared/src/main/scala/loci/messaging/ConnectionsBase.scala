@@ -2,12 +2,12 @@ package loci
 package messaging
 
 import communicator._
+import compatibility.jdkCollectionConverters._
 
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
@@ -151,7 +151,7 @@ trait ConnectionsBase[R, M] {
       throw new UnsupportedOperationException(
         "current thread does not hold the synchronization lock")
     else
-      syncHandlers.get += handler _
+      syncHandlers.get += { () => handler }
 
 
   protected def deserializeMessage(message: MessageBuffer): Try[M]

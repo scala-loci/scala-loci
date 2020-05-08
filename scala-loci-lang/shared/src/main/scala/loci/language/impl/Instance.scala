@@ -674,9 +674,9 @@ class Instance(val c: blackbox.Context) {
     }
 
     // collect early and late definitions
-    val lateSymbols = (valueDefinitions collect {
+    val lateSymbols = mutable.Set(valueDefinitions collect {
       case (_, symbol, _, _) if !symbol.isVar && !symbol.isVal || symbol.isLazy || symbol.isModule => symbol
-    }).to[mutable.Set]
+    }: _*)
 
     var foundAdditionals = true
     while (foundAdditionals) {

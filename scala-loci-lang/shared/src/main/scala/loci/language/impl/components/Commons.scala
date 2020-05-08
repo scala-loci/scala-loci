@@ -185,7 +185,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   def uniqueRealisticName(symbol: Symbol): String = uniqueName(symbol, ".", "#")
 
-  def uniqueName(symbol: Symbol): String = uniqueName(symbol, "$", "$$$")
+  def uniqueName(symbol: Symbol): String = uniqueName(symbol, "$", "$_$")
 
   private def uniqueName(symbol: Symbol, selection: String, projection: String): String = {
     val owner = symbol.owner
@@ -210,8 +210,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
   implicit class ListOps[T](list: List[T]) {
     def process(f: PartialFunction[T, T]): List[T] =
       list map { v => f.applyOrElse(v, identity[T]) }
-    def flatProcess(f: PartialFunction[T, TraversableOnce[T]]): List[T] =
-      list flatMap { v => f.applyOrElse(v, Traversable(_: T)) }
+    def flatProcess(f: PartialFunction[T, compatibility.IterableOnce[T]]): List[T] =
+      list flatMap { v => f.applyOrElse(v, compatibility.Iterable(_: T)) }
   }
 
   implicit class TypeOps(tpe: Type) {

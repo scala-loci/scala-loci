@@ -2,7 +2,7 @@ package loci
 package language
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.language.{higherKinds, implicitConversions}
+import scala.language.implicitConversions
 
 
 abstract class PlacedValue[+T, -P] private[loci]

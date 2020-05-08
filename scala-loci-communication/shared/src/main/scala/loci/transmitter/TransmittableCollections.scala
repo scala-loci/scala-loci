@@ -3,30 +3,15 @@ package transmitter
 
 import logging.tracingExecutionContext
 
-import scala.collection.TraversableLike
-import scala.collection.generic.CanBuildFrom
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Future, Promise}
-import scala.language.higherKinds
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
-trait TransmittableGeneralCollections extends TransmittableDummy {
+trait TransmittableGeneralCollections extends
+    TransmittableGeneralIterableCollections with
+    TransmittableDummy {
   this: Transmittable.type =>
-
-  final implicit def traversable[B, I, R, V[T] >: Null <: TraversableLike[T, V[T]]]
-    (implicit
-        transmittable: Transmittable[B, I, R],
-        cbfI: CanBuildFrom[V[B], I, V[I]],
-        cbfR: CanBuildFrom[V[I], R, V[R]])
-  : DelegatingTransmittable[V[B], V[I], V[R]] {
-      type Delegates = transmittable.Type
-    } =
-    DelegatingTransmittable(
-      provide = (value, context) =>
-        if (value == null) null else value map { context delegate _ },
-      receive = (value, context) =>
-        if (value == null) null else value map { context delegate _ })
 
   final implicit def array[B: ClassTag, I: ClassTag, R: ClassTag]
     (implicit transmittable: Transmittable[B, I, R])
@@ -102,9 +87,9 @@ trait TransmittableGeneralCollections extends TransmittableDummy {
     } =
     DelegatingTransmittable(
       provide = (value, context) =>
-        if (value == null) null else Left(context delegate value.left.get),
+        if (value == null) null else Left(context delegate compatibility.either.left(value)),
       receive = (value, context) =>
-        if (value == null) null else Left(context delegate value.left.get))
+        if (value == null) null else Left(context delegate compatibility.either.left(value)))
 
   final implicit def right[LB, LI, LR, RB, RI, RR]
     (implicit transmittable: Transmittable[RB, RI, RR])
@@ -113,9 +98,9 @@ trait TransmittableGeneralCollections extends TransmittableDummy {
     } =
     DelegatingTransmittable(
       provide = (value, context) =>
-        if (value == null) null else Right(context delegate value.right.get),
+        if (value == null) null else Right(context delegate compatibility.either.right(value)),
       receive = (value, context) =>
-        if (value == null) null else Right(context delegate value.right.get))
+        if (value == null) null else Right(context delegate compatibility.either.right(value)))
 
   implicit def future[B, I, R]
     (implicit
@@ -183,12 +168,10 @@ trait TransmittableGeneralCollections extends TransmittableDummy {
       })
 }
 
-trait TransmittableCollections extends TransmittableGeneralCollections {
+trait TransmittableCollections extends
+    TransmittableIterableCollections with
+    TransmittableGeneralCollections {
   this: Transmittable.type =>
-
-  final implicit def identicalTraversable
-    [T: IdenticallyTransmittable, V[T] <: TraversableLike[T, V[T]]]
-  : IdenticallyTransmittable[V[T]] = IdenticallyTransmittable()
 
   final implicit def identicalArray[T: IdenticallyTransmittable]
   : IdenticallyTransmittable[Array[T]] = IdenticallyTransmittable()

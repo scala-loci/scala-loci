@@ -5,47 +5,80 @@ enablePlugins(GitVersioning)
 
 git.useGitDescribe in ThisBuild := true
 
-scalaVersion in ThisBuild := "2.12.10"
+scalaVersion in ThisBuild := "2.13.2"
 
-crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.10")
+crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.11", "2.13.2")
 
 organization in ThisBuild := "de.tuda.stg"
 
 licenses in ThisBuild += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
 
-scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint")
+scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 
 
-val macroparadise = addCompilerPlugin(
-  "org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
+def `is 2.12+`(scalaVersion: String): Boolean =
+  CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 12 } getOrElse false
+
+def `is 2.13+`(scalaVersion: String): Boolean =
+  CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 13 } getOrElse false
+
+
+val macroparadise = Seq(
+  scalacOptions ++= {
+    if (`is 2.13+`(scalaVersion.value))
+      Seq("-Ymacro-annotations")
+    else
+      Seq.empty
+  },
+  libraryDependencies ++= {
+    if (`is 2.13+`(scalaVersion.value))
+      Seq.empty
+    else
+      Seq(compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch))
+  })
 
 val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.0.8" % Test
+  "org.scalatest" %%% "scalatest" % "3.1.1" % Test
 
-val scribe = libraryDependencies +=
-  "com.outr" %%% "scribe" % "2.7.9"
+val scribe = libraryDependencies += {
+  if (`is 2.12+`(scalaVersion.value))
+    "com.outr" %%% "scribe" % "2.7.12"
+  else
+    "com.outr" %%% "scribe" % "2.7.9"
+}
 
 val retypecheckRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val retypecheck = libraryDependencies +=
-  "de.tuda.stg" %% "retypecheck" % "0.6.0"
+  "de.tuda.stg" %% "retypecheck" % "0.7.0"
 
 val rescalaRepo =
   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.26.0"
+  "de.tuda.stg" %%% "rescala" % "0.30.0"
 
-val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "0.7.4"
+val upickle = libraryDependencies += {
+  if (`is 2.12+`(scalaVersion.value))
+    "com.lihaoyi" %%% "upickle" % "1.1.0"
+  else
+    "com.lihaoyi" %%% "upickle" % "0.7.4"
+}
 
-val circe = libraryDependencies ++= Seq(
-  "io.circe" %%% "circe-core" % "0.11.1",
-  "io.circe" %%% "circe-parser" % "0.11.1")
+val circe = libraryDependencies ++= {
+  if (`is 2.12+`(scalaVersion.value))
+    Seq(
+      "io.circe" %%% "circe-core" % "0.13.0",
+      "io.circe" %%% "circe-parser" % "0.13.0")
+  else
+    Seq(
+      "io.circe" %%% "circe-core" % "0.11.2",
+      "io.circe" %%% "circe-parser" % "0.11.2")
+}
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
@@ -53,13 +86,13 @@ val akkaHttp = libraryDependencies ++= Seq(
 
 val play = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
-  "com.typesafe.play" %% "play" % "[2.5,2.7)" % Provided)
+  "com.typesafe.play" %% "play" % "[2.5,2.8)" % Provided)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "0.9.7" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "1.0.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "3.6.0"
+  "io.javalin" % "javalin" % "3.8.0"
 
 
 lazy val loci = (project

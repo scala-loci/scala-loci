@@ -2,7 +2,6 @@ package loci
 package language
 package impl
 
-import scala.language.higherKinds
 import scala.reflect.macros.blackbox
 
 trait Component[C <: blackbox.Context] {
