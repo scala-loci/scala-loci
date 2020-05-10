@@ -65,6 +65,7 @@ private object WSHandler {
             val path = wsPath
             val host = None
             val port = None
+            val context = ctx
             val setup = connectionSetup
             val authenticated = false
             val encrypted = false

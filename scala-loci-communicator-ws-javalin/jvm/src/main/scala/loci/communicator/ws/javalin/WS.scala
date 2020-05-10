@@ -5,7 +5,7 @@ package ws.javalin
 import java.util.function.Consumer
 
 import io.javalin.Javalin
-import io.javalin.websocket.WsHandler
+import io.javalin.websocket.{WsContext, WsHandler}
 
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
@@ -18,6 +18,8 @@ trait WS extends
   val path: String
   val host: Option[String]
   val port: Option[Int]
+  val context: WsContext
+
 
   override def toString = s"WS($path, $host, $port)"
 }
