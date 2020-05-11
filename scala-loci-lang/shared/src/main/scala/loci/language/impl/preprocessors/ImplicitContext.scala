@@ -13,20 +13,18 @@ class ImplicitContext[C <: blackbox.Context](val c: C) extends Preprocessor[C] {
   import c.universe._
 
   def process(tree: Tree): Tree = {
-    def implicitContext(tree: Tree): Tree = {
-      val valDef = internal.setPos(
-        ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), TypeTree(), EmptyTree),
-        tree.pos)
-
-      internal.setPos(Function(List(valDef), tree), tree.pos)
-    }
-
     def processImplicitContext(tree: Apply): Option[Tree] = tree match {
       case Apply(_, List(Function(List(arg), _))) if arg.mods hasFlag Flag.IMPLICIT =>
         Some(tree)
 
       case Apply(fun, List(arg)) =>
-        Some(treeCopy.Apply(tree, fun, List(implicitContext(arg))))
+        val valDef = internal.setPos(
+          ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), TypeTree(), EmptyTree),
+          arg.pos)
+
+        val function = internal.setPos(Function(List(valDef), arg), arg.pos)
+
+        Some(treeCopy.Apply(tree, fun, List(function)))
 
       case _ =>
         None
@@ -128,7 +126,7 @@ class ImplicitContext[C <: blackbox.Context](val c: C) extends Preprocessor[C] {
         val root = internal.setPos(Ident(termNames.ROOTPKG), tree.pos)
         val loci = internal.setPos(Select(root, TermName("loci")), tree.pos)
         val placed = internal.setPos(Select(loci, TermName("placed")), tree.pos)
-        Some(internal.setPos(Apply(placed, List(implicitContext(tree))), tree.pos))
+        processImplicitContext(internal.setPos(Apply(placed, List(tree)), tree.pos))
       }
       else
         None
