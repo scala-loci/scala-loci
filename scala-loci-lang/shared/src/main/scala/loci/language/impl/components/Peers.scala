@@ -396,12 +396,9 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
 
     // ensure that all super peers are defined in the same module
-    peer.bases foreach {
-      case Peer.Base(tpe @ TypeRef(pre, _, _), _, tree) =>
-        if (!modulePeer(tpe) && !(module.symbol.info.members exists { _ == pre.termSymbol }))
-          c.abort(tree.pos orElse pos,
-            s"peer type cannot declare a super peer of another module: $tpe")
-      case _ =>
+    peer.bases foreach { case Peer.Base(tpe, _, tree) =>
+      if (!nestedPeer(tpe))
+        c.abort(tree.pos orElse pos, s"peer type cannot declare a super peer of another module: $tpe")
     }
 
 
@@ -619,6 +616,21 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         else
           None
     }).flatten
+
+  private def nestedPeer(tpe: Type): Boolean = {
+    def isModuleSymbol(sym: Symbol) =
+      sym == module.classSymbol ||
+      sym.isModule && sym.asModule.moduleClass == module.classSymbol
+
+    tpe match {
+      case TypeRef(pre, _, _) =>
+        isModuleSymbol(pre.typeSymbol) || isMultitierModule(pre) && nestedPeer(pre)
+      case SingleType(pre, _) =>
+        isMultitierModule(tpe) && nestedPeer(pre)
+      case ThisType(sym) =>
+        isModuleSymbol(sym)
+    }
+  }
 
   private def isMultitierModule(tpe: Type) =
     tpe.finalResultType.baseClasses take 2 exists { symbol =>
