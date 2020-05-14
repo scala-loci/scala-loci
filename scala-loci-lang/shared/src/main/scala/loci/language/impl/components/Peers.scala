@@ -355,7 +355,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
           if (tree.isEmpty &&
               symbol.owner != module.classSymbol &&
               (module.symbol.info.members exists { _ == symbol }))
-            inferTies(symbol, ties)
+            inferTies(symbol, ties, bases)
           else
             None
 
@@ -499,9 +499,21 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     }
   }
 
-  private def inferTies(symbol: Symbol, ties: List[Peer.Tie]): Option[List[Peer.Tie]] = {
+  private def inferTies(symbol: Symbol, ties: List[Peer.Tie], bases: List[Peer.Base]): Option[List[Peer.Tie]] = {
+    // collect tie specifications from base peers
+    val baseTies = bases flatMap {
+      case Peer.Base(TypeRef(pre, sym, _), _, _) =>
+        requirePeerType(sym).ties map { tie =>
+          tie.copy(tpe = tie.tpe.typeSymbol.ancestors.foldLeft(tie.tpe) { (tpe, symbol) =>
+            tpe.asSeenFrom(pre, symbol)
+          })
+        }
+      case _ =>
+        List.empty
+    }
+
     // merge tie specification of overridden peers
-    val mergedTies = (overriddenPeers(symbol) map { _.ties }).foldLeft(ties) { (ties0, ties1) =>
+    val mergedTies = (overriddenPeers(symbol) map { _.ties }).foldLeft(ties ++ baseTies) { (ties0, ties1) =>
       val updatedTies0 = ties0 map { tie0 =>
         val multiplicity = ties1.foldLeft(tie0.multiplicity.id) { (multiplicity0, tie1) =>
           if (tie1.tpe =:= tie0.tpe)
