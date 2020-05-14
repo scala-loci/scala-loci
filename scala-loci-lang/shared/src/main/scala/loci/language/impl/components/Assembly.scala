@@ -175,7 +175,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
           case TypeBoundsTree(_, hi) => hi.original match {
             case CompoundTypeTree(Template(parents, _, body)) =>
               parents -> body
-            case parent @ Select(_, _) =>
+            case parent @ (Select(_, _) | Ident(_)) =>
               List(parent) -> List.empty
             case _ =>
               List.empty -> List.empty
