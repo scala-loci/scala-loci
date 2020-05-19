@@ -121,6 +121,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
     }
 
     socket.onerror = { event: dom.Event =>
+      connectionEstablished.trySet(Failure(new ConnectionException("Websocket failed to connect")))
       socket.close()
     }
   }
