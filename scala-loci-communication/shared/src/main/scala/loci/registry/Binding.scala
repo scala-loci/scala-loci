@@ -8,10 +8,15 @@ import scala.util.Try
 trait Binding[T] {
   type RemoteCall
   val name: String
-  def dispatch(function: RemoteRef => T, message: MessageBuffer, abstraction: AbstractionRef)
-    : Try[MessageBuffer]
-  def call(abstraction: AbstractionRef)(handler: MessageBuffer => Notice.Steady[Try[MessageBuffer]])
-    : RemoteCall
+
+  def dispatch(
+    function: RemoteRef => T,
+    message: MessageBuffer,
+    abstraction: AbstractionRef): Try[MessageBuffer]
+
+  def call[A <: AbstractionRef](
+    createAbstraction: () => A)(
+    handler: (MessageBuffer, A) => Notice.Steady[Try[MessageBuffer]]): RemoteCall
 }
 
 object Binding {
@@ -43,10 +48,12 @@ trait ValueBindingBuilder {
             abstraction: AbstractionRef) =
           Try { res.marshal(function(abstraction.remote), abstraction) }
 
-        def call(
-            abstraction: AbstractionRef)(
-            handler: MessageBuffer => Notice.Steady[Try[MessageBuffer]]) =
-          res.unmarshal(handler(MessageBuffer.empty), abstraction)
+        def call[A <: AbstractionRef](
+            createAbstraction: () => A)(
+            handler: (MessageBuffer, A) => Notice.Steady[Try[MessageBuffer]]) = {
+          val abstraction = createAbstraction()
+          res.unmarshal(handler(MessageBuffer.empty, abstraction), abstraction)
+        }
       }
     }
 }

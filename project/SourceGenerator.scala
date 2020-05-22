@@ -117,11 +117,13 @@ object SourceGenerator {
           |            function: RemoteRef => ($argTypes) => R,
           |            message: MessageBuffer,
           |            abstraction: AbstractionRef) = $dispatch
-          |        def call(
-          |            abstraction: AbstractionRef)(
-          |            handler: MessageBuffer => Notice.Steady[Try[MessageBuffer]]) =
+          |        def call[A <: AbstractionRef](
+          |            createAbstraction: () => A)(
+          |            handler: (MessageBuffer, A) => Notice.Steady[Try[MessageBuffer]]) = {
           |          ($typedArgs) =>
-          |            res.unmarshal(handler($marshalling), abstraction)
+          |            val abstraction = createAbstraction()
+          |            res.unmarshal(handler($marshalling, abstraction), abstraction)
+          |        }
           |      }
           |    }
           |  }

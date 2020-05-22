@@ -253,7 +253,7 @@ class Registry {
   def lookup[T](binding: Binding[T], remote: RemoteRef): binding.RemoteCall =
     bindings.lookup(
       binding,
-      Registry.AbstractionRef(
+      () => Registry.AbstractionRef(
         binding.name,
         remote,
         java.util.UUID.randomUUID.toString,

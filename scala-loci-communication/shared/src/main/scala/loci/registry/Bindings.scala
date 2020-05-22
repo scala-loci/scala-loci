@@ -20,8 +20,8 @@ class Bindings[A <: AbstractionRef](
   def bind[T](binding: Binding[T])(function: RemoteRef => T): Unit =
     bindings.put(binding.name, binding.dispatch(function, _, _))
 
-  def lookup[T](binding: Binding[T], abstraction: A): binding.RemoteCall =
-    binding.call(abstraction) { message =>
+  def lookup[T, R](binding: Binding[T], createAbstraction: () => A): binding.RemoteCall =
+    binding.call(createAbstraction) { (message, abstraction) =>
       val channel = abstraction.channel
       val response = Notice.Steady[Try[MessageBuffer]]
 
