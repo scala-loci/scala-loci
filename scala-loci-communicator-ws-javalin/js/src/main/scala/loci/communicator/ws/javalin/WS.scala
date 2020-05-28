@@ -2,8 +2,6 @@ package loci
 package communicator
 package ws.javalin
 
-import io.javalin.Javalin
-
 import scala.concurrent.duration._
 
 trait WS extends
@@ -27,8 +25,8 @@ object WS extends WSSetupFactory {
 
   private def ??? = sys.error("WebSocket communicator method only available on the JVM")
 
-  def apply(javalin: Javalin, path: String): Listener[WS] = ???
-  def apply(javalin: Javalin, path: String, properties: Properties): Listener[WS] = ???
+  def apply(javalin: AnyRef, path: String): Listener[WS] = ???
+  def apply(javalin: AnyRef, path: String, properties: Properties): Listener[WS] = ???
 
   def apply(url: String): Connector[WS] =
     new WSConnector[WS](url, Properties())

@@ -226,7 +226,8 @@ lazy val lociCommunicatorWsJavalin = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-ws-javalin")
   settings (normalizedName := "scala-loci-communicator-ws-javalin",
-            javalin, scalajsDom)
+            scalajsDom)
+  jvmSettings javalin
   dependsOn lociCommunication)
 
 lazy val lociCommunicatorWsJavalinJVM = lociCommunicatorWsJavalin.jvm
