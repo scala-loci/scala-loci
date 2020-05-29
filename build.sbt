@@ -80,6 +80,8 @@ val circe = libraryDependencies ++= {
       "io.circe" %%% "circe-parser" % "0.11.2")
 }
 
+val jsoniter = libraryDependencies += "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.2.4"
+
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
   "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided)
@@ -106,6 +108,7 @@ lazy val lociJVM = (project
   aggregate (lociLangJVM, lociArchitecturesBasicJVM,
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
+             lociSerializerJsoniterScalaJVM,
              lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
@@ -117,6 +120,7 @@ lazy val lociJS = (project
   aggregate (lociLangJS, lociArchitecturesBasicJS,
              lociSerializerUpickleJS,
              lociSerializerCirceJS,
+             lociSerializerJsoniterScalaJS,
              lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
              lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
@@ -178,6 +182,17 @@ lazy val lociSerializerCirce = (crossProject(JSPlatform, JVMPlatform)
 
 lazy val lociSerializerCirceJVM = lociSerializerCirce.jvm
 lazy val lociSerializerCirceJS = lociSerializerCirce.js
+
+
+lazy val lociSerializerJsoniterScala = (crossProject(JSPlatform, JVMPlatform) 
+  crossType CrossType.Pure
+  in file("scala-loci-serializer-jsoniter-scala")
+  settings (normalizedName := "scala-loci-serializer-jsoniter-scala",
+           jsoniter)
+  dependsOn lociCommunication)
+
+lazy val lociSerializerJsoniterScalaJVM = lociSerializerJsoniterScala.jvm
+lazy val lociSerializerJsoniterScalaJS = lociSerializerJsoniterScala.js
 
 
 lazy val lociTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
