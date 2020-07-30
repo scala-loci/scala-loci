@@ -91,7 +91,7 @@ final class MessageBuffer private (val backingArrayBuffer: ArrayBuffer)
       }
     }
     else
-      MessageBufferEncoding.byteBufferToString(asByteBuffer, offset, count, fatal = false)
+      MessageBufferEncoding.byteBufferToString(asByteBuffer, offset, count, fatal = fatal)
 }
 
 object MessageBuffer {
