@@ -112,7 +112,7 @@ object TransmittableResolution {
              tree.tpe != null &&
              tree.symbol.isMethod &&
              tree.tpe <:< identicallyTransmittableType =>
-          q"$identicallyTransmittableTree[${restoreType(tree.tpe.typeArgs.head)}]"
+          q"$identicallyTransmittableTree[${restoreType(tree.tpe.typeArgs.head)}]()"
 
         case TypeApply(fun, args) if args exists hasNonRepresentableType =>
           super.transform(fun)
