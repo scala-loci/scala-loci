@@ -9,11 +9,11 @@ import scala.annotation.meta.{getter, setter}
 @getter @setter
 final class MarshallableInfo[I](signature: Int) extends StaticAnnotation
 
-final class PlacedValue[U, T](
+final class PlacedValue[U, R, B, T](
   val signature: Value.Signature,
   val stable: Boolean,
-  val arguments: Marshallable[U, _, _],
-  val result: Marshallable[_, _, T])
+  val arguments: Marshallable[U, R, _],
+  val result: Marshallable[B, _, T])
 
 @getter @setter
 final class PlacedValueInfo(

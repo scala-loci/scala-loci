@@ -5,13 +5,13 @@ import transmitter.RemoteRef
 
 final class RemoteRequest[V, R, T, L, M, U](
   arguments: U,
-  placedValue: PlacedValue[U, T],
+  placedValue: PlacedValue[U, _, _, T],
   peer: Peer.Signature,
   remotes: Seq[RemoteRef],
   system: System)
     extends transmitter.Transmission[V, R, T, L, M] {
 
-  private[this] val remoteId = (placedValue, peer, remotes, system)
+  private[this] val remoteId: AnyRef = (placedValue, peer, remotes, system)
 
   @inline private[loci] def cache[B <: AnyRef](id: Any, body: => B): B =
     if (placedValue.stable)

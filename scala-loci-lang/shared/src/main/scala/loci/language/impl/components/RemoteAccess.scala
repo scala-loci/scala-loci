@@ -203,8 +203,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     // collect all inherited marshallables with their transmittable information
     val (declaredMarshallables, definedMarshallables) =
       mutable.ListBuffer(module.classSymbol.selfType.members.sorted collect {
-        case symbol @ MarshallableSymbol(info, accessorName, implementationName) =>
-          info -> ((symbol, accessorName, implementationName))
+        case symbol @ MarshallableSymbol(info, name) =>
+          info -> (symbol -> name)
       }: _*) partition { case (info, _) => info.signature.isEmpty }
 
     // collect symbols that are accessed remotely
@@ -330,26 +330,24 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var marshallableIndex = 0
 
     def createMarshallable(info: TransmittableInfo, tree: Tree, pos: Position) = {
-      val marshallableName = TermName(s"$$loci$$mar$$$moduleName$$$marshallableIndex")
-      val deferredMarshallableName = TermName(s"$$loci$$mar$$deferred$$$moduleName$$$marshallableIndex")
+      val (name, marshallable) = generateMarshallable(
+        info, tree, pos, TermName(s"$$loci$$mar$$$moduleName$$$marshallableIndex"), implementationRequired = false)
 
-      val result @ (_, _, marshallables) = marshallable(info, tree, pos, Left(marshallableName -> deferredMarshallableName))
-
-      if (marshallables.nonEmpty)
+      if (marshallable.nonEmpty)
         marshallableIndex += 1
 
-      result
+      (q"$name", q"$name", marshallable)
     }
 
-    def implementMarshallable(info: TransmittableInfo, tree: Tree, pos: Position, deferredMarshallableName: TermName) = {
-      val (_, _, marshallables) = marshallable(info, tree, pos, Right(deferredMarshallableName))
-      marshallables
+    def implementMarshallable(info: TransmittableInfo, tree: Tree, pos: Position, name: TermName) = {
+      val (_, marshallable) = generateMarshallable(info, tree, pos, name, implementationRequired = true)
+      marshallable
     }
 
-    def marshallable(info: TransmittableInfo, tree: Tree, pos: Position, name: Either[(TermName, TermName), TermName]) = {
+    def generateMarshallable(info: TransmittableInfo, tree: Tree, pos: Position, name: TermName, implementationRequired: Boolean) = {
       val dummyTransmittableTree = DummyTransmittable(tree) != DummyTransmittable.None
       val marshallables =
-        if (dummyTransmittableTree && name.isLeft)
+        if (dummyTransmittableTree && !implementationRequired)
           definedMarshallables.iterator ++ declaredMarshallables.iterator
         else
           definedMarshallables.iterator
@@ -361,31 +359,35 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         else
           q"new ${createTypeTree(marshallableInfoType, pos)}(${info.signature.get})"
 
-      def deferredMarshallableImplementation(deferredMarshallableName: TermName, expr: Tree) =
-        if (!(implementedMarshallables contains deferredMarshallableName)) {
-          logging.debug(s"  Implementing deferred marshallable for ${info.base} ~> ${info.proxy}")
+      def marshallableImplementation(marshallableName: TermName, expr: Tree, isDeferred: Boolean) =
+        if (!(implementedMarshallables contains marshallableName)) {
+          if (isDeferred)
+            logging.debug(s"  Implementing deferred marshallable for ${info.base} ~> ${info.proxy}")
+          else
+            logging.debug(s"  Creating marshallable for ${info.base} ~> ${info.proxy}")
 
-          implementedMarshallables += deferredMarshallableName
-          Seq(atPos(pos) {
-            q"@$annotation ${Flag.SYNTHETIC} protected[this] def $deferredMarshallableName = $expr" })
+          implementedMarshallables += marshallableName
+          definedMarshallables += info -> (NoSymbol -> marshallableName)
+
+          Some(atPos(pos) {
+            q"@$annotation ${Flag.SYNTHETIC} protected[this] lazy val $marshallableName = $expr" })
         }
         else
-          Seq.empty
+          None
 
       // reuse existing marshallable if possible or
       // create new marshallable if necessary
       (marshallables
         firstWithInfo info
-        map { case (_, accessorName, implementationName) =>
-          name match {
-            case Left((_, _)) =>
-              logging.debug("  " +
-                s"Reusing${if (dummyTransmittableTree) " deferred " else " "}marshallable " +
-                s"for ${info.base} ~> ${info.proxy}")
-              (q"$accessorName", q"$implementationName", Seq.empty)
-            case Right(deferredMarshallableName) =>
-              (EmptyTree, EmptyTree, deferredMarshallableImplementation(deferredMarshallableName, q"$accessorName"))
+        map { case (_, marshallableName) =>
+          if (!implementationRequired) {
+            logging.debug("  " +
+              s"Reusing${if (dummyTransmittableTree) " deferred " else " "}marshallable " +
+              s"for ${info.base} ~> ${info.proxy}")
+            marshallableName -> None
           }
+          else
+            termNames.EMPTY -> marshallableImplementation(name, q"$marshallableName", isDeferred = true)
         }
         getOrElse {
           if (!dummyTransmittableTree) {
@@ -425,48 +427,26 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               ${trees.implicitly}[${createTypeTree(serializableType, pos)}],
               ${contextBuilder(tree.tpe)})"""
 
-            name match {
-              case Left((marshallableName, _)) =>
-                logging.debug(s"  Creating marshallable for ${info.base} ~> ${info.proxy}")
-
-                definedMarshallables += info -> ((NoSymbol, marshallableName, marshallableName))
-
-                (q"$marshallableName",
-                 q"$marshallableName",
-                 Seq(atPos(pos) {
-                   q"@$annotation ${Flag.SYNTHETIC} final protected[this] val $marshallableName = $expr" }))
-
-              case Right(deferredMarshallableName) =>
-                (EmptyTree, EmptyTree, deferredMarshallableImplementation(deferredMarshallableName, expr))
-            }
+            if (!implementationRequired)
+              name -> marshallableImplementation(name, expr, isDeferred = false)
+            else
+              termNames.EMPTY -> marshallableImplementation(name, expr, isDeferred = true)
           }
           else
-            name match {
-              case Left((marshallableName, deferredMarshallableName)) =>
-                logging.debug(s"  Deferring marshallable for ${info.base} ~> ${info.proxy}")
+            if (!implementationRequired) {
+              logging.debug(s"  Deferring marshallable for ${info.base} ~> ${info.proxy}")
 
-                declaredMarshallables += info -> ((NoSymbol, marshallableName, deferredMarshallableName))
+              declaredMarshallables += info -> (NoSymbol -> name)
 
-                val marshallableType = types.marshallable mapArgs { _ => List(info.base, info.result, info.proxy) }
-                val abstractValueAnnotation = q"new ${types.abstractValue}"
+              val marshallableType = types.marshallable mapArgs { _ => List(info.base, info.result, info.proxy) }
+              val abstractValueAnnotation = q"new ${types.abstractValue}"
 
-                (q"$marshallableName",
-                 q"$deferredMarshallableName",
-                 Seq(
-                   atPos(pos) {
-                     q"""${Flag.SYNTHETIC} final protected[this] val $marshallableName =
-                       $deferredMarshallableName"""
-                   },
-                   atPos(pos) {
-                     q"""@$abstractValueAnnotation @$annotation
-                       ${Flag.SYNTHETIC} protected[this] def $deferredMarshallableName: $marshallableType =
-                       null"""
-                   }))
-
-              case _ =>
-                (EmptyTree, EmptyTree, Seq.empty)
+              name -> Some(atPos(pos) {
+                q"@$abstractValueAnnotation @$annotation ${Flag.SYNTHETIC} protected[this] lazy val $name: $marshallableType = null" })
             }
-      })
+            else
+              termNames.EMPTY -> None
+        })
     }
 
     // resolve or construct marshallables and placed value info instances
@@ -531,27 +511,27 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             // for the successfully resolved transmittable
             // reusing inherited placed value info if possible
             val (name, seq) = inheritedPlacedValue getOrElse {
-                val nonStandardNonResult =
-                  resInfo.proxy =:!= types.unitFuture &&
-                  resInfo.proxy =:!= types.nothingFuture
+              val nonStandardNonResult =
+                resInfo.proxy =:!= types.unitFuture &&
+                resInfo.proxy =:!= types.nothingFuture
 
-                val (argValue, argAnnotation, argMarshallable) =
-                  if (hasArguments)
-                    createMarshallable(argInfo, argTree, pos)
-                  else
-                    (trees.unitMarshallable, q"null", Seq.empty)
+              val (argValue, argAnnotation, argMarshallable) =
+                if (hasArguments)
+                  createMarshallable(argInfo, argTree, pos)
+                else
+                  (trees.unitMarshallable, q"null", None)
 
-                val (resValue, resAnnotation, resMarshallable) =
-                  if (hasResult || nonStandardNonResult)
-                    createMarshallable(resInfo, resTree, pos)
-                  else if (res =:= definitions.UnitTpe)
-                    (trees.unitMarshallable, q"null", Seq.empty)
-                  else
-                    (trees.nothingMarshallable, q"null", Seq.empty)
+              val (resValue, resAnnotation, resMarshallable) =
+                if (hasResult || nonStandardNonResult)
+                  createMarshallable(resInfo, resTree, pos)
+                else if (res =:= definitions.UnitTpe)
+                  (trees.unitMarshallable, q"null", None)
+                else
+                  (trees.nothingMarshallable, q"null", None)
 
-                Right((argValue, argAnnotation, resValue, resAnnotation)) ->
-                  (argMarshallable ++ resMarshallable)
-              }
+              Right((argValue, argAnnotation, resValue, resAnnotation)) ->
+                (argMarshallable ++ resMarshallable).toSeq
+            }
 
             name match {
               case Left(name) =>
@@ -562,7 +542,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 // create new placed value info if necessary
                 val placedValueName = TermName(s"$$loci$$val$$$moduleName$$$placedValueIndex")
                 val annotation = q"new ${types.placedRuntimeValueInfo}($signature, $argAnnotation, $resAnnotation)"
-                val placedValueType = types.placedRuntimeValue mapArgs { _ => List(argInfo.base, resInfo.proxy) }
+                val placedValueType = types.placedRuntimeValue mapArgs { _ =>
+                  List(argInfo.base, argInfo.result, resInfo.base, resInfo.proxy)
+                }
 
                 val placedValue = atPos(pos) {
                   q"""@$annotation ${Flag.SYNTHETIC} final val $placedValueName =
@@ -632,7 +614,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                 val marshalling =
                   if (hasResult)
-                    q"$resValue.marshal($$loci$$response, $$loci$$reference)"
+                    q"$placedValueName.result.marshal($$loci$$response, $$loci$$reference)"
                   else
                     trees.empty
 
@@ -641,7 +623,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                 val requestProcessing = atPos(pos) {
                   if (hasArguments)
-                    q"$argValue.unmarshal($$loci$$request, $$loci$$reference) flatMap { $$loci$$arguments => $resultMarshalling }"
+                    q"$placedValueName.arguments.unmarshal($$loci$$request, $$loci$$reference) flatMap { $$loci$$arguments => $resultMarshalling }"
                   else
                     resultMarshalling
                 }
@@ -659,10 +641,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     // resolve or construct marshallables whose instantiation was deferred to sub modules
     logging.debug(" Processing deferred marshallables of super modules")
     val marshallableValues = declaredMarshallables.toList flatMap {
-      case (_, (NoSymbol, _, _)) =>
+      case (_, (NoSymbol, _)) =>
         Seq.empty
 
-      case (info, (symbol, _, implementationName)) =>
+      case (info, (symbol, marshallableName)) =>
         val ancestors = symbol.ancestors
         val definedTransmittable = definedTransmittables firstWithAccessInfo info
         val transmittableType = types.resolution mapArgs { args => List(info.base, args(1), info.base, info.proxy) :+ args.last }
@@ -681,7 +663,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           case Right(Seq()) =>
             Seq.empty
           case Right(Seq((info, tree))) =>
-            implementMarshallable(info, tree, pos, implementationName)
+            implementMarshallable(info, tree, pos, marshallableName)
         }
     }
 
@@ -1149,30 +1131,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
   object MarshallableSymbol {
-    def unapply(symbol: Symbol): Option[(TransmittableInfo, TermName, TermName)] =
+    def unapply(symbol: Symbol): Option[(TransmittableInfo, TermName)] =
       cache.getOrElse(symbol, {
         if (symbol.isMethod && (symbol.name.toString startsWith "$loci$mar$")) {
           val method = symbol.asMethod
           val tpe = method.info.finalResultType
 
-          val name =
-            if (method.name.toString startsWith "$loci$mar$deferred$") {
-              val name = TermName(s"$$loci$$mar$$${method.name.toString.drop(19)}")
-              val value =
-                if (method.owner.isClass)
-                  method.owner.asClass.selfType member name
-                else
-                  NoSymbol
-
-              if (value.isMethod && value.asMethod.info.finalResultType <:< types.marshallable)
-                Some(name)
-              else
-                None
-            }
-            else
-              Some(method.name)
-
-          if (name.nonEmpty && tpe <:< types.marshallable)
+          if (tpe <:< types.marshallable)
             method.allAnnotations map { _.tree } collectFirst {
               case tree @ Apply(_, List(Literal(Constant(signature: Int))))
                   if tree.tpe <:< types.marshallableInfo =>
@@ -1183,11 +1148,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   intermediate.asSeenFrom(module.classSymbol),
                   result.asSeenFrom(module.classSymbol),
                   proxy.asSeenFrom(module.classSymbol),
-                  if (method.annotations exists { _.tree.tpe <:< types.abstractValue })
+                  if (method.allAnnotations exists { _.tree.tpe <:< types.abstractValue })
                     None
                   else
                     Some(signature)),
-                  name.get,
                   method.name)
             }
           else
@@ -1197,7 +1161,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           None
       })
 
-    private val cache = mutable.Map.empty[Symbol, Option[(TransmittableInfo, TermName, TermName)]]
+    private val cache = mutable.Map.empty[Symbol, Option[(TransmittableInfo, TermName)]]
   }
 
   object PlacedValueSymbol {
@@ -1220,7 +1184,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                   (tree, symbol) match {
                     case (Literal(Constant(null)), _) => Some(None)
-                    case (_, MarshallableSymbol(info, _, _)) => Some(Some(info))
+                    case (_, MarshallableSymbol(info, _)) => Some(Some(info))
                     case _ => None
                   }
                 }

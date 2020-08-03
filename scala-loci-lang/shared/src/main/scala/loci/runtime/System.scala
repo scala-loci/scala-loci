@@ -511,7 +511,7 @@ class System(
 
   def invokeRemoteAccess[U, T](
       arguments: U,
-      placedValue: PlacedValue[U, T],
+      placedValue: PlacedValue[U, _, _, T],
       peer: Peer.Signature,
       remotes: Seq[RemoteRef],
       requestResult: Boolean): Seq[T] = {

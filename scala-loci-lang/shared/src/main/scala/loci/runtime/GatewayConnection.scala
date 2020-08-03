@@ -9,7 +9,7 @@ final class GatewayConnection[R, M](
   system: System)
     extends transmitter.Connection[R, M] {
 
-  private[this] val peerId = (system, peer)
+  private[this] val peerId: AnyRef = (system, peer)
 
   @inline private[loci] def cache[B <: AnyRef](id: Any, body: => B): B =
     system.cache((peerId, id), body)
