@@ -41,11 +41,14 @@ val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.1.1" % Test
+  "org.scalatest" %%% "scalatest" % "3.2.3" % Test
 
+// TODO: since 2.8.0 scribe seems to support scala 2.11, 2.12, and 2.13. 
+// However, there is some code depending on the internal structure of scribe in
+// scala-loci-communication/shared/src/main/scala/loci/logging/package.scala
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "2.7.12"
+    "com.outr" %%% "scribe" % "2.7.13"
   else
     "com.outr" %%% "scribe" % "2.7.9"
 }
@@ -80,7 +83,7 @@ val circe = libraryDependencies ++= {
       "io.circe" %%% "circe-parser" % "0.11.2")
 }
 
-val jsoniter = libraryDependencies += "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.2.4"
+val jsoniter = libraryDependencies += "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.6.2"
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
@@ -91,10 +94,10 @@ val play = libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play" % "[2.5,2.8)" % Provided)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "1.0.0" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "1.1.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "3.8.0"
+  "io.javalin" % "javalin" % "3.11.2"
 
 
 lazy val loci = (project
