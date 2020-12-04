@@ -43,12 +43,9 @@ val macrodeclaration = libraryDependencies +=
 val scalatest = libraryDependencies +=
   "org.scalatest" %%% "scalatest" % "3.2.3" % Test
 
-// TODO: since 2.8.0 scribe seems to support scala 2.11, 2.12, and 2.13. 
-// However, there is some code depending on the internal structure of scribe in
-// scala-loci-communication/shared/src/main/scala/loci/logging/package.scala
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "2.7.13"
+    "com.outr" %%% "scribe" % "3.1.7"
   else
     "com.outr" %%% "scribe" % "2.7.9"
 }

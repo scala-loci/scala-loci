@@ -71,7 +71,7 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
     }
 
     dispatchings foreach { dispatching =>
-      logging.tracing(context).execute(new Runnable {
+      context.execute(new Runnable {
         def run() = {
           var throwable: Throwable = null
 

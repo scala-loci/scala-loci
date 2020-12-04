@@ -1,8 +1,6 @@
 package loci
 package transmitter
 
-import logging.tracingExecutionContext
-
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag

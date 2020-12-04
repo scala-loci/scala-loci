@@ -218,7 +218,7 @@ class Runtime[P](
           }
         }
 
-        logging.tracing(context).execute(new Runnable {
+        context.execute(new Runnable {
           def run() = {
             val instance = state.synchronized {
               if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {

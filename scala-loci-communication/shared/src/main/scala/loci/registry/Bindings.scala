@@ -40,13 +40,11 @@ class Bindings[A <: AbstractionRef](
       message: MessageBuffer, name: String, abstraction: A): Unit = {
     logging.trace(s"handling remote access for $abstraction")
 
-    val value = logging.tracing run {
-      bindings get name match {
-        case null =>
-          Failure(new RemoteAccessException(s"request for $abstraction could not be dispatched"))
-        case dispatch =>
-          dispatch(message, abstraction)
-      }
+    val value = bindings get name match {
+      case null =>
+        Failure(new RemoteAccessException(s"request for $abstraction could not be dispatched"))
+      case dispatch =>
+        dispatch(message, abstraction)
     }
 
     value.failed foreach { exception =>

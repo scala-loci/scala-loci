@@ -47,8 +47,6 @@ class System(
   private def doMain(): Unit = main foreach { main =>
     mainThread synchronized {
       if (!doneMain) {
-        import logging.tracingExecutionContext
-
         implicit val context: ExecutionContext =
           if (separateMainThread)
             contexts.Queued.create()
@@ -280,7 +278,7 @@ class System(
       if (notifyRemote)
         bufferedSend(channel, CloseMessage(channel.name))
 
-      logging.tracing(context).execute(new Runnable {
+      context.execute(new Runnable {
         def run() = channel.doClosed.set()
       })
     }
@@ -344,7 +342,7 @@ class System(
 
   remoteConnections.remoteLeft foreach { remote =>
     doRemoteLeftEarly.fire(remote)
-    logging.tracing(context).execute(new Runnable {
+    context.execute(new Runnable {
       def run() = {
         logging.trace(s"remote left: $remote")
 
@@ -398,7 +396,7 @@ class System(
         if (Option(startedRemotes.putIfAbsent(remote, remote)).isEmpty) {
           logging.trace(s"remote joined: $remote")
 
-          logging.tracing(context).execute(new Runnable {
+          context.execute(new Runnable {
             def run() = doRemoteJoined.fire(remote)
           })
         }
@@ -416,14 +414,14 @@ class System(
           payload) =>
         val signature = Value.Signature.deserialize(abstraction)
         val reference = Value.Reference(channelName, channelName, remote, System.this)
-        logging.tracing(context).execute(new Runnable {
+        context.execute(new Runnable {
           def run() = {
             val messages = mutable.ListBuffer.empty[Message[Method]]
             channelMessages.put(channelName, messages)
 
             logging.trace(s"handling remote access for $signature from $remote over channel $channelName")
 
-            val result = logging.tracing run { values.$loci$dispatch(payload, signature, reference) }
+            val result = values.$loci$dispatch(payload, signature, reference)
 
             if (messageType == ChannelMessage.Type.Request) {
               val message = result match {
