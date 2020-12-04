@@ -14,4 +14,4 @@ jobs:
       with:
         java-version: 11
     - name: Run tests
-      run: sbt test
+      run: JAVA_OPTS=-Xmx1536M sbt test
