@@ -80,7 +80,15 @@ val circe = libraryDependencies ++= {
       "io.circe" %%% "circe-parser" % "0.11.2")
 }
 
-val jsoniter = libraryDependencies += "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.6.2"
+val jsoniter = Seq(
+  libraryDependencies ++= {
+    if (`is 2.12+`(scalaVersion.value))
+      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.6.2")
+    else
+      Seq.empty
+  },
+  skip in compile := !`is 2.12+`(scalaVersion.value),
+  skip in publish := !`is 2.12+`(scalaVersion.value))
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
@@ -188,7 +196,7 @@ lazy val lociSerializerJsoniterScala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-serializer-jsoniter-scala")
   settings (normalizedName := "scala-loci-serializer-jsoniter-scala",
-           jsoniter)
+            jsoniter)
   dependsOn lociCommunication)
 
 lazy val lociSerializerJsoniterScalaJVM = lociSerializerJsoniterScala.jvm
