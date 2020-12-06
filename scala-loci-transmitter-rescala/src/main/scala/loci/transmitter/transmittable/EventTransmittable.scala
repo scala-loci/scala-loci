@@ -18,7 +18,7 @@ protected[transmitter] trait EventTransmittable {
     val interface = RescalaInterface.interfaceFor(scheduler)
 
     ConnectedTransmittable.Proxy(
-      internal = interface.Evt[U],
+      internal = interface.Evt[U](),
 
       provide = (value, context) => {
         val observer =

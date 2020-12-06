@@ -34,7 +34,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
           (false, None, None)
       }
 
-      implicitly[WSProtocolFactory[P]] make (url, host, port, this, tls, tls, tls) match {
+      implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls) match {
         case Failure(exception) =>
           connectionEstablished.set(Failure(exception))
 

@@ -44,7 +44,7 @@ private object WSConnector {
       extends Connector[P] {
 
     def connect(connectionEstablished: Connected[P]) = {
-      val protocolPromise = Promise[P]
+      val protocolPromise = Promise[P]()
 
       def connected(connection: Try[Connection[P]]) = {
         webSocketConnectionEstablished(connection)
@@ -56,7 +56,7 @@ private object WSConnector {
           webSocketRequest,
           WSHandler.handleWebSocket(protocolPromise.future, properties, connected))
         catch {
-          case NonFatal(exception) => (Future failed exception, ())
+          case NonFatal(exception) => (Future.failed(exception), ())
         }
 
       future onComplete {
@@ -66,7 +66,7 @@ private object WSConnector {
           val WSSecurityProperties(isAuthenticated, isProtected, isEncrypted, certificates) =
             WSSecurityProperties(webSocketRequest, response, authenticated = false)
 
-          implicitly[WSProtocolFactory[P]] make (
+          implicitly[WSProtocolFactory[P]].make(
               uri.toString,
               Some(uri.authority.host.address), Some(uri.effectivePort),
               WSConnector.this, isAuthenticated, isEncrypted, isProtected,

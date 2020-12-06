@@ -2,13 +2,13 @@ package loci
 package runtime
 
 import messaging.Message
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable
 import scala.collection.Seq
 
+@compatibility.nowarn("msg=multiarg infix syntax")
 class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
   val dummySig = Peer.Signature.deserialize("[Dummy,[],[[Peer,[],[]]],Module]").get
   val serverSig = Peer.Signature.deserialize("[MyServer,[],[[Server,[],[[Peer,[],[]]]]],Module]").get

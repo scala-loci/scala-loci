@@ -113,11 +113,11 @@ object MessageBuffer {
       val byteBuffer = MessageBufferEncoding.stringToByteBuffer(string) {
         TypedArrayBuffer wrap new ArrayBuffer(_)
       }
-      new MessageBuffer(byteBuffer.arrayBuffer.slice(0, byteBuffer.position))
+      new MessageBuffer(byteBuffer.arrayBuffer().slice(0, byteBuffer.position))
     }
 
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
-    if (!buffer.hasArrayBuffer) {
+    if (!buffer.hasArrayBuffer()) {
       val duplicate = buffer.duplicate()
       duplicate.position(0)
       duplicate.limit(buffer.capacity)
@@ -130,7 +130,7 @@ object MessageBuffer {
       new MessageBuffer(bufferArray.buffer)
     }
     else
-      new MessageBuffer(buffer.arrayBuffer)
+      new MessageBuffer(buffer.arrayBuffer())
 
   def wrapArrayBuffer(arrayBuffer: ArrayBuffer): MessageBuffer =
     new MessageBuffer(arrayBuffer)

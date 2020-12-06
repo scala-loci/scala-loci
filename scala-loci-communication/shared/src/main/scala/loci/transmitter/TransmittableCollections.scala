@@ -109,7 +109,7 @@ trait TransmittableGeneralCollections extends
       type Message = transmittable.Type
     } =
     ConnectedTransmittable.Proxy(
-      internal = Promise[R],
+      internal = Promise[R](),
 
       provide = (value, context) => {
         value.value match {

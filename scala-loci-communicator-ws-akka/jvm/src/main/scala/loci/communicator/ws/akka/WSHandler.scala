@@ -30,13 +30,13 @@ private object WSHandler {
 
       def processMessage(message: Message) = message match {
         case BinaryMessage.Strict(data) =>
-          Some(Future successful data)
+          Some(Future.successful(data))
         case BinaryMessage.Streamed(dataStream) =>
           Some(dataStream.runFold(ByteString()) { _ ++ _ })
         case _ =>
           None
       }
-    } handleWebSocket (ws, properties, connectionEstablished)
+    }.handleWebSocket(ws, properties, connectionEstablished)
   }
 }
 
@@ -68,7 +68,7 @@ private abstract class WSAbstractHandler[M] {
         if (promises.nonEmpty && !promises.head.isCompleted)
           promises.dequeue().success(message)
         else
-          promises.enqueue(Promise successful message)
+          promises.enqueue(Promise.successful(message))
       }
     }
 
@@ -103,7 +103,7 @@ private abstract class WSAbstractHandler[M] {
       promises synchronized {
         if (connectionOpen) {
           if (promises.isEmpty) {
-            val promise = Promise[Option[(Unit, M)]]
+            val promise = Promise[Option[(Unit, M)]]()
             promises.enqueue(promise)
             promise.future
           }
@@ -111,7 +111,7 @@ private abstract class WSAbstractHandler[M] {
             promises.dequeue().future
         }
         else
-          Future successful None
+          Future.successful(None)
       }
     }
 

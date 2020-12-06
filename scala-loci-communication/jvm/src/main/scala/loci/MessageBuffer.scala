@@ -77,7 +77,7 @@ object MessageBuffer {
 
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
     if (!buffer.hasArray) {
-      val duplicate = buffer.duplicate
+      val duplicate = buffer.duplicate()
       duplicate.position(0)
       duplicate.limit(buffer.capacity)
       val array = new Array[Byte](duplicate.remaining)
@@ -85,7 +85,7 @@ object MessageBuffer {
       new MessageBuffer(array)
     }
     else
-      new MessageBuffer(buffer.array)
+      new MessageBuffer(buffer.array())
 
   def wrapArray(array: Array[Byte]): MessageBuffer =
     new MessageBuffer(array)

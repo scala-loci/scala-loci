@@ -23,10 +23,10 @@ private object WSPlayHandler {
 
       def processMessage(message: Message) = message match {
         case BinaryMessage(data) =>
-          Some(Future successful data)
+          Some(Future.successful(data))
         case _ =>
           None
       }
-    } handleWebSocket (ws, properties, connectionEstablished)
+    }.handleWebSocket(ws, properties, connectionEstablished)
   }
 }

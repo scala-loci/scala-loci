@@ -31,7 +31,7 @@ private object WSListener {
           val WSSecurityProperties(isAuthenticated, isProtected, isEncrypted, certificates) =
             WSSecurityProperties(request, authenticatedName.nonEmpty)
 
-          implicitly[WSProtocolFactory[P]] make (
+          implicitly[WSProtocolFactory[P]].make(
               request.uri.toString,
               ip map { _.ip.getHostName },
               ip flatMap { _.port },
@@ -46,7 +46,7 @@ private object WSListener {
               complete(
                 webSocket.handleMessages(
                   WSHandler.handleWebSocket(
-                    Future successful ws, properties, connectionEstablished)))
+                    Future.successful(ws), properties, connectionEstablished)))
           }
         }
       }

@@ -261,7 +261,7 @@ class Registry {
 
 
   def connect(connector: Connector[Connections.Protocol]): Future[RemoteRef] = {
-    val promise = Promise[RemoteRef]
+    val promise = Promise[RemoteRef]()
     connectWithCallback(connector) { promise.complete }
     promise.future
   }

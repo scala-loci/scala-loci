@@ -162,7 +162,7 @@ private object TCPHandler {
               size -= 1
             }
 
-            doReceive.fire(MessageBuffer wrapArray arrayBuilder.result)
+            doReceive.fire(MessageBuffer wrapArray arrayBuilder.result())
           }
           else
             connection.close()

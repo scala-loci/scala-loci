@@ -154,13 +154,13 @@ object Notice {
     }
 
     def toFutureFromTry[U](implicit ev: T <:< Try[U]): Future[U] = {
-      val promise = Promise[U]
+      val promise = Promise[U]()
       foreach { promise.complete(_) }
       promise.future
     }
 
     def toFuture: Future[T] = {
-      val promise = Promise[T]
+      val promise = Promise[T]()
       foreach { promise.success(_) }
       promise.future
     }

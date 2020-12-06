@@ -22,14 +22,14 @@ protected[transmitter] trait RescalaGateway {
 
     @cutOutOfUserComputation lazy val joined: Event[Remote[R]] =
       gateway.cache(joinedId) {
-        val event = Evt[Remote[R]]
+        val event = Evt[Remote[R]]()
         gateway.remoteJoined foreach event.fire
         event
       }
 
     @cutOutOfUserComputation lazy val left: Event[Remote[R]] =
       gateway.cache(leftId) {
-        val event = Evt[Remote[R]]
+        val event = Evt[Remote[R]]()
         gateway.remoteLeft foreach event.fire
         event
       }

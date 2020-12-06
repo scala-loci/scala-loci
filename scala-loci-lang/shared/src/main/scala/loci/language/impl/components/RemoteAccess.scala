@@ -1041,8 +1041,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
   private def methodSignature(symbol: MethodSymbol, returnType: Type) = {
     val name = symbol.name
-    val args = (symbol.paramLists map {
-      _ map { _.info.erasure.typeSymbol.fullName } mkString ("(", ",", ")")
+    val args = (symbol.paramLists map { paramList =>
+      (paramList map { _.info.erasure.typeSymbol.fullName }).mkString("(", ",", ")")
     }).mkString
     val result = returnType.erasure.typeSymbol.fullName
     s"$name$args:$result"

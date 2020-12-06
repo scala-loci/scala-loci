@@ -30,7 +30,7 @@ private object WSPlayListener {
           val isProtected = request.secure
           val isEncrypted = request.secure
 
-          val ws = implicitly[WSProtocolFactory[P]] make (
+          val ws = implicitly[WSProtocolFactory[P]].make(
             request.uri,
             Option(host),
             if (port < 0) None else Some(port),
@@ -38,14 +38,14 @@ private object WSPlayListener {
             Some(Left(request)),
             authenticated.left.toOption.flatten toRight certificates)
 
-          Future successful (ws match {
+          Future.successful(ws match {
             case Failure(exception) =>
               connectionEstablished(Failure(exception))
               Left(Results.NotFound)
 
             case Success(ws) =>
-              Right(WSPlayHandler handleWebSocket (
-                Future successful ws, properties, connectionEstablished))
+              Right(WSPlayHandler.handleWebSocket(
+                Future.successful(ws), properties, connectionEstablished))
           })
         }
 

@@ -138,9 +138,9 @@ trait ConnectionsBase[R, M] {
       if (syncLock.getHoldCount == 0) {
         val handlers = syncHandlers.get
         if (handlers.nonEmpty) {
-          val result = handlers.result
+          val result = handlers.result()
           handlers.clear()
-          result foreach { _.apply }
+          result foreach { _.apply() }
         }
       }
     }

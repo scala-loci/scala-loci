@@ -20,7 +20,7 @@ object RemoteAccessor {
       extends RemoteAccessor {
 
       def asLocalFromAll_?(timeout: Duration): Seq[(Remote[R], T)] =
-        value.remotes zip (Await result (Future sequence value.retrieveValues, timeout))
+        value.remotes zip Await.result(Future.sequence(value.retrieveValues), timeout)
 
       def asLocalFromAll_! : Seq[(Remote[R], T)] = asLocalFromAll_?(Duration.Inf)
     }
@@ -38,7 +38,7 @@ object RemoteAccessor {
       extends RemoteAccessor {
 
       def asLocal_?(timeout: Duration): Option[T] =
-        value.retrieveValue map { Await result (_, timeout) }
+        value.retrieveValue map { Await.result(_, timeout) }
 
       def asLocal_! : Option[T] = asLocal_?(Duration.Inf)
     }
@@ -56,7 +56,7 @@ object RemoteAccessor {
       extends RemoteAccessor {
 
       def asLocal_?(timeout: Duration): T =
-        Await result (value.retrieveValue, timeout)
+        Await.result(value.retrieveValue, timeout)
 
       def asLocal_! : T = asLocal_?(Duration.Inf)
     }
