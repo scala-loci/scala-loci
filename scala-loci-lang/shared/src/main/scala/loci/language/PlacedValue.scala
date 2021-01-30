@@ -17,7 +17,7 @@ sealed trait Placed[+T, -P] extends PlacedValue[T, P] {
   def to[R, U](r: RemoteSbj[R, T, U]): U
   def from[R]: T @uncheckedVariance from R
   def from[R](r: Remote[R]): T @uncheckedVariance fromSingle R
-  def from[R](r0: Remote[R], r1: Remote[R], rn: Remote[R]*): T @uncheckedVariance fromMultiple R
+  def from[R, placed[_, _]](r: RemoteSelection[R, placed]): T @uncheckedVariance placed R
 }
 
 object Placed {

@@ -3,4 +3,5 @@ package language
 
 object feature {
   trait ManualImplicitContext
+  trait ManualSelectionTupling
 }

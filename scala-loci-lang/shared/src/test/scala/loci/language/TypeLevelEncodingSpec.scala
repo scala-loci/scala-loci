@@ -16,7 +16,7 @@ class TypeLevelEncodingSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "typecheck remote access" in {
-    """trait Module {
+    CompileTimeUtils.replace(CompileTimeUtils.replace("""trait Module {
       @peer type Component
       @peer type Server <: Component { type Tie <: Multiple[Client] with Optional[MobileClient] }
       @peer type Client <: Component { type Tie <: Single[Server] with Single[SpecialServer] }
@@ -239,6 +239,8 @@ class TypeLevelEncodingSpec extends AnyFlatSpec with Matchers with NoLogging {
         val h = on[Server].run.capture(server) sbj { implicit! => v: Remote[Server] => 42 }
         h.staticAssertType[Int per Server from Server]
       }
-    }""" should compile
+    }""",
+    "from (client, client)", "from ((client, client))"),
+    "from (server, server)", "from ((server, server))") should compile
   }
 }

@@ -73,6 +73,34 @@ object SourceGenerator {
       files.keys.toSeq
     }
 
+  val remoteSelection =
+    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+      val members = (2 to 22) map { i =>
+        val args = s"Remote[R]${", Remote[R]" * (i - 1)}"
+        s"""  implicit def tuple$i[R](r: Tuple$i[$args]): RemoteSelection[R, fromMultiple] = erased
+        |"""
+      }
+
+      val files = Map(
+        dir / "loci" / "language" / "RemoteSelection.scala" ->
+        s"""package loci
+           |package language
+           |
+           |import scala.language.implicitConversions
+           |
+           |sealed trait RemoteSelection[R, placed[_, _]]
+           |
+           |object RemoteSelection {
+           |  implicit def tuple1[R](r: Tuple1[Remote[R]]): RemoteSelection[R, fromSingle] = erased
+           |${members.mkString}
+           |}
+           |""".stripMargin
+      )
+
+      files foreach { case (file, content) => IO.write(file, content) }
+      files.keys.toSeq
+    }
+
   val functionsBindingBuilder =
     sourceGenerators in Compile += sourceManaged in Compile map { dir =>
       val builders = (0 to 22) map { i =>

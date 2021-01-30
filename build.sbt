@@ -139,6 +139,7 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("scala-loci-lang")
   settings (normalizedName := "scala-loci-lang",
+            SourceGenerator.remoteSelection,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scribe, scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")

@@ -798,8 +798,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           val q"$_[..$tpts](...$exprss)" = expr
 
           if (expr.symbol.owner == symbols.Select) {
-            val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, tree) =>
-              q"$tree.::(${trees.reference}($remote))"
+            val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
+              q"$result.::(${trees.reference}($remote))"
             }
             (remotes, tpts.head.tpe, EmptyTree)
           }
@@ -816,10 +816,24 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     def extractSelection(tree: Tree) =
       if (symbols.froms contains tree.symbol) {
-        val q"$expr.$_[..$tpts](...$exprss)" = tree
+        val (expr, tpts, exprss) = tree match {
+          case q"$expr.$_[..$tpts]($selection(new $tuple(...$exprss)))"
+            if selection.symbol.owner == symbols.remoteSelection &&
+               (tuple.symbol.fullName startsWith names.tuple) =>
+            (expr, tpts, exprss)
+          case q"$expr.$_[..$tpts]($selection($tuple(...$exprss)))"
+            if selection.symbol.owner == symbols.remoteSelection &&
+               (tuple.symbol.owner.fullName startsWith names.tuple) =>
+            (expr, tpts, exprss)
+          case q"$expr.$_[..$tpts](...$exprss)" =>
+            (expr, tpts, exprss)
+        }
+
         if (exprss.nonEmpty) {
-          val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, tree) =>
-            q"$tree.::(${trees.reference}($remote))"
+          val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
+            if (remote.tpe <:!< types.remote)
+              c.abort(tree.pos, "Unexpected selection")
+            q"$result.::(${trees.reference}($remote))"
           }
           (expr, EmptyTree, remotes, tpts.head.tpe)
         }

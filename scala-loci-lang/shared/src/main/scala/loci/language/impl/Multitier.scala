@@ -144,7 +144,7 @@ class Multitier(val c: blackbox.Context) {
 
           val preprocessedAnnottee = Preprocessor.run(c)(
             annottee,
-            Seq(MultitierTypes, AbstractValues, ImplicitContext))
+            Seq(MultitierTypes, AbstractValues, ImplicitContext, SelectionTupling))
 
           if (!documentationCompiler) {
             val typedAnnottee =
