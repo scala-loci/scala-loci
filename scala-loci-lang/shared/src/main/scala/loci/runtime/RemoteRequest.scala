@@ -8,10 +8,11 @@ final class RemoteRequest[V, R, T, L, M, U](
   placedValue: PlacedValue[U, _, _, T],
   peer: Peer.Signature,
   remotes: Seq[RemoteRef],
+  instances: Boolean,
   system: System)
     extends transmitter.Transmission[V, R, T, L, M] {
 
-  private[this] val remoteId: AnyRef = (placedValue, peer, remotes, system)
+  private[this] val remoteId: AnyRef = (placedValue, peer, remotes, instances, system)
 
   @inline private[loci] def cache[B <: AnyRef](id: Any, body: => B): B =
     if (placedValue.stable)
@@ -19,15 +20,29 @@ final class RemoteRequest[V, R, T, L, M, U](
     else
       body
 
-  @inline private[loci] val remoteJoined: Notice.Stream[Remote[R]] =
-    system.remoteJoined(peer, remotes, earlyAccess = true)
+  @inline private[loci] val remoteJoined: Notice.Stream[Remote[R]] = {
+    if (instances && remotes.isEmpty)
+      Notice.Stream[Remote[R]].notice
+    else
+      system.remoteJoined(peer, remotes, earlyAccess = true)
+  }
 
   @inline private[loci] val remoteLeft: Notice.Stream[Remote[R]] =
-    system.remoteLeft(peer, remotes, earlyAccess = true)
+    if (instances && remotes.isEmpty)
+      Notice.Stream[Remote[R]].notice
+    else
+      system.remoteLeft(peer, remotes, earlyAccess = true)
 
-  @inline private[loci] def remotesReferences: Seq[Remote[R]] =
-    system.remoteReferences(peer, remotes, earlyAccess = true)
+  @inline private[loci] def remotesReferences: Seq[Remote[R]] = {
+    if (instances && remotes.isEmpty)
+      Seq.empty
+    else
+      system.remoteReferences(peer, remotes, earlyAccess = true)
+  }
 
   @inline private[loci] def retrieveValues: Seq[T] =
-    system.invokeRemoteAccess(arguments, placedValue, peer, remotes, requestResult = true)
+    if (instances && remotes.isEmpty)
+      Seq.empty
+    else
+      system.invokeRemoteAccess(arguments, placedValue, peer, remotes, requestResult = true)
 }

@@ -21,6 +21,7 @@ object Placement {
     def apply[P, Q, _on_[T, P] <: T on P](r: Remote[P] _on_ Q): Command[P, fromSingle]
     def apply[P](r: Remote[P]): Command[P, fromSingle]
     def apply[P](r0: Remote[P], r1: Remote[P], rn: Remote[P]*): Command[P, fromMultiple]
+    def apply[P](r: Seq[Remote[P]]): Command[P, fromMultiple]
   }
 
   sealed trait Run[P, placed[_, _]] {

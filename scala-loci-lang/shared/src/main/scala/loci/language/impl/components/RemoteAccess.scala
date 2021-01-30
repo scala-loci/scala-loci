@@ -794,22 +794,30 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           tree.symbol.owner == symbols.Call) {
         val q"$expr.$_[..$tpts](...$exprss)" = tree
 
-        val (remotes, remotesType, signature) = {
+        val (remotes, instanceBased, remotesType, signature) = {
           val q"$_[..$tpts](...$exprss)" = expr
 
           if (expr.symbol.owner == symbols.Select) {
-            val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
-              q"$result.::(${trees.reference}($remote))"
-            }
-            (remotes, tpts.head.tpe, EmptyTree)
+            val dynamicRemoteSequence =
+              exprss.head.size == 1 && exprss.head.head.tpe <:< types.remoteSeq
+
+            val remotes =
+              if (dynamicRemoteSequence)
+                q"${exprss.head.head} map ${trees.reference}"
+              else
+                exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
+                  q"$result.::(${trees.reference}($remote))"
+                }
+
+            (remotes, dynamicRemoteSequence, tpts.head.tpe, EmptyTree)
           }
           else if (tpts.nonEmpty)
-            (trees.nil, tpts.head.tpe, accessPeerSignatureByTree(tpts.head))
+            (trees.nil, false, tpts.head.tpe, accessPeerSignatureByTree(tpts.head))
           else
-            (trees.nil, definitions.NothingTpe, EmptyTree)
+            (trees.nil, false, definitions.NothingTpe, EmptyTree)
         }
 
-        Some((exprss.head.head, signature, remotes, remotesType))
+        Some((exprss.head.head, signature, remotes, instanceBased, remotesType))
       }
       else
         None
@@ -830,18 +838,26 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         }
 
         if (exprss.nonEmpty) {
-          val remotes = exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
-            if (remote.tpe <:!< types.remote)
-              c.abort(tree.pos, "Unexpected selection")
-            q"$result.::(${trees.reference}($remote))"
-          }
-          (expr, EmptyTree, remotes, tpts.head.tpe)
+          val dynamicRemoteSequence =
+            exprss.head.size == 1 && exprss.head.head.tpe <:< types.remoteSeq
+
+          val remotes =
+            if (dynamicRemoteSequence)
+              q"${exprss.head.head} map ${trees.reference}"
+            else
+              exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
+                if (remote.tpe <:!< types.remote)
+                  c.abort(tree.pos, "Unexpected selection")
+                q"$result.::(${trees.reference}($remote))"
+              }
+
+          (expr, EmptyTree, remotes, dynamicRemoteSequence, tpts.head.tpe)
         }
         else
-          (expr, accessPeerSignatureByTree(tpts.head), trees.nil, tpts.head.tpe)
+          (expr, accessPeerSignatureByTree(tpts.head), trees.nil, false, tpts.head.tpe)
       }
       else
-        (tree, EmptyTree, trees.nil, definitions.NothingTpe)
+        (tree, EmptyTree, trees.nil, false, definitions.NothingTpe)
 
     def extractRemoteAccess(tree: Tree, peer: Symbol, remotesType: Type) = {
       def preventSuperAccess(tree: Tree): Unit = tree match {
@@ -940,17 +956,19 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
               val index = checkForTransmission(tree, peer)
 
-              val (value, _, remotes, remotesType) =
+              val (value, _, remotes, dynamicRemoteSequence, remotesType) =
                 extractRemoteCall(exprss.head.head) getOrElse
                 extractSelection(exprss.head.head)
 
               val (placedValue, placedValuePeer, arguments) =
                 extractRemoteAccess(value, peer, remotesType)
 
+              val instances = c.freshName(TermName("instances"))
               val exprs = exprss(1).updated(
                 index,
-                q"""new ${createTypeTree(types.remoteRequest.typeConstructor, value.pos)}(
-                      $arguments, $placedValue, $placedValuePeer, $remotes, $$loci$$sys)""")
+                q"""val $instances = $remotes
+                    new ${createTypeTree(types.remoteRequest.typeConstructor, value.pos)}(
+                      $arguments, $placedValue, $placedValuePeer, $instances, $dynamicRemoteSequence, $$loci$$sys)""")
 
               atPos(value.pos) {
                 transform(q"$expr[..${tpts map createTypeTree}](${trees.remoteValue})(..$exprs)")
@@ -958,14 +976,21 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
             case _ =>
               (extractRemoteCall(tree)
-                map { case (value, _, remotes, remotesType) =>
+                map { case (value, _, remotes, dynamicRemoteSequence, remotesType) =>
                   count += 1
 
                   val (placedValue, placedValuePeer, arguments) =
                     extractRemoteAccess(value, peer, remotesType)
 
                   atPos(value.pos) {
-                    transform(q"$$loci$$sys.invokeRemoteAccess($arguments, $placedValue, $placedValuePeer, $remotes, false)")
+                    val instances = c.freshName(TermName("instances"))
+                    val invokeRemoteAccess =
+                      q"$$loci$$sys.invokeRemoteAccess($arguments, $placedValue, $placedValuePeer, $instances, false)"
+
+                    if (dynamicRemoteSequence)
+                      transform(q"val $instances = $remotes; if($instances.nonEmpty) $invokeRemoteAccess")
+                    else
+                      transform(q"val $instances = $remotes; $invokeRemoteAccess")
                   }
                 }
                 getOrElse {
