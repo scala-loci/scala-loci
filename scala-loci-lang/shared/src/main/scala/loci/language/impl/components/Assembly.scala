@@ -112,7 +112,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         case Peer.InheritedBase(_, name, tq"$expr.$_") =>
           tq"$expr.$name"
         case Peer.InheritedBase(tpe, name, _) =>
-          val tq"$expr.$_" = createTypeTree(tpe.underlying, NoPosition)
+          val tq"$expr.$_" = createTypeTree(tpe.underlying, NoPosition): @unchecked
           tq"$expr.$name"
       }
 
@@ -135,7 +135,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
           case tq"$expr.$_" =>
             expr
           case _ =>
-            val tq"$expr.$_" = createTypeTree(base.tpe.underlying, NoPosition)
+            val tq"$expr.$_" = createTypeTree(base.tpe.underlying, NoPosition): @unchecked
             expr
         }
         q"$tree.::($expr.${TermName(s"$$loci$$peer$$sig$$${base.tpe.typeSymbol.name}")})"
@@ -151,7 +151,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
           case tq"$expr.$_" =>
             expr
           case _ =>
-            val tq"$expr.$_" = createTypeTree(tie.tpe.underlying, NoPosition)
+            val tq"$expr.$_" = createTypeTree(tie.tpe.underlying, NoPosition): @unchecked
             expr
         }
 
@@ -275,7 +275,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
     }
 
     // add assembled results to records
-    Assembly(castsInserter transform tree match { case tree: ImplDef => tree }) :: records
+    Assembly((castsInserter transform tree: @unchecked) match { case tree: ImplDef => tree }) :: records
   }
 
   private object castsInserter extends Transformer {

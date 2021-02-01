@@ -63,11 +63,12 @@ class Multitier(val c: blackbox.Context) {
       } || symbol != NoSymbol && hasInstanceOwner(symbol.owner)
     }
 
-    val documentationCompiler =
-      c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
-        case Seq(flag, value) =>
-          flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
-      })
+    val documentationCompiler = c.compilerSettings sliding 2 exists {
+      case Seq(flag, value) =>
+        flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+      case _ =>
+        false
+    }
 
     // the current macro expansion always appears twice
     // see: http://stackoverflow.com/a/20466423
@@ -103,12 +104,12 @@ class Multitier(val c: blackbox.Context) {
             constructorParams += tree.vparamss
 
             val vparamss = tree.vparamss map {
-              _ map {
-                case tree @ ValDef(mods, name, tpt, rhs) =>
-                  if ((mods hasFlag Flag.DEFAULTPARAM) && rhs.nonEmpty)
-                    treeCopy.ValDef(tree, reducedFlags(mods), name, tpt, EmptyTree)
-                  else
-                    tree
+              _ map { tree =>
+                val ValDef(mods, name, tpt, rhs) = tree: @unchecked
+                if ((mods hasFlag Flag.DEFAULTPARAM) && rhs.nonEmpty)
+                  treeCopy.ValDef(tree, reducedFlags(mods), name, tpt, EmptyTree)
+                else
+                  tree
               }
             }
 
@@ -148,7 +149,7 @@ class Multitier(val c: blackbox.Context) {
 
           if (!documentationCompiler) {
             val typedAnnottee =
-              try retyper typecheck preprocessedAnnottee match { case tree: ImplDef => tree }
+              try { (retyper typecheck preprocessedAnnottee: @unchecked) match { case tree: ImplDef => tree } }
               catch improveTypecheckingErrorMessage
 
             fixAnnotteeSymbols(typedAnnottee)
@@ -189,7 +190,7 @@ class Multitier(val c: blackbox.Context) {
           q"new ${termNames.ROOTPKG}.loci.runtime.MultitierModule" :: _
         }
 
-        annottee match {
+        (annottee: @unchecked) match {
           case ModuleDef(_, name, impl) =>
             treeCopy.ModuleDef(annottee, mods, name, impl)
           case ClassDef(_, name, tparams, impl) =>
@@ -443,7 +444,7 @@ class Multitier(val c: blackbox.Context) {
       val compilationError =
         q"${termNames.ROOTPKG}.loci.language.impl.Multitier.compilationFailure(${e.getMessage})"
 
-      annottee match {
+      (annottee: @unchecked) match {
         case ModuleDef(mods, name, _) =>
           atPos(pos) { q"$mods object $name { $compilationError }" }
         case ClassDef(mods, name, _, _) if mods hasFlag Flag.TRAIT =>

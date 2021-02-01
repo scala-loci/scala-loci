@@ -123,7 +123,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
       events should have size 13
 
 
-      val Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) = events
+      val Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) = events: @unchecked
 
 
       Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (

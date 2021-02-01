@@ -83,7 +83,7 @@ object Selector {
         contextBuilder(contextBuilders, index)
 
       def transmittable[U <: Delegates[D]](transmittables: U, index: Int)
-      : Transmittable.Aux[B, I, R, P, T] = transmittables.delegates match {
+      : Transmittable.Aux[B, I, R, P, T] = (transmittables.delegates: @unchecked) match {
         case transmittable: Transmittable.Aux[B, I, R, P, T] @unchecked =>
           transmittable
         case delegates: (D / Transmittable.Aux[B, I, R, P, T]) @unchecked =>

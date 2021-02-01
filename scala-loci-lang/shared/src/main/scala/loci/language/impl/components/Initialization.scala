@@ -139,7 +139,7 @@ class Initialization[C <: blackbox.Context](val engine: Engine[C]) extends Compo
 
     logging.debug(" Checking nested multitier modules")
 
-    records :+ Initialized(transformer transform module.tree match { case tree: ImplDef => tree })
+    records :+ Initialized((transformer transform module.tree: @unchecked) match { case tree: ImplDef => tree })
   }
 
   private val multitierModules: Set[Symbol] = {

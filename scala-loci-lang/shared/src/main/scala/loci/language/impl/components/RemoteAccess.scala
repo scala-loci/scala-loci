@@ -171,7 +171,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         (tree collect {
           case tree @ q"$_[..$_](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
             val index = checkForTransmission(tree, peer)
-            val q"$_[..$_](...$transmissionExprss)" = exprss(1)(index)
+            val q"$_[..$_](...$transmissionExprss)" = exprss(1)(index): @unchecked
             transmissionExprss.headOption.toList flatMap {
               _ map extractTransmittable filter { _.nonEmpty }
             }
@@ -404,7 +404,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             }
 
             def contextBuilder(tpe: Type): Tree = {
-              memberType(tpe, names.transmittables) match {
+              (memberType(tpe, names.transmittables): @unchecked) match {
                 case tpe if tpe <:< types.delegates =>
                   q"${trees.delegating}(${contextBuilders(tpe.typeArgs.head)})"
 
@@ -492,11 +492,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               None
         }).flatten
 
-        resolveTransmittables(
+        (resolveTransmittables(
             Seq(definedArgTransmittable -> argTransmittableType, definedResTransmittable -> resTransmittableType),
             pos,
             inheritedPlacedValue.nonEmpty,
-            transmittablesRequired) match {
+            transmittablesRequired): @unchecked) match {
           case Left(trees) =>
             ((symbol, termNames.EMPTY, arg, subjective, false), None, trees)
 
@@ -589,7 +589,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 }
 
                 val invocation = (subjective
-                  map { case subjective @ TypeRef(pre, sym, _) =>
+                  map { subjective =>
+                    val TypeRef(pre, sym, _) = subjective: @unchecked
                     (moduleStablePath(pre, q"${module.self}")
                       map { module =>
                         val name = TermName(s"$$loci$$peer$$sig$$${sym.name}")
@@ -653,11 +654,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           collectFirst { case tree if ancestors contains tree.symbol => tree.pos }
           getOrElse symbol.pos)
 
-        resolveTransmittables(
+        (resolveTransmittables(
             Seq(definedTransmittable -> transmittableType),
             pos,
             inheritedPlacedValue = false,
-            transmittablesRequired = false) match {
+            transmittablesRequired = false): @unchecked) match {
           case Left(trees) =>
             trees
           case Right(Seq()) =>
@@ -792,10 +793,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       if (tree.nonEmpty &&
           tree.symbol != null &&
           tree.symbol.owner == symbols.Call) {
-        val q"$expr.$_[..$tpts](...$exprss)" = tree
+        val q"$expr.$_[..$tpts](...$exprss)" = tree: @unchecked
 
         val (remotes, instanceBased, remotesType, signature) = {
-          val q"$_[..$tpts](...$exprss)" = expr
+          val q"$_[..$tpts](...$exprss)" = expr: @unchecked
 
           if (expr.symbol.owner == symbols.Select) {
             val dynamicRemoteSequence =
@@ -824,7 +825,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     def extractSelection(tree: Tree) =
       if (symbols.froms contains tree.symbol) {
-        val (expr, tpts, exprss) = tree match {
+        val (expr, tpts, exprss) = (tree: @unchecked) match {
           case q"$expr.$_[..$tpts]($selection(new $tuple(...$exprss)))"
             if selection.symbol.owner == symbols.remoteSelection &&
                (tuple.symbol.fullName startsWith names.tuple) =>
@@ -868,7 +869,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         case _ =>
       }
 
-      val q"$expr[..$_](...$exprss)" = tree
+      val q"$expr[..$_](...$exprss)" = tree: @unchecked
 
       preventSuperAccess(expr)
 
@@ -1011,7 +1012,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
   private def checkForTransmission(tree: Tree, peer: Symbol): Int = {
-    val q"$_[..$_](...$exprss)" = tree
+    val q"$_[..$_](...$exprss)" = tree: @unchecked
 
     if (exprss.size != 2 || exprss.head.size != 1)
       c.abort(tree.pos, "Invalid remote accessor: " +
@@ -1026,7 +1027,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     exprss(1) foreach { expr =>
       if (expr.tpe real_<:< types.transmission) {
-        val q"$_[..$params](...$_)" = expr
+        val q"$_[..$params](...$_)" = expr: @unchecked
 
         val value =
           if (params.size < 11)
@@ -1035,7 +1036,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             params(4).tpe
 
         val Seq(placedValue, placedPeer, _, to, _) =
-          extractTag(expr.tpe, types.transmission, tree.pos).typeArgs
+          extractTag(expr.tpe, types.transmission, tree.pos).typeArgs: @unchecked
 
         val expectedValue =
           decomposePlacementType(tpe, EmptyTree, arg.symbol, arg.pos, moduleDefinition = false) match {
@@ -1180,8 +1181,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             method.allAnnotations map { _.tree } collectFirst {
               case tree @ Apply(_, List(Literal(Constant(signature: Int))))
                   if tree.tpe <:< types.marshallableInfo =>
-                val Seq(base, result, proxy) = tpe.typeArgs
-                val Seq(intermediate) = tree.tpe.typeArgs
+                val Seq(base, result, proxy) = tpe.typeArgs: @unchecked
+                val Seq(intermediate) = tree.tpe.typeArgs: @unchecked
                 (TransmittableInfo(
                   base.asSeenFrom(module.classSymbol),
                   intermediate.asSeenFrom(module.classSymbol),

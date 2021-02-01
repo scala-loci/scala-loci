@@ -281,21 +281,22 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               }
 
               // ensure that peer-specific specialized implementations agree on their modalities
-              if (specializations.size > 1)
-                specializations sliding 2 foreach {
-                  case Seq((_, _, modality0), (_, _, modality1)) =>
-                    val equal = (modality0, modality1) match {
-                      case (Modality.Subjective(peer1), Modality.Subjective(peer2)) =>
-                        peer1 =:= peer2
-                      case (Modality.Local, Modality.Local) | (Modality.None, Modality.None) =>
-                        true
-                      case _ =>
-                        false
-                    }
+              specializations sliding 2 foreach {
+                case Seq((_, _, modality0), (_, _, modality1)) =>
+                  val equal = (modality0, modality1) match {
+                    case (Modality.Subjective(peer1), Modality.Subjective(peer2)) =>
+                      peer1 =:= peer2
+                    case (Modality.Local, Modality.Local) | (Modality.None, Modality.None) =>
+                      true
+                    case _ =>
+                      false
+                  }
 
-                    if (!equal)
-                      c.abort(tree.pos, "Placed definitions must agree on subjective and local modalities")
-                }
+                  if (!equal)
+                    c.abort(tree.pos, "Placed definitions must agree on subjective and local modalities")
+
+                case _ =>
+              }
 
               // ensure that peer-specific specialized implementations exist
               // 1) for the common super peer
@@ -325,7 +326,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               val (Seq((common, _, _)), specialized) = inferredUnit ++ specializations partition {
                 case (_, `peer`, _) => true
                 case _ => false
-              }
+              }: @unchecked
 
               concreteValues(
                 valOrDefDef map { (mods, name, tpt, _) => (mods, name, tpt, common) },
@@ -670,7 +671,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
           if (treeType real_<:< types.placedValue) {
             val localPeer = peerType exists { tpe =>
-              val Seq(_, peer) = extractTag(treeType, types.placedValue, tree.pos).typeArgs
+              val Seq(_, peer) = extractTag(treeType, types.placedValue, tree.pos).typeArgs: @unchecked
               tpe <:< peer
             }
 
@@ -945,7 +946,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
           // modality: subjective, but wrong syntax
           case tpe if tpe real_<:< types.subjective =>
-            val Seq(value, peer) = extractTag(tpe, types.subjective, pos).typeArgs
+            val Seq(value, peer) = extractTag(tpe, types.subjective, pos).typeArgs: @unchecked
             c.abort(pos, s"Subjective placed type must be given as: $value per ${peer.typeSymbol.name}")
 
           // modality: local
@@ -968,7 +969,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       case tpe =>
         // wrong syntax for placed values
         if (tpe real_<:< types.placedValue) {
-          val Seq(value, peer) = extractTag(tpe, types.placedValue, pos).typeArgs
+          val Seq(value, peer) = extractTag(tpe, types.placedValue, pos).typeArgs: @unchecked
 
           val (selectedValue, selection) =
             if (value real_<:< types.singleSelection)
@@ -980,7 +981,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
           val subjectiveValue =
             if (selectedValue real_<:< types.subjective) {
-              val Seq(value, peer) = extractTag(selectedValue, types.subjective, pos).typeArgs
+              val Seq(value, peer) = extractTag(selectedValue, types.subjective, pos).typeArgs: @unchecked
               s"$value per ${peer.typeSymbol.name}"
             }
             else
@@ -1186,7 +1187,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         if tree.nonEmpty &&
            (tree.symbol.owner == symbols.On ||
             tree.symbol.owner == symbols.Placed) =>
-      val q"(..$_) => $expr" = exprss.head.head
+      val q"(..$_) => $expr" = exprss.head.head: @unchecked
       expr
 
     case _ =>

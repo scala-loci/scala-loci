@@ -349,7 +349,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   implicit class ImplDefOps(tree: ImplDef) {
     def map(f: (Modifiers, List[Tree], ValDef, List[Tree]) =>
-               (Modifiers, List[Tree], ValDef, List[Tree])): ImplDef = tree match {
+               (Modifiers, List[Tree], ValDef, List[Tree])): ImplDef = (tree: @unchecked) match {
       case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, body)) =>
         val (modsNew, parentsNew, selfNew, bodyNew) = f(mods, parents, self, body)
         treeCopy.ClassDef(tree, modsNew, tpname, tparams,
@@ -364,7 +364,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   implicit class ValOrDefDefOps(tree: ValOrDefDef) {
     def map(f: (Modifiers, TermName, Tree, Tree) =>
-               (Modifiers, TermName, Tree, Tree)): ValOrDefDef = tree match {
+               (Modifiers, TermName, Tree, Tree)): ValOrDefDef = (tree: @unchecked) match {
       case ValDef(mods, name, tpt, rhs) =>
         val (modsNew, nameNew, tptNew, rhsNew) = f(mods, name, tpt, rhs)
         treeCopy.ValDef(tree, modsNew, nameNew, tptNew, rhsNew)

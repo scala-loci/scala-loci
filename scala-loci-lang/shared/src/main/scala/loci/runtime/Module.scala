@@ -24,7 +24,7 @@ object Module {
         list(signature.path map string)).toString
 
     def deserialize(signature: String): Try[Signature] = Try {
-      val Seq(name, path) = parse(signature).asElements(2)
+      val Seq(name, path) = parse(signature).asElements(2): @unchecked
       Signature(
         name.asString,
         path.asList map { _.asString })

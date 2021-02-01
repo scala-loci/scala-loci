@@ -78,7 +78,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private def liftClass(tree: ClassDef, valuePrefix: Tree): (Option[Tree], Option[Tree]) =
     if (isUnlifted(tree.symbol)) {
-      val ClassDef(_, name, tparams, Template(parents, self, _)) = tree
+      val ClassDef(_, name, tparams, Template(parents, self, _)) = tree: @unchecked
 
       val mods = tree.mods mapAnnotations { multitierStubAnnotation :: _ }
 
@@ -121,7 +121,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private def liftModule(tree: ModuleDef, valuePrefix: Tree): (Option[Tree], Option[Tree]) =
     if (isUnlifted(tree.symbol)) {
-      val ModuleDef(mods, name, Template(parents, self, body)) = tree
+      val ModuleDef(mods, name, Template(parents, self, body)) = tree: @unchecked
 
       val companion = tree.symbol.companion
 
@@ -158,7 +158,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private def addImplicitArgument(tree: Tree, arg: Tree): Tree =
       if (takesImplicits(tree.symbol.asMethod)) {
-        val Apply(fun, args) = tree
+        val Apply(fun, args) = tree: @unchecked
         treeCopy.Apply(tree, fun, args :+ arg)
       }
       else
@@ -182,7 +182,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   // construct the stable prefix path within a multitier module
   // consisting of multitier module instances
   private def multitierPrefixPath(tpe: Type): Option[String] = {
-    def multitierPrefixPath(tree: Tree, multitier: Boolean): Option[String] = tree match {
+    def multitierPrefixPath(tree: Tree, multitier: Boolean): Option[String] = (tree: @unchecked) match {
       case EmptyTree =>
         Some("")
       case Select(qualifier, name) =>
@@ -378,7 +378,7 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   // of other multitier module instances
   private def validateInstantiatability(tree: Tree): Unit =
     if (tree.tpe != null) {
-      val TypeRef(pre, _, _) = tree.tpe
+      val TypeRef(pre, _, _) = tree.tpe: @unchecked
 
       multitierPrefixPath(pre) foreach { path =>
         if (path.nonEmpty && isUnlifted(tree.symbol))

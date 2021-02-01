@@ -27,11 +27,12 @@ object TransmittableResolution {
     // replace type parameters of macro application that are not inferred with existentials
     // replace `Nothing` types with different `Transmittable.Bottom` types and remember the corresponding original type
     def createResolutionType = {
-      val TypeRef(bottomPre, bottomSym, _) = typeOf[Transmittable.Bottom[Any]]
+      val TypeRef(bottomPre, bottomSym, _) =
+        typeOf[Transmittable.Bottom[Any]]: @unchecked
       val TypeRef(singletonPre, singletonSym, _) =
-        typeOf[Transmittable.DependantValue[Any, Any, Any, Any]]
+        typeOf[Transmittable.DependantValue[Any, Any, Any, Any]]: @unchecked
       val ExistentialType(existentialQuantified, TypeRef(auxPre, auxSym, existentialArgs)) =
-        typeOf[Transmittable.Aux[_, _, _, _, _]]
+        typeOf[Transmittable.Aux[_, _, _, _, _]]: @unchecked
 
       var quantified = List.empty[Symbol]
       var args = List.empty[Type]
@@ -135,7 +136,7 @@ object TransmittableResolution {
     // and type-check against the expected type
     def createExpectedResolutionType = {
       val ExistentialType(existentialQuantified, TypeRef(pre, sym, existentialArgs)) =
-        typeOf[Transmittable.Aux.Resolution[_, _, _, _, _]]
+        typeOf[Transmittable.Aux.Resolution[_, _, _, _, _]]: @unchecked
 
       var quantified = List.empty[Symbol]
       var args = List.empty[Type]

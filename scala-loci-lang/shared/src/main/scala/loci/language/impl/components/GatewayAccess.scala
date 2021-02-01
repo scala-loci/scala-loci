@@ -81,12 +81,12 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     }
 
     val name = TermName(s"$$loci$$peer$$sig$$${tpe.typeSymbol.name}")
-    val Select(qualifier, _) = createTypeTree(tpe, pos)
+    val Select(qualifier, _) = createTypeTree(tpe, pos): @unchecked
     Select(transformer transform qualifier, name)
   }
 
   private def checkForConnection(tree: Tree): Int = {
-    val q"$_[..$_](...$exprss)" = tree
+    val q"$_[..$_](...$exprss)" = tree: @unchecked
 
     if (exprss.size != 2 || exprss.head.size != 1)
       c.abort(tree.pos, "Invalid gateway accessor: " +

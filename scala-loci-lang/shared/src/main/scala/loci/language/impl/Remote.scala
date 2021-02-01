@@ -8,7 +8,7 @@ object Remote {
   def asRemote[P: c.WeakTypeTag](c: blackbox.Context): c.Tree = {
     import c.universe._
 
-    val q"$expr.asRemote[$tpt]" = c.macroApplication
+    val q"$expr.asRemote[$tpt]" = c.macroApplication: @unchecked
 
     val enclosingMultitierMacro = c.enclosingMacros exists { c =>
       import c.universe._
@@ -28,11 +28,12 @@ object Remote {
       }
     }
 
-    val documentationCompiler =
-      c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
-        case Seq(flag, value) =>
-          flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
-      })
+    val documentationCompiler = c.compilerSettings sliding 2 exists {
+      case Seq(flag, value) =>
+        flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+      case _ =>
+        false
+    }
 
     if (!enclosingMultitierMacro && !documentationCompiler) {
       val remote = weakTypeOf[Remote[P]]

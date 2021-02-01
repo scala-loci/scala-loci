@@ -26,17 +26,17 @@ object PlacedType {
 
 
     def placedClean(p: Type, l: Type, t: Type, u: Type): Type = {
-      val TypeRef(pre, sym, _) = typeOf[PlacedClean.MacroGenerated[Any, Any, Any, Any, Any]]
+      val TypeRef(pre, sym, _) = typeOf[PlacedClean.MacroGenerated[Any, Any, Any, Any, Any]]: @unchecked
       internal.typeRef(pre, sym, List(p, l, t, t, u))
     }
 
     def on(t: Type, p: Type): Type = {
-      val TypeRef(pre, sym, _) = typeOf[Any on Any]
+      val TypeRef(pre, sym, _) = typeOf[Any on Any]: @unchecked
       internal.typeRef(pre, sym, List(t, p))
     }
 
     def per(t: Type, p: Type): Type = {
-      val ExistentialType(_, TypeRef(pre, sym, _)) = subjective
+      val ExistentialType(_, TypeRef(pre, sym, _)) = subjective: @unchecked
       internal.typeRef(pre, sym, List(t, p))
     }
 
@@ -55,7 +55,7 @@ object PlacedType {
             if valuePeer <:< placed &&
                !(valuePeer <:< definitions.NothingTpe) &&
                !(valuePeer <:< definitions.NullTpe) =>
-          val Seq(placed, peer) = valuePeer.typeArgs
+          val Seq(placed, peer) = valuePeer.typeArgs: @unchecked
           if (value =:= placed)
             Some(placed -> peer)
           else
@@ -70,7 +70,7 @@ object PlacedType {
             if tpe <:< subjective &&
                !(tpe <:< definitions.NothingTpe) &&
                !(tpe <:< definitions.NullTpe) =>
-          val Seq(value, peer) = tpe.typeArgs
+          val Seq(value, peer) = tpe.typeArgs: @unchecked
           Some(value -> peer)
         case _ =>
           None

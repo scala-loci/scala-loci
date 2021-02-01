@@ -200,7 +200,7 @@ private class WebRTCChannelConnector(
         connection
       }
 
-      channel.readyState match {
+      (channel.readyState: @unchecked) match {
         case RTCDataChannelState.connecting =>
           // strange fix for strange issue with Chromium
           val handle = js.timers.setTimeout(1.day) { channel.readyState }

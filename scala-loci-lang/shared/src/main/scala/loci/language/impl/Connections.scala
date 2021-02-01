@@ -8,13 +8,13 @@ class Connections(val c: blackbox.Context) {
   import c.universe._
 
   def setup(setup: Tree): Tree = {
-    val q"$_.$name[$tpt](...$_)" = c.macroApplication
+    val q"$_.$name[$tpt](...$_)" = c.macroApplication: @unchecked
 
     q"${termNames.ROOTPKG}.loci.language.Connections.$name(${signature(tpt)}, $setup)"
   }
 
   def factory(factory: Tree)(args: Tree*): Tree = {
-    val q"$_.$name[$tpt](...$_)" = c.macroApplication
+    val q"$_.$name[$tpt](...$_)" = c.macroApplication: @unchecked
     val arguments =
       if (args.size == 1)
         args :+ q"${termNames.ROOTPKG}.scala.collection.immutable.Map.empty"
@@ -28,6 +28,8 @@ class Connections(val c: blackbox.Context) {
     c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
       case Seq(flag, value) =>
         flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+      case _ =>
+        false
     })
 
   private def signature(tpt: Tree) = {

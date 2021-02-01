@@ -89,7 +89,7 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
           ServerClientApp.$loci$peer$sig$Client,
           Seq.empty,
           earlyAccess = true)(0)),
-        requestResult = true)
+        requestResult = true): @unchecked
 
       val Seq(res3) = serverSystem.invokeRemoteAccess(
         (),
@@ -99,7 +99,7 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
           ServerClientApp.$loci$peer$sig$Client,
           Seq.empty,
           earlyAccess = true)(1)),
-        requestResult = true)
+        requestResult = true): @unchecked
 
       val res4 = client0System.invokeRemoteAccess(
         4,

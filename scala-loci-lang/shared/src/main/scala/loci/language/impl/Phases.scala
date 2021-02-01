@@ -75,7 +75,8 @@ object Phases {
 
   private def edges(phases: Seq[Phase]) = (phases
     combinations 2
-    flatMap { case Seq(p0, p1) =>
+    flatMap { phases =>
+      val Seq(p0, p1) = phases: @unchecked
       Seq(p0 -> p1, p1 -> p0)
     }
     filter { case (p0, p1) =>

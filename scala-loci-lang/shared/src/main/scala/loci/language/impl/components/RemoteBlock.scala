@@ -49,7 +49,7 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
         val liftedDefinitions = mutable.ListBuffer.empty[Tree]
 
         def liftRemoteBlock(tree: Tree, resultUsed: Boolean) = {
-          val q"$expr.$_[..$_](...$exprss)" = tree
+          val q"$expr.$_[..$_](...$exprss)" = tree: @unchecked
           val name = TermName(s"$$loci$$anonymous$$$index")
           index += 1
 
@@ -107,7 +107,7 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           // generate the canonical type alias
           // (since we check later for that types are in their canonical form)
           val fixedTreeType = {
-            val Seq(value, peer) = tree.tpe.underlying.typeArgs
+            val Seq(value, peer) = tree.tpe.underlying.typeArgs: @unchecked
 
             if (value <:< types.singleSelection)
               types.fromSingle mapArgs { _ => List(value.typeArgs.head, peer) }
@@ -123,7 +123,7 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           val tpe = internal.methodType(
             captures map { case (_, symbol) => symbol },
             types.on mapArgs { _ =>
-              val Seq(value, peer) = tree.tpe.underlying.typeArgs
+              val Seq(value, peer) = tree.tpe.underlying.typeArgs: @unchecked
 
               val selected =
                 if (value <:< types.singleSelection || value <:< types.multipleSelection)
@@ -256,7 +256,7 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           internal.classInfoType(parents, scope, typeSymbol)
         }
 
-        val info = module.classSymbol.info match {
+        val info = (module.classSymbol.info: @unchecked) match {
           case PolyType(typeParams, ClassInfoType(parents, decls, typeSymbol)) =>
             internal.polyType(typeParams, classInfoType(parents, decls, typeSymbol))
           case ClassInfoType(parents, decls, typeSymbol) =>

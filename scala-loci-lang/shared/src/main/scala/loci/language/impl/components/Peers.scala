@@ -25,10 +25,22 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   import moduleInfo._
 
 
-  type Tie = Tie.Value
+  sealed trait Tie extends Ordered[Tie] {
+    val key: Int
+    def compare(that: Tie) = key - that.key
+  }
 
-  object Tie extends Enumeration {
-    val Multiple, Optional, Single = Value
+  object Tie {
+    case object Multiple extends Tie { val key = 0 }
+    case object Optional extends Tie { val key = 1 }
+    case object Single extends Tie { val key = 2 }
+
+    def apply(key: Int): Tie = key match {
+      case 0 => Multiple
+      case 1 => Optional
+      case 2 => Single
+      case _ => throw new NoSuchElementException(s"key not found: $key")
+    }
   }
 
   case class Peer(symbol: Symbol, name: TypeName,
@@ -56,9 +68,9 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   def tieMultiplicity(ties: List[Peer.Tie], tpe: Type): Option[Tie] =
     ties.foldLeft(Option.empty[Int]) { (multiplicity, tie) =>
       if (tie.tpe =:= tpe)
-        multiplicity map { _ max tie.multiplicity.id } orElse Some(tie.multiplicity.id)
+        multiplicity map { _ max tie.multiplicity.key } orElse Some(tie.multiplicity.key)
       else if (tie.tpe <:< tpe)
-        multiplicity orElse Some(Tie.Multiple.id)
+        multiplicity orElse Some(Tie.Multiple.key)
       else
         multiplicity
     } map { Tie(_) }
@@ -387,11 +399,11 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private def validate(peer: Peer, tiesInferred: Boolean, pos: Position): Unit = {
     // ensure that peers only appear once as super peer
-    peer.bases combinations 2 foreach {
-      case Seq(Peer.Base(tpe0, _, _), Peer.Base(tpe1, _, tree1)) =>
-        if (tpe0 =:= tpe1)
-          c.abort(tree1.pos orElse pos,
-            s"peer type cannot appear multiple times as super peer: $tpe1")
+    peer.bases combinations 2 foreach { bases =>
+      val Seq(Peer.Base(tpe0, _, _), Peer.Base(tpe1, _, tree1)) = bases: @unchecked
+      if (tpe0 =:= tpe1)
+        c.abort(tree1.pos orElse pos,
+          s"peer type cannot appear multiple times as super peer: $tpe1")
     }
 
 
@@ -455,7 +467,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         (overridden map { _.symbol.asType.toType -> "overridden" })
 
       peers foreach { case (tpe, relation) =>
-        val TypeRef(pre, _, _) = tpe
+        val TypeRef(pre, _, _) = tpe: @unchecked
         val base = tpe.typeSymbol
         val baseTie = tieType(base).asSeenFrom(pre, base.owner).asSeenFrom(module.classSymbol)
 
@@ -473,28 +485,28 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
           filter { case Peer.Tie(tpe1, _, _) => tpe1 <:< tpe0 }
           sortWith { case (Peer.Tie(tpe0, _, _), Peer.Tie(tpe1, _, _)) => tpe0 <:< tpe1 })
 
-        if (subtypes.size > 1)
-          subtypes sliding 2 foreach {
-            case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
-              if (tpe1 =:= tpe2) {
-                if (multiplicity1 != multiplicity2)
-                  c.abort(tree2.pos orElse pos,
-                    s"$multiplicity1 tie required for $tpe2 " +
-                    s"when specified for same peer $tpe1")
-              }
-              else if (tpe1 <:< tpe2) {
-                if (multiplicity1 < multiplicity2)
-                  c.abort(tree2.pos orElse pos,
-                    s"$multiplicity1 tie required for $tpe2 " +
-                    s"when specified for sub peer $tpe1")
-              }
-              else {
-                if (multiplicity0 != Tie.Multiple)
-                  c.abort(tree0.pos orElse pos,
-                    s"${Tie.Multiple} tie required for $tpe0 " +
-                    s"since unrelated sub peers are tied: $tpe1 and $tpe2")
-              }
-          }
+        subtypes sliding 2 foreach {
+          case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
+            if (tpe1 =:= tpe2) {
+              if (multiplicity1 != multiplicity2)
+                c.abort(tree2.pos orElse pos,
+                  s"$multiplicity1 tie required for $tpe2 " +
+                  s"when specified for same peer $tpe1")
+            }
+            else if (tpe1 <:< tpe2) {
+              if (multiplicity1 < multiplicity2)
+                c.abort(tree2.pos orElse pos,
+                  s"$multiplicity1 tie required for $tpe2 " +
+                  s"when specified for sub peer $tpe1")
+            }
+            else {
+              if (multiplicity0 != Tie.Multiple)
+                c.abort(tree0.pos orElse pos,
+                  s"${Tie.Multiple} tie required for $tpe0 " +
+                  s"since unrelated sub peers are tied: $tpe1 and $tpe2")
+            }
+          case _ =>
+        }
       }
     }
   }
@@ -515,9 +527,9 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     // merge tie specification of overridden peers
     val mergedTies = (overriddenPeers(symbol) map { _.ties }).foldLeft(ties ++ baseTies) { (ties0, ties1) =>
       val updatedTies0 = ties0 map { tie0 =>
-        val multiplicity = ties1.foldLeft(tie0.multiplicity.id) { (multiplicity0, tie1) =>
+        val multiplicity = ties1.foldLeft(tie0.multiplicity.key) { (multiplicity0, tie1) =>
           if (tie1.tpe =:= tie0.tpe)
-            multiplicity0 max tie1.multiplicity.id
+            multiplicity0 max tie1.multiplicity.key
           else
             multiplicity0
         }
@@ -537,18 +549,17 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         filter { case Peer.Tie(tpe, _, _) => tpe <:< tie.tpe }
         sortWith { case (Peer.Tie(tpe0, _, _), Peer.Tie(tpe1, _, _)) => tpe0 <:< tpe1 })
 
-      if (subtypes.size > 1)
-        (subtypes sliding 2) forall {
-          case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
-            if (tpe1 =:= tpe2)
-              multiplicity1 == multiplicity2 && tie.multiplicity.id >= multiplicity2.id
-            else if (tpe1 <:< tpe2)
-              multiplicity1 >= multiplicity2 && tie.multiplicity.id >= multiplicity2.id
-            else
-              tie.multiplicity == Tie.Multiple
-        }
-      else
-        true
+      (subtypes sliding 2) forall {
+        case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
+          if (tpe1 =:= tpe2)
+            multiplicity1 == multiplicity2 && tie.multiplicity.key >= multiplicity2.key
+          else if (tpe1 <:< tpe2)
+            multiplicity1 >= multiplicity2 && tie.multiplicity.key >= multiplicity2.key
+          else
+            tie.multiplicity == Tie.Multiple
+        case _ =>
+          true
+      }
     }
 
     val moduleName = s"${module.name}.this."
@@ -634,7 +645,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       sym == module.classSymbol ||
       sym.isModule && sym.asModule.moduleClass == module.classSymbol
 
-    tpe match {
+    (tpe: @unchecked) match {
       case TypeRef(pre, _, _) =>
         isModuleSymbol(pre.typeSymbol) || isMultitierModule(pre) && nestedPeer(pre)
       case SingleType(pre, _) =>

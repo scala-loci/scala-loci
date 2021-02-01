@@ -95,6 +95,8 @@ class Instance(val c: blackbox.Context) {
     c.compilerSettings.size > 1 && (c.compilerSettings sliding 2 exists {
       case Seq(flag, value) =>
         flag == "-d" && ((value endsWith "/api") || (value endsWith "\\api"))
+      case _ =>
+        false
     })
 
   def retrieve(retrievable: Tree): Tree =
@@ -146,11 +148,12 @@ class Instance(val c: blackbox.Context) {
 
             val (placedPrefix, placedPath) = splitPrefixPath(prefix)
 
-            val Seq(value, peer) =
+            val Seq(value, peer) = {
               if (expr.tpe <:< types.on)
                 expr.tpe.widen.typeArgs
               else
                 Seq(expr.tpe, NoType)
+            }: @unchecked
 
             if (peer != NoType && !(instancePeer <:< peer))
               c.abort(pos, s"$expr is not placed on $peer")
@@ -168,7 +171,7 @@ class Instance(val c: blackbox.Context) {
 
             val access =
               if (peer != NoType && value <:< types.per) {
-                val Seq(subjective, remote) = value.widen.typeArgs
+                val Seq(subjective, remote) = value.widen.typeArgs: @unchecked
                 val access =
                   if (expr.symbol.asTerm.isStable)
                     q"$placedPath.$$loci$$sys.subjectiveValue($placedPath.$name[..$tpt](...$exprss), remote)"
@@ -423,7 +426,8 @@ class Instance(val c: blackbox.Context) {
         (tree, tree.symbol.asTerm, tree.name, methodShapeType(tree.symbol.info))
 
       case tree: ModuleDef =>
-        val q"$mods object $name extends { ..$earlydefs } with ..$parents { $self => ..$body }" = tree
+        val q"$mods object $name extends { ..$earlydefs } with ..$parents { $self => ..$body }" =
+          tree: @unchecked
 
         val symbol = module member name
         val multitierModuleType =

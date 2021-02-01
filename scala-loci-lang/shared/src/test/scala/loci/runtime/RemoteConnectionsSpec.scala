@@ -70,7 +70,7 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
     events should have size 5
 
-    val Seq(_0, _1, _2, _3, _4) = events
+    val Seq(_0, _1, _2, _3, _4) = events: @unchecked
 
     Seq(_0, _1, _2) should contain theSameElementsAs Seq(
       Client0(Joined), Client0(ConstraintsSatisfied), Server(Joined))
@@ -89,7 +89,7 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
     events should have size 6
 
-    val Seq(_0, _1, _2, _3, _4, _5) = events
+    val Seq(_0, _1, _2, _3, _4, _5) = events: @unchecked
 
     Seq(_0, _1, _2) should contain theSameElementsAs Seq(
       Client0(Joined), Client0(ConstraintsSatisfied), Server(Joined))
@@ -113,7 +113,7 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       events should have size 7
 
-      val Seq(_0, _1, _2, _3, _4, _5, _6) = events
+      val Seq(_0, _1, _2, _3, _4, _5, _6) = events: @unchecked
 
       Seq(_0, _1, _2, _3) should contain theSameElementsAs Seq(
         Node(Joined), Node(Joined),
@@ -149,7 +149,7 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       events should have size 11
 
-      val Seq(_, _, _, _, _, _, _, _, _, _9, _10) = events
+      val Seq(_, _, _, _, _, _, _, _, _, _9, _10) = events: @unchecked
 
       exactly (1, events) should be (Client0(Joined))
 

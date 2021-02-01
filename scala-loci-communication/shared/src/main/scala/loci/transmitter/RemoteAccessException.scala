@@ -55,7 +55,7 @@ object RemoteAccessException {
     }
 
   private def deserializeException(exception: Deserializer): RemoteAccessException = {
-    val Seq(name, message, cause, suppressed, stackTrace) = exception.asElements(5)
+    val Seq(name, message, cause, suppressed, stackTrace) = exception.asElements(5): @unchecked
     val remoteException = new RemoteAccessException(RemoteException(name.asString, message.asString))
     cause.asList.headOption foreach { cause =>
       remoteException.initCause(deserializeException(cause))
@@ -68,7 +68,7 @@ object RemoteAccessException {
   }
 
   private def deserializeStackTraceElement(element: Deserializer): StackTraceElement = {
-    val Seq(className, methodName, fileName, lineNumber) = element.asElements(4)
+    val Seq(className, methodName, fileName, lineNumber) = element.asElements(4): @unchecked
     new StackTraceElement(
       className.asString,
       methodName.asString,

@@ -6,17 +6,29 @@ import transmitter.Parser._
 import scala.util.Try
 
 object Peer {
-  type Tie = Tie.Value
+  sealed trait Tie extends Ordered[Tie] {
+    val key: Int
+    def compare(that: Tie) = key - that.key
+  }
 
-  object Tie extends Enumeration {
-    val Multiple, Optional, Single = Value
+  object Tie {
+    case object Multiple extends Tie { val key = 0 }
+    case object Optional extends Tie { val key = 1 }
+    case object Single extends Tie { val key = 2 }
+
+    def apply(key: Int): Tie = key match {
+      case 0 => Multiple
+      case 1 => Optional
+      case 2 => Single
+      case _ => throw new NoSuchElementException(s"key not found: $key")
+    }
 
     def apply(signature: Peer.Signature, ties: compatibility.Iterable[(Peer.Signature, Tie)]): Option[Tie] =
       ties.foldLeft(Option.empty[Int]) { case (multiplicity, (tieSignature, tieMultiplicity)) =>
         if (tieSignature == signature)
-          multiplicity map { _ max tieMultiplicity.id } orElse Some(tieMultiplicity.id)
+          multiplicity map { _ max tieMultiplicity.key } orElse Some(tieMultiplicity.key)
         else if (tieSignature < signature)
-          multiplicity orElse Some(Tie.Multiple.id)
+          multiplicity orElse Some(Tie.Multiple.key)
         else
           multiplicity
       } map { Tie(_) }
@@ -73,7 +85,7 @@ object Peer {
 
     private def deserializeBases(signatures: Deserializer, moduleName: String): List[Signature] =
       signatures.asList map { signature =>
-        val Seq(name, path, bases) = signature.asElements(3)
+        val Seq(name, path, bases) = signature.asElements(3): @unchecked
         Signature(
           name.asString,
           deserializeBases(bases, moduleName),
@@ -81,7 +93,7 @@ object Peer {
       }
 
     def deserialize(signature: String): Try[Signature] = Try {
-      val Seq(name, path, bases, module) = parse(signature).asElements(4)
+      val Seq(name, path, bases, module) = parse(signature).asElements(4): @unchecked
       val moduleName = module.asString
       Signature(
         name.asString,

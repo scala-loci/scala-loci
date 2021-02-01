@@ -181,6 +181,9 @@ object Message {
             case '\n' => state = statePayload; mark = offset
             case _  => throwInvalidLineBreak
           }
+
+        case _ =>
+          assert(assertion = false, "invalid state")
       }
     }
 
@@ -192,6 +195,7 @@ object Message {
       case `stateValue` => makeProperty()
       case `statePayload` => makePayload()
       case `stateBeforeKey` | `stateBeforePayload` =>
+      case _ => assert(assertion = false, "invalid state")
     }
 
     (method, properties, payload)
