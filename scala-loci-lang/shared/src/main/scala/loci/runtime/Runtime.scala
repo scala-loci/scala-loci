@@ -252,7 +252,7 @@ class Runtime[P](
       logging.info("multitier runtime terminated")
 
       state.terminate()
-      state.instances foreach { _.terminate() }
+      state.instances.toSeq foreach { _.terminate() }
       state.instances.clear()
 
       remoteConnections.terminate()
