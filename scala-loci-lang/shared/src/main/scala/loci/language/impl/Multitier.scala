@@ -29,14 +29,20 @@ class Multitier(val c: blackbox.Context) {
 
   def annotation(annottees: Tree*): Tree = {
     val multitierAnnotationType = c.mirror.staticClass("_root_.loci.multitier").toType
+    val macroApplicationString = c.macroApplication.toString
 
     val isNestedExpansion = c.openMacros exists { other =>
       other.macroApplication match {
         case q"new $macroApplication(...$_).macroTransform(...$_)"
-            if c.enclosingPosition.source.file.path == other.enclosingPosition.source.file.path &&
-               (other.macroApplication exists { _.pos == c.enclosingPosition }) &&
-               (c.enclosingPosition != other.enclosingPosition ||
-                c.macroApplication.toString != other.macroApplication.toString) =>
+            if other.enclosingPosition.source.file.path == c.enclosingPosition.source.file.path &&
+               (other.enclosingPosition != c.enclosingPosition ||
+                other.macroApplication.toString != macroApplicationString) =>
+          val positions = other.macroApplication collect { case tree if tree.pos != NoPosition => tree.pos }
+          val min = positions minBy { pos => math.min(pos.point, pos.start) }
+          val max = positions maxBy { pos => math.max(pos.point, pos.end) }
+
+          c.enclosingPosition.point >= math.min(min.point, min.start) &&
+          c.enclosingPosition.point <= math.max(max.point, max.end) &&
           c.typecheck(macroApplication, c.TYPEmode, silent = true).tpe =:= multitierAnnotationType
 
         case _ =>
