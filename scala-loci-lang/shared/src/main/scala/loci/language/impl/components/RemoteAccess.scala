@@ -1066,15 +1066,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     result
   }
 
-  private val nothingTransmittable = c typecheck trees.nothingTransmittable
-
   private def extractTransmittable(resolution: Tree) = resolution match {
     case q"new $_[..$_]($expr)" if expr.tpe <:< types.transmittable =>
       expr
     case q"$_[..$_]($_[..$_]($expr))" if expr.tpe <:< types.transmittable =>
       expr
-    case tree if tree.nonEmpty && tree.symbol.owner == symbols.resolutionNothing =>
-      nothingTransmittable
     case _ =>
       EmptyTree
   }
@@ -1090,7 +1086,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
   private def memberType(tpe: Type, name: Name) = {
     val symbol = tpe member name
-    symbol.info.asSeenFrom(tpe.underlying, symbol.owner)
+
+    symbol.info.asSeenFrom(tpe.underlying, symbol.owner) match {
+      case TypeBounds(lo, hi) if lo =:= definitions.NothingTpe => hi
+      case TypeBounds(lo, hi) if hi =:= definitions.AnyTpe => lo
+      case tpe => tpe
+    }
   }
 
   private object DummyTransmittable extends Enumeration {

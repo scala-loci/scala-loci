@@ -4,7 +4,7 @@ package experimental
 
 import webrtc.WebRTC._
 
-import transmitter._
+import transmitter.transmittable._
 
 package webrtc {
   protected[webrtc] trait WebRTCUpdateTransmittable {

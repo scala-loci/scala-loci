@@ -1,6 +1,8 @@
 package loci
 package transmitter
 
+import transmittable._
+
 import scala.annotation.implicitNotFound
 import scala.concurrent.Future
 import scala.util.control.NonFatal
@@ -27,13 +29,13 @@ sealed trait MarshallableResolution {
   : marshallable.Type = marshallable.self
 
   implicit def marshallable[B, I, R, P, T <: Transmittables](implicit
-      resolution: Transmittable.Aux.Resolution[B, I, R, P, T],
+      resolution: Transmittable.Resolution[B, I, R, P, T],
       serializer: Serializable[I],
       contextBuilder: ContextBuilder[T]): Marshallable[B, R, P] =
     new Marshallable[B, R, P] {
       val transmittable = resolution.transmittable
 
-      def connected = (transmittable: Transmittable[B, I, R]) match {
+      def connected = (transmittable: Transmittable.Any[B, I, R]) match {
         case _: ConnectedTransmittable[_, _, _] => true
         case _: ConnectedTransmittable.Proxy[_, _, _] => true
         case _ => false

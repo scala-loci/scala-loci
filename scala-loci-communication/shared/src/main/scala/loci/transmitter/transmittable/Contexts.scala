@@ -1,5 +1,6 @@
 package loci
 package transmitter
+package transmittable
 
 import Transmittable.Delegating
 import Transmittables.{Delegates, Message, None}

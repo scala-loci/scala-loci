@@ -2,6 +2,7 @@ package loci
 package transmitter
 
 import language._
+import transmittable._
 
 import scala.concurrent.Future
 
@@ -26,6 +27,6 @@ object Transmission extends TransmissionNothing {
     ev0: Placement.Context[L],
     ev1: Multiplicity[L, R, V, W, M],
     ev2: Subjectivity[W, B],
-    ev3: Transmittable.Aux.Resolution[B, I, U, P, S],
+    ev3: Transmittable.Resolution[B, I, U, P, S],
     ev4: T =:= P): Transmission[V, R, T, L, M] = erased(ev0, ev1, ev2, ev3, ev4)
 }

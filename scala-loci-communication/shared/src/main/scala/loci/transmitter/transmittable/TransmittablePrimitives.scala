@@ -1,10 +1,11 @@
 package loci
 package transmitter
+package transmittable
 
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 trait TransmittablePrimitives extends TransmittableDummy {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def unit: IdenticallyTransmittable[Unit] =
     IdenticallyTransmittable()

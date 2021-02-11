@@ -1,10 +1,11 @@
 package loci
 package transmitter
+package transmittable
 
 import scala.collection.IterableOps
 
 trait TransmittableGeneralIterableCollections extends TransmittableDummy {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def iterable[B, I, R, V[T] >: Null <: IterableOps[T, V, V[T]]]
     (implicit transmittable: Transmittable[B, I, R])
@@ -19,7 +20,7 @@ trait TransmittableGeneralIterableCollections extends TransmittableDummy {
 }
 
 trait TransmittableIterableCollections extends TransmittableGeneralCollections {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def identicalIterable
     [T: IdenticallyTransmittable, V[T] <: IterableOps[T, V, V[T]]]

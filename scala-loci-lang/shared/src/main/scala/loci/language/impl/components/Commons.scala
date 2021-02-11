@@ -61,8 +61,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val Block = symbolOf[Placement.Block[_, PlacedValue]]
     val Capture = symbolOf[Placement.Capture[_, PlacedValue]]
     val placement = symbolOf[Placement.type]
-    val resolutionNothing = symbolOf[transmitter.Transmittable.Aux.ResolutionNothing]
-    val transmittableDummy = symbolOf[transmitter.TransmittableDummy]
+    val transmittableDummy = symbolOf[transmitter.transmittable.TransmittableDummy]
     val remoteSelection = symbolOf[RemoteSelection.type]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
@@ -105,9 +104,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val placedRuntimeValue = typeOf[runtime.PlacedValue[_, _, _, _]]
     val placedRuntimeValueInfo = typeOf[runtime.PlacedValueInfo]
     val marshallable = typeOf[transmitter.Marshallable[_, _, _]]
-    val transmittable = typeOf[transmitter.Transmittable[_, _, _]]
-    val resolution = typeOf[transmitter.Transmittable.Aux.Resolution[_, _, _, _, _]]
     val serializable = typeOf[transmitter.Serializable[_]]
+    val transmittable = typeOf[transmitter.transmittable.Transmittable.Any[_, _, _]]
+    val resolution = typeOf[transmitter.transmittable.Transmittable.Resolution[_, _, _, _, _]]
     val gatewayConnection = typeOf[runtime.GatewayConnection[_, _]]
     val remoteRequest = typeOf[runtime.RemoteRequest[_, _, _, _, _, _]]
     val moduleSignature = typeOf[runtime.Module.Signature]
@@ -118,9 +117,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val transmission = typeOf[transmitter.Transmission[_, _, _, _, _]]
     val remoteGateway = typeOf[transmitter.RemoteGateway]
     val remoteAccessor = typeOf[transmitter.RemoteAccessor]
-    val delegates = typeOf[transmitter.Transmittables.Delegates[_ ]]
-    val message = typeOf[transmitter.Transmittables.Message[_]]
-    val none = typeOf[transmitter.Transmittables.None]
+    val delegates = typeOf[transmitter.transmittable.Transmittables.Delegates[_ ]]
+    val message = typeOf[transmitter.transmittable.Transmittables.Message[_]]
+    val none = typeOf[transmitter.transmittable.Transmittables.None]
     val compileTimeOnly = typeOf[annotation.compileTimeOnly]
     val placedValues = symbols.placedValues.companion.asType.toType
     val nowran =
@@ -143,15 +142,14 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val multiple = q"${names.root}.loci.runtime.Peer.Tie.Multiple"
     val optional = q"${names.root}.loci.runtime.Peer.Tie.Optional"
     val single = q"${names.root}.loci.runtime.Peer.Tie.Single"
-    val nothingTransmittable = q"${names.root}.loci.transmitter.Transmittable.nothing"
+    val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
     val nothingMarshallable = q"${names.root}.loci.transmitter.Marshallable.nothing"
     val unitMarshallable = q"${names.root}.loci.transmitter.Marshallable.unit"
-    val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
-    val delegating = q"${names.root}.loci.transmitter.ContextBuilder.delegating"
-    val messaging = q"${names.root}.loci.transmitter.ContextBuilder.messaging"
-    val none = q"${names.root}.loci.transmitter.ContextBuilder.none"
-    val delegate = q"${names.root}.loci.transmitter.ContextBuilders.delegate"
-    val list = q"${names.root}.loci.transmitter.ContextBuilders.list"
+    val delegating = q"${names.root}.loci.transmitter.transmittable.ContextBuilder.delegating"
+    val messaging = q"${names.root}.loci.transmitter.transmittable.ContextBuilder.messaging"
+    val none = q"${names.root}.loci.transmitter.transmittable.ContextBuilder.none"
+    val delegate = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.delegate"
+    val list = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.list"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {

@@ -53,17 +53,18 @@ object SourceGenerator {
       val (tupleMembers, identicalTupleMembers) = members.unzip
 
       val files = Map(
-        dir / "loci" / "transmitter" / "TransmittableTuples.scala" ->
+        dir / "loci" / "transmitter" / "transmittable" / "TransmittableTuples.scala" ->
         s"""package loci
            |package transmitter
+           |package transmittable
            |
            |trait TransmittableGeneralTuples extends TransmittableDummy {
-           |  this: Transmittable.type =>
+           |  this: TransmittableBase.type =>
            |${tupleMembers.mkString}
            |}
            |
            |trait TransmittableTuples extends TransmittableGeneralTuples {
-           |  this: Transmittable.type =>
+           |  this: TransmittableBase.type =>
            |${identicalTupleMembers.mkString}
            |}
            |""".stripMargin

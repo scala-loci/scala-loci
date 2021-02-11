@@ -1,5 +1,6 @@
 package loci
 package transmitter
+package transmittable
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Future, Promise}
@@ -9,7 +10,7 @@ import scala.util.{Failure, Success}
 trait TransmittableGeneralCollections extends
     TransmittableGeneralIterableCollections with
     TransmittableDummy {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def array[B: ClassTag, I: ClassTag, R: ClassTag]
     (implicit transmittable: Transmittable[B, I, R])
@@ -169,7 +170,7 @@ trait TransmittableGeneralCollections extends
 trait TransmittableCollections extends
     TransmittableIterableCollections with
     TransmittableGeneralCollections {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def identicalArray[T: IdenticallyTransmittable]
   : IdenticallyTransmittable[Array[T]] = IdenticallyTransmittable()

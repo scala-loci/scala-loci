@@ -1,12 +1,13 @@
 package loci
 package transmitter
+package transmittable
 
 import scala.collection.TraversableLike
 import scala.collection.generic.CanBuildFrom
 import scala.language.higherKinds
 
 trait TransmittableGeneralIterableCollections extends TransmittableDummy {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def traversable[B, I, R, V[T] >: Null <: TraversableLike[T, V[T]]]
     (implicit
@@ -24,7 +25,7 @@ trait TransmittableGeneralIterableCollections extends TransmittableDummy {
 }
 
 trait TransmittableIterableCollections extends TransmittableGeneralCollections {
-  this: Transmittable.type =>
+  this: TransmittableBase.type =>
 
   final implicit def identicalTraversable
     [T: IdenticallyTransmittable, V[T] <: TraversableLike[T, V[T]]]
