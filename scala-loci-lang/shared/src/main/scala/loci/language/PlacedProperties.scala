@@ -7,7 +7,7 @@ import scala.annotation.implicitNotFound
 sealed trait Subjectivity[-T, U]
 
 sealed trait SubjectivityDefault {
-  implicit def default[T, U](implicit ev: Local[U] =:= T): Subjectivity[T, U] = erased(ev)
+  implicit def default[T]: Subjectivity[Local[T], T] = erased
 }
 
 object Subjectivity extends SubjectivityDefault {

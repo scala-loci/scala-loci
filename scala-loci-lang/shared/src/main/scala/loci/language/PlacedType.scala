@@ -147,11 +147,16 @@ sealed trait PlacedCleanRemotePeer extends PlacedCleanRemotePeerSelection {
 }
 
 sealed trait PlacedCleanLocalPeer extends PlacedCleanRemotePeer {
-  implicit def localPeerLocal[V, L <: P, T, U, P](implicit ev: PlacedClean[V, L, T, T, U])
-    : PlacedClean[V, L, Local[T] on P, Local[T] on P, U] = erased(ev)
+  implicit def localPeer[V, L <: P, T, U, P](implicit ev: PlacedClean[V, L, T, T, U])
+    : PlacedClean[V, L, T on P, T on P, U] = erased(ev)
 }
 
-sealed trait PlacedCleanSubjective extends PlacedCleanLocalPeer {
+sealed trait PlacedCleanLocalPeerLocal extends PlacedCleanLocalPeer {
+  implicit def localPeerLocal[V, L <: P, T, U, P, _Local_[T] <: Local[T]](implicit ev: PlacedClean[V, L, T, T, U])
+    : PlacedClean[V, L, _Local_[T] on P, _Local_[T] on P, U] = erased(ev)
+}
+
+sealed trait PlacedCleanSubjective extends PlacedCleanLocalPeerLocal {
   implicit def subjectivePeer[V, L, T, P, R]
     : PlacedClean[V, L, T per R on P, T per R on P, Unit] = erased
 }

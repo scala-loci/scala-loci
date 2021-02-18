@@ -117,6 +117,29 @@ object TransmittableResolution {
           "Skipping transmittable resolution macro due to unresolved implicit")
 
 
+      def dealiasNonRepresentableType(tpe: Type): Type =
+        tpe map {
+          case tpe @ TypeRef(pre @ ThisType(_), sym, _)
+            if sym.asType.isAliasType &&
+               pre.typeSymbol.name.toString == "<refinement>" =>
+            val dealiased = sym.info.asSeenFrom(pre, sym.owner)
+            if (dealiased ne tpe)
+              dealiasNonRepresentableType(dealiased)
+            else
+              tpe
+
+          case tpe =>
+            tpe
+        }
+
+      def hasNonRepresentableType(tpe: Type): Boolean =
+        tpe exists {
+          case tpe @ ThisType(_) =>
+            tpe.typeSymbol.name.toString == "<refinement>"
+          case tpe =>
+            tpe.typeSymbol.name.toString endsWith ".type"
+        }
+
       // restore original types for types replaced with `TransmittableBase.SurrogateType` types
       // contract `IdenticallyTransmittable` instances
       object transformer extends Transformer {
@@ -128,15 +151,6 @@ object TransmittableResolution {
           else
             tpe
 
-        def hasNonRepresentableType(tree: Tree): Boolean =
-          tree.tpe != null &&
-          (tree.tpe exists {
-            case tpe @ ThisType(_) =>
-              tpe.typeSymbol.name.toString == "<refinement>"
-            case tpe =>
-              tpe.typeSymbol.name.toString endsWith ".type"
-          })
-
         def originalType(tpe: Type): Option[Type] =
           surrogates collectFirst { case (surrogate, original) if tpe =:= surrogate => original }
 
@@ -144,10 +158,13 @@ object TransmittableResolution {
           tpe map { tpe => originalType(tpe) getOrElse tpe }
 
         def restoreType(tree: Tree): Tree =
-          if (hasNonRepresentableType(tree))
-            internal.setType(tree, null)
-          else if (tree.tpe != null)
-            internal.setType(tree, restoreType(tree.tpe))
+          if (tree.tpe != null) {
+            val tpe = dealiasNonRepresentableType(tree.tpe)
+            if (hasNonRepresentableType(tpe))
+              internal.setType(tree, null)
+            else
+              internal.setType(tree, restoreType(tpe))
+          }
           else
             tree
 
@@ -164,8 +181,12 @@ object TransmittableResolution {
                resolution.symbol.owner == wrapperAlternationClass =>
             transform(q"new $wrapperTree[..$tpts]($expr)")
 
-          case TypeApply(fun, args) if args exists hasNonRepresentableType =>
-            transform(fun)
+          case TypeApply(fun, args) =>
+            args foreach { restoreType(_) }
+            if (args exists { _.tpe == null })
+              transform(fun)
+            else
+              super.transform(restoreType(tree))
 
           case DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
             super.transform(
@@ -208,9 +229,21 @@ object TransmittableResolution {
           internal.existentialType(quantified, typeRef)
       }
 
-      c.typecheck(
+      val resolutionResult = c.typecheck(
         q"new ${termNames.ROOTPKG}.loci.transmitter.transmittable.Transmittable.Resolution($result)",
         pt = expectedResolutionType)
+
+      val Apply(select @ Select(New(_), _), _) = resolutionResult: @unchecked
+
+      select foreach { tree =>
+        if (tree.tpe != null)
+          internal.setType(tree, dealiasNonRepresentableType(tree.tpe))
+      }
+
+      if (resolutionResult.tpe != null)
+        internal.setType(resolutionResult, dealiasNonRepresentableType(resolutionResult.tpe))
+
+      resolutionResult
     }
     else
       q"""new ${termNames.ROOTPKG}.loci.transmitter.transmittable.Transmittable.Resolution[
