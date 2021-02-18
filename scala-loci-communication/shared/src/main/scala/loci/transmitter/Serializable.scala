@@ -17,7 +17,7 @@ object Serializable {
     serializable
 
   @compileTimeOnly("Value is not serializable")
-  final implicit def resolutionFailure[T](implicit ev: DummyImplicit.Resolvable): Serializable[T] =
+  final implicit def resolutionFailure[T, S[T]]: S[T] =
     macro SerializableResolutionFailure[T]
 
   @compileTimeOnly("Value is not serializable")
@@ -25,22 +25,8 @@ object Serializable {
 }
 
 object SerializableResolutionFailure {
-  def apply[T: c.WeakTypeTag](c: whitebox.Context)(ev: c.Tree): c.Tree = {
+  def apply[T: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
     import c.universe._
-
-    // the current macro expansion always appears twice
-    // see: http://stackoverflow.com/a/20466423
-    val recursionCount = c.openMacros.count { other =>
-      c.enclosingPosition == other.enclosingPosition &&
-        c.macroApplication.toString == other.macroApplication.toString
-    }
-    if (recursionCount > 2)
-      c.abort(c.enclosingPosition, "Skipping serializable resolution failure macro for recursive invocation")
-
-    val serializableType = weakTypeOf[Serializable[T]]
-
-    if ((c inferImplicitValue serializableType).nonEmpty)
-      c.abort(c.enclosingPosition, "Skipping serializable resolution failure macro to prioritize other implicit")
 
     val tpe = weakTypeOf[T]
     val message = s"$tpe is not serializable"
