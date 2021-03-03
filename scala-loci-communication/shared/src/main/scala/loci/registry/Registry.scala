@@ -228,29 +228,32 @@ class Registry {
       implicit builder: BindingBuilder[T]): Unit =
     bind(builder(name))(function)
 
-  def bind[T](binding: Binding[T])(function: T): Unit =
+  def bind[T, R](binding: Binding[T, R])(function: T): Unit =
     bindings.bind(binding)(_ => function)
 
-  def bindValuePerRemote[T](name: String)(function: RemoteRef => T)(
-      implicit builder: BindingBuilder.Value[T]): Unit =
-    bindPerRemote(builder(name))(function)
 
-  def bindPerRemote[T](name: String)(function: RemoteRef => T)(
-      implicit builder: BindingBuilder[T]): Unit =
-    bindPerRemote(builder(name))(function)
+  def bindValueSbj[T, U](name: String)(function: T)(
+      implicit subjective: SubjectiveBinding[T, U], builder: BindingBuilder.Value[U]): Unit =
+    bindSbj(builder(name))(function)
 
-  def bindPerRemote[T](binding: Binding[T])(function: RemoteRef => T): Unit =
-    bindings.bind(binding)(function)
+  def bindSbj[T, U](name: String)(function: T)(
+      implicit subjective: SubjectiveBinding[T, U], builder: BindingBuilder[U]): Unit =
+    bindSbj(builder(name))(function)
+
+  def bindSbj[T, U, R](binding: Binding[U, R])(function: T)(
+      implicit subjective: SubjectiveBinding[T, U]): Unit =
+    bindings.bind(binding)(subjective(_, function))
+
 
   def lookupValue[T](name: String, remote: RemoteRef)(
-      implicit builder: BindingBuilder.Value[T]): builder.RemoteCall =
+      implicit builder: BindingBuilder.Value[T]): builder.Result =
     lookup(builder(name), remote)
 
   def lookup[T](name: String, remote: RemoteRef)(
-      implicit builder: BindingBuilder[T]): builder.RemoteCall =
+      implicit builder: BindingBuilder[T]): builder.Result =
     lookup(builder(name), remote)
 
-  def lookup[T](binding: Binding[T], remote: RemoteRef): binding.RemoteCall =
+  def lookup[T, R](binding: Binding[T, R], remote: RemoteRef): R =
     bindings.lookup(
       binding,
       () => Registry.AbstractionRef(

@@ -154,6 +154,7 @@ lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
   settings (normalizedName := "scala-loci-communication",
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
+            SourceGenerator.functionSubjectiveBinding,
             macrodeclaration, scribe, scalatest))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm

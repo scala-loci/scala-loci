@@ -17,10 +17,10 @@ class Bindings[A <: AbstractionRef](
   private val responseHandlers = new ConcurrentHashMap[
     Channel, Notice.Steady.Source[Try[MessageBuffer]]]
 
-  def bind[T](binding: Binding[T])(function: RemoteRef => T): Unit =
+  def bind[T, R](binding: Binding[T, R])(function: RemoteRef => T): Unit =
     bindings.put(binding.name, binding.dispatch(function, _, _))
 
-  def lookup[T, R](binding: Binding[T], createAbstraction: () => A): binding.RemoteCall =
+  def lookup[T, R](binding: Binding[T, R], createAbstraction: () => A): R =
     binding.call(createAbstraction) { (message, abstraction) =>
       val channel = abstraction.channel
       val response = Notice.Steady[Try[MessageBuffer]]

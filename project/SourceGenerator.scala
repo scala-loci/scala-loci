@@ -136,11 +136,11 @@ object SourceGenerator {
             |            res.marshal($tupledFunction(arg), abstraction) }"""
 
         s"""
-          |  implicit def $function(implicit $marshallables) = {
+          |  implicit def $function(implicit $marshallables)
+          |      : BindingBuilder[($argTypes) => R] { type Result = ($argTypes) => P } = {
           |    new BindingBuilder[($argTypes) => R] {
-          |      type RemoteCall = ($argTypes) => P
-          |      def apply(bindingName: String) = new Binding[($argTypes) => R] {
-          |        type RemoteCall = ($argTypes) => P
+          |      type Result = ($argTypes) => P
+          |      def apply(bindingName: String) = new Binding[($argTypes) => R, Result] {
           |        val name = bindingName
           |        def dispatch(
           |            function: RemoteRef => ($argTypes) => R,
@@ -170,6 +170,54 @@ object SourceGenerator {
            |
            |trait FunctionsBindingBuilder extends ValueBindingBuilder {
            |${builders.mkString}
+           |}
+           |""".stripMargin
+      )
+
+      files foreach { case (file, content) => IO.write(file, content) }
+      files.keys.toSeq
+    }
+
+  val functionSubjectiveBinding =
+    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+      val subjectiveBinding = (0 to 21) map { i =>
+        val argTypes = (0 until i) map { i => s"T$i" } mkString ", "
+        val typedArgs = (0 until i) map { i => s"v$i: T$i" } mkString ", "
+        val args = (0 until i) map { i => s"v$i" } mkString ", "
+
+        val function =
+          if (i == 0) s"function${i + 1}[R]"
+          else s"function${i + 1}[$argTypes, R]"
+
+        val application =
+          if (i == 0) s"function(remote)"
+          else s"function(remote, $args)"
+
+        val input =
+          if (i == 0) s"(RemoteRef) => R"
+          else s"(RemoteRef, $argTypes) => R"
+
+        val output = s"($argTypes) => R"
+
+        s"""
+          |  implicit def $function
+          |      : SubjectiveBinding[$input, $output] =
+          |    new SubjectiveBinding[$input, $output] {
+          |      def apply(remote: RemoteRef, function: $input) =
+          |        ($typedArgs) => $application
+          |    }
+          |"""
+      }
+
+      val files = Map(
+        dir / "loci" / "registry" / "FunctionSubjectiveBinding.scala" ->
+        s"""package loci
+           |package registry
+           |
+           |import transmitter.RemoteRef
+           |
+           |trait FunctionSubjectiveBinding extends ValueSubjectiveBinding {
+           |${subjectiveBinding.mkString}
            |}
            |""".stripMargin
       )
