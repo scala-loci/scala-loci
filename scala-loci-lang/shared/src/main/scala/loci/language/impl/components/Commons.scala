@@ -61,6 +61,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val Block = symbolOf[Placement.Block[_, PlacedValue]]
     val Capture = symbolOf[Placement.Capture[_, PlacedValue]]
     val placement = symbolOf[Placement.type]
+    val serializable = symbolOf[transmitter.Serializable.type]
     val transmittableDummy = symbolOf[transmitter.transmittable.TransmittableDummy]
     val remoteSelection = symbolOf[RemoteSelection.type]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.runtime.PlacedValues")
@@ -142,6 +143,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val multiple = q"${names.root}.loci.runtime.Peer.Tie.Multiple"
     val optional = q"${names.root}.loci.runtime.Peer.Tie.Optional"
     val single = q"${names.root}.loci.runtime.Peer.Tie.Single"
+    val serializable = q"${names.root}.loci.transmitter.Serializable.apply"
     val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
     val nothingMarshallable = q"${names.root}.loci.transmitter.Marshallable.nothing"
     val unitMarshallable = q"${names.root}.loci.transmitter.Marshallable.unit"
@@ -375,7 +377,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   private object typeTreeExpander extends Transformer {
     override def transform(tree: Tree): Tree = tree match {
-      case tree: TypeTree =>
+      case tree: TypeTree if tree.tpe != null =>
         retyper.createTypeTree(tree.tpe map { _.dealias }, tree.pos) match {
           case tree: TypeTree => tree
           case tree => transform(tree)
