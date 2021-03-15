@@ -38,9 +38,47 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   import values._
 
 
+  case class MarshallableInfo(base: Type, intermediate: Type, result: Type, proxy: Type, signature: Option[Int])
+
+  object MarshallableInfo {
+    def apply(info: TransmittableInfo, signature: Option[Int]): MarshallableInfo =
+      MarshallableInfo(info.base, info.intermediate, info.result, info.proxy, signature)
+
+    def apply(info: TransmittableInfo, fullyExpandedTree: Tree): MarshallableInfo =
+      apply(info, Some((retyper untypecheck fullyExpandedTree).toString.hashCode))
+
+    implicit class IterableMarshallableInfoOps[T](
+        iterable: compatibility.IterableOnce[(MarshallableInfo, T)]) {
+      def firstOfType(info: TransmittableInfo): Option[(MarshallableInfo, T)] =
+        compatibility.iterable.collectFirst(iterable) {
+          case value @ (otherInfo, _)
+              if otherInfo.base =:= info.base &&
+                 otherInfo.intermediate =:= info.intermediate &&
+                 otherInfo.result =:= info.result &&
+                 otherInfo.proxy =:= info.proxy =>
+            value
+        }
+
+      def firstOf(info: MarshallableInfo): Option[T] =
+        compatibility.iterable.collectFirst(iterable) {
+          case (otherInfo, value)
+              if otherInfo.base =:= info.base &&
+                 otherInfo.intermediate =:= info.intermediate &&
+                 otherInfo.result =:= info.result &&
+                 otherInfo.proxy =:= info.proxy &&
+                 otherInfo.signature == info.signature =>
+            value
+        }
+    }
+  }
+
+
   case class TransmittableInfo(base: Type, intermediate: Type, result: Type, proxy: Type, signature: Option[Int])
 
   object TransmittableInfo {
+    def apply(info: MarshallableInfo, signature: Option[Int]): TransmittableInfo =
+      TransmittableInfo(info.base, info.intermediate, info.result, info.proxy, signature)
+
     def apply(fullyExpandedTree: Tree): TransmittableInfo = {
       val tpe = fullyExpandedTree.tpe
       TransmittableInfo(
@@ -51,7 +89,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         Some((retyper untypecheck fullyExpandedTree).toString.hashCode))
     }
 
-    implicit class TraversableTransmittableInfoOps[T](
+    implicit class IterableTransmittableInfoOps[T](
         iterable: compatibility.IterableOnce[(TransmittableInfo, T)]) {
       def firstOfBaseType(tpe: Type): Option[(TransmittableInfo, T)] =
         compatibility.iterable.collectFirst(iterable) {
@@ -63,23 +101,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           case value @ (info, _) if info.base =:= tpe && info.result =:= tpe => value
         }
 
-      def firstWithAccessInfo(info: TransmittableInfo): Option[(TransmittableInfo, T)] =
+      def firstOfAccessType(info: TransmittableInfo): Option[(TransmittableInfo, T)] =
         compatibility.iterable.collectFirst(iterable) {
           case value @ (otherInfo, _)
             if otherInfo.base =:= info.base &&
                otherInfo.result =:= info.result &&
                otherInfo.proxy =:= info.proxy =>
-            value
-        }
-
-      def firstWithInfo(info: TransmittableInfo): Option[T] =
-        compatibility.iterable.collectFirst(iterable) {
-          case (otherInfo, value)
-              if otherInfo.base =:= info.base &&
-                 otherInfo.intermediate =:= info.intermediate &&
-                 otherInfo.result =:= info.result &&
-                 otherInfo.proxy =:= info.proxy &&
-                 (otherInfo.signature.isEmpty || otherInfo.signature == info.signature) =>
             value
         }
     }
@@ -187,7 +214,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         List.empty[(TransmittableInfo, Tree)]) { (transmittables, tree) =>
       val fullyExpandedTree = tree.fullyExpanded
       val info = TransmittableInfo(fullyExpandedTree)
-      val existing = transmittables firstWithAccessInfo info
+      val existing = transmittables firstOfAccessType info
 
       existing foreach { case (existingInfo, _) =>
         if (info.signature != existingInfo.signature)
@@ -414,13 +441,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           definedMarshallables.iterator
 
       val marshallableInfoType = types.marshallableInfo mapArgs { _ => List(info.intermediate) }
-      val annotation =
-        if (dummyTransmittableTree)
-          q"new ${createTypeTree(marshallableInfoType, pos)}(0)"
-        else
-          q"new ${createTypeTree(marshallableInfoType, pos)}(${info.signature.get})"
+      val marshallableInfoTree = createTypeTree(marshallableInfoType, pos)
+      val marshallableMods = Modifiers(Flag.SYNTHETIC | Flag.PROTECTED | Flag.LOCAL | Flag.LAZY)
 
-      def marshallableImplementation(marshallableName: TermName, expr: Tree, isDeferred: Boolean) =
+      val abstractValueAnnotation = q"new ${types.abstractValue}"
+
+      def marshallableImplementation(marshallableName: TermName, expr: Tree, exprInfo: MarshallableInfo, isDeferred: Boolean) =
         if (!(implementedMarshallables contains marshallableName)) {
           if (isDeferred)
             logging.debug(s"  Implementing deferred marshallable for ${info.base} ~> ${info.proxy}")
@@ -428,92 +454,114 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             logging.debug(s"  Creating marshallable for ${info.base} ~> ${info.proxy}")
 
           implementedMarshallables += marshallableName
-          definedMarshallables += info -> (NoSymbol -> marshallableName)
+          definedMarshallables += exprInfo -> (NoSymbol -> marshallableName)
 
-          Some(atPos(pos) {
-            q"@$annotation ${Flag.SYNTHETIC} protected[this] lazy val $marshallableName = $expr" })
+          val annotation = q"new $marshallableInfoTree(${exprInfo.signature getOrElse 0})"
+          val mods =
+            if (exprInfo.signature.nonEmpty)
+              marshallableMods mapAnnotations { _ => List(annotation) }
+            else
+              marshallableMods mapAnnotations { _ => List(abstractValueAnnotation, annotation) }
+
+          Some(atPos(pos) { q"$mods val $marshallableName = $expr" })
         }
         else
           None
 
+      def reusedMarshallableImplementation(info: MarshallableInfo, marshallableName: TermName) =
+        if (implementation != MarshallableImplementation.Omissible) {
+          logging.debug("  " +
+            s"Reusing${if (info.signature.isEmpty) " deferred " else " "}marshallable " +
+            s"for ${info.base} ~> ${info.proxy}")
+          Some(marshallableName) -> None
+        }
+        else
+          None -> marshallableImplementation(name, q"$marshallableName", info, isDeferred = true)
+
       // reuse existing marshallable if possible or
       // create new marshallable if necessary
-      (marshallables
-        firstWithInfo info
-        map { case (_, marshallableName) =>
-          if (implementation != MarshallableImplementation.Omissible) {
-            logging.debug("  " +
-              s"Reusing${if (dummyTransmittableTree) " deferred " else " "}marshallable " +
-              s"for ${info.base} ~> ${info.proxy}")
-            Some(marshallableName) -> None
+      val reusedMarshallable =
+        if (accessorGeneration != AccessorGeneration.Forced)
+          (marshallables
+            firstOfType info
+            map { case (info, (_, marshallableName)) =>
+              reusedMarshallableImplementation(info, marshallableName)
+            })
+        else
+          None
+
+      reusedMarshallable getOrElse {
+        if (!dummyTransmittableTree) {
+          val transmittables = memberType(tree.tpe, names.transmittables)
+          val transmittableTypes = List(info.base, info.intermediate, info.result, info.proxy, transmittables)
+          val resolutionType = types.resolution mapArgs { args => transmittableTypes }
+
+          val serializable = resolveSerializable(info.intermediate, pos)
+          var serializableResolutionFailure = serializable.isLeft
+
+          def contextBuilders(tpe: Type): Tree = tpe.typeArgs match {
+            case Seq(tail, head) =>
+              q"${trees.list}(${contextBuilder(head)}, ${contextBuilders(tail)})"
+            case _ =>
+              q"${trees.delegate}(${contextBuilder(tpe)})"
           }
-          else
-            None -> marshallableImplementation(name, q"$marshallableName", isDeferred = true)
+
+          def contextBuilder(tpe: Type): Tree = {
+            (memberType(tpe, names.transmittables): @unchecked) match {
+              case tpe if tpe <:< types.delegates =>
+                q"${trees.delegating}(${contextBuilders(tpe.typeArgs.head)})"
+
+              case tpe if tpe <:< types.message =>
+                val transmittableType = tpe.typeArgs.head
+                val serializable = resolveSerializable(memberType(transmittableType, names.intermediate), pos)
+
+                if (serializable.isLeft)
+                  serializableResolutionFailure = true
+
+                q"""${trees.messaging}(
+                  ${contextBuilder(transmittableType)},
+                  ${serializable.merge})"""
+
+              case tpe if tpe <:< types.none =>
+                trees.none
+            }
+          }
+
+          val expr = q"""${trees.marshallable}[..$transmittableTypes](
+            new $resolutionType($tree),
+            ${serializable.merge},
+            ${contextBuilder(tree.tpe)})"""
+
+          val exprInfo = MarshallableInfo(info, expr.fullyExpanded)
+
+          (definedMarshallables
+            firstOf exprInfo
+            map { case (_, marshallableName) =>
+              reusedMarshallableImplementation(exprInfo, marshallableName)
+            }
+            getOrElse {
+              if (serializableResolutionFailure && implementation != MarshallableImplementation.Required)
+                None -> None
+              else if (implementation == MarshallableImplementation.Omissible)
+                None -> marshallableImplementation(name, expr, exprInfo, isDeferred = true)
+              else
+                Some(name) -> marshallableImplementation(name, expr, exprInfo, isDeferred = false)
+            })
         }
-        getOrElse {
-          if (!dummyTransmittableTree) {
-            val transmittables = memberType(tree.tpe, names.transmittables)
-            val transmittableTypes = List(info.base, info.intermediate, info.result, info.proxy, transmittables)
-            val resolutionType = types.resolution mapArgs { args => transmittableTypes }
+        else if (implementation != MarshallableImplementation.Omissible) {
+          logging.debug(s"  Deferring marshallable for ${info.base} ~> ${info.proxy}")
 
-            val serializable = resolveSerializable(info.intermediate, pos)
-            var serializableResolutionFailure = serializable.isLeft
+          declaredMarshallables += MarshallableInfo(info, None) -> (NoSymbol -> name)
 
-            def contextBuilders(tpe: Type): Tree = tpe.typeArgs match {
-              case Seq(tail, head) =>
-                q"${trees.list}(${contextBuilder(head)}, ${contextBuilders(tail)})"
-              case _ =>
-                q"${trees.delegate}(${contextBuilder(tpe)})"
-            }
+          val marshallableType = types.marshallable mapArgs { _ => List(info.base, info.result, info.proxy) }
+          val annotation = q"new $marshallableInfoTree(0)"
+          val mods = marshallableMods mapAnnotations { _ => List(abstractValueAnnotation, annotation) }
 
-            def contextBuilder(tpe: Type): Tree = {
-              (memberType(tpe, names.transmittables): @unchecked) match {
-                case tpe if tpe <:< types.delegates =>
-                  q"${trees.delegating}(${contextBuilders(tpe.typeArgs.head)})"
-
-                case tpe if tpe <:< types.message =>
-                  val transmittableType = tpe.typeArgs.head
-                  val serializable = resolveSerializable(memberType(transmittableType, names.intermediate), pos)
-
-                  if (serializable.isLeft)
-                    serializableResolutionFailure = true
-
-                  q"""${trees.messaging}(
-                    ${contextBuilder(transmittableType)},
-                    ${serializable.merge})"""
-
-                case tpe if tpe <:< types.none =>
-                  trees.none
-              }
-            }
-
-            val expr = q"""${trees.marshallable}[..$transmittableTypes](
-              new $resolutionType($tree),
-              ${serializable.merge},
-              ${contextBuilder(tree.tpe)})"""
-
-            if (serializableResolutionFailure && implementation != MarshallableImplementation.Required)
-              None -> None
-            else if (implementation == MarshallableImplementation.Omissible)
-              None -> marshallableImplementation(name, expr, isDeferred = true)
-            else
-              Some(name) -> marshallableImplementation(name, expr, isDeferred = false)
-          }
-          else
-            if (implementation != MarshallableImplementation.Omissible) {
-              logging.debug(s"  Deferring marshallable for ${info.base} ~> ${info.proxy}")
-
-              declaredMarshallables += info -> (NoSymbol -> name)
-
-              val marshallableType = types.marshallable mapArgs { _ => List(info.base, info.result, info.proxy) }
-              val abstractValueAnnotation = q"new ${types.abstractValue}"
-
-              Some(name) -> Some(atPos(pos) {
-                q"@$abstractValueAnnotation @$annotation ${Flag.SYNTHETIC} protected[this] lazy val $name: $marshallableType = null" })
-            }
-            else
-              None -> None
-        })
+          Some(name) -> Some(atPos(pos) { q"$mods val $name: $marshallableType = null" })
+        }
+        else
+          None -> None
+      }
     }
 
     // resolve or construct marshallables and placed value info instances
@@ -539,45 +587,43 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         // find an inherited inheritedPlacedValueplaced value with the same signature
         // and whose transmittable type conforms to the transmittable used in this code
-        val inheritedPlacedValue = (module.classSymbol.selfType.members.sorted collectFirst {
-          case symbol @ PlacedValueSymbol(`signature`, argInfo, resInfo) =>
-            val resConformant = definedResTransmittable forall { case (info, _) =>
-              !hasResult && resInfo.isEmpty ||
-               hasResult && resInfo.isDefined &&
-               resInfo.get.result =:= info.result && resInfo.get.proxy =:= info.proxy
-            }
+        val inheritedPlacedValue = (module.classSymbol.selfType.members.sorted
+          collectFirst {
+            case symbol @ PlacedValueSymbol(`signature`, argInfo, resInfo) =>
+              val resConformant = definedResTransmittable forall { case (info, _) =>
+                !hasResult && resInfo.isEmpty ||
+                 hasResult && resInfo.isDefined &&
+                 resInfo.get.result =:= info.result && resInfo.get.proxy =:= info.proxy
+              }
 
-            if ((!hasArguments && argInfo.isEmpty ||
-                  hasArguments && argInfo.isDefined &&
-                  argInfo.get.base =:= arg && argInfo.get.result =:= arg) &&
-                (!hasResult && resInfo.isEmpty ||
-                  hasResult && resInfo.isDefined &&
-                  resInfo.get.base =:= res) &&
-                resConformant)
-              Some(Left(symbol.asTerm.name) -> Seq.empty)
-            else
-              None
-        }).flatten
+              (!hasArguments && argInfo.isEmpty ||
+                hasArguments && argInfo.isDefined &&
+                argInfo.get.base =:= arg && argInfo.get.result =:= arg) &&
+              (!hasResult && resInfo.isEmpty ||
+                hasResult && resInfo.isDefined &&
+                resInfo.get.base =:= res) &&
+              resConformant
+          }
+          contains true)
 
         (resolveTransmittables(
             Seq(definedArgTransmittable -> argTransmittableType, definedResTransmittable -> resTransmittableType),
             pos,
-            inheritedPlacedValue.nonEmpty,
+            inheritedPlacedValue,
             transmittablesRequired): @unchecked) match {
           case Left(trees) =>
             ((symbol, termNames.EMPTY, arg, subjective, false), None, trees)
 
           case Right(Seq()) if failed =>
-            ((symbol, termNames.EMPTY, arg, subjective, inheritedPlacedValue.nonEmpty), None, Seq.empty)
+            ((symbol, termNames.EMPTY, arg, subjective, inheritedPlacedValue), None, Seq.empty)
 
           case Right(Seq()) =>
-            ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue.nonEmpty), None, Seq.empty)
+            ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue), None, Seq.empty)
 
           case Right(Seq((argInfo, argTree), (resInfo, resTree))) =>
             // create marshallable and placed value info instances
             // for the successfully resolved transmittable
-            // reusing inherited placed value info if possible
-            val (name, seq) = inheritedPlacedValue getOrElse {
+            val marshallables = {
               val nonStandardNonResult =
                 resInfo.proxy =:!= types.unitFuture &&
                 resInfo.proxy =:!= types.nothingFuture
@@ -602,21 +648,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   (Some(trees.nothingMarshallable), Some(q"null"), None)
 
               if (argValue.nonEmpty && argAnnotation.nonEmpty && resValue.nonEmpty && resAnnotation.nonEmpty)
-                Right((argValue.get, argAnnotation.get, resValue.get, resAnnotation.get)) ->
-                  (argMarshallable ++ resMarshallable).toSeq
+                Some((argValue.get, argAnnotation.get, resValue.get, resAnnotation.get, (argMarshallable ++ resMarshallable).toSeq))
               else
-                Left(termNames.EMPTY) -> Seq.empty
+                None
             }
 
-            name match {
-              case Left(termNames.EMPTY) =>
-                ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue.nonEmpty), None, Seq.empty)
-
-              case Left(name) =>
-                // reusing inherited placed value info if possible
-                ((symbol, name, arg, subjective, true), None, seq)
-
-              case Right((argValue, argAnnotation, resValue, resAnnotation)) =>
+            (marshallables
+              map { case (argValue, argAnnotation, resValue, resAnnotation, marshallables) =>
                 // create new placed value info if necessary
                 val placedValueName = TermName(s"$$loci$$val$$$moduleName$$$placedValueIndex")
                 val annotation = q"new ${types.placedRuntimeValueInfo}($signature, $argAnnotation, $resAnnotation)"
@@ -712,8 +750,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                 placedValueIndex += 1
 
-                ((symbol, placedValueName, arg, subjective, true), dispatchClause, seq :+ placedValue)
+                ((symbol, placedValueName, arg, subjective, true), dispatchClause, marshallables :+ placedValue)
             }
+            getOrElse {
+              ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue), None, Seq.empty)
+            })
         }
     }).unzip3
 
@@ -725,7 +766,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       case (info, (symbol, marshallableName)) =>
         val ancestors = symbol.ancestors
-        val definedTransmittable = definedTransmittables firstWithAccessInfo info
+        val definedTransmittable = definedTransmittables firstOfAccessType TransmittableInfo(info, None)
         val transmittableType = types.resolution mapArgs { args => List(info.base, args(1), info.base, info.proxy) :+ args.last }
 
         val pos = (module.tree.impl.parents
@@ -1250,7 +1291,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
   object MarshallableSymbol {
-    def unapply(symbol: Symbol): Option[(TransmittableInfo, TermName)] =
+    def unapply(symbol: Symbol): Option[(MarshallableInfo, TermName)] =
       cache.getOrElse(symbol, {
         if (symbol.isMethod && (symbol.name.toString startsWith "$loci$mar$")) {
           val method = symbol.asMethod
@@ -1262,7 +1303,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   if tree.tpe <:< types.marshallableInfo =>
                 val Seq(base, result, proxy) = tpe.typeArgs: @unchecked
                 val Seq(intermediate) = tree.tpe.typeArgs: @unchecked
-                (TransmittableInfo(
+                (MarshallableInfo(
                   base.asSeenFrom(module.classSymbol),
                   intermediate.asSeenFrom(module.classSymbol),
                   result.asSeenFrom(module.classSymbol),
@@ -1280,11 +1321,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           None
       })
 
-    private val cache = mutable.Map.empty[Symbol, Option[(TransmittableInfo, TermName)]]
+    private val cache = mutable.Map.empty[Symbol, Option[(MarshallableInfo, TermName)]]
   }
 
   object PlacedValueSymbol {
-    def unapply(symbol: Symbol): Option[(String, Option[TransmittableInfo], Option[TransmittableInfo])] =
+    def unapply(symbol: Symbol): Option[(String, Option[MarshallableInfo], Option[MarshallableInfo])] =
       cache.getOrElse(symbol, {
         if (symbol.isMethod && (symbol.name.toString startsWith "$loci$val$")) {
           val method = symbol.asMethod
@@ -1322,6 +1363,6 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           None
       })
 
-    private val cache = mutable.Map.empty[Symbol, Option[(String, Option[TransmittableInfo], Option[TransmittableInfo])]]
+    private val cache = mutable.Map.empty[Symbol, Option[(String, Option[MarshallableInfo], Option[MarshallableInfo])]]
   }
 }
