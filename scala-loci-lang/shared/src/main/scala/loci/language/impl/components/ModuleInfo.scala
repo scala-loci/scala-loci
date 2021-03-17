@@ -28,6 +28,11 @@ class ModuleInfo[C <: blackbox.Context](val engine: Engine[C]) extends Component
     val self = uniqueRealisticTermName(engine.multitierCode.symbol)
     val outer = engine.outerMultitierName.headOption
     val path = engine.outerMultitierName.reverse map { case (value, _) => value }
+    val accessorGeneration = {
+      val accessorGeneration = internal.attachments(tree).get[AccessorGeneration]
+      internal.removeAttachment[AccessorGeneration](tree)
+      accessorGeneration
+    }
   }
 
   private val underExpansion: Set[Symbol] = (engine.multitierCode collect {

@@ -141,10 +141,15 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   def createMarshallables(records: List[Any]): List[Any] = {
     val moduleName = uniqueName(module.symbol)
     val accessorGeneration =
-      if (!module.symbol.isAbstract)
-        AccessorGeneration.Required
+      if (!module.symbol.isAbstract) {
+        if ((module.accessorGeneration contains AccessorGeneration.Deferred) ||
+            (module.accessorGeneration contains AccessorGeneration.Preferred))
+          c.abort(c.enclosingPosition, "Accessor generation is required")
+
+        module.accessorGeneration getOrElse AccessorGeneration.Required
+      }
       else
-        AccessorGeneration.Preferred
+        module.accessorGeneration getOrElse AccessorGeneration.Preferred
 
     // all placed values and their corresponding type
     // (with placement information stripped from the type)

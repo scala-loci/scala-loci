@@ -155,7 +155,16 @@ class Multitier(val c: blackbox.Context) {
 
           if (!documentationCompiler) {
             val typedAnnottee =
-              try { (retyper typecheck preprocessedAnnottee: @unchecked) match { case tree: ImplDef => tree } }
+              try {
+                val tree =
+                  argumentIntegrator transform
+                   (retyper typecheck
+                     (argumentExtractor transform preprocessedAnnottee))
+
+                integrateAnnotteeArgument(tree)
+
+                (tree: @unchecked) match { case tree: ImplDef => tree }
+              }
               catch improveTypecheckingErrorMessage
 
             fixAnnotteeSymbols(typedAnnottee)
@@ -234,6 +243,121 @@ class Multitier(val c: blackbox.Context) {
     (companion.headOption
       map { companion => q"$recoveredAnnottee; $companion"}
       getOrElse recoveredAnnottee)
+  }
+
+  private def singleOptionalArgument(exprss: List[List[Tree]], pos: Position): Option[Tree] =
+    if (exprss.size == 1 && exprss.head.size == 1)
+      Some(exprss.head.head)
+    else if (exprss.size > 1 || exprss.size == 1 && exprss.head.size > 1)
+      c.abort(pos, "wrong number of arguments")
+    else
+      None
+
+  private def accessorGeneration(symbol: Symbol): Option[AccessorGeneration] = {
+    def checkSymbol[T <: AccessorGeneration with Singleton: WeakTypeTag](value: T) =
+      if (symbol == symbolOf[T].asClass.module) Some(value) else None
+
+    checkSymbol(AccessorGeneration.Deferred) orElse
+    checkSymbol(AccessorGeneration.Preferred) orElse
+    checkSymbol(AccessorGeneration.Required) orElse
+    checkSymbol(AccessorGeneration.Forced)
+  }
+
+  private def integrateAnnotteeArgument(annottee: Tree): Unit = {
+    val q"new $expr(...$exprss).macroTransform(...$_)" = c.macroApplication: @unchecked
+
+    singleOptionalArgument(exprss, expr.pos) foreach { arg =>
+      val q"..$_; $_($expr)" =
+        c typecheck atPos(arg.pos) {
+          q"""def $$loci$$argument(accessorGeneration: ${typeOf[AccessorGeneration]}): Unit =
+            ${termNames.ROOTPKG}.scala.Predef.locally(accessorGeneration)
+          $$loci$$argument($arg)"""
+        }: @unchecked
+
+      accessorGeneration(expr.symbol) foreach { internal.updateAttachment(annottee, _) }
+    }
+  }
+
+  private object argumentExtractor extends Transformer {
+    val accessorGeneration = typeOf[AccessorGeneration]
+    var index = 0
+
+    override def transform(tree: Tree): Tree = tree match {
+      case tree @ Template(parents, self, _) =>
+        val body = tree.body flatMap {
+          case tree: ImplDef =>
+            val exprss = tree.mods.annotations collectFirst {
+              case tree @ q"new multitier(...$exprss)" => exprss -> tree.pos
+              case tree @ q"new $_.multitier(...$exprss)" => exprss -> tree.pos
+            }
+
+            (exprss
+              flatMap (singleOptionalArgument _).tupled
+              map { arg =>
+                val name = TermName(s"$$loci$$argument$$$index")
+                index += 1
+                Seq(
+                  atPos(arg.pos) {
+                    q"""${Flag.SYNTHETIC} private[this] def $name(accessorGeneration: $accessorGeneration): Unit =
+                        ${termNames.ROOTPKG}.scala.Predef.locally(accessorGeneration)""" },
+                  atPos(arg.pos) {
+                    q"""$name($arg)""" },
+                  tree)
+              }
+              getOrElse Seq(tree))
+
+          case tree =>
+            Seq(tree)
+        }
+
+        super.transform(treeCopy.Template(tree, parents, self, body))
+
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+  private object argumentIntegrator extends Transformer {
+    val multitierModule = typeOf[runtime.MultitierModule]
+
+    def isExtractedArgument(symbol: Symbol) =
+      symbol != null && symbol.isMethod && symbol.isSynthetic &&
+      (symbol.name.toString startsWith "$loci$argument$")
+
+    override def transform(tree: Tree): Tree = tree match {
+      case tree @ Template(parents, self, _) =>
+        tree.body sliding 2 foreach {
+          case Seq(q"$expr($arg)", module: ImplDef)
+            if isExtractedArgument(expr.symbol) &&
+               (module.symbol.annotations exists { _.tree.tpe <:< multitierModule }) =>
+              accessorGeneration(arg.symbol) foreach { internal.updateAttachment(module, _) }
+
+          case _ =>
+        }
+
+        val body = tree.body filterNot { tree => isExtractedArgument(tree.symbol) }
+
+        super.transform(treeCopy.Template(tree, parents, self, body))
+
+      case _: ImplDef =>
+        val symbol =
+          if (tree.symbol.isModule)
+            tree.symbol.asModule.moduleClass
+          else
+            tree.symbol
+
+        symbol.info match {
+          case info @ ClassInfoType(parents, _, typeSymbol) =>
+            val decls = internal.newScopeWith(info.decls.toSeq filterNot isExtractedArgument: _*)
+            internal.setInfo(symbol, internal.classInfoType(parents, decls, typeSymbol))
+          case _ =>
+        }
+
+        super.transform(tree)
+
+      case _ =>
+        super.transform(tree)
+    }
   }
 
   private def fixAnnotteeSymbols(annottee: Tree) = {
@@ -441,7 +565,8 @@ class Multitier(val c: blackbox.Context) {
 
   private def improveMacroErrorReporting(annottee: Tree): PartialFunction[Throwable, Tree] = {
     case e: Throwable
-        if e.getClass.getCanonicalName == "scala.reflect.macros.runtime.AbortMacroException" =>
+      if e.getClass.getCanonicalName == "scala.reflect.macros.runtime.AbortMacroException" ||
+         e.getClass.getCanonicalName == "scala.reflect.macros.TypecheckException" =>
 
       logging.debug(s" Expansion failed: ${e.getMessage}")
 
@@ -462,8 +587,9 @@ class Multitier(val c: blackbox.Context) {
 
   private val improveTypecheckingErrorMessage: PartialFunction[Throwable, Nothing] = {
     case e: Throwable
-        if e.getClass.getCanonicalName == "scala.reflect.macros.runtime.AbortMacroException" &&
-           (e.getMessage contains "type mismatch") =>
+      if (e.getClass.getCanonicalName == "scala.reflect.macros.runtime.AbortMacroException" ||
+          e.getClass.getCanonicalName == "scala.reflect.macros.TypecheckException") &&
+         (e.getMessage contains "type mismatch") =>
 
       val pos = readPosField(e)
 

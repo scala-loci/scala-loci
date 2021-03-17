@@ -8,6 +8,7 @@ import scala.language.experimental.macros
 package loci {
   @compileTimeOnly("enable macro paradise to use multitier code")
   final class multitier extends StaticAnnotation {
+    def this(accessorGeneration: AccessorGeneration) = this()
     def macroTransform(annottees: Any*): Any = macro impl.Multitier.annotation
   }
 
