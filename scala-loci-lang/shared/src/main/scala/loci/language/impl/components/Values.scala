@@ -96,8 +96,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     def setupMultitierModule(tree: Tree, multitierName: TermName, multitierType: Tree, signature: String): Seq[Value] =
       modulePeers map { peer =>
         val bases = multitierType :: (peer.bases collect {
-          case Peer.DelegatedBase(TypeRef(pre, _, _), name, _)
+          case Peer.DelegatedBase(TypeRef(pre, sym, _), _)
               if pre.termSymbol == tree.symbol =>
+            val name = TypeName(s"$$loci$$peer$$${uniqueName(pre.termSymbol, sym.name.toString)}")
             tq"${module.self}.${pre.termSymbol.asTerm.name}.$name"
         })
 

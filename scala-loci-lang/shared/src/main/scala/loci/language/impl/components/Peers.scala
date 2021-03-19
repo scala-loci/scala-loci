@@ -49,17 +49,16 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   object Peer {
     trait Base {
       val tpe: Type
-      val name: TypeName
       val tree: Tree
     }
 
     object Base {
-      def unapply(base: Base) = Some((base.tpe, base.name, base.tree))
+      def unapply(base: Base) = Some((base.tpe, base.tree))
     }
 
-    case class InheritedBase(tpe: Type, name: TypeName, tree: Tree) extends Base
+    case class InheritedBase(tpe: Type, tree: Tree) extends Base
 
-    case class DelegatedBase(tpe: Type, name: TypeName, tree: Tree) extends Base
+    case class DelegatedBase(tpe: Type, tree: Tree) extends Base
 
     case class Tie(tpe: Type, multiplicity: Peers.this.Tie, tree: Tree)
   }
@@ -212,7 +211,8 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         s"$symbolName is not a peer type: @peer type ${symbol.name}"
     })
 
-    if ((symbol.owner.info member peer.name) == NoSymbol &&
+    val name = TypeName(s"$$loci$$peer$$${uniqueName(symbol.owner, symbol.name.toString)}")
+    if ((symbol.owner.info member name) == NoSymbol &&
         (!underEnclosingExpansion(symbol) ||
          !isMultitierModule(symbol.owner.info)))
       c.abort(symbolPos,
@@ -328,7 +328,6 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
                  tpe =:!= types.peerMarker &&
                  (!tpe.typeSymbol.isClass || !tpe.typeSymbol.isSynthetic) =>
             val symbol = tpe.typeSymbol
-            val id = symbol.name.toString
 
             if (!(cache contains symbol))
               requirePeerType(symbol, EmptyTree, tree.pos orElse symbolPos)
@@ -336,9 +335,9 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
             val peerType = tpe.underlying.asSeenFrom(module.classSymbol)
 
             if (modulePeer(peerType))
-              Peer.InheritedBase(peerType, TypeName(s"$$loci$$peer$$$id"), tree)
+              Peer.InheritedBase(peerType, tree)
             else
-              Peer.DelegatedBase(peerType, TypeName(s"$$loci$$peer$$$id"), tree)
+              Peer.DelegatedBase(peerType, tree)
         }
 
         // ensure ties are specified to be `Multiple`, `Optional` or `Single`
@@ -375,7 +374,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
         // construct peer and add it to the cache
         // so we do not run checks again
-        val name = TypeName(s"$$loci$$peer$$${symbol.name}")
+        val name = TypeName(s"$$loci$$peer$$${uniqueName(module.symbol, symbol.name.toString)}")
         val peer = Peer(symbol, name, bases, computedTies)
         cache += symbol -> peer
 
@@ -400,7 +399,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   private def validate(peer: Peer, tiesInferred: Boolean, pos: Position): Unit = {
     // ensure that peers only appear once as super peer
     peer.bases combinations 2 foreach { bases =>
-      val Seq(Peer.Base(tpe0, _, _), Peer.Base(tpe1, _, tree1)) = bases: @unchecked
+      val Seq(Peer.Base(tpe0, _), Peer.Base(tpe1, tree1)) = bases: @unchecked
       if (tpe0 =:= tpe1)
         c.abort(tree1.pos orElse pos,
           s"peer type cannot appear multiple times as super peer: $tpe1")
@@ -408,7 +407,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
 
     // ensure that all super peers are defined in the same module
-    peer.bases foreach { case Peer.Base(tpe, _, tree) =>
+    peer.bases foreach { case Peer.Base(tpe, tree) =>
       if (!nestedPeer(tpe))
         c.abort(tree.pos orElse pos, s"peer type cannot declare a super peer of another module: $tpe")
     }
@@ -422,7 +421,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       case ExistentialTypeTree(_, _) => "existential type"
     }).headOption
 
-    peer.bases foreach { case Peer.Base(_, _, tree) =>
+    peer.bases foreach { case Peer.Base(_, tree) =>
       validateTypeTree(tree) foreach { desc =>
         c.abort(tree.pos orElse pos,
           s"peer type cannot be a subtype of $desc $tree")
@@ -514,7 +513,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   private def inferTies(symbol: Symbol, ties: List[Peer.Tie], bases: List[Peer.Base]): Option[List[Peer.Tie]] = {
     // collect tie specifications from base peers
     val baseTies = bases flatMap {
-      case Peer.Base(TypeRef(pre, sym, _), _, _) =>
+      case Peer.Base(TypeRef(pre, sym, _), _) =>
         requirePeerType(sym).ties map { tie =>
           tie.copy(tpe = tie.tpe.typeSymbol.ancestors.foldLeft(tie.tpe) { (tpe, symbol) =>
             tpe.asSeenFrom(pre, symbol)

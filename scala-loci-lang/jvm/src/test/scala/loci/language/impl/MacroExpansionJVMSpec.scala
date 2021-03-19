@@ -61,7 +61,7 @@ class MacroExpansionJVMSpec extends AnyFlatSpec with Matchers {
 
     val dummyRemote: Remote[mod.Peer] = null
 
-    val peer = new mod.$loci$peer$Peer {
+    val peer = new mod.$loci$peer$loci$language$impl$MacroExpansionJVMSpec$_$mod$Peer {
       def $loci$sys$create = emptySystem(this)
     }
 

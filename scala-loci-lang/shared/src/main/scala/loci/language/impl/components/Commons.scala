@@ -123,9 +123,6 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val none = typeOf[transmitter.transmittable.Transmittables.None]
     val compileTimeOnly = typeOf[annotation.compileTimeOnly]
     val placedValues = symbols.placedValues.companion.asType.toType
-    val nowran =
-      try Some(engine.c.mirror.staticClass("_root_.scala.annotation.nowarn").toType)
-      catch { case _: ScalaReflectionException => None }
   }
 
   object trees {
@@ -184,29 +181,47 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     }
 
   def uniqueRealisticTermName(symbol: Symbol): TermName =
-    TermName(uniqueName(symbol, NameTransformer encode ".", NameTransformer encode "#"))
+    TermName(uniqueName(symbol, NameTransformer encode ".", NameTransformer encode "#", ""))
 
-  def uniqueRealisticName(symbol: Symbol): String = uniqueName(symbol, ".", "#")
+  def uniqueRealisticName(symbol: Symbol): String = uniqueName(symbol, ".", "#", "")
 
-  def uniqueName(symbol: Symbol): String = uniqueName(symbol, "$", "$_$")
+  def uniqueName(symbol: Symbol, name: String = ""): String = uniqueName(symbol, "$", "$_$", name)
 
-  private def uniqueName(symbol: Symbol, selection: String, projection: String): String = {
-    val owner = symbol.owner
-    val name = symbol.name.toString
+  private def uniqueName(symbol: Symbol, selection: String, projection: String, name: String): String = {
+    val symbolOwner = symbol.owner
 
-    if (owner == engine.c.mirror.RootClass)
-      name
-    else if (symbol.isSynthetic || ((name startsWith "<") && (name endsWith ">")))
-      uniqueName(owner, selection, projection)
+    val symbolName = {
+      val symbolName = symbol.name.toString
+      if (symbolName startsWith "$loci$multitier$")
+        (symbolOwner.info member TermName(symbolName.drop(16)) orElse symbol).name.toString
+      else
+        symbolName
+    }
+
+    if (symbolOwner != NoSymbol && (symbol.isSynthetic || ((symbolName startsWith "<") && (symbolName endsWith ">"))))
+      uniqueName(symbolOwner, selection, projection, name)
     else {
-      val prefix = uniqueName(owner, selection, projection)
-      val separator = if (owner.isType && !owner.isModuleClass) projection else selection
-      val suffix =
-        if (name endsWith termNames.LOCAL_SUFFIX_STRING)
-          name.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
+      val prefix =
+        if (symbolOwner == NoSymbol || symbolOwner == engine.c.mirror.RootClass)
+          symbolName
         else
-          name
-      s"$prefix$separator$suffix"
+          uniqueName(symbolOwner, selection, projection, symbolName)
+
+      if (prefix.isEmpty)
+        name
+      else if (name.nonEmpty) {
+        val separator = if (symbol.isType && !symbol.isModuleClass) projection else selection
+
+        val suffix =
+          if (name endsWith termNames.LOCAL_SUFFIX_STRING)
+            name.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
+          else
+            name
+
+        s"$prefix$separator$suffix"
+      }
+      else
+        prefix
     }
   }
 

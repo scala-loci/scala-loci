@@ -30,31 +30,46 @@ class Instance(val c: blackbox.Context) {
 
   object names {
     def placedValues(symbol: Symbol) =
-      TypeName(NameTransformer encode s"<placed values of ${uniqueRealisticName(symbol)}>")
+      TypeName(NameTransformer encode s"<placed values of ${uniqueName(symbol, ".", "#", "")}>")
 
-    private def uniqueRealisticName(symbol: Symbol): String = {
-      val owner = symbol.owner
-      val name = symbol.name.toString
+    def peer(symbol: Symbol) =
+      TypeName(s"$$loci$$peer$$${uniqueName(symbol.owner, "$", "$_$", symbol.name.toString)}")
 
-      val realisticName =
-        if (name startsWith "$loci$multitier$")
-          (symbol.owner.info member TermName(name.drop(16)) orElse symbol).name.toString
+    private def uniqueName(symbol: Symbol, selection: String, projection: String, name: String): String = {
+      val symbolOwner = symbol.owner
+
+      val symbolName = {
+        val symbolName = symbol.name.toString
+        if (symbolName startsWith "$loci$multitier$")
+          (symbolOwner.info member TermName(symbolName.drop(16)) orElse symbol).name.toString
         else
-          name
+          symbolName
+      }
 
-      if (owner == c.mirror.RootClass)
-        realisticName
-      else if (symbol.isSynthetic || ((realisticName startsWith "<") && (realisticName endsWith ">")))
-        uniqueRealisticName(owner)
+      if (symbolOwner != NoSymbol && (symbol.isSynthetic || ((symbolName startsWith "<") && (symbolName endsWith ">"))))
+        uniqueName(symbolOwner, selection, projection, name)
       else {
-        val prefix = uniqueRealisticName(owner)
-        val separator = if (owner.isType && !owner.isModuleClass) "#" else "."
-        val suffix =
-          if (realisticName endsWith termNames.LOCAL_SUFFIX_STRING)
-            realisticName.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
+        val prefix =
+          if (symbolOwner == NoSymbol || symbolOwner == c.mirror.RootClass)
+            symbolName
           else
-            realisticName
-        s"$prefix$separator$suffix"
+            uniqueName(symbolOwner, selection, projection, symbolName)
+
+        if (prefix.isEmpty)
+          name
+        else if (name.nonEmpty) {
+          val separator = if (symbol.isType && !symbol.isModuleClass) projection else selection
+
+          val suffix =
+            if (name endsWith termNames.LOCAL_SUFFIX_STRING)
+              name.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
+            else
+              name
+
+          s"$prefix$separator$suffix"
+        }
+        else
+          prefix
       }
     }
   }
@@ -235,7 +250,7 @@ class Instance(val c: blackbox.Context) {
             "Early initialization not permitted (note that values are automatically initialized early if possible)")
 
         // create prefix path for multitier module
-        val peer = TypeName(s"$$loci$$peer$$${tpt.symbol.name}")
+        val peer = names.peer(tpt.symbol)
         val signature = TermName(s"$$loci$$peer$$sig$$${tpt.symbol.name}")
         val ties = TermName(s"$$loci$$peer$$ties$$${tpt.symbol.name}")
 
@@ -471,7 +486,7 @@ class Instance(val c: blackbox.Context) {
                      symbol.isType &&
                      !symbol.isClass &&
                      peer <:< symbol.asType.toType =>
-                val peerName = TypeName(s"$$loci$$peer$$${symbol.name}")
+                val peerName = names.peer(symbol)
                 val peer = multitierModuleType member peerName
                 if (peer.isType)
                   Some(tq"$path.$name.$peerName")

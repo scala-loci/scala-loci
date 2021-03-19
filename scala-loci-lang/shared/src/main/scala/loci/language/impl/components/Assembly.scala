@@ -100,18 +100,22 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
     val peerValues = modulePeers map { case Peer(symbol, name, bases, ties) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
-      val overriddenBases = module.tree.impl.parents flatMap { base =>
-        if ((base.tpe member symbol.name) != NoSymbol)
-          Some(tq"super[${base.symbol.name.toTypeName}].$name")
+      val overriddenBases = module.tree.impl.parents flatMap { parent =>
+        if ((parent.tpe member symbol.name) != NoSymbol)
+          Some(atPos(parent.pos) {
+            tq"${TypeName(s"$$loci$$peer$$${uniqueName(parent.symbol, symbol.name.toString)}")}"
+          })
         else
           None
       }
 
       // inherit implementation for peer bases defined in the same module
       val inheritedBases = bases collect {
-        case Peer.InheritedBase(_, name, tq"$expr.$_") =>
+        case Peer.InheritedBase(tpe, tq"$expr.$_") =>
+          val name = TypeName(s"$$loci$$peer$$${uniqueName(module.symbol, tpe.typeSymbol.name.toString)}")
           tq"$expr.$name"
-        case Peer.InheritedBase(tpe, name, _) =>
+        case Peer.InheritedBase(tpe, _) =>
+          val name = TypeName(s"$$loci$$peer$$${uniqueName(module.symbol, tpe.typeSymbol.name.toString)}")
           val tq"$expr.$_" = createTypeTree(tpe.underlying, NoPosition): @unchecked
           tq"$expr.$name"
       }
@@ -123,14 +127,8 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
       // generate peer implementations
       val parents = overriddenBases ++ inheritedBases :+ tq"${names.placedValues(module.symbol)}"
-      val mods = Modifiers(Flag.SYNTHETIC, typeNames.EMPTY,
-        if (overriddenBases.nonEmpty)
-          nowarnAnnotation.toList
-        else
-          List.empty)
-
       val peerImpl =
-        q"""$mods trait $name extends ..$parents {
+        q"""${Flag.SYNTHETIC} trait $name extends ..$parents {
           this: $selfType =>
           ..$placedValues
         }"""
@@ -194,7 +192,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         // we outsource the tie specification into a separate synthetically generated trait
         // to work around http://github.com/scala/bug/issues/10928
         Some(symbol -> body) -> atPos(rhs.pos orElse tree.pos) {
-          val tieName = TypeName(s"$$loci$$peer$$tie$$$name")
+          val tieName = TypeName(s"$$loci$$peer$$tie$$${uniqueName(tree.symbol)}")
           val tieParents = tq"${types.peerMarker} with ..$parents with $tieName"
           val rhs = TypeBoundsTree(EmptyTree, tieParents)
           treeCopy.TypeDef(tree, mods, name, tparams, rhs)
@@ -208,23 +206,19 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
     val peerTypeTieTrees = modulePeers map { peer =>
       // collect inherited synthetic peer traits
-      val tieName = TypeName(s"$$loci$$peer$$tie$$${peer.symbol.name}")
-
-      val parents = module.tree.impl.parents collect {
+      val parents = (module.tree.impl.parents collect {
         case parent if
             parent.tpe =:!= definitions.AnyTpe &&
-            parent.tpe =:!= definitions.AnyRefTpe &&
-            (parent.tpe member peer.symbol.name) != NoSymbol =>
-          atPos(parent.pos) {
-            tq"super[${parent.symbol.name.toTypeName}].$tieName"
-          }
-      }
+            parent.tpe =:!= definitions.AnyRefTpe =>
+          if ((parent.tpe member peer.symbol.name) != NoSymbol)
+            Some(atPos(parent.pos) {
+              tq"${TypeName(s"$$loci$$peer$$tie$$${uniqueName(parent.symbol, peer.symbol.name.toString)}")}"
+            })
+          else
+            None
+      }).flatten
 
-      val mods = Modifiers(Flag.SYNTHETIC, typeNames.EMPTY,
-        if (parents.nonEmpty)
-          nowarnAnnotation.toList
-        else
-          List.empty)
+      val tieName = TypeName(s"$$loci$$peer$$tie$$${uniqueName(module.symbol, peer.symbol.name.toString)}")
 
       (peerTypeBodies get peer.symbol
         map { body =>
@@ -241,7 +235,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
             else
               q"type Tie" :: body
 
-          Seq(q"$mods trait $tieName extends ..$parents { ..$stats }")
+          Seq(q"${Flag.SYNTHETIC} trait $tieName extends ..$parents { ..$stats }")
         }
         getOrElse {
           // generate synthetic peer trait for tie specification
@@ -265,7 +259,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
           Seq(
             q"@$peerAnnotation ${Flag.SYNTHETIC} type ${peer.symbol.name.toTypeName} <: ..$peerParents with $tieName",
-            q"$mods trait $tieName extends ..$parents { ..$tie }")
+            q"${Flag.SYNTHETIC} trait $tieName extends ..$parents { ..$tie }")
         })
     }
 
@@ -298,10 +292,4 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
   private val peerAnnotation =
     internal.setType(q"new ${types.peer}", types.peer)
-
-  private val nowarnAnnotation =
-    types.nowran map { nowarn =>
-      val message = s"msg=shadows trait \\$$loci\\$$peer"
-      internal.setType(q"new $nowarn($message)", nowarn)
-    }
 }

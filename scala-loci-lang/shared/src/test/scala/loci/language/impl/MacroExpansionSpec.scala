@@ -593,19 +593,19 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "correctly compile nested multitier modules" in {
-    new NestedMultitierModules.p.$loci$peer$Peer {
+    new NestedMultitierModules.p.$loci$peer$loci$language$impl$NestedMultitierModules$p$Peer {
       def $loci$sys$create = emptySystem(this)
     }.a.i should be (16)
 
-    new NestedMultitierModules.p.$loci$peer$Peer {
+    new NestedMultitierModules.p.$loci$peer$loci$language$impl$NestedMultitierModules$p$Peer {
       def $loci$sys$create = emptySystem(this)
     }.b.i should be (16)
 
-    new NestedMultitierModules.q.$loci$peer$Peer {
+    new NestedMultitierModules.q.$loci$peer$loci$language$impl$NestedMultitierModules$q$Peer {
       def $loci$sys$create = emptySystem(this)
     }.a.i should be (0)
 
-    new NestedMultitierModules.q.$loci$peer$Peer {
+    new NestedMultitierModules.q.$loci$peer$loci$language$impl$NestedMultitierModules$q$Peer {
       def $loci$sys$create = emptySystem(this)
     }.b.i should be (16)
   }
@@ -615,12 +615,12 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
       def $loci$sys$create = emptySystem(this)
     }.buffer should be (null)
 
-    new SubModule.$loci$peer$A {
+    new SubModule.$loci$peer$loci$language$impl$SubModule$A {
       def $loci$sys$create = emptySystem(this)
     }.buffer should contain theSameElementsInOrderAs Seq(
       "super a.0", "super a.1", "sub a.0", "sub a.1")
 
-    new SubModule.$loci$peer$B {
+    new SubModule.$loci$peer$loci$language$impl$SubModule$B {
       def $loci$sys$create = emptySystem(this)
     }.buffer should contain theSameElementsInOrderAs Seq(
       "super a.0", "super b.0", "super a.1", "super b.1", "sub a.0", "sub b.0", "sub a.1","sub b.1")
