@@ -271,7 +271,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           serializable
         }
         getOrElse {
-          val tree = c.typecheck(q"${trees.serializable}[$tpe]", silent = true) match {
+          val tree = typecheckInPositionContext(q"${trees.serializable}[$tpe]", pos) match {
             case q"$_[$_]($expr)" => expr
             case _ => EmptyTree
           }
@@ -327,7 +327,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               transmittablesRequired))) {
           val resolvedTransmittable = definedTransmittable orElse {
             if (unresolvedTransmittables forall { _ =:!= transmittableType }) {
-              val tree = extractTransmittable(c inferImplicitValue transmittableType)
+              val tree = extractTransmittable(typecheckInPositionContext(q"${trees.implicitly}[$transmittableType]", pos))
+
               tree foreach { internal.setPos(_, NoPosition) }
 
               val fullyExpandedTree = tree.fullyExpanded
@@ -1190,10 +1191,107 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     result
   }
 
+  private def typecheckInPositionContext(expr: Tree, pos: Position) = {
+    object traverser extends Traverser {
+      var result = EmptyTree
+      var blocks = 0
+
+      def process(trees: List[Tree], collectArguments: Boolean): List[Tree] = {
+        def min(tree: Tree): Int =
+          math.min(
+            if (tree.children.nonEmpty) min(tree.children.head) else Int.MaxValue,
+            if (tree.pos != NoPosition) tree.pos.point else Int.MaxValue)
+
+        val index = trees indexWhere { tree => tree.pos != NoPosition && min(tree) > pos.point }
+
+        val count = if (index == -1) trees.size - 1 else if (index > 0) index - 1 else 0
+
+        val implicitArguments =
+          if (collectArguments)
+            trees collect { case tree @ ValDef(mods, name, tpt, EmptyTree)
+                if (mods hasFlag Flag.PARAMACCESSOR) && (mods hasFlag Flag.IMPLICIT) =>
+              treeCopy.ValDef(tree,
+                mods withoutFlags (Flag.PARAMACCESSOR | Flag.PRIVATE | Flag.LOCAL),
+                name,
+                tpt,
+                q"null.asInstanceOf[$tpt]")
+            }
+          else
+            List.empty
+
+        val imports = trees take count collect { case tree: Import => tree }
+
+        result = EmptyTree
+        if (count >= 0)
+          traverse(trees(count))
+
+        if (result.nonEmpty)
+          implicitArguments ++ imports :+ result
+        else
+          implicitArguments ++ imports :+ expr
+      }
+
+      override def traverse(tree: Tree): Unit = tree match {
+        case tree @ ClassDef(mods, _, tparams, impl) if blocks == 0 =>
+          val body = process(impl.body, collectArguments = true)
+          val name = TypeName(s"$$loci$$impl$$dummy$$${tree.name}")
+          result = treeCopy.ClassDef(tree, mods mapAnnotations { _ => List.empty }, name, tparams,
+            treeCopy.Template(impl, List.empty, noSelfType, body))
+
+        case tree @ ModuleDef(mods, _, impl) if blocks == 0 =>
+          val body = process(impl.body, collectArguments = false)
+          val name = TermName(s"$$loci$$impl$$dummy$$${tree.name}")
+          result = treeCopy.ModuleDef(tree, mods mapAnnotations { _ => List.empty }, name,
+            treeCopy.Template(impl, List.empty, noSelfType, body))
+
+        case tree: ImplDef =>
+          val body = process(tree.impl.body, collectArguments = false)
+          result = Block(body dropRight 1, body.last)
+
+        case tree: Block =>
+          blocks += 1
+          val stats = process(tree.stats :+ tree.expr, collectArguments = false)
+          blocks -= 1
+          result = treeCopy.Block(tree, stats dropRight 1, stats.last)
+
+        case _ =>
+          super.traverse(tree)
+      }
+    }
+
+    object transformer extends Transformer {
+      var expressionFound = false
+
+      override def transform(tree: Tree): Tree = tree match {
+        case This(name) if name.toString startsWith "$loci$impl$dummy$" =>
+          This(TypeName(name.toString.drop(17)))
+
+        case tree: ImplDef if !expressionFound =>
+          tree.impl.body.lastOption map transform getOrElse EmptyTree
+
+        case tree: Block if !expressionFound =>
+          transform(tree.expr)
+
+        case _ =>
+          expressionFound = true
+          super.transform(tree)
+      }
+    }
+
+    traverser traverse c.macroApplication
+
+    transformer transform c.typecheck(traverser.result, silent = true) orElse
+    c.typecheck(expr, silent = true)
+  }
+
   private def extractTransmittable(resolution: Tree) = resolution match {
     case q"new $_[..$_]($expr)" if expr.tpe <:< types.transmittable =>
       expr
     case q"$_[..$_]($_[..$_]($expr))" if expr.tpe <:< types.transmittable =>
+      expr
+    case q"$_[..$_](new $_[..$_]($expr))" if expr.tpe <:< types.transmittable =>
+      expr
+    case q"$_[..$_]($_[..$_]($_[..$_]($expr)))" if expr.tpe <:< types.transmittable =>
       expr
     case _ =>
       EmptyTree
