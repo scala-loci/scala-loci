@@ -15,6 +15,7 @@ enablePlugins(GitVersioning)
 
 (ThisBuild / scalacOptions) ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 
+(ThisBuild / resolvers) += ("STG old bintray repo" at "http://www.st.informatik.tu-darmstadt.de/maven/").withAllowInsecureProtocol(true)
 
 def `is 2.12+`(scalaVersion: String): Boolean =
   CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 12 } getOrElse false
