@@ -5,9 +5,9 @@ enablePlugins(GitVersioning)
 
 (ThisBuild / git.useGitDescribe) := true
 
-(ThisBuild / scalaVersion) := "2.13.3"
+(ThisBuild / scalaVersion) := "2.13.5"
 
-(ThisBuild / crossScalaVersions) := Seq("2.11.12", "2.12.11", "2.13.3")
+(ThisBuild / crossScalaVersions) := Seq("2.11.12", "2.12.11", "2.13.5")
 
 (ThisBuild / organization) := "de.tuda.stg"
 
@@ -42,11 +42,11 @@ val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.3" % Test
+  "org.scalatest" %%% "scalatest" % "3.2.8" % Test
 
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "3.1.7"
+    "com.outr" %%% "scribe" % "3.5.4"
   else
     "com.outr" %%% "scribe" % "2.7.9"
 }
@@ -65,7 +65,7 @@ val rescala = libraryDependencies +=
 
 val upickle = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.lihaoyi" %%% "upickle" % "1.1.0"
+    "com.lihaoyi" %%% "upickle" % "1.3.12"
   else
     "com.lihaoyi" %%% "upickle" % "0.7.4"
 }
@@ -84,7 +84,7 @@ val circe = libraryDependencies ++= {
 val jsoniter = Seq(
   libraryDependencies ++= {
     if (`is 2.12+`(scalaVersion.value))
-      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.6.2")
+      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.8.0")
     else
       Seq.empty
   },
@@ -103,7 +103,7 @@ val scalajsDom = libraryDependencies +=
   "org.scala-js" % "scalajs-dom" % "1.1.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "3.11.2"
+  "io.javalin" % "javalin" % "3.13.7"
 
 
 lazy val loci = (project
