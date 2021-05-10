@@ -3,17 +3,17 @@ import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
 
 enablePlugins(GitVersioning)
 
-git.useGitDescribe in ThisBuild := true
+(ThisBuild / git.useGitDescribe) := true
 
-scalaVersion in ThisBuild := "2.13.3"
+(ThisBuild / scalaVersion) := "2.13.3"
 
-crossScalaVersions in ThisBuild := Seq("2.11.12", "2.12.11", "2.13.3")
+(ThisBuild / crossScalaVersions) := Seq("2.11.12", "2.12.11", "2.13.3")
 
-organization in ThisBuild := "de.tuda.stg"
+(ThisBuild / organization) := "de.tuda.stg"
 
-licenses in ThisBuild += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
+(ThisBuild / licenses) += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
 
-scalacOptions in ThisBuild ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
+(ThisBuild / scalacOptions) ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 
 
 def `is 2.12+`(scalaVersion: String): Boolean =
@@ -87,8 +87,8 @@ val jsoniter = Seq(
     else
       Seq.empty
   },
-  skip in compile := !`is 2.12+`(scalaVersion.value),
-  skip in publish := !`is 2.12+`(scalaVersion.value))
+  (compile / skip) := !`is 2.12+`(scalaVersion.value),
+  (publish / skip) := !`is 2.12+`(scalaVersion.value))
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
@@ -107,12 +107,12 @@ val javalin = libraryDependencies +=
 
 lazy val loci = (project
   in file(".")
-  settings (skip in publish := true)
+  settings ((publish / skip) := true)
   aggregate (lociJVM, lociJS))
 
 lazy val lociJVM = (project
   in file(".jvm")
-  settings (skip in publish := true)
+  settings ((publish / skip) := true)
   aggregate (lociLangJVM, lociArchitecturesBasicJVM,
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
@@ -124,7 +124,7 @@ lazy val lociJVM = (project
 
 lazy val lociJS = (project
   in file(".js")
-  settings (skip in publish := true)
+  settings ((publish / skip) := true)
   aggregate (lociLangJS, lociArchitecturesBasicJS,
              lociSerializerUpickleJS,
              lociSerializerCirceJS,
