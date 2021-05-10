@@ -18,26 +18,16 @@ trait Binding[T, R] {
     handler: (MessageBuffer, A) => Notice.Steady[Try[MessageBuffer]]): R
 }
 
-object Binding {
-  def apply[T](name: String)(implicit builder: BindingBuilder[T]) =
-    builder(name)
-
-  def Value[T](name: String)(implicit builder: BindingBuilder.Value[T]) =
-    builder(name)
-}
-
-trait BindingBuilder[T] {
-  type Result
+trait BindingBuilder[T, R] {
+  type Result = R
   def apply(bindingName: String): Binding[T, Result]
 }
 
 trait ValueBindingBuilder {
   implicit def value[T, P](implicit res: Marshallable[T, _, P])
-      : BindingBuilder.Value[T] { type Result = P } =
-    new BindingBuilder.Value[T] {
-      type Result = P
-
-      def apply(bindingName: String) = new Binding[T, Result] {
+      : BindingBuilder.Value[T, P] =
+    new BindingBuilder.Value[T, P] {
+      def apply(bindingName: String) = new Binding[T, P] {
         val name = bindingName
 
         def dispatch(
@@ -57,7 +47,7 @@ trait ValueBindingBuilder {
 }
 
 object BindingBuilder extends FunctionsBindingBuilder {
-  trait Value[T] extends BindingBuilder[T]
+  trait Value[T, R] extends BindingBuilder[T, R]
 }
 
 

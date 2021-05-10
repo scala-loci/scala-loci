@@ -137,10 +137,9 @@ object SourceGenerator {
 
         s"""
           |  implicit def $function(implicit $marshallables)
-          |      : BindingBuilder[($argTypes) => R] { type Result = ($argTypes) => P } = {
-          |    new BindingBuilder[($argTypes) => R] {
-          |      type Result = ($argTypes) => P
-          |      def apply(bindingName: String) = new Binding[($argTypes) => R, Result] {
+          |      : BindingBuilder[($argTypes) => R, ($argTypes) => P] = {
+          |    new BindingBuilder[($argTypes) => R, ($argTypes) => P] {
+          |      def apply(bindingName: String) = new Binding[($argTypes) => R, ($argTypes) => P] {
           |        val name = bindingName
           |        def dispatch(
           |            function: RemoteRef => ($argTypes) => R,

@@ -221,11 +221,11 @@ class Registry {
 
 
   def bindValue[T](name: String)(function: T)(
-      implicit builder: BindingBuilder.Value[T]): Unit =
+      implicit builder: BindingBuilder.Value[T, _]): Unit =
     bind(builder(name))(function)
 
   def bind[T](name: String)(function: T)(
-      implicit builder: BindingBuilder[T]): Unit =
+      implicit builder: BindingBuilder[T, _]): Unit =
     bind(builder(name))(function)
 
   def bind[T, R](binding: Binding[T, R])(function: T): Unit =
@@ -233,11 +233,11 @@ class Registry {
 
 
   def bindValueSbj[T, U](name: String)(function: T)(
-      implicit subjective: SubjectiveBinding[T, U], builder: BindingBuilder.Value[U]): Unit =
+      implicit subjective: SubjectiveBinding[T, U], builder: BindingBuilder.Value[U, _]): Unit =
     bindSbj(builder(name))(function)
 
   def bindSbj[T, U](name: String)(function: T)(
-      implicit subjective: SubjectiveBinding[T, U], builder: BindingBuilder[U]): Unit =
+      implicit subjective: SubjectiveBinding[T, U], builder: BindingBuilder[U, _]): Unit =
     bindSbj(builder(name))(function)
 
   def bindSbj[T, U, R](binding: Binding[U, R])(function: T)(
@@ -246,11 +246,11 @@ class Registry {
 
 
   def lookupValue[T](name: String, remote: RemoteRef)(
-      implicit builder: BindingBuilder.Value[T]): builder.Result =
+      implicit builder: BindingBuilder.Value[T, _]): builder.Result =
     lookup(builder(name), remote)
 
   def lookup[T](name: String, remote: RemoteRef)(
-      implicit builder: BindingBuilder[T]): builder.Result =
+      implicit builder: BindingBuilder[T, _]): builder.Result =
     lookup(builder(name), remote)
 
   def lookup[T, R](binding: Binding[T, R], remote: RemoteRef): R =
