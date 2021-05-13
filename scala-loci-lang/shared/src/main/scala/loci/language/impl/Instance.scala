@@ -220,7 +220,7 @@ class Instance(val c: blackbox.Context) {
   def start(instance: Tree): Tree = {
     // parse named arguments for constructor invocation
     val (stats, expr) = instance match {
-      case Block(stats @ List(ClassDef(_, _, _, _)), expr) =>
+      case Block(List(ClassDef(_, _, _, _)), _) =>
         List.empty -> instance
 
       case Block(stats, expr) =>
@@ -230,7 +230,7 @@ class Instance(val c: blackbox.Context) {
           case _ =>
             None
         }
-        definitions map { _ -> expr } getOrElse List.empty -> instance
+        definitions.fold(List.empty[ValDef] -> instance) { _ -> expr }
 
       case _ =>
         List.empty -> instance

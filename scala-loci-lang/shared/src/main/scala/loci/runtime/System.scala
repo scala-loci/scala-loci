@@ -110,12 +110,11 @@ class System(
           (earlyAccess || (startedRemotes containsKey remote)) && (remote.signature <= peer)
         }
 
-      (Peer.Tie(peer, ties) map {
+      Peer.Tie(peer, ties).fold(List.empty[Remote.Reference]) {
         case Peer.Tie.Multiple => remotes
         case Peer.Tie.Optional => remotes.headOption.toList
         case Peer.Tie.Single => List(singleRemotes(peer))
       }
-      getOrElse List.empty)
     }
     else
       remotes map {

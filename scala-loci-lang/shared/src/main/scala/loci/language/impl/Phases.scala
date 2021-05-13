@@ -86,19 +86,19 @@ object Phases {
 
   private def sort(phases: Seq[Phase], edges: Seq[(Phase, Phase)]) = {
     val permanents = mutable.Set.empty[Phase]
-    val temporarys = mutable.Set.empty[Phase]
+    val temporaries = mutable.Set.empty[Phase]
     var list = List.empty[Phase]
     var error = List.empty[String]
 
     def visit(phase: Phase, path: List[String]): Boolean =
       if (permanents contains phase)
         true
-      else if (temporarys contains phase) {
+      else if (temporaries contains phase) {
         error = phase.name :: path
         false
       }
       else {
-        temporarys += phase
+        temporaries += phase
         val result = edges forall {
           case (`phase`, succeeding) => visit(succeeding, phase.name :: path)
           case _ => true

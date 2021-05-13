@@ -47,7 +47,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     bases: List[Peer.Base], ties: List[Peer.Tie])
 
   object Peer {
-    trait Base {
+    sealed trait Base {
       val tpe: Type
       val tree: Tree
     }
@@ -549,7 +549,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         sortWith { case (Peer.Tie(tpe0, _, _), Peer.Tie(tpe1, _, _)) => tpe0 <:< tpe1 })
 
       (subtypes sliding 2) forall {
-        case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, tree2)) =>
+        case Seq(Peer.Tie(tpe1, multiplicity1, _), Peer.Tie(tpe2, multiplicity2, _)) =>
           if (tpe1 =:= tpe2)
             multiplicity1 == multiplicity2 && tie.multiplicity.key >= multiplicity2.key
           else if (tpe1 <:< tpe2)

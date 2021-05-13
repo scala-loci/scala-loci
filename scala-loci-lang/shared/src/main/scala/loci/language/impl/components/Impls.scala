@@ -357,12 +357,10 @@ class Impls[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
           if (isUnlifted(expr.symbol) &&
               underExpansion(expr.symbol) &&
-              !(skippedTrees contains expr)) {
-            skippedTrees += expr
+              skippedTrees.add(expr))
             addImplicitArgument(
               super.transform(tree),
               enclosingPlacedValueReference(currentOwner, enclosing, tree.pos))
-          }
           else
             super.transform(tree)
 

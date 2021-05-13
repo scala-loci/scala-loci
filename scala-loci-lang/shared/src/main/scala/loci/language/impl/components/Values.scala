@@ -305,9 +305,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               val peers = mutable.Set.empty[Symbol]
 
               specializations foreach { case (tree, peer, _) =>
-                if (peers contains peer)
+                if (!peers.add(peer))
                   c.abort(tree.pos, s"Duplicate implementation for ${peer.name}")
-                peers += peer
               }
 
               val inferredUnit =
@@ -873,7 +872,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       moduleStablePath(pre, prefix) map { tree =>
         internal.setSymbol(Select(tree, sym.name), sym)
       }
-    case TypeRef(pre, sym, List())
+    case TypeRef(_, sym, List())
         if sym.isModule || sym.isModuleClass || sym.isTerm && sym.asTerm.isStable =>
       moduleStablePath(sym, prefix)
     case ThisType(sym) =>

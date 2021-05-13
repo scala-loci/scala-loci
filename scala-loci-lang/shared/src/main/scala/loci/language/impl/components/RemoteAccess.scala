@@ -500,7 +500,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         if (!dummyTransmittableTree) {
           val transmittables = memberType(tree.tpe, names.transmittables)
           val transmittableTypes = List(info.base, info.intermediate, info.result, info.proxy, transmittables)
-          val resolutionType = types.resolution mapArgs { args => transmittableTypes }
+          val resolutionType = types.resolution mapArgs { _ => transmittableTypes }
 
           val serializable = resolveSerializable(info.intermediate, pos)
           var serializableResolutionFailure = serializable.isLeft
@@ -1267,7 +1267,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           This(TypeName(name.toString.drop(17)))
 
         case tree: ImplDef if !expressionFound =>
-          tree.impl.body.lastOption map transform getOrElse EmptyTree
+          tree.impl.body.lastOption.fold(EmptyTree) { transform }
 
         case tree: Block if !expressionFound =>
           transform(tree.expr)
@@ -1326,11 +1326,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       }
 
       if (trees.isEmpty)
-        DummyTransmittable.None
+        None
       else if (trees forall { _.tpe.typeSymbol.isParameter })
-        DummyTransmittable.Parameter
+        Parameter
       else
-        DummyTransmittable.NonParameter
+        NonParameter
     }
   }
 
@@ -1380,7 +1380,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           collectFirst {
             case symbol @ PlacedValueSymbol(`signature`, argInfo, _) =>
               (symbol.name.toTermName,
-               argInfo map { _.base } getOrElse definitions.UnitTpe,
+               argInfo.fold(definitions.UnitTpe) { _.base },
                peerType)
           }
           getOrElse c.abort(pos, s"Could not find remote accessor for placed $symbol"))

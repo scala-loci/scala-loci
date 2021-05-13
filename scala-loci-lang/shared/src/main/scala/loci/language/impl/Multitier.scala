@@ -240,9 +240,7 @@ class Multitier(val c: blackbox.Context) {
       logging.code(s"Expanded code for multitier module $name:${Properties.lineSeparator}$code")
     }
 
-    (companion.headOption
-      map { companion => q"$recoveredAnnottee; $companion"}
-      getOrElse recoveredAnnottee)
+    companion.headOption.fold(recoveredAnnottee) { companion => q"$recoveredAnnottee; $companion"}
   }
 
   private def singleOptionalArgument(exprss: List[List[Tree]], pos: Position): Option[Tree] =
@@ -419,8 +417,7 @@ class Multitier(val c: blackbox.Context) {
     }
 
     def fixSymbolInfo(symbol: Symbol): Unit =
-      if (!(fixingSymbols contains symbol)) {
-        fixingSymbols += symbol
+      if (fixingSymbols.add(symbol)) {
         fixType(symbol.info) foreach { internal.setInfo(symbol, _) }
         symbol.overrides foreach fixSymbolInfo
       }
