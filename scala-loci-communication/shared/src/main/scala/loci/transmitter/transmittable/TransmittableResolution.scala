@@ -114,7 +114,7 @@ object TransmittableResolution {
 
       if (resolutionTree.isEmpty)
         c.abort(c.enclosingPosition,
-          "Skipping transmittable resolution macro due to unresolved implicit")
+          s"Could not resolve ${resolutionType.typeConstructor} for $B")
 
 
       def dealiasNonRepresentableType(tpe: Type): Type =

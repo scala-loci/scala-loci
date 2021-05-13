@@ -21,5 +21,5 @@ object DummyImplicit {
 
 object NoDummyImplicit {
   def skip(c: whitebox.Context): c.Tree =
-    c.abort(c.enclosingPosition, "Skipping dummy macro")
+    c.abort(c.enclosingPosition, "`noDummy` must not be called")
 }

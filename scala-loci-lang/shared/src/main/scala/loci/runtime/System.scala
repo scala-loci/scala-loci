@@ -420,7 +420,7 @@ class System(
 
             logging.trace(s"handling remote access for $signature from $remote over channel $channelName")
 
-            val result = values.$loci$dispatch(payload, signature, reference)
+            val result = values.$loci$dispatch(payload, signature, signature.path, reference)
 
             if (messageType == ChannelMessage.Type.Request) {
               val message = result match {

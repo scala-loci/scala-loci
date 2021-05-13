@@ -6,7 +6,7 @@ import scala.collection.mutable
 object Value {
   case class Signature(name: String, module: String, path: List[String]) {
     override def toString: String =
-      if (path.isEmpty) s"$module.$name" else s"${path mkString "."}.$module.$name"
+      if (path.isEmpty) s"$module.$name" else s"${path mkString "."}.$name[$module]"
   }
 
   object Signature {

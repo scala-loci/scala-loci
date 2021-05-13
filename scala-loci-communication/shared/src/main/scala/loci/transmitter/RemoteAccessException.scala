@@ -15,6 +15,7 @@ object RemoteAccessException {
   case class Violation(message: String) extends Reason(message)
   case object RemoteDisconnected extends Reason("remote disconnected")
   case object ChannelClosed extends Reason("communication channel closed")
+  case object IllegalSubjectiveAccess extends Reason("illegal subjective access")
 
   def serialize(exception: Throwable): String =
     serializeException(exception).toString

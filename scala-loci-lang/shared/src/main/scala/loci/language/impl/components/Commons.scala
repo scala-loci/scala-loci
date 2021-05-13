@@ -75,6 +75,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   object types {
     val function = typeOf[_ => _]
+    val stringList = typeOf[List[String]]
     val unitFuture = typeOf[concurrent.Future[Unit]]
     val nothingFuture = typeOf[concurrent.Future[Nothing]]
     val on = typeOf[_ on _]
@@ -139,6 +140,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val multiple = q"${names.root}.loci.runtime.Peer.Tie.Multiple"
     val optional = q"${names.root}.loci.runtime.Peer.Tie.Optional"
     val single = q"${names.root}.loci.runtime.Peer.Tie.Single"
+    val illegalSubjectiveAccess = q"${names.root}.loci.transmitter.RemoteAccessException.IllegalSubjectiveAccess"
     val serializable = q"${names.root}.loci.transmitter.Serializable.apply"
     val marshallable = q"${names.root}.loci.transmitter.Marshallable.marshallable"
     val nothingMarshallable = q"${names.root}.loci.transmitter.Marshallable.nothing"

@@ -8,7 +8,7 @@ import scala.util.Try
 object Module {
   case class Signature(name: String, path: List[String]) {
     override def toString: String =
-      if (path.isEmpty) name else s"${path mkString "."}.$name"
+      if (path.isEmpty) name else s"$name.${path mkString "."}"
   }
 
   object Signature {

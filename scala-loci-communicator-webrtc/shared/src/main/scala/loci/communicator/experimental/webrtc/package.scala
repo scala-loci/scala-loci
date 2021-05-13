@@ -29,7 +29,7 @@ package webrtc {
           case (_, _, Some((candidate, sdpMid, sdpMLineIndex))) =>
             SessionUpdate(candidate, sdpMid, sdpMLineIndex)
           case _ =>
-            throw new RemoteAccessException("Invalid WebRTC update")
+            throw new RemoteAccessException("invalid WebRTC update")
         })
   }
 
@@ -51,7 +51,7 @@ package webrtc {
           case (_, Some((candidate, sdpMid, sdpMLineIndex))) =>
             SessionUpdate(candidate, sdpMid, sdpMLineIndex)
           case _ =>
-            throw new RemoteAccessException("Invalid WebRTC update")
+            throw new RemoteAccessException("invalid WebRTC update")
         })
 
     implicit val transmittableCompleteUpdate: TransformingTransmittable[

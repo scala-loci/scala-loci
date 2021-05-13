@@ -134,7 +134,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         record.copy(tree = transformer transform record.tree)
     }
 
-    logging.debug(s" Eliminated $count syntactic ${if (count == 1) "from" else "froms"} for explicit remote value access")
+    logging.debug(s" Eliminated $count syntactic ${if (count == 1) "form" else "forms"} for explicit remote value access")
     result
   }
 
@@ -223,7 +223,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       existing foreach { case (existingInfo, _) =>
         if (info.signature != existingInfo.signature)
-          c.abort(tree.pos, "Incoherent transmittables")
+          c.abort(tree.pos, "Incoherent transmittables: The transmittables in scope must be the same for all use sites")
       }
 
       if (existing.isEmpty)
@@ -722,7 +722,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                           if ($$loci$$reference.remote.signature <= $signature)
                             $$loci$$reference.remote
                           else
-                            throw new ${types.remoteAccessException}("Illegal subjective access")"""
+                            throw new ${types.remoteAccessException}(${trees.illegalSubjectiveAccess})"""
 
                         if (symbol.asTerm.isStable)
                           q"$$loci$$sys.subjectiveValue(${symbol.name}, $remote)"
@@ -809,10 +809,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     }).distinct
 
     val dispatchModuleClauses = modules map { symbol =>
-      cq"""${symbol.name.toString} => ${symbol.name}.$$loci$$dispatch(
-        $$loci$$request,
-        $$loci$$signature.copy($$loci$$signature.name, $$loci$$signature.module, $$loci$$signature.path.tail),
-        $$loci$$reference)"""
+      cq"""${symbol.name.toString} =>
+             ${symbol.name}.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$path.tail, $$loci$$reference)"""
     }
 
     val moduleDispatch =
@@ -820,13 +818,14 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         val tree = q"""${Flag.SYNTHETIC} def $$loci$$dispatch(
             $$loci$$request: ${types.messageBuffer},
             $$loci$$signature: ${types.signature},
+            $$loci$$path: ${types.stringList},
             $$loci$$reference: ${types.valueReference}) =
-          if ($$loci$$signature.path.isEmpty)
-            super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
+          if ($$loci$$path.isEmpty)
+            super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$path, $$loci$$reference)
           else
-            $$loci$$signature.path.head match {
+            $$loci$$path.head match {
               case ..$dispatchModuleClauses
-              case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
+              case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$path, $$loci$$reference)
             }"""
 
         Some(PlacedValueDef(NoSymbol, tree, None, Modality.None))
@@ -840,18 +839,15 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         val tree = q"""${Flag.SYNTHETIC} def $$loci$$dispatch(
             $$loci$$request: ${types.messageBuffer},
             $$loci$$signature: ${types.signature},
+            $$loci$$path: ${types.stringList},
             $$loci$$reference: ${types.valueReference}) =
-          if ($$loci$$signature.path.isEmpty) {
-            if ($$loci$$signature.module == $$loci$$mod)
-              $$loci$$signature.name match {
-                case ..${clauses map { case (_, clause) => clause } }
-                case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
-              }
-            else
-              super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)
-          }
+          if ($$loci$$path.isEmpty && $$loci$$signature.module == $$loci$$mod)
+            $$loci$$signature.name match {
+              case ..${clauses map { case (_, clause) => clause } }
+              case _ => super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$path, $$loci$$reference)
+            }
           else
-            super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$reference)"""
+            super.$$loci$$dispatch($$loci$$request, $$loci$$signature, $$loci$$path, $$loci$$reference)"""
 
         PlacedValuePeerImpl(NoSymbol, tree, peer, Modality.None)
       })
@@ -973,7 +969,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             else
               exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
                 if (remote.tpe <:!< types.remote)
-                  c.abort(tree.pos, "Unexpected selection")
+                  c.abort(remote.pos, "Unexpected selection: Only remote references should be well-typed")
                 q"$result.::(${trees.reference}($remote))"
               }
 

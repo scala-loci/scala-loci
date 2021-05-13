@@ -35,7 +35,16 @@ object TransmittableResolutionFailure {
         tpe -> tpe.toString
     }
 
-    val message = s"$original is not transmittable"
+    val symbol = tpe.typeSymbol
+
+    val baseMessage = s"$original is not transmittable"
+    val message =
+      if (symbol.isClass && symbol.asClass.isCaseClass) {
+        val impl = if (symbol.isModuleClass) "case object" else "case class"
+        s"$baseMessage; you may consider defining an `IdenticallyTransmittable[$tpe]` instance for $impl ${symbol.name}"
+      }
+      else
+        baseMessage
 
     q"""{
       @${termNames.ROOTPKG}.scala.annotation.compileTimeOnly($message) def resolutionFailure() = ()
