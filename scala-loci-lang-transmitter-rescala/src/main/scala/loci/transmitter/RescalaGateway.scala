@@ -15,8 +15,8 @@ protected[transmitter] trait RescalaGateway {
 
   protected class RescalaGateway[R, S <: Struct](gateway: Gateway[R])(implicit
       ev: Connection[R, _],
-      val scheduler: Scheduler[S]) extends RemoteGateway {
-    val interface = RescalaInterface.interfaceFor(scheduler)
+      protected val scheduler: Scheduler[S]) extends RemoteGateway {
+    protected val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.{Event, Evt}
 
@@ -42,7 +42,7 @@ protected[transmitter] trait RescalaGateway {
 
   implicit class RescalaMultipleGateway[R, S <: Struct](gateway: Gateway[R])(implicit
       ev: Connection[R, Multiple],
-      override val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
+      override protected val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
     import interface.{Signal, Var}
 
     @cutOutOfUserComputation lazy val connected: Signal[Seq[Remote[R]]] =
@@ -60,7 +60,7 @@ protected[transmitter] trait RescalaGateway {
 
   implicit class RescalaOptionalGateway[R, S <: Struct](gateway: Gateway[R])(implicit
       ev: Connection[R, Optional],
-      override val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
+      override protected val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
     import interface.{Signal, Var}
 
     @cutOutOfUserComputation lazy val connected: Signal[Option[Remote[R]]] =
@@ -78,7 +78,7 @@ protected[transmitter] trait RescalaGateway {
 
   implicit class RescalaSingleGateway[R, S <: Struct](gateway: Gateway[R])(implicit
       ev: Connection[R, Single],
-      override val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
+      override protected val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
 
     @cutOutOfUserComputation lazy val connected: Remote[R] =
       gateway.remote

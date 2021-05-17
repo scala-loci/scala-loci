@@ -12,9 +12,9 @@ protected[transmitter] trait SignalAccessor {
   implicit class RescalaSignalMultipleAccessor[S <: Struct, V, R, T, L](
     value: V from R)(implicit
     ev: Transmission[V, R, Signal[T, S], L, Multiple],
-    val scheduler: Scheduler[S])
+    protected val scheduler: Scheduler[S])
       extends RemoteAccessor {
-    val interface = RescalaInterface.interfaceFor(scheduler)
+    protected val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.{Signal, Var, transaction}
 
@@ -37,9 +37,9 @@ protected[transmitter] trait SignalAccessor {
   implicit class RescalaSignalOptionalAccessor[S <: Struct, V, R, T, L](
     value: V from R)(implicit
     ev: Transmission[V, R, Signal[T, S], L, Optional],
-    val scheduler: Scheduler[S])
+    protected val scheduler: Scheduler[S])
       extends RemoteAccessor {
-    val interface = RescalaInterface.interfaceFor(scheduler)
+    protected val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.{Signal, Var, transaction}
 
@@ -62,9 +62,9 @@ protected[transmitter] trait SignalAccessor {
   implicit class RescalaSignalSingleAccessor[S <: Struct, V, R, T, L](
     value: V from R)(implicit
     ev: Transmission[V, R, Signal[T, S], L, Single],
-    val scheduler: Scheduler[S])
+    protected val scheduler: Scheduler[S])
       extends RemoteAccessor {
-    val interface = RescalaInterface.interfaceFor(scheduler)
+    protected val interface = RescalaInterface.interfaceFor(scheduler)
 
     import interface.Signal
 

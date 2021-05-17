@@ -2,10 +2,17 @@ package loci
 package language
 
 import scala.annotation.unchecked.uncheckedVariance
+import scala.language.experimental.macros
+import scala.language.dynamics
 import scala.language.implicitConversions
 
 
-abstract class PlacedValue[+T, -P] private[loci]
+abstract class PlacedValue[+T, -P] private[loci] extends Dynamic {
+  def selectDynamic(key: String): Unit = macro AccessorResolutionFailure.selectDynamic
+  def updateDynamic(key: String)(value: Any): Unit = macro AccessorResolutionFailure.updateDynamic
+  def applyDynamic(key: String)(args: Any*): Unit = macro AccessorResolutionFailure.applyDynamic
+  def applyDynamicNamed(key: String)(args: Any*): Unit = macro AccessorResolutionFailure.applyDynamic
+}
 
 object PlacedValue extends transmitter.RemoteAccessor.Default
 
