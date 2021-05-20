@@ -11,6 +11,8 @@ object GatewayResolutionFailure {
   def fail(c: blackbox.Context)(key: c.Tree): c.Tree = {
     import c.universe._
 
+    val gatewayType = c.prefix.tree.tpe.baseType(symbolOf[Gateway[_]])
+
     val peerTree = c.prefix.tree match {
       case q"$_[$tpt]" => tpt
       case _ => EmptyTree
@@ -55,6 +57,6 @@ object GatewayResolutionFailure {
     c.abort(c.enclosingPosition,
       s"No peer gateway method $method for peer ${peerTree.tpe} " +
       s"(with ${tieType.typeSymbol.name.toString.toLowerCase} tie from local peer $localPeerType)" +
-      implicitConversionHints(c)(typeOf[Gateway[_]]))
+      utility.implicitHints.conversions(c)(gatewayType))
   }
 }

@@ -28,8 +28,9 @@ object SerializableResolutionFailure {
   def apply[T: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
     import c.universe._
 
-    val tpe = weakTypeOf[T]
-    val message = s"$tpe is not serializable"
+    val serializableType = weakTypeOf[Serializable[T]]
+    val tpe = serializableType.typeArgs.head
+    val message = s"$tpe is not serializable${utility.implicitHints.values(c)(serializableType)}"
 
     q"""{
       @${termNames.ROOTPKG}.scala.annotation.compileTimeOnly($message) def resolutionFailure() = ()

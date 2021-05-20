@@ -1,10 +1,10 @@
 package loci
-package language
+package utility
 
 import scala.reflect.macros.Universe
 
 object noReporting {
-  def apply(universe: Universe)(body: => Unit) = {
+  def apply[T](universe: Universe, default: T)(body: => T) = {
     val reset = try {
       val reporterClass = Class.forName("scala.tools.nsc.reporters.Reporter")
       val filteringReporterClass = Class.forName("scala.tools.nsc.reporters.FilteringReporter")
@@ -28,7 +28,7 @@ object noReporting {
         None
     }
 
-    reset foreach { case (setRepoter, reporter) =>
+    reset.fold(default) { case (setRepoter, reporter) =>
       try body
       finally {
         try setRepoter.invoke(universe, reporter)
