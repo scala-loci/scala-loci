@@ -17,7 +17,7 @@ object Serializable {
     serializable
 
   @compileTimeOnly("Value is not serializable")
-  final implicit def resolutionFailure[T, S[T]]: S[T] =
+  final implicit def resolutionFailure[T, SerializableFallback[T]]: SerializableFallback[T] =
     macro SerializableResolutionFailure[T]
 
   @compileTimeOnly("Value is not serializable")

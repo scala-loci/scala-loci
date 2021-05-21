@@ -1317,8 +1317,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     def apply(tree: Tree) = {
       val trees = tree collect {
-        case q"$expr[$tpt](...$_)" if expr.symbol.owner == symbols.transmittableDummy =>
-          tpt
+        case q"$expr[..$tpts](...$_)"
+            if tpts.nonEmpty && expr.symbol.owner == symbols.transmittableDummy =>
+          tpts.head
       }
 
       if (trees.isEmpty)
