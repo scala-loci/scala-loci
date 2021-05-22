@@ -3,6 +3,7 @@ package utility
 
 import java.util
 import scala.collection.mutable
+import scala.reflect.internal.util.SourceFile
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 import scala.reflect.macros.blackbox
 import scala.util.control.NonFatal
@@ -67,8 +68,106 @@ object implicitHints {
     i > 1 && path(i + 1) == '2' && path(i + 2) == '.'
   }
 
-  private def findImplicits(c: blackbox.Context)(findConversions: Boolean) = {
+  private val importNamesCache = new util.WeakHashMap[SourceFile, Any]
+
+  private def importNames(c: blackbox.Context)(file: SourceFile) = {
     import c.universe._
+
+    def erasePackageStatements(content: Array[Char]) = {
+      val builder = new mutable.StringBuilder(content.length)
+      val length = content.length - 7
+      var i = 0
+
+      while (i < length)
+        if (content(i) == 'p' &&
+            content(i + 1) == 'a' &&
+            content(i + 2) == 'c' &&
+            content(i + 3) == 'k' &&
+            content(i + 4) == 'a' &&
+            content(i + 5) == 'g' &&
+            content(i + 6) == 'e' &&
+            !Character.isJavaIdentifierPart(content(i + 7)) &&
+            (i == 0 || !Character.isJavaIdentifierPart(content(i - 1)))) {
+          builder.append("       ")
+          i += 7
+        }
+        else {
+          builder.append(content(i))
+          i += 1
+        }
+
+      while (i < length + 7) {
+        builder += content(i)
+        i += 1
+      }
+
+      builder.toString
+    }
+
+    importNamesCache.get(file) match {
+      case names: Set[String] @unchecked =>
+        names
+
+      case _ =>
+        val tree =
+          try c.parse(erasePackageStatements(file.content))
+          catch { case _: reflect.macros.ParseException => EmptyTree }
+
+        val names =
+          (tree collect {
+            case Import(expr, selectors) =>
+              (selectors map { _.name.toString }) ++
+              (expr collect {
+                case Select(_, name) => name.toString
+                case Ident(name) => name.toString
+              })
+          }).flatten.toSet - termNames.WILDCARD.toString
+
+        importNamesCache.put(file, names)
+
+        names
+    }
+  }
+
+  private def typeSymbolNames(c: blackbox.Context)(tpe: c.Type) = {
+    import c.universe._
+
+    val symbols = mutable.ListBuffer.empty[Symbol]
+    tpe foreach { tpe => symbols += tpe.typeSymbol }
+
+    (symbols flatMap { symbol =>
+      (ancestors(c)(symbol)
+        filter { symbol => !symbol.isParameter }
+        map { _.name.toString }
+        filter { name =>
+          name.nonEmpty &&
+          (name.head != '<' || name.last != '>') &&
+          !(name contains '$')
+        })
+    }).toSet
+  }
+
+  private def findImplicits(c: blackbox.Context)(tpe: c.Type, findConversions: Boolean) = {
+    import c.universe._
+
+    val (maxDepth, maxVisited, resetDepth) =
+      if (tpe != NoType) {
+        val related = typeSymbolNames(c)(tpe) ++ importNames(c)(c.enclosingPosition.source)
+        val normalRelated = related map { _.toLowerCase }
+        val resetDepth = { name: String =>
+          val normalName = name.toLowerCase
+          normalRelated exists { normalRelated =>
+            if (normalRelated.length < 4 || normalName.length < 4)
+              normalRelated == normalName
+            else
+              (normalRelated contains normalName) || (normalName contains normalRelated)
+          }
+        }
+
+        (2, 5000, resetDepth)
+      }
+      else
+        (5, 5000, (_: String) => false)
 
     val implicitConversions = mutable.ListBuffer.empty[(MethodSymbol, List[(Symbol, Symbol)])]
     val implicitValues = mutable.ListBuffer.empty[(MethodSymbol, List[(Symbol, Symbol)])]
@@ -127,8 +226,11 @@ object implicitHints {
               info.member(member.name) != NoSymbol) {
             val currentPath = if (root) path else symbol -> member.owner :: path
 
-            if (member.isModule && depth < 5 && visited.size < 5000)
-              queue.enqueue((member.asModule.moduleClass, currentPath, depth + 1))
+            if (member.isModule && depth < maxDepth && visited.size < maxVisited)
+              queue.enqueue((
+                member.asModule.moduleClass,
+                currentPath,
+                if (resetDepth(member.name.toString)) 0 else depth + 1))
 
             if (member.isMethod &&
                 member.isImplicit &&
@@ -192,6 +294,12 @@ object implicitHints {
       definitions.ObjectClass) contains symbol.owner)
   }
 
+  private def ancestors(c: blackbox.Context)(symbol: c.Symbol): List[c.Symbol] =
+    if (symbol != c.universe.NoSymbol)
+      symbol :: ancestors(c)(symbol.owner)
+    else
+      List.empty
+
   private def associatedImplicitScope(c: blackbox.Context)(tpe: c.Type) = {
     import c.universe._
 
@@ -200,13 +308,7 @@ object implicitHints {
       case tpe => tpe.typeSymbol.owner
     }
 
-    def ancestors(symbol: Symbol): List[Symbol] =
-      if (symbol != NoSymbol)
-        symbol :: ancestors(symbol.owner)
-      else
-        List.empty
-
-    val prefixes = ancestors(owner(tpe)) ++ ancestors(owner(tpe.dealias))
+    val prefixes = ancestors(c)(owner(tpe)) ++ ancestors(c)(owner(tpe.dealias))
 
     val symbol = tpe.dealias.typeSymbol
 
@@ -337,7 +439,7 @@ object implicitHints {
     import c.universe._
 
     noReporting(c.universe, List.empty[(List[(MethodSymbol, Type, List[(Symbol, Symbol)], (Int, String))], String, String)]) {
-      val (implicitValues, implicitConversions) = findImplicits(c)(tpeIsBaseOfConversion)
+      val (implicitValues, implicitConversions) = findImplicits(c)(tpe, tpeIsBaseOfConversion)
       val scope = associatedImplicitScope(c)(tpe)
 
       val implicits =
