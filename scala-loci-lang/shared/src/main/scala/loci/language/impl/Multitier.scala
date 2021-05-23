@@ -86,12 +86,6 @@ class Multitier(val c: blackbox.Context) {
 
     val constructorParams = mutable.ListBuffer.empty[List[List[ValDef]]]
 
-    val expandMultitierMacro =
-      !c.hasErrors &&
-      !isRecursiveExpansion &&
-      !isNestedExpansion &&
-      !hasInstanceOwner(c.internal.enclosingOwner)
-
     val (annottee, companion) = annottees match {
       case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) :: companion =>
         def reducedFlags(mods: Modifiers): Modifiers = {
@@ -136,22 +130,41 @@ class Multitier(val c: blackbox.Context) {
           "multitier annotation only applicable to classes, traits or objects")
     }
 
-    val processedAnnotee: Tree =
+    val skip = annottee.mods.annotations exists {
+      case q"new $expr[..$_](...$_)" =>
+        expr equalsStructure tq"${termNames.ROOTPKG}.loci.runtime.AbstractValue"
+      case _ =>
+        false
+    }
+
+    val expandMultitierMacro =
+      !c.hasErrors &&
+      !isRecursiveExpansion &&
+      !isNestedExpansion &&
+      !hasInstanceOwner(c.internal.enclosingOwner) &&
+      !skip
+
+    val markMultitierMacro =
+      !expandMultitierMacro &&
+      !c.hasErrors &&
+      !isRecursiveExpansion
+
+    val processedAnnotee: Tree = try {
+      import preprocessors._
+      import components._
+      import retypecheck._
+
+      val preprocessedAnnottee = Preprocessor.run(c)(
+        annottee,
+        Seq(MultitierTypes, AbstractValues, ImplicitContext, SelectionTupling))
+
       if (expandMultitierMacro) {
         try {
-          import preprocessors._
-          import components._
-          import retypecheck._
-
           val retyper = c.retyper
 
           logging.info(
             s"Expanding multitier code for ${c.internal.enclosingOwner.fullName}.${annottee.name} " +
             s"in ${c.enclosingPosition.source.file.path}")
-
-          val preprocessedAnnottee = Preprocessor.run(c)(
-            annottee,
-            Seq(MultitierTypes, AbstractValues, ImplicitContext, SelectionTupling))
 
           if (!documentationCompiler) {
             val typedAnnottee =
@@ -198,9 +211,9 @@ class Multitier(val c: blackbox.Context) {
           else
             preprocessedAnnottee
         }
-        catch improveMacroErrorReporting(annottee)
+        catch improveMacroErrorReporting(preprocessedAnnottee)
       }
-      else if (!c.hasErrors && !isRecursiveExpansion) {
+      else if (markMultitierMacro) {
         val mods = annottee.mods mapAnnotations {
           q"new ${termNames.ROOTPKG}.loci.runtime.MultitierModule" :: _
         }
@@ -213,7 +226,9 @@ class Multitier(val c: blackbox.Context) {
         }
       }
       else
-        annottee
+        preprocessedAnnottee
+    }
+    catch improveMacroErrorReporting(annottee)
 
     val recoveredAnnottee = processedAnnotee match {
       case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) if expandMultitierMacro =>
@@ -569,17 +584,34 @@ class Multitier(val c: blackbox.Context) {
 
       val pos = readPosField(e)
 
-      val compilationError =
+      val compilationError = atPos(pos) {
         q"${termNames.ROOTPKG}.loci.language.impl.Multitier.compilationFailure(${e.getMessage})"
-
-      (annottee: @unchecked) match {
-        case ModuleDef(mods, name, _) =>
-          atPos(pos) { q"$mods object $name { $compilationError }" }
-        case ClassDef(mods, name, _, _) if mods hasFlag Flag.TRAIT =>
-          atPos(pos) { q"$mods trait $name { $compilationError }" }
-        case ClassDef(mods, name, _, _) =>
-          atPos(pos) { q"$mods class $name { $compilationError }" }
       }
+
+      val compilationErrorAnnottee =
+        (annottee: @unchecked) match {
+          case ModuleDef(mods, name, impl @ Template(parents, self, body)) =>
+            treeCopy.ModuleDef(annottee, mods, name,
+              treeCopy.Template(impl, parents, self, body :+ compilationError))
+          case ClassDef(mods, name, tparams, impl @ Template(parents, self, body)) =>
+            treeCopy.ClassDef(annottee, mods, name, tparams,
+              treeCopy.Template(impl, parents, self, body :+ compilationError))
+        }
+
+      object skipNestedExpansionMarker extends Transformer {
+        val abstractValue = atPos(pos) { q"new ${termNames.ROOTPKG}.loci.runtime.AbstractValue" }
+
+        override def transform(tree: Tree): Tree = tree match {
+          case ModuleDef(mods, name, impl) =>
+            super.transform(treeCopy.ModuleDef(tree, mods mapAnnotations { _ :+ abstractValue }, name, impl))
+          case ClassDef(mods, name, tparams, impl) =>
+            super.transform(treeCopy.ClassDef(tree, mods mapAnnotations { _ :+ abstractValue }, name, tparams, impl))
+          case _ =>
+            super.transform(tree)
+        }
+      }
+
+      skipNestedExpansionMarker transform compilationErrorAnnottee
   }
 
   private val improveTypecheckingErrorMessage: PartialFunction[Throwable, Nothing] = {

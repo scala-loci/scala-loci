@@ -116,7 +116,7 @@ class Instance(val c: blackbox.Context) {
 
   def retrieve(retrievable: Tree): Tree =
     c.macroApplication match {
-      case _ if documentationCompiler =>
+      case _ if documentationCompiler || c.hasErrors =>
         q"${termNames.ROOTPKG}.scala.Predef.???"
 
       case q"$_[..$_]($instance).$_[$_]($_[..$_]($expr))" =>
@@ -237,7 +237,7 @@ class Instance(val c: blackbox.Context) {
     }
 
     expr match {
-      case _ if documentationCompiler =>
+      case _ if documentationCompiler || c.hasErrors =>
         q"${termNames.ROOTPKG}.scala.Predef.???"
 
       case q"new { ..$earlydefs } with $inst[$tpt](...$exprss) { $self => ..$body }"

@@ -36,7 +36,7 @@ class Connections(val c: blackbox.Context) {
     val name = TermName(s"$$loci$$peer$$sig$$${tpt.symbol.name}")
 
     tpt match {
-      case _ if documentationCompiler =>
+      case _ if documentationCompiler || c.hasErrors =>
         q"${termNames.ROOTPKG}.scala.Predef.???"
 
       case tq"$prefix.$_" if (prefix.tpe member name) != NoSymbol =>
