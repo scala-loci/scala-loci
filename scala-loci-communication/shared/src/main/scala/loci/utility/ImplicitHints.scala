@@ -481,25 +481,17 @@ object implicitHints {
         sortBy { case (importStatement, _) => importStatement })
 
       val selectedEntries =
-        if (tpeIsBaseOfConversion) {
-          val typeCheckingEntries = sortedEntries map { case entry @ (importStatement, entries) =>
+        if (tpeIsBaseOfConversion)
+          sortedEntries map { case entry @ (importStatement, entries) =>
             val typeCheckingEntries = entries filter { case (symbol, _, _, _) =>
               c.typecheck(q"$symbol(${c.prefix.tree})", silent = true).nonEmpty
             }
 
-            if (typeCheckingEntries.nonEmpty) (true, (importStatement, typeCheckingEntries)) else (false, entry)
+            if (typeCheckingEntries.nonEmpty)
+              (importStatement, typeCheckingEntries)
+            else
+              entry
           }
-
-          val typeCheckingImports =
-            typeCheckingEntries exists { case (typeChecking, ((_, importStatement), _)) =>
-              typeChecking && importStatement.nonEmpty
-            }
-
-          if (typeCheckingImports)
-            typeCheckingEntries collect { case (true, entry) => entry }
-          else
-            typeCheckingEntries map { case (_, entry) => entry }
-        }
         else
           sortedEntries
 
