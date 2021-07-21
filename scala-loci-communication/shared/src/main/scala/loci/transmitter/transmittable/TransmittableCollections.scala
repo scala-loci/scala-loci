@@ -2,7 +2,8 @@ package loci
 package transmitter
 package transmittable
 
-import scala.concurrent.ExecutionContext.Implicits.global
+import contexts.Immediate.Implicits.global
+
 import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
