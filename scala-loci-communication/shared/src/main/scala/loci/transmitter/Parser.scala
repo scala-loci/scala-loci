@@ -18,7 +18,7 @@ object Parser {
 
       if (start >= end - 1)
         throw new IllegalArgumentException("Malformed signature: "+
-          s"Expected '[...]' but found empty string")
+          "Expected '[...]' but found empty string")
 
       if (content(start) != '[' || content(end - 1) != ']')
         throw new IllegalArgumentException("Malformed signature: "+
@@ -75,7 +75,7 @@ object Parser {
 
       if (start >= first - 1)
         throw new IllegalArgumentException("Malformed signature: "+
-          s"Unexpected empty tag name")
+          "Unexpected empty tag name")
 
       val tag = content.substring(start, first)
       val index = tags indexOf tag
@@ -101,10 +101,15 @@ object Parser {
     def asList: List[Deserializer] =
       parse(start, end)
 
-    def asString: String =
-      unescape.replaceAllIn(
-        toString,
-        matching => Regex.quoteReplacement(matching.matched(1).toString))
+    def asString: String = {
+      val string = toString
+      if (string == "[]")
+        ""
+      else
+        unescape.replaceAllIn(
+          string,
+          matching => Regex.quoteReplacement(matching.matched(1).toString))
+    }
 
     override def toString =
       content.substring(start, end)
@@ -114,11 +119,14 @@ object Parser {
 
   def apply(content: String) = parse(content)
 
-  def tag(tag: String, value: String) = new Serializer {
+  def tag(tag: String, value: Serializer) = new Serializer {
+    if (tag.isEmpty)
+      throw new IllegalArgumentException("Unexpected empty tag name")
+
     def toString(builder: StringBuilder) = {
       builder ++= escape(tag)
       builder += ':'
-      builder ++= escape(value)
+      value.toString(builder)
     }
   }
 
@@ -140,7 +148,12 @@ object Parser {
   def list(list: List[Serializer]) = elements(list: _*)
 
   def string(string: String) = new Serializer {
-    def toString(builder: StringBuilder) = builder ++= escape(string)
+    def toString(builder: StringBuilder) = {
+      if (string.isEmpty)
+        builder ++= "[]"
+      else
+        builder ++= escape(string)
+    }
   }
 
   private def escape(string: String): String =
