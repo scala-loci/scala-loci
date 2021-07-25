@@ -3,6 +3,7 @@ package transmitter
 package transmittable
 
 import scala.annotation.compileTimeOnly
+import scala.collection.mutable
 import scala.concurrent.Future
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
@@ -42,12 +43,41 @@ object TransmittableResolutionFailure {
     val ExistentialType(existentialQuantified, TypeRef(pre, sym, existentialArgs)) =
       typeOf[Transmittable.Any[_, _, _]]: @unchecked
 
-    def originalType(tpe: Type) = tpe match {
-      case TypeRef(_, _, List(_, original, ConstantType(Constant(name: String))))
+    def originalType(tpe: Type) = tpe map {
+      case tpe @ TypeRef(_, _, List(_, original, _))
           if tpe <:< typeOf[TransmittableBase.SurrogateType[_, _, _]] =>
-        original -> name
+        original
       case tpe =>
-        tpe -> tpe.toString
+        tpe
+    }
+
+    def originalName(tpe: Type) = {
+      val names = mutable.ListBuffer.empty[(String, String)]
+
+      val originalType = tpe map {
+        case tpe @ TypeRef(_, _, List(_, original, ConstantType(Constant(name: String))))
+            if tpe <:< typeOf[TransmittableBase.SurrogateType[_, _, _]] =>
+          if (original.toString != name) {
+            val nameType = internal.constantType(Constant(" :: <" + name + "> :: "))
+            names += nameType.toString -> name
+            nameType
+          }
+          else
+            original
+        case tpe =>
+          tpe
+      }
+
+      names.foldLeft(originalType.toString) {
+        case (originalName, (typeName, name)) =>
+          val index = originalName.indexOf(typeName)
+          if (index != -1)
+            originalName.substring(0, index) +
+            name +
+            originalName.substring(index + typeName.length)
+          else
+            originalName
+      }
     }
 
     def instantiatedTypeOrElse(tpe: Type, alternative: Type, alternativeSymbol: Symbol) = {
@@ -58,17 +88,16 @@ object TransmittableResolutionFailure {
         tpe -> List.empty
     }
 
-    def instantiatedOriginalTypeOrElse(tpe: Type, alternative: Type, alternativeSymbol: Symbol) = {
-      val (original, _) = originalType(tpe)
-      instantiatedTypeOrElse(original, alternative, alternativeSymbol)
-    }
+    def instantiatedOriginalTypeOrElse(tpe: Type, alternative: Type, alternativeSymbol: Symbol) =
+      instantiatedTypeOrElse(originalType(tpe), alternative, alternativeSymbol)
 
     val (typeI, _) = instantiatedTypeOrElse(I, B, NoSymbol)
     val (typeR, _) = instantiatedTypeOrElse(R, B, NoSymbol)
     val (typeP, _) = instantiatedTypeOrElse(P, internal.typeRef(futurePre, futureSym, List(B)), NoSymbol)
     val (typeT, _) = instantiatedTypeOrElse(T, none, NoSymbol)
 
-    val (originalB, nameB) = originalType(B)
+    val originalB = originalType(B)
+    val nameB = originalName(B)
     val symbolB = originalB.typeSymbol
 
     val (args, quantified) =
