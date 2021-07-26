@@ -383,8 +383,59 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           val resolutionName = TermName(s"$$loci$$resolution$$failure$$res")
           val errorName = TermName(s"$$loci$$resolution$$failure$$err")
 
+          val errorTree = tree getOrElse q"${trees.implicitly}[${createTypeTree(tpe, pos)}]"
           val message = s"${tpe.typeArgs.head} is not transmittable"
-          val rhs = tree getOrElse q"${trees.implicitly}[${createTypeTree(tpe, pos)}]"
+
+          val methodArguments = (records flatMap {
+            case PlacedValue(_, DefDef(_, _, _, vparamss, _, _), Some(_), _) =>
+              vparamss flatMap { _ map { tree => tree.symbol -> tree } }
+            case _ =>
+              Seq.empty
+          }).toMap
+
+          var argumentDependencies = List.empty[(Symbol, ValDef)]
+
+          def findAdditionalArgumentDependencies(tree: Tree) = {
+            var additionalArgumentDependencies = List.empty[(Symbol, ValDef)]
+
+            tree foreach {
+              case tree: TypeTree if tree.tpe != null =>
+                methodArguments foreach { case argument @ (symbol, _) =>
+                  if ((tree.tpe contains symbol) &&
+                      !(argumentDependencies contains argument) &&
+                      !(additionalArgumentDependencies contains argument))
+                    additionalArgumentDependencies ::= argument
+                }
+              case tree =>
+                methodArguments get tree.symbol foreach { valDef =>
+                  val argument = tree.symbol -> valDef
+                  if (!(argumentDependencies contains argument) &&
+                      !(additionalArgumentDependencies contains argument))
+                    additionalArgumentDependencies ::= argument
+                }
+            }
+
+            additionalArgumentDependencies
+          }
+
+          var additionalArgumentDependencies = findAdditionalArgumentDependencies(errorTree)
+
+          while (additionalArgumentDependencies.nonEmpty) {
+            argumentDependencies :::= additionalArgumentDependencies
+            additionalArgumentDependencies = additionalArgumentDependencies flatMap { case (_, tree) =>
+              findAdditionalArgumentDependencies(tree)
+            }
+          }
+
+          val rhs =
+            if (argumentDependencies.nonEmpty) {
+              val defintions = argumentDependencies map { case (_, tree) =>
+                treeCopy.ValDef(tree, tree.mods withoutFlags Flag.PARAM, tree.name, tree.tpt, q"null.asInstanceOf[${tree.tpt}]")
+              }
+              q"..$defintions; $errorTree"
+            }
+            else
+              errorTree
 
           rhs foreach { internal.setPos(_, NoPosition) }
 
