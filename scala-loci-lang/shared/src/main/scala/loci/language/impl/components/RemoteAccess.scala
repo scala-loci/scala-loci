@@ -476,7 +476,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     }
 
     def implementMarshallable(info: TransmittableInfo, tree: Tree, pos: Position, name: TermName) = {
-      val (_, marshallable) = generateMarshallable(info, tree, pos, name, MarshallableImplementation.Omissible)
+      val implementation =
+        if (accessorGeneration == AccessorGeneration.Forced || accessorGeneration == AccessorGeneration.Required)
+          MarshallableImplementation.Required
+        else
+          MarshallableImplementation.Omissible
+
+      val (_, marshallable) = generateMarshallable(info, tree, pos, name, implementation)
       marshallable
     }
 
