@@ -6,8 +6,11 @@ import transmitter.Marshallable
 import scala.annotation.StaticAnnotation
 import scala.annotation.meta.{getter, setter}
 
+final class MarshallableValue[B, I, R, P](
+  val marshallable: Marshallable[B, R, P])
+
 @getter @setter
-final class MarshallableInfo[I](signature: Int) extends StaticAnnotation
+final class MarshallableInfo(signature: Int) extends StaticAnnotation
 
 final class PlacedValue[U, R, B, T](
   val signature: Value.Signature,
@@ -18,5 +21,5 @@ final class PlacedValue[U, R, B, T](
 @getter @setter
 final class PlacedValueInfo(
   signature: String,
-  arguments: Marshallable[_, _, _],
-  result: Marshallable[_, _, _]) extends StaticAnnotation
+  arguments: MarshallableValue[_, _, _, _],
+  result: MarshallableValue[_, _, _, _]) extends StaticAnnotation

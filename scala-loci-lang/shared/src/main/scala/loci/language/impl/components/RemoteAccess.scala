@@ -471,8 +471,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       if (marshallable.nonEmpty)
         marshallableIndex += 1
 
-      val nameTree = name map { name => q"$name" }
-      (nameTree, nameTree, marshallable)
+      (name map { name => q"$name.marshallable" }, name map { name => q"$name" }, marshallable)
     }
 
     def implementMarshallable(info: TransmittableInfo, tree: Tree, pos: Position, name: TermName) = {
@@ -503,8 +502,8 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         else
           definedMarshallables.iterator
 
-      val marshallableInfoType = types.marshallableInfo mapArgs { _ => List(info.intermediate) }
-      val marshallableInfoTree = createTypeTree(marshallableInfoType, pos)
+      val marshallableValueType = types.marshallableValue mapArgs { _ => List(info.base, info.intermediate, info.result, info.proxy) }
+      val marshallableValueTree = createTypeTree(marshallableValueType, pos)
       val marshallableMods = Modifiers(Flag.SYNTHETIC | Flag.PROTECTED | Flag.LOCAL | Flag.LAZY)
 
       val abstractValueAnnotation = q"new ${types.abstractValue}"
@@ -519,7 +518,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           implementedMarshallables += marshallableName
           definedMarshallables += exprInfo -> (NoSymbol -> marshallableName)
 
-          val annotation = q"new $marshallableInfoTree(${exprInfo.signature getOrElse 0})"
+          val annotation = q"new ${types.marshallableInfo}(${exprInfo.signature getOrElse 0})"
           val mods =
             if (exprInfo.signature.nonEmpty)
               marshallableMods mapAnnotations { _ => List(annotation) }
@@ -590,10 +589,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             }
           }
 
-          val expr = q"""${trees.marshallable}[..$transmittableTypes](
-            new $resolutionType($tree),
-            ${serializable.merge},
-            ${contextBuilder(tree.tpe)})"""
+          val expr = q"""new $marshallableValueTree(
+            ${trees.marshallable}[..$transmittableTypes](
+              new $resolutionType($tree),
+              ${serializable.merge},
+              ${contextBuilder(tree.tpe)}))"""
 
           val exprInfo = MarshallableInfo(info, expr.fullyExpanded)
 
@@ -616,11 +616,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
           declaredMarshallables += MarshallableInfo(info, None) -> (NoSymbol -> name)
 
-          val marshallableType = types.marshallable mapArgs { _ => List(info.base, info.result, info.proxy) }
-          val annotation = q"new $marshallableInfoTree(0)"
+          val annotation = q"new ${types.marshallableInfo}(0)"
           val mods = marshallableMods mapAnnotations { _ => List(abstractValueAnnotation, annotation) }
 
-          Some(name) -> Some(atPos(pos) { q"$mods val $name: $marshallableType = null" })
+          Some(name) -> Some(atPos(pos) { q"$mods val $name: $marshallableValueType = null" })
         }
         else
           None -> None
@@ -1454,12 +1453,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           val method = symbol.asMethod
           val tpe = method.info.finalResultType
 
-          if (tpe <:< types.marshallable)
+          if (tpe <:< types.marshallableValue)
             method.allAnnotations map { _.tree } collectFirst {
               case tree @ Apply(_, List(Literal(Constant(signature: Int))))
                   if tree.tpe <:< types.marshallableInfo =>
-                val Seq(base, result, proxy) = tpe.typeArgs: @unchecked
-                val Seq(intermediate) = tree.tpe.typeArgs: @unchecked
+                val Seq(base, intermediate, result, proxy) = tpe.typeArgs: @unchecked
                 (MarshallableInfo(
                   base.asSeenFrom(module.classSymbol),
                   intermediate.asSeenFrom(module.classSymbol),
