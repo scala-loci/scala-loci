@@ -2,6 +2,7 @@ package loci
 package transmitter
 package transmittable
 
+import scala.collection.mutable
 import scala.concurrent.Future
 import scala.reflect.macros.whitebox
 
@@ -14,11 +15,27 @@ object TransmittableResolution {
       T: c.WeakTypeTag](c: whitebox.Context)(dummy: c.Tree): c.Tree = {
     import c.universe._
 
-    val B = weakTypeOf[B]
-    val I = weakTypeOf[I]
-    val R = weakTypeOf[R]
-    val P = weakTypeOf[P]
-    val T = weakTypeOf[T]
+    def dealiasExistentials(tpe: Type) = tpe map {
+      case tpe @ ExistentialType(quantified, underlying) =>
+        val dealised = underlying map {
+          case tpe if tpe exists { tpe => quantified contains tpe.typeSymbol } => tpe.dealias
+          case tpe => tpe
+        }
+
+        if (!(dealised exists { tpe => quantified contains tpe.typeSymbol }))
+          dealised
+        else
+          tpe
+
+      case tpe =>
+        tpe
+    }
+
+    val B = dealiasExistentials(weakTypeOf[B])
+    val I = dealiasExistentials(weakTypeOf[I])
+    val R = dealiasExistentials(weakTypeOf[R])
+    val P = dealiasExistentials(weakTypeOf[P])
+    val T = dealiasExistentials(weakTypeOf[T])
 
     val resolutionModule = symbolOf[TransmittableBase.Resolution.type]
     val nothing = B =:= definitions.NothingTpe || B.typeSymbol.owner.owner == resolutionModule
@@ -132,13 +149,22 @@ object TransmittableResolution {
             tpe
         }
 
-      def hasNonRepresentableType(tpe: Type): Boolean =
+      def hasNonRepresentableType(tpe: Type): Boolean = {
+        val symbols = mutable.Set.empty[Symbol]
+
+        tpe foreach {
+          case ExistentialType(quantified, _) =>
+            symbols ++= quantified
+          case _ =>
+        }
+
         tpe exists {
           case tpe @ ThisType(_) =>
             tpe.typeSymbol.name.toString == "<refinement>"
           case tpe =>
-            tpe.typeSymbol.name.toString endsWith ".type"
+            !(symbols contains tpe.typeSymbol) && (tpe.typeSymbol.name.toString endsWith ".type")
         }
+      }
 
       // restore original types for types replaced with `TransmittableBase.SurrogateType` types
       // contract `IdenticallyTransmittable` instances
