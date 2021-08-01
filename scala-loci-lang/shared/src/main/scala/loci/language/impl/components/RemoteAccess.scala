@@ -13,7 +13,7 @@ object RemoteAccess extends Component.Factory[RemoteAccess](
 
   object placedValueCache extends ContextReference {
     class Value[C <: blackbox.Context](val c: C) extends Value.Base[C] {
-      val cache = mutable.Map.empty[(String, c.Symbol), (c.TermName, c.Type, Option[c.Type])]
+      val cache = mutable.Map.empty[(String, c.Symbol), (c.TermName, Option[(c.Type, c.Type, c.Type, c.Type)], Option[c.Type])]
     }
     def apply[C <: blackbox.Context](c: C): Value[c.type] = new Value(c)
   }
@@ -162,34 +162,18 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             if (method.typeParams.nonEmpty)
               c.abort(method.pos, "Placed methods cannot have type parameters")
 
-            def paramTypes(tpe: Type): List[List[Type]] = tpe match {
-              case MethodType(params, resultType) => (params map { _.info }) :: paramTypes(resultType)
-              case NullaryMethodType(tpe) => List.empty
-              case _ => List.empty
-            }
-
-            def makeTuple(types: List[Type]) = types match {
-              case List() => definitions.UnitTpe
-              case List(tpe) => tpe
-              case _ =>
-                val size = types.size
-                if (size > 22)
-                  c.abort(method.pos, "More than 22 arguments are not supported")
-                c.mirror.staticClass(s"_root_.scala.Tuple$size").toType mapArgs { _ => types }
-            }
-
-            val argss = paramTypes(method.info.asSeenFrom(module.classSymbol))
-
-            val tuple = makeTuple(argss
-              map { args => makeTuple(args filterNot { _ eq definitions.UnitTpe }) }
-              filterNot { _ eq definitions.UnitTpe })
-
-            modality match {
+            val (result, subjective) = modality match {
               case Modality.Subjective(subjective) =>
-                Some((method, peer, tpe.typeArgs(1), Some(subjective), tuple))
+                tpe.typeArgs(1).asSeenFrom(module.classSymbol) -> Some(subjective)
               case _ =>
-                Some((method, peer, tpe, None, tuple))
+                tpe.asSeenFrom(module.classSymbol) -> None
             }
+
+            val arguments = makeArgumentsTuple(method)
+            val (existentialArguments, argumentsExistentialization) = existentializeArgumentDependentType(arguments)
+            val (existentialResult, resultExistentialization) = existentializeArgumentDependentType(result)
+
+            Some((argumentsExistentialization + resultExistentialization, method, peer, existentialResult, subjective, existentialArguments))
 
           case _ =>
             None
@@ -197,12 +181,16 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       }
     }).flatten
 
+    val existentialized = placedValues exists { case (existentialization, _, _, _, _, _) =>
+      existentialization contains Existentialization.Existential
+    }
+
     // extract all implicitly constructed transmittables for all remote accesses
     val definedTransmittableTrees = records flatMap {
       case PlacedValue(_, tree, Some(peer), _) =>
         (tree collect {
           case tree @ q"$_[..$_](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
-            val index = checkForTransmission(tree, peer)
+            val (index, _, _) = checkForTransmission(tree, peer)
             val q"$_[..$_](...$transmissionExprss)" = exprss(1)(index): @unchecked
             transmissionExprss.headOption.toList flatMap {
               _ map extractTransmittable filter { _.nonEmpty }
@@ -630,7 +618,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     var placedValueIndex = 0
 
     val (placedValueNames, dispatchValueClauses, accessorValues) = (placedValues map {
-      case (symbol, peer, res, subjective, arg) =>
+      case (existentialization, symbol, peer, res, subjective, arg) =>
         val ancestors = symbol.ancestors
         val signature = methodSignature(symbol, res)
         val hasArguments = arg =:!= definitions.UnitTpe
@@ -647,40 +635,66 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           collectFirst { case tree if ancestors contains tree.symbol => tree.pos }
           getOrElse symbol.pos)
 
-        // find an inherited inheritedPlacedValueplaced value with the same signature
+        // find an inherited placed value with the same signature
         // and whose transmittable type conforms to the transmittable used in this code
         val inheritedPlacedValue = (module.classSymbol.selfType.members.sorted
           collectFirst {
-            case symbol @ PlacedValueSymbol(`signature`, argInfo, resInfo) =>
+            case PlacedValueSymbol(`signature`, argInfo, resInfo) =>
               val resConformant = definedResTransmittable forall { case (info, _) =>
                 !hasResult && resInfo.isEmpty ||
                  hasResult && resInfo.isDefined &&
                  resInfo.get.result =:= info.result && resInfo.get.proxy =:= info.proxy
               }
 
-              (!hasArguments && argInfo.isEmpty ||
-                hasArguments && argInfo.isDefined &&
-                argInfo.get.base =:= arg && argInfo.get.result =:= arg) &&
-              (!hasResult && resInfo.isEmpty ||
-                hasResult && resInfo.isDefined &&
-                resInfo.get.base =:= res) &&
-              resConformant
-          }
-          contains true)
+              if ((!hasArguments && argInfo.isEmpty ||
+                    hasArguments && argInfo.isDefined &&
+                    argInfo.get.base =:= arg && argInfo.get.result =:= arg) &&
+                  (!hasResult && resInfo.isEmpty ||
+                    hasResult && resInfo.isDefined &&
+                    resInfo.get.base =:= res) &&
+                  resConformant)
+                Some(argInfo -> resInfo)
+              else
+                None
+          }).flatten
+
+        val argPlacedInfo = (inheritedPlacedValue
+          collect { case (Some(argInfo), _) => argInfo.base -> argInfo.result }
+          orElse { if (!hasArguments) Some(definitions.UnitTpe -> types.unitFuture) else None })
+
+        val resPlacedInfo = (inheritedPlacedValue
+          collect { case (_, Some(resInfo)) => resInfo.base -> resInfo.proxy }
+          orElse {
+            if (!hasArguments) {
+              if (res =:= definitions.UnitTpe)
+                Some(definitions.UnitTpe -> types.unitFuture)
+              else
+                Some(definitions.NothingTpe -> types.nothingFuture)
+            }
+            else
+              None
+          })
+
+        val placedInfo = (argPlacedInfo, resPlacedInfo) match {
+          case (Some((argBase, argResult)), Some((resBase, resProxy))) =>
+            Some((argBase, argResult, resBase, resProxy))
+          case _ =>
+            None
+        }
 
         (resolveTransmittables(
             Seq(definedArgTransmittable -> argTransmittableType, definedResTransmittable -> resTransmittableType),
             pos,
-            inheritedPlacedValue,
+            inheritedPlacedValue.nonEmpty,
             transmittablesRequired): @unchecked) match {
           case Left(trees) =>
-            ((symbol, termNames.EMPTY, arg, subjective, false), None, trees)
+            ((symbol, termNames.EMPTY, placedInfo, subjective), None, trees)
 
           case Right(Seq()) if failed =>
-            ((symbol, termNames.EMPTY, arg, subjective, inheritedPlacedValue), None, Seq.empty)
+            ((symbol, termNames.EMPTY, placedInfo, subjective), None, Seq.empty)
 
           case Right(Seq()) =>
-            ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue), None, Seq.empty)
+            ((NoSymbol, termNames.EMPTY, None, None), None, Seq.empty)
 
           case Right(Seq((argInfo, argTree), (resInfo, resTree))) =>
             // create marshallable and placed value info instances
@@ -734,36 +748,44 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 }
 
                 // create dispatch clause
-                def arguments(paramLists: List[List[Symbol]], prefix: Tree) = {
-                  def element(index: Int) = TermName(s"_$index")
+                val tpe = symbol.info.asSeenFrom(module.classSymbol)
+                val argumentTrees = {
+                  val initialPath = q"$$loci$$arguments"
+                  val arguments = makeArgumentsTupleStructure(tpe)
 
-                  def arguments(paramList: List[Symbol], prefix: Tree) = {
-                    paramList.foldLeft(1 -> List.empty[Tree]) {
-                      case ((index, args), symbol) =>
-                        if (symbol.info =:= definitions.UnitTpe)
-                          index -> (q"()" :: args)
-                        else if ((paramList count { _.info =:!= definitions.UnitTpe }) == 1)
-                          index + 1 -> (prefix :: args)
-                        else
-                          index + 1 -> (q"$prefix.${element(index)}" :: args)
+                  def makePath(list: List[_], path: Tree, index: Int) =
+                    if (list.size == 1) path else q"$path.${TermName(s"_${index + 1}")}"
+
+                  (arguments.zipWithIndex flatMap { case (symbols, index) =>
+                    val currentPath = makePath(arguments, initialPath, index)
+                    symbols.zipWithIndex map { case (symbol, index) =>
+                      symbol -> makePath(symbols, currentPath, index)
                     }
+                  }).toMap
+                }
+
+                object argumentsTransformer extends Transformer {
+                  override def transform(tree: Tree): Tree = tree match {
+                    case Ident(_) => argumentTrees.getOrElse(tree.symbol, tree)
+                    case _ => super.transform(tree)
                   }
+                }
 
-                  val (_, argss) = paramLists.foldLeft(1 -> List.empty[List[Tree]]) {
-                    case ((index, argss), args) =>
-                      val (count, newargs) =
-                        if ((paramLists count { _ exists { _.info =:!= definitions.UnitTpe } }) == 1)
-                          arguments(args, prefix)
-                        else
-                          arguments(args, q"$prefix.${element(index)}")
+                val existentialized =
+                  (existentialization contains Existentialization.Projected) ||
+                  (existentialization contains Existentialization.Existential)
 
-                      if (count == 1)
-                        index -> (newargs.reverse :: argss)
-                      else
-                        index + 1 -> (newargs.reverse :: argss)
+                val arguments = tpe.paramLists map {
+                  _ map { symbol =>
+                    val tpe = symbol.info
+
+                    if (tpe =:= definitions.UnitTpe)
+                      q"()"
+                    else if (existentialized && (argumentTrees.keys exists { tpe contains _ }))
+                      q"${argumentTrees(symbol)}.asInstanceOf[${argumentsTransformer transform createTypeTree(tpe, pos)}]"
+                    else
+                      argumentTrees(symbol)
                   }
-
-                  argss.reverse
                 }
 
                 val invocation = (subjective
@@ -780,15 +802,15 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                           else
                             throw new ${types.remoteAccessException}(${trees.illegalSubjectiveAccess})"""
 
-                        if (symbol.asTerm.isStable)
+                        if (symbol.isStable)
                           q"$$loci$$sys.subjectiveValue(${symbol.name}, $remote)"
                         else
-                          q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})($remote)"
+                          q"${symbol.name}(...$arguments)($remote)"
                       }
                       getOrElse c.abort(pos,
                         s"Subjective definition may not refer to peer of another module: $subjective"))
                   } getOrElse {
-                    q"${symbol.name}(...${arguments(symbol.paramLists, q"$$loci$$arguments")})"
+                    q"${symbol.name}(...$arguments)"
                   })
 
                 val marshalling =
@@ -812,10 +834,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                 placedValueIndex += 1
 
-                ((symbol, placedValueName, arg, subjective, true), dispatchClause, marshallables :+ placedValue)
+                val placedInfo = Some((argInfo.base, argInfo.result, resInfo.base, resInfo.proxy))
+                ((symbol, placedValueName, placedInfo, subjective), dispatchClause, marshallables :+ placedValue)
             }
             getOrElse {
-              ((NoSymbol, termNames.EMPTY, NoType, None, inheritedPlacedValue), None, Seq.empty)
+              ((NoSymbol, termNames.EMPTY, None, None), None, Seq.empty)
             })
         }
     }).unzip3
@@ -851,9 +874,9 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     val path = module.path mkString "."
 
-    placedValueNames foreach { case (symbol, name, tpe, subjective, _) =>
+    placedValueNames foreach { case (symbol, name, info, subjective) =>
       if (symbol != NoSymbol)
-        PlacedValues.makeResolvable(path, symbol, name, tpe, subjective)
+        PlacedValues.makeResolvable(path, symbol, name, info, subjective)
     }
 
     val modules = (records collect {
@@ -908,6 +931,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         PlacedValuePeerImpl(NoSymbol, tree, peer, Modality.None)
       })
 
+    val existentialsLanguageFeature =
+      if (existentialized)
+        List(ModuleValue(NoSymbol, q"import ${termNames.ROOTPKG}.scala.language.existentials"))
+      else
+        List.empty
+
+    existentialsLanguageFeature ++
     records ++
     (accessorValues.flatten ++ marshallableValues map { ModuleValue(NoSymbol, _) }) ++
     moduleDispatch ++
@@ -1067,7 +1097,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           ""
       }
 
-      val (placedValueName, _, subjective) =
+      val (placedValueName, info, subjective) =
         PlacedValues.resolve(path, tree.symbol, tree.pos)
 
       val peerType = tree.tpe.finalResultType.widen.asSeenFrom(module.classSymbol).typeArgs(1)
@@ -1105,6 +1135,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
       (placedValue,
        placedValuePeer,
+       info,
        arguments(tree.symbol.asMethod.paramLists, exprss))
     }
 
@@ -1132,21 +1163,44 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             case q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.remoteAccessor =>
               count += 1
 
-              val index = checkForTransmission(tree, peer)
+              val (index, result, proxy) = checkForTransmission(tree, peer)
 
               val (value, _, remotes, dynamicRemoteSequence, remotesType) =
                 extractRemoteCall(exprss.head.head) getOrElse
                 extractSelection(exprss.head.head)
 
-              val (placedValue, placedValuePeer, arguments) =
+              val (placedValue, placedValuePeer, info, arguments) =
                 extractRemoteAccess(value, peer, remotesType)
+
+              val typedPlacedValue = (info
+                flatMap { case (argBase, argResult, resBase, resProxy) =>
+                  val arguments = if (value.symbol.isMethod) makeArgumentsTuple(value.symbol.asMethod) else NoType
+                  val (existentialArguments, _) = existentializeArgumentDependentType(arguments)
+                  val (existentialResult, _) = existentializeArgumentDependentType(result)
+                  val (existentialProxy, _) = existentializeArgumentDependentType(proxy)
+
+                  if (hoistExistentialTypes(existentialArguments) =:= hoistExistentialTypes(argBase) &&
+                      hoistExistentialTypes(existentialArguments) =:= hoistExistentialTypes(argResult) &&
+                      hoistExistentialTypes(existentialResult) =:= hoistExistentialTypes(resBase) &&
+                      hoistExistentialTypes(existentialProxy) =:= hoistExistentialTypes(resProxy) &&
+                      (arguments =:!= existentialArguments ||
+                       result =:!= existentialResult ||
+                       proxy =:!= existentialProxy)) {
+                    val placedValueType = types.placedRuntimeValue mapArgs { _ => List(arguments, arguments, result, proxy) }
+                    val placedValueTree = createTypeTree(placedValueType, value.pos)
+                    Some(q"$placedValue.asInstanceOf[$placedValueTree]")
+                  }
+                  else
+                    None
+                }
+                getOrElse placedValue)
 
               val instances = c.freshName(TermName("instances"))
               val exprs = exprss(1).updated(
                 index,
                 q"""val $instances = $remotes
                     new ${createTypeTree(types.remoteRequest.typeConstructor, value.pos)}(
-                      $arguments, $placedValue, $placedValuePeer, $instances, $dynamicRemoteSequence, $$loci$$sys)""")
+                      $arguments, $typedPlacedValue, $placedValuePeer, $instances, $dynamicRemoteSequence, $$loci$$sys)""")
 
               atPos(value.pos) {
                 transform(q"$expr[..${tpts map createTypeTree}](${trees.remoteValue})(..$exprs)")
@@ -1157,7 +1211,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 map { case (value, _, remotes, dynamicRemoteSequence, remotesType) =>
                   count += 1
 
-                  val (placedValue, placedValuePeer, arguments) =
+                  val (placedValue, placedValuePeer, _, arguments) =
                     extractRemoteAccess(value, peer, remotesType)
 
                   atPos(value.pos) {
@@ -1188,7 +1242,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     result
   }
 
-  private def checkForTransmission(tree: Tree, peer: Symbol): Int = {
+  private def checkForTransmission(tree: Tree, peer: Symbol): (Int, Type, Type) = {
     val q"$_[..$_](...$exprss)" = tree: @unchecked
 
     if (exprss.size != 2 || exprss.head.size != 1)
@@ -1197,7 +1251,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
     var index = 0
     var count = 0
-    var result = -1
+    var result = (-1, NoType, NoType)
 
     val arg = exprss.head.head
     val tpe = arg.tpe.finalResultType.widen.asSeenFrom(module.classSymbol)
@@ -1206,11 +1260,11 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       if (expr.tpe real_<:< types.transmission) {
         val q"$_[..$params](...$_)" = expr: @unchecked
 
-        val value =
+        val (value, proxy) =
           if (params.size < 11)
-            definitions.NothingTpe
+            definitions.NothingTpe -> types.nothingFuture
           else
-            params(4).tpe
+            params(4).tpe -> params(7).tpe
 
         val Seq(placedValue, placedPeer, _, to, _) =
           extractTag(expr.tpe, types.transmission, tree.pos).typeArgs: @unchecked
@@ -1229,7 +1283,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           c.abort(tree.pos, "Invalid remote accessor: " +
             "Transmission value does not conform to remote access")
 
-        result = index
+        result = (index, value, proxy)
         count += 1
       }
 
@@ -1368,6 +1422,80 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
     }
   }
 
+  private def hoistExistentialTypes(tpe: Type) = {
+    val hoisted = mutable.ListBuffer.empty[Symbol]
+
+    val underlying = tpe map {
+      case ExistentialType(quantified, underlying) =>
+        hoisted ++= quantified
+        underlying
+      case tpe =>
+        tpe
+    }
+
+    internal.existentialAbstraction(hoisted.toList, underlying)
+  }
+
+  private object Existentialization extends Enumeration {
+    val None, Projected, Existential = Value
+  }
+
+  private def existentializeArgumentDependentType(tpe: Type) = {
+    val quantified = mutable.ListBuffer.empty[Symbol]
+
+    val underlying = tpe map {
+      case singleType @ SingleType(NoPrefix, _) if singleType exists { _.typeSymbol.isParameter } =>
+        import scala.language.existentials
+
+        val ExistentialType(List(symbol), _) = weakTypeOf[v.type forSome { val v: AnyRef }]: @unchecked
+
+        internal.setName(symbol, TypeName(singleType.toString))
+        internal.setOwner(symbol, module.classSymbol)
+        internal.setInfo(symbol, symbol.info map {
+          case tpe if tpe == definitions.AnyRefTpe =>
+            singleType.underlying.asSeenFrom(module.classSymbol)
+          case tpe =>
+            tpe
+        })
+
+        quantified += symbol
+        internal.typeRef(NoPrefix, symbol, List.empty)
+
+      case tpe =>
+        tpe
+    }
+
+    if (quantified.nonEmpty)
+      internal.existentialAbstraction(quantified.toList, underlying) match {
+        case tpe @ ExistentialType(_, _) => tpe -> Existentialization.Existential
+        case tpe => tpe -> Existentialization.Projected
+      }
+    else
+      tpe -> Existentialization.None
+  }
+
+  private def makeArgumentsTupleStructure(tpe: Type) =
+    (tpe.paramLists
+      map { args => args filterNot { _.info =:= definitions.UnitTpe } }
+      filterNot { _.isEmpty })
+
+  private def makeArgumentsTuple(symbol: MethodSymbol) = {
+    def makeTuple(types: List[Type]) = types match {
+      case List() => definitions.UnitTpe
+      case List(tpe) => tpe
+      case _ =>
+        val size = types.size
+        if (size > 22)
+          c.abort(symbol.pos, "More than 22 arguments are not supported")
+        c.mirror.staticClass(s"_root_.scala.Tuple$size").toType mapArgs { _ => types }
+    }
+
+    makeTuple(
+      makeArgumentsTupleStructure(symbol.info.asSeenFrom(module.classSymbol)) map { args =>
+        makeTuple(args map { _.info })
+      })
+  }
+
   private object DummyTransmittable extends Enumeration {
     val NonParameter, Parameter, None = Value
 
@@ -1378,9 +1506,19 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           tpts.head
       }
 
+      def isParameterInPath(tpe: Type): Boolean =
+        tpe.typeSymbol.isParameter ||
+        (tpe.typeSymbol.info exists { _.typeSymbol.isParameter }) ||
+        (tpe match {
+          case TypeRef(pre, _, _) => isParameterInPath(pre)
+          case SingleType(pre, _) => isParameterInPath(pre)
+          case ExistentialType(_, underlying) => isParameterInPath(underlying)
+          case _ => false
+        })
+
       if (trees.isEmpty)
         None
-      else if (trees forall { _.tpe.typeSymbol.isParameter })
+      else if (trees forall { tree => isParameterInPath(tree.tpe) })
         Parameter
       else
         NonParameter
@@ -1388,7 +1526,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
   object PlacedValues {
-    def resolve(path: String, symbol: Symbol, pos: Position): (TermName, Type, Option[Type]) =
+    def resolve(path: String, symbol: Symbol, pos: Position): (TermName, Option[(Type, Type, Type, Type)], Option[Type]) =
       cache.getOrElseUpdate(path -> symbol, {
         val (resultType, peerType) =
           if (symbol.isMethod) {
@@ -1431,18 +1569,30 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
         (info.members.sorted
           collectFirst {
-            case symbol @ PlacedValueSymbol(`signature`, argInfo, _) =>
-              (symbol.name.toTermName,
-               argInfo.fold(definitions.UnitTpe) { _.base },
-               peerType)
+            case symbol @ PlacedValueSymbol(`signature`, argInfo, resInfo) =>
+              val (argBase, argResult) = (argInfo
+                map { info => info.base -> info.result }
+                getOrElse { definitions.UnitTpe -> types.unitFuture })
+
+              val (resBase, resProxy) = (resInfo
+                map { info => info.base -> info.proxy }
+                getOrElse {
+                  if (resultType =:= definitions.UnitTpe)
+                    definitions.UnitTpe -> types.unitFuture
+                  else
+                    definitions.NothingTpe -> types.nothingFuture
+                })
+
+              (symbol.name.toTermName, Some((argBase, argResult, resBase, resProxy)), peerType)
           }
           getOrElse c.abort(pos, s"Could not find remote accessor for placed $symbol"))
       })
 
-    def makeResolvable(path: String, symbol: Symbol, name: TermName, tpe: Type, subjective: Option[Type]): Unit =
-      cache += path -> symbol -> ((name, tpe, subjective))
+    def makeResolvable(path: String, symbol: Symbol, name: TermName, info: Option[(Type, Type, Type, Type)], subjective: Option[Type]): Unit = {
+      cache += path -> symbol -> ((name, info, subjective))
+    }
 
-    private val cache: mutable.Map[(String, Symbol), (TermName, Type, Option[Type])] =
+    private val cache: mutable.Map[(String, Symbol), (TermName, Option[(Type, Type, Type, Type)], Option[Type])] =
       RemoteAccess.placedValueCache.get(c).cache
   }
 
