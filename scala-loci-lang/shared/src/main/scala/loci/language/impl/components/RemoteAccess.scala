@@ -699,7 +699,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           case Right(Seq((argInfo, argTree), (resInfo, resTree))) =>
             // create marshallable and placed value info instances
             // for the successfully resolved transmittable
-            val marshallables = {
+            val (marshallablesValueAnnotation, marshallables) = {
               val nonStandardNonResult =
                 resInfo.proxy =:!= types.unitFuture &&
                 resInfo.proxy =:!= types.nothingFuture
@@ -723,14 +723,16 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 else
                   (Some(trees.nothingMarshallable), Some(q"null"), None)
 
+              val marshallables = (argMarshallable ++ resMarshallable).toSeq
+
               if (argValue.nonEmpty && argAnnotation.nonEmpty && resValue.nonEmpty && resAnnotation.nonEmpty)
-                Some((argValue.get, argAnnotation.get, resValue.get, resAnnotation.get, (argMarshallable ++ resMarshallable).toSeq))
+                Some((argValue.get, argAnnotation.get, resValue.get, resAnnotation.get)) -> marshallables
               else
-                None
+                None -> marshallables
             }
 
-            (marshallables
-              map { case (argValue, argAnnotation, resValue, resAnnotation, marshallables) =>
+            (marshallablesValueAnnotation
+              map { case (argValue, argAnnotation, resValue, resAnnotation) =>
                 // create new placed value info if necessary
                 val placedValueName = TermName(s"$$loci$$val$$$moduleName$$$placedValueIndex")
                 val annotation = q"new ${types.placedRuntimeValueInfo}($signature, $argAnnotation, $resAnnotation)"
@@ -838,7 +840,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 ((symbol, placedValueName, placedInfo, subjective), dispatchClause, marshallables :+ placedValue)
             }
             getOrElse {
-              ((NoSymbol, termNames.EMPTY, None, None), None, Seq.empty)
+              ((NoSymbol, termNames.EMPTY, None, None), None, marshallables)
             })
         }
     }).unzip3
