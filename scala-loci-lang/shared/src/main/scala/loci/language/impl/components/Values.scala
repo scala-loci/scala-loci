@@ -1171,7 +1171,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
   private def splitPlacementSyntax(tree: Tree): List[Tree] = tree match {
     case q"$expr.$_[..$_](...$exprss)"
         if tree.nonEmpty && tree.symbol == symbols.and =>
-      expr :: splitPlacementSyntax(exprss.head.head)
+      exprss.head.head :: splitPlacementSyntax(expr)
 
     case _ =>
       tree :: Nil
