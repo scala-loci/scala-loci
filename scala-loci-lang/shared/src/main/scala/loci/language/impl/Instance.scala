@@ -163,15 +163,25 @@ class Instance(val c: blackbox.Context) {
 
             val (placedPrefix, placedPath) = splitPrefixPath(prefix)
 
-            val Seq(value, peer) = {
-              if (expr.tpe <:< types.on)
-                expr.tpe.widen.typeArgs
+            val peerTypeTree = exprss match {
+              case List(List(tree)) if expr.symbol.isTerm && expr.symbol.asTerm.isSetter => tree
+              case _ => expr
+            }
+
+            val peer =
+              if (peerTypeTree.tpe <:< types.on)
+                peerTypeTree.tpe.widen.typeArgs.last
               else
-                Seq(expr.tpe, NoType)
-            }: @unchecked
+                NoType
+
+            val result =
+              if (expr.tpe <:< types.on)
+                expr.tpe.widen.typeArgs.head
+              else
+                expr.tpe
 
             if (peer != NoType && !(instancePeer <:< peer))
-              c.abort(pos, s"$expr is not placed on $peer")
+              c.abort(pos, s"${expr.symbol} is not placed on $peer")
 
             object transformer extends Transformer {
               override def transform(tree: Tree): Tree = tree match {
@@ -185,8 +195,8 @@ class Instance(val c: blackbox.Context) {
             }
 
             val access =
-              if (peer != NoType && value <:< types.per) {
-                val Seq(subjective, remote) = value.widen.typeArgs: @unchecked
+              if (peer != NoType && result <:< types.per) {
+                val Seq(subjective, remote) = result.widen.typeArgs: @unchecked
                 val access =
                   if (expr.symbol.asTerm.isStable)
                     q"$placedPath.$$loci$$sys.subjectiveValue($placedPath.$name[..$tpt](...$exprss), remote)"
