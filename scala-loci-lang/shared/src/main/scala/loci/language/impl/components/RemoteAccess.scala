@@ -53,7 +53,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         compatibility.iterable.collectFirst(iterable) {
           case value @ (otherInfo, _)
               if otherInfo.base =:= info.base &&
-                 otherInfo.intermediate =:= info.intermediate &&
+                (otherInfo.intermediate == NoType || otherInfo.intermediate =:= info.intermediate) &&
                  otherInfo.result =:= info.result &&
                  otherInfo.proxy =:= info.proxy =>
             value
@@ -63,7 +63,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         compatibility.iterable.collectFirst(iterable) {
           case (otherInfo, value)
               if otherInfo.base =:= info.base &&
-                 otherInfo.intermediate =:= info.intermediate &&
+                (otherInfo.intermediate == NoType || otherInfo.intermediate =:= info.intermediate) &&
                  otherInfo.result =:= info.result &&
                  otherInfo.proxy =:= info.proxy &&
                  otherInfo.signature == info.signature =>
@@ -490,6 +490,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         else
           definedMarshallables.iterator
 
+      val marshallableDeferredValueType = types.marshallableValue mapArgs { args => info.base :: args(1) :: List(info.result, info.proxy) }
       val marshallableValueType = types.marshallableValue mapArgs { _ => List(info.base, info.intermediate, info.result, info.proxy) }
       val marshallableValueTree = createTypeTree(marshallableValueType, pos)
       val marshallableMods = Modifiers(Flag.SYNTHETIC | Flag.PROTECTED | Flag.LOCAL | Flag.LAZY)
@@ -607,7 +608,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           val annotation = q"new ${types.marshallableInfo}(0)"
           val mods = marshallableMods mapAnnotations { _ => List(abstractValueAnnotation, annotation) }
 
-          Some(name) -> Some(atPos(pos) { q"$mods val $name: $marshallableValueType = null" })
+          Some(name) -> Some(atPos(pos) { q"$mods val $name: $marshallableDeferredValueType = null" })
         }
         else
           None -> None
@@ -1603,23 +1604,29 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
       cache.getOrElse(symbol, {
         if (symbol.isMethod && (symbol.name.toString startsWith "$loci$mar$")) {
           val method = symbol.asMethod
-          val tpe = method.info.finalResultType
+          val tpe = method.info.finalResultType.asSeenFrom(module.classSymbol)
 
           if (tpe <:< types.marshallableValue)
             method.allAnnotations map { _.tree } collectFirst {
-              case tree @ Apply(_, List(Literal(Constant(signature: Int))))
+              case tree @ Apply(_, List(Literal(Constant(signatureValue: Int))))
                   if tree.tpe <:< types.marshallableInfo =>
-                val Seq(base, intermediate, result, proxy) = tpe.typeArgs: @unchecked
-                (MarshallableInfo(
-                  base.asSeenFrom(module.classSymbol),
-                  intermediate.asSeenFrom(module.classSymbol),
-                  result.asSeenFrom(module.classSymbol),
-                  proxy.asSeenFrom(module.classSymbol),
+                val args = tpe match {
+                  case ExistentialType(quantified, TypeRef(_, _, List(_, TypeRef(NoPrefix, sym, List()), _, _)))
+                      if quantified contains sym =>
+                    tpe.typeArgs.updated(1, NoType)
+                  case _ =>
+                    tpe.typeArgs
+                }
+
+                val Seq(base, intermediate, result, proxy) = args: @unchecked
+
+                val signature =
                   if (method.allAnnotations exists { _.tree.tpe <:< types.abstractValue })
                     None
                   else
-                    Some(signature)),
-                  method.name)
+                    Some(signatureValue)
+
+                MarshallableInfo(base, intermediate, result, proxy, signature) -> method.name
             }
           else
             None
