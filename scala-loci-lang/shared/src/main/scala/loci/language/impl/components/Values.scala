@@ -754,8 +754,12 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
               case tree: TypeTree if underExpansion(tree) =>
                 val tpe = tree.tpe map { tpe =>
-                  if ((tpe.typeArgs.size == 1 || tpe.typeArgs.size == 2) &&
-                      (placementTypes exists { tpe real_<:< _ }))
+                  if (tpe.typeArgs.size == 2 && (tpe real_<:< types.per))
+                    types.function mapArgs { _ => List(
+                      types.remote mapArgs { _ => tpe.typeArgs.tail },
+                      tpe.typeArgs.head) }
+                  else if ((tpe.typeArgs.size == 1 || tpe.typeArgs.size == 2) &&
+                           (placementTypes exists { tpe real_<:< _ }))
                     tpe.typeArgs.head
                   else
                     tpe
