@@ -33,8 +33,12 @@ object Placement {
   }
 
   sealed trait Block[P, placed[_, _]] {
-    def apply[T, U](v: Context[P] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): U placed P
-    def sbj[R, T, U](v: Context[P] => Remote[R] => T)(implicit ev: PlacedClean[U on P, P, T, T, U]): U per R placed P
+    def apply[T, U, U_placed_P](v: Context[P] => T)(implicit
+      ev0: PlacedClean[U on P, P, T, T, U],
+      ev1: CanonicalPlacedTypeAlias[U placed P, U_placed_P]): U_placed_P
+    def sbj[R, T, U, U_per_R_placed_P](v: Context[P] => Remote[R] => T)(implicit
+      ev0: PlacedClean[U on P, P, T, T, U],
+      ev1: CanonicalPlacedTypeAlias[U per R placed P, U_per_R_placed_P]): U_per_R_placed_P
   }
 
   sealed trait Narrow {
@@ -42,6 +46,8 @@ object Placement {
   }
 
   sealed trait Call[Q, placed[_, _]] {
-    def call[P, R, T, _on_[T, P] <: T on P](v: T _on_ R)(implicit ev: PeerType[Q, R, P]): T placed P
+    def call[P, R, T, _on_[T, P] <: T on P, T_placed_P](v: T _on_ R)(implicit
+      ev0: PeerType[Q, R, P],
+      ev1: CanonicalPlacedTypeAlias[T placed P, T_placed_P]): T_placed_P
   }
 }

@@ -30,6 +30,19 @@ object PlacedType extends PlacedTypeSubjective {
 }
 
 
+sealed trait CanonicalPlacedTypeAlias[T, U]
+
+sealed trait CanonicalPlacedTypeAliasNonSelected {
+  implicit def on[T, P]: CanonicalPlacedTypeAlias[T on P, T on P] = erased
+  implicit def from[T, P]: CanonicalPlacedTypeAlias[T from P, T from P] = erased
+}
+
+object CanonicalPlacedTypeAlias extends CanonicalPlacedTypeAliasNonSelected {
+  implicit def fromSingle[T, P]: CanonicalPlacedTypeAlias[T fromSingle P, T fromSingle P] = erased
+  implicit def fromMultiple[T, P]: CanonicalPlacedTypeAlias[T fromMultiple P, T fromMultiple P] = erased
+}
+
+
 sealed trait PlacedClean[+V, L, T, T_, +U]
 
 sealed trait PlacedCleanFallback {
