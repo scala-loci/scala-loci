@@ -2,7 +2,7 @@ package loci
 package language
 package impl
 
-import Testing._
+import transmitter.Serializables._
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

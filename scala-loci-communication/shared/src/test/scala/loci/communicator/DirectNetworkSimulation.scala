@@ -1,8 +1,7 @@
 package loci
-package runtime
+package communicator
 
-import communicator._
-import runtime.DirectConnectionSimulation.SimulationProtocol
+import DirectConnectionSimulation.SimulationProtocol
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext
@@ -48,8 +47,7 @@ trait DirectConnectionSimulation {
     val doClosed = Notice.Steady[Unit](ExecutionContext.defaultReporter)
     val doReceive = Notice.Stream[MessageBuffer](ExecutionContext.defaultReporter)
 
-    val protocol = new Protocol
-        with SetupInfo with SecurityInfo with SymmetryInfo with Bidirectional {
+    val protocol = new Protocol with SetupInfo with SecurityInfo with SymmetryInfo with Bidirectional {
       val setup = connectionSetup
       val encrypted = false
       val integrityProtected = false
@@ -78,9 +76,9 @@ trait DirectConnectionSimulation {
 }
 
 class NetworkListener(
-    protected var deferred: Boolean = false,
-    protected val seed: Int = 0)
-  extends DirectConnectionSimulation with Listener[SimulationProtocol] {
+  protected var deferred: Boolean = false,
+  protected val seed: Int = 0)
+    extends DirectConnectionSimulation with Listener[SimulationProtocol] {
 
   protected val random = new Random(seed.toLong)
 
@@ -106,9 +104,9 @@ class NetworkListener(
 }
 
 class NetworkConnector(
-    protected var deferred: Boolean = false,
-    protected val seed: Int = 0)
-  extends DirectConnectionSimulation {
+  protected var deferred: Boolean = false,
+  protected val seed: Int = 0)
+    extends DirectConnectionSimulation {
 
   protected val random = new Random(seed.toLong)
 

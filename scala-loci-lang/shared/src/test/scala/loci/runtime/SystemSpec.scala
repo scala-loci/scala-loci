@@ -1,6 +1,8 @@
 package loci
 package runtime
 
+import communicator.NetworkListener
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -114,6 +116,10 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
         ServerClientApp.$loci$peer$sig$Server,
         Seq.empty,
         requestResult = true).head
+
+      serverSystem.terminate()
+      client0System.terminate()
+      client1System.terminate()
 
 
       res0 should be (empty)

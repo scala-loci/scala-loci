@@ -153,6 +153,16 @@ lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("scala-loci-communication")
   settings (normalizedName := "scala-loci-communication",
+            Compile / unmanagedSourceDirectories +=
+                (ThisBuild / baseDirectory).value / "scala-loci-communication" / "shared" / "src" / "test" / "scala",
+            Compile / unmanagedSources / excludeFilter := {
+              val testDirectory =
+                (ThisBuild / baseDirectory).value / "scala-loci-communication" / "shared" / "src" / "test" / "scala"
+              new SimpleFileFilter(file =>
+                (file.getCanonicalPath startsWith testDirectory.getCanonicalPath) && !(file.getName startsWith "CompileTimeUtils"))
+            },
+            Compile / packageBin / mappings ~= { _ filter { case (file, _) => !(file.getName startsWith "CompileTimeUtils") } },
+            Test / unmanagedSources / excludeFilter := NothingFilter,
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
             SourceGenerator.functionSubjectiveBinding,
@@ -210,8 +220,8 @@ lazy val lociTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-transmitter-rescala")
   settings (normalizedName := "scala-loci-transmitter-rescala",
-            rescalaRepo, rescala)
-  dependsOn lociCommunication)
+            rescalaRepo, rescala, scalatest)
+  dependsOn lociCommunication % "compile->compile;test->test")
 
 lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
@@ -220,8 +230,10 @@ lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 lazy val lociLangTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-lang-transmitter-rescala")
-  settings (normalizedName := "scala-loci-lang-transmitter-rescala")
-  dependsOn (lociLang, lociTransmitterRescala))
+  settings (normalizedName := "scala-loci-lang-transmitter-rescala",
+            macroparadise, macrodeclaration, scalatest)
+  dependsOn (lociLang % "compile->compile;test->test",
+             lociTransmitterRescala % "compile->compile;test->test"))
 
 lazy val lociLangTransmitterRescalaJVM = lociLangTransmitterRescala.jvm
 lazy val lociLangTransmitterRescalaJS = lociLangTransmitterRescala.js

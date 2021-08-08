@@ -1,7 +1,7 @@
 package loci
 package runtime
 
-import Testing._
+import transmitter.Serializables._
 
 @multitier object ServerClientApp {
   @peer type Server <: { type Tie <: Multiple[Client] }

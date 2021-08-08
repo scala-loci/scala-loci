@@ -1,7 +1,9 @@
 package loci
 package runtime
 
+import communicator.{NetworkConnector, NetworkListener}
 import messaging.Message
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -60,7 +62,7 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "RemoteConnections"
 
   it should "handle connections correctly for terminating client" in {
-    val (events, _, server, client0, _, _, _) = setup
+    val (events, dummy, server, client0, client1, node0, node1) = setup
     val listener = new NetworkListener
 
     server.listen(listener, clientSig)
@@ -77,10 +79,13 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
     Seq(_3, _4) should contain theSameElementsAs Seq(
       Client0(Left), Server(Left))
+
+
+    Seq(client0, client1, node0, node1, dummy, server) foreach { _.terminate() }
   }
 
   it should "handle connections correctly for terminating server" in {
-    val (events, _, server, client0, _, _, _) = setup
+    val (events, dummy, server, client0, client1, node0, node1) = setup
     val listener = new NetworkListener
 
     server.listen(listener, clientSig)
@@ -96,11 +101,14 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
     Seq(_3, _4, _5) should contain theSameElementsAs Seq(
       Client0(Left), Client0(ConstraintsViolated), Server(Left))
+
+
+    Seq(client0, client1, node0, node1, dummy, server) foreach { _.terminate() }
   }
 
   it should "handle connections correctly for terminating node" in {
     for (seed <- 0 to 5) {
-      val (events, _, _, _, _, node0, node1) = setup
+      val (events, dummy, server, client0, client1, node0, node1) = setup
       val connector = new NetworkConnector(deferred = seed != 0, seed)
 
       node0.connect(connector.first, nodeSig)
@@ -121,12 +129,15 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       Seq(_4, _5, _6) should contain theSameElementsAs Seq(
         Node(Left), Node(Left), Node(ConstraintsViolated))
+
+
+      Seq(client0, client1, node0, node1, dummy, server) foreach { _.terminate() }
     }
   }
 
   it should "handle connections correctly in a more complex example" in {
     for (seed <- 0 to 5) {
-      val (events, dummy, server, client0, client1, _, _) = setup
+      val (events, dummy, server, client0, client1, node0, node1) = setup
       val listener = new NetworkListener(deferred = seed != 0, seed)
       val dummyListener = new NetworkListener(deferred = seed != 0, seed)
 
@@ -165,6 +176,9 @@ class RemoteConnectionsSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       Seq(_9, _10) should contain allOf (
         Server(Receive("just a test")), Server(Receive("another test")))
+
+
+      Seq(client0, client1, node0, node1, dummy, server) foreach { _.terminate() }
     }
   }
 }

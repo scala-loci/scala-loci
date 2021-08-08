@@ -2,7 +2,7 @@ package loci
 package language
 package impl
 
-import Testing._
+import transmitter.Serializables._
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -495,14 +495,11 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     new ClassLifting.C(2).v should be (2)
     new ClassLifting.o.C(2).v should be (2)
     new ClassLifting.p.C(2).v should be (2)
+    new ClassLifting.o.D(2).v should be (8)
+    new ClassLifting.p.D(2).v should be (8)
 
-    // untypeability not correctly detected by the testing framework
-    // since `compileTimeOnly` annotation is checked later during compilation
-    //
-    // "new ClassLifting.D(2)" shouldNot typeCheck
-    // "new ClassLifting.o.D(2)" shouldNot typeCheck
-    // "new ClassLifting.p.D(2)" shouldNot typeCheck
-    // "new ClassLifting.p.E(2)" shouldNot typeCheck
+    CompileTimeUtils.containsCompileTimeOnly("new ClassLifting.D(2)") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly("new ClassLifting.p.E(2)") should be (true)
 
 
     val placedValuesTraits = new TraitLifting.`<placed values of loci.language.impl.TraitLifting>` {
@@ -518,11 +515,11 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     new TraitLifting.T { val j = 2 }.j should be (2)
     new TraitLifting.C(4).v should be (8)
 
-    // untypeability not correctly detected by the testing framework
-    // since `compileTimeOnly` annotation is checked later during compilation
-    //
-    // "new TraitLifting.U { }" shouldNot typeCheck
-    // "new TraitLifting.V { }" shouldNot typeCheck
+    CompileTimeUtils.abstractValuesInInstantiation(
+      "new TraitLifting.U { }") should contain theSameElementsAs Seq("<placed values>")
+
+    CompileTimeUtils.abstractValuesInInstantiation(
+      "new TraitLifting.V { }") should contain theSameElementsAs Seq("<placed values>")
   }
 
   it should "typecheck nested multitier modules" in {

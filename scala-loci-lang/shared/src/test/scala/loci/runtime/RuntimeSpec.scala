@@ -1,7 +1,9 @@
 package loci
 package runtime
 
+import communicator.NetworkListener
 import messaging.Message
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -59,7 +61,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
         })
 
 
-      Runtime.start(
+      val client0Runtime = Runtime.start(
         ServerClientApp.$loci$peer$sig$Client,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
@@ -87,7 +89,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
           instance
         })
 
-      Runtime.start(
+      val client1Runtime = Runtime.start(
         ServerClientApp.$loci$peer$sig$Client,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
@@ -118,6 +120,8 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
       listener.run()
 
       serverRuntime.terminate()
+      client0Runtime.terminate()
+      client1Runtime.terminate()
 
 
       events should have size 13
