@@ -25,7 +25,8 @@ object Multitier {
 class Multitier(val c: blackbox.Context) {
   import c.universe._
 
-  val logging = Logging(c)
+  private val logging = Logging(c)
+  private val codeDumper = CodeDumper(c)
 
   def annotation(annottees: Tree*): Tree = {
     val multitierAnnotationType = c.mirror.staticClass("_root_.loci.multitier").toType
@@ -249,10 +250,15 @@ class Multitier(val c: blackbox.Context) {
         processedAnnotee
     }
 
-    if (expandMultitierMacro && logging.codeEnabled) {
+    if (expandMultitierMacro) {
       val name = s"${c.internal.enclosingOwner.fullName}.${annottee.name}"
       val code = (recoveredAnnottee.toString.linesWithSeparators map { "  " + _ }).mkString
-      logging.code(s"Expanded code for multitier module $name:${Properties.lineSeparator}$code")
+      if (logging.codeEnabled) {
+        logging.code(s"Expanded code for multitier module $name:${Properties.lineSeparator}$code")
+      }
+      if (codeDumper.isEnabled) {
+        codeDumper.dump(code, name)
+      }
     }
 
     companion.headOption.fold(recoveredAnnottee) { companion => q"$recoveredAnnottee; $companion"}
