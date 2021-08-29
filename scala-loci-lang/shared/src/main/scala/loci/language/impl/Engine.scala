@@ -105,13 +105,17 @@ object Engine {
       }
     }
 
-    val result =
-      phases.foldLeft(List.empty[Any]) { (list, phase) =>
+    val results =
+      phases.foldLeft(Seq.empty[PhaseResult]) { (results, phase) =>
         logging.debug(s"Running multitier expansion phase ${phase.name}")
-        phase transform list
+        val records = results.lastOption.map(_.records).getOrElse(List.empty[Any])
+        val result = phase transform records
+        results.appended(PhaseResult(phase.name, result))
       }
 
-    Result(engine, result)
+    CodeDumper(ctx).dump(results, ctx.internal.enclosingOwner.fullName, engine)
+
+    Result(engine, results.lastOption.map(_.records).getOrElse(List.empty[Any]))
   }
 
   private def create(

@@ -119,6 +119,8 @@ val jetty = libraryDependencies ++= Seq(
   "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.44.v20210927",
   "org.slf4j" % "slf4j-nop" % "1.7.30" % Test)
 
+val json4sNative = libraryDependencies +=
+  "org.json4s" %% "json4s-native" % "4.0.3"
 
 lazy val loci = (project
   in file(".")
@@ -158,7 +160,8 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
   settings (normalizedName := "scala-loci-lang",
             SourceGenerator.remoteSelection,
             retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration, scribe, scalatest)
+            macroparadise, macrodeclaration, scribe, scalatest,
+            json4sNative)
   jsSettings jsweakreferences
   dependsOn lociCommunication % "compile->compile;test->test")
 
