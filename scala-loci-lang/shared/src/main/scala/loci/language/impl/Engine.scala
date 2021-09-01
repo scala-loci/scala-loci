@@ -113,7 +113,11 @@ object Engine {
         results.appended(PhaseResult(phase.name, result))
       }
 
-    CodeDumper(ctx).dump(results, ctx.internal.enclosingOwner.fullName, engine)
+    CodeDumper(ctx).dump(
+      results,
+      s"${ctx.internal.enclosingOwner.fullName}.${code.name}",
+      engine
+    )
 
     Result(engine, results.lastOption.map(_.records).getOrElse(List.empty[Any]))
   }
