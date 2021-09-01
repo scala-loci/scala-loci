@@ -56,4 +56,6 @@ package object loci {
   def on[P]: Placement.On[P] with Placement.Run[P, from] = erased
   def remote: Placement.Narrow with Placement.Select[Placement.Call] with Placement.Call[Nothing, from] with Gateway[Nothing] = erased
   def remote[P]: Placement.Call[P, from] with Gateway[P] = erased
+
+  def onAny: Placement.SelectAny[Placement.Run] = erased
 }

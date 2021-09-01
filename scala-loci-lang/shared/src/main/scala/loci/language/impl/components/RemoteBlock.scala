@@ -94,11 +94,16 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           // extract list of selected remote references
           val (selection, selectionType) = runExpr match {
             case q"$expr[..$tpts](...$exprss).$_"
-                if expr.nonEmpty &&
-                   expr.symbol != null &&
-                   expr.symbol.owner == symbols.Select =>
+              if expr.nonEmpty &&
+                expr.symbol != null &&
+                expr.symbol.owner == symbols.Select =>
               exprss.head -> tpts.head
-
+            case q"$apply[..$peerType](...$ruleParam).$_"
+              if apply.nonEmpty &&
+                apply.symbol != null &&
+                apply.symbol.owner == symbols.SelectAny =>
+              val rule: Tree = ruleParam.head.head
+              List(rule) -> peerType.head
             case _ =>
               List.empty -> EmptyTree
           }
