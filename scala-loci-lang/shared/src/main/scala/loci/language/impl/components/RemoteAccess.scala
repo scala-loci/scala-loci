@@ -1008,7 +1008,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         val (remotes, instanceBased, remotesType, signature) = {
           val q"$_[..$tpts](...$exprss)" = expr: @unchecked
 
-          if (expr.symbol.owner == symbols.Select) {
+          if (expr.symbol.owner == symbols.Select || expr.symbol.owner == symbols.SelectAny) {
             val dynamicRemoteSequence =
               exprss.head.size == 1 && exprss.head.head.tpe <:< types.remoteSeq
 

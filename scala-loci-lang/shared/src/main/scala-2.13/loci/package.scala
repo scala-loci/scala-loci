@@ -58,4 +58,5 @@ package object loci {
   def remote[P]: Placement.Call[P, from] with Gateway[P] = erased
 
   def onAny: Placement.SelectAny[Placement.Run] = erased
+  def remoteAny: Placement.SelectAny[Placement.Call] = erased
 }
