@@ -189,6 +189,7 @@ class Multitier(val c: blackbox.Context) {
                 Commons,
                 ModuleInfo,
                 Initialization,
+                DynamicPlacement,
                 RemoteBlock,
                 Peers,
                 Values,

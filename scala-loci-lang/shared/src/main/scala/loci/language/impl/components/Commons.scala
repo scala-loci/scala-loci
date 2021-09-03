@@ -124,6 +124,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val none = typeOf[transmitter.transmittable.Transmittables.None]
     val compileTimeOnly = typeOf[annotation.compileTimeOnly]
     val placedValues = symbols.placedValues.companion.asType.toType
+    val transmitterMultiple = typeOf[language.Tie.Multiple]
+    val defaultMultipleGateway = typeOf[language.Gateway.DefaultMultipleGateway[_]]
   }
 
   object trees {

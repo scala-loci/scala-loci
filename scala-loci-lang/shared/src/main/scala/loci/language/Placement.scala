@@ -25,7 +25,8 @@ object Placement {
   }
 
   sealed trait SelectAny[Command[_, _[_, _]]] {
-    def apply[P](implicit rule: => Remote[P]): Command[P, fromSingle]
+    def apply[P](rule: => Remote[P]): Command[P, fromSingle]
+    def apply[P](implicit rule: Seq[Remote[P]] => Remote[P]): Command[P, fromSingle]
   }
 
   sealed trait Run[P, placed[_, _]] {

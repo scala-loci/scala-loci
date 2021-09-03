@@ -31,10 +31,17 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
       case record @ PlacedValue(_, _, _, _) =>
         object transformer extends Transformer {
           override def transform(tree: Tree): Tree = tree match {
-            case tree @ q"$expr[..$tpts](...$exprss)" if tree.tpe real_<:< types.remoteGateway =>
+            case tree if tree.tpe real_<:< types.remoteGateway =>
+
+              val (expr, tpts, exprss, isNew) = tree match {
+                case q"new $expr[..$tpts](...$exprss)" => (expr, tpts, exprss, true)
+                case q"$expr[..$tpts](...$exprss)" => (expr, tpts, exprss, false)
+                case tree => c.abort(tree.pos, s"Unexpected remote gateway: $tree")
+              }
+
               count += 1
 
-              val index = checkForConnection(tree)
+              val index = checkForConnection(exprss, tree.pos)
 
               val pos = exprss.head.head.pos
               val args = exprss(1)(index).tpe.underlying.typeArgs
@@ -54,7 +61,11 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
                 q"new $remoteGateway(${peerSignature(args.head, pos)}, $$loci$$sys)")
 
               atPos(pos) {
-                transform(q"$expr[..${tpts map createTypeTree}](${trees.remoteGateway})(..$exprs)")
+                if (isNew) {
+                  transform(q"new $expr[..${tpts map createTypeTree}](${trees.remoteGateway})(..$exprs)")
+                } else {
+                  transform(q"$expr[..${tpts map createTypeTree}](${trees.remoteGateway})(..$exprs)")
+                }
               }
 
             case _ =>
@@ -70,7 +81,7 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     result
   }
 
-  private def peerSignature(tpe: Type, pos: Position) = {
+  def peerSignature(tpe: Type, pos: Position): Select = {
     object transformer extends Transformer {
       override def transform(tree: Tree): Tree = tree match {
         case This(module.className) =>
@@ -85,11 +96,9 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     Select(transformer transform qualifier, name)
   }
 
-  private def checkForConnection(tree: Tree): Int = {
-    val q"$_[..$_](...$exprss)" = tree: @unchecked
-
+  private def checkForConnection(exprss: List[List[Tree]], pos: Position): Int = {
     if (exprss.size != 2 || exprss.head.size != 1)
-      c.abort(tree.pos, "Invalid gateway accessor: " +
+      c.abort(pos, "Invalid gateway accessor: " +
         "Implicit conversion with implicit argument list required")
 
     var index = 0
@@ -106,7 +115,7 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     }
 
     if (count != 1)
-      c.abort(tree.pos, "Invalid gateway accessor: " +
+      c.abort(pos, "Invalid gateway accessor: " +
         "Exactly one connection value required")
 
     result
