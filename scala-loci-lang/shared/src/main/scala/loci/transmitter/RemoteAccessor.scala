@@ -16,8 +16,8 @@ object RemoteAccessor {
     }
 
     implicit class BasicBlockingMultipleAccessor[V, R, T, L](value: V from R)(
-        implicit ev: Transmission[V, R, Future[T], L, Multiple])
-      extends RemoteAccessor {
+        override implicit val ev: Transmission[V, R, Future[T], L, Multiple])
+      extends RemoteAccessor with Blocking {
 
       def asLocalFromAll_?(timeout: Duration): Seq[(Remote[R], T)] =
         value.remotes zip Await.result(Future.sequence(value.retrieveValues), timeout)
@@ -34,8 +34,8 @@ object RemoteAccessor {
     }
 
     implicit class BasicBlockingOptionalAccessor[V, R, T, L](value: V from R)(
-        implicit ev: Transmission[V, R, Future[T], L, Optional])
-      extends RemoteAccessor {
+        override implicit val ev: Transmission[V, R, Future[T], L, Optional])
+      extends RemoteAccessor with Blocking {
 
       def asLocal_?(timeout: Duration): Option[T] =
         value.retrieveValue map { Await.result(_, timeout) }
@@ -52,8 +52,8 @@ object RemoteAccessor {
     }
 
     implicit class BasicBlockingSingleAccessor[V, R, T, L](value: V from R)(
-        implicit ev: Transmission[V, R, Future[T], L, Single])
-      extends RemoteAccessor {
+        override implicit val ev: Transmission[V, R, Future[T], L, Single])
+      extends RemoteAccessor with Blocking {
 
       def asLocal_?(timeout: Duration): T =
         Await.result(value.retrieveValue, timeout)
@@ -91,4 +91,12 @@ trait RemoteAccessor extends RemoteAccessor.Access {
     def remote: Remote[R] = ev.remotesReferences.head
     def retrieveValue: T = ev.retrieveValues.head
   }
+}
+
+/**
+ * Helper trait to identify RemoteAccessors that use a transmission with output type Future[T], while the accessor
+ * output type itself is T
+ */
+trait Blocking { this: RemoteAccessor =>
+  implicit val ev: Transmission[_, _, Future[_], _, _]
 }

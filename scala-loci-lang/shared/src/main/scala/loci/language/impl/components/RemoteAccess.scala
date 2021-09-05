@@ -1014,10 +1014,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
             val remotes =
               if (dynamicRemoteSequence)
-                q"${exprss.head.head} map ${trees.reference}"
+                exprss.head.head
               else
                 exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
-                  q"$result.::(${trees.reference}($remote))"
+                  q"$result.::($remote)"
                 }
 
             (remotes, dynamicRemoteSequence, tpts.head.tpe, EmptyTree)
@@ -1054,12 +1054,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
           val remotes =
             if (dynamicRemoteSequence)
-              q"${exprss.head.head} map ${trees.reference}"
+              exprss.head.head
             else
               exprss.head.foldRight[Tree](trees.nil) { (remote, result) =>
                 if (remote.tpe <:!< types.remote)
                   c.abort(remote.pos, "Unexpected selection: Only remote references should be well-typed")
-                q"$result.::(${trees.reference}($remote))"
+                q"$result.::($remote)"
               }
 
           (expr, EmptyTree, remotes, dynamicRemoteSequence, tpts.head.tpe)
@@ -1198,12 +1198,44 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 }
                 getOrElse placedValue)
 
+              val remotesIdentifier = c.freshName(TermName("remotes"))
+              val remotesAssignment = q"val $remotesIdentifier = $remotes"
               val instances = c.freshName(TermName("instances"))
-              val exprs = exprss(1).updated(
-                index,
-                q"""val $instances = $remotes
-                    new ${createTypeTree(types.remoteRequest.typeConstructor, value.pos)}(
-                      $arguments, $typedPlacedValue, $placedValuePeer, $instances, $dynamicRemoteSequence, $$loci$$sys)""")
+              val remoteRequest =
+                q"""
+                  val $instances = $remotesIdentifier map ${trees.reference};
+                  new ${createTypeTree(types.remoteRequest.typeConstructor, value.pos)}(
+                    $arguments, $typedPlacedValue, $placedValuePeer, $instances, $dynamicRemoteSequence, $$loci$$sys)
+                """
+
+              val transmissionOutputIsFuture: Boolean = (tree.tpe real_<:< types.blockingRemoteAccessor) || (tree.tpe.typeArgs match {
+                case Seq(_, _, outputType, _) => outputType real_<:< types.future
+                case _ => false // rescala accessors are ignored
+              })
+
+              val exprs = if (transmissionOutputIsFuture) {
+                val selfReferenceDummyRequest =
+                  q"new ${createTypeTree(types.selfReferenceDummyRequest.typeConstructor, value.pos)}($value)"
+                val localExecutionOrRemoteRequest =
+                  q"""
+                  $remotesIdentifier match {
+                    case remotes: ${names.root}.scala.collection.immutable.Seq[_] if remotes.size == 1 && remotes.head.isInstanceOf[${types.selfReference}] =>
+                      $selfReferenceDummyRequest
+                    case _ =>
+                      $remoteRequest
+                  }
+                """
+
+                exprss(1).updated(
+                  index,
+                  q"$remotesAssignment; $localExecutionOrRemoteRequest"
+                )
+              } else {
+                exprss(1).updated(
+                  index,
+                  q"$remotesAssignment; $remoteRequest"
+                )
+              }
 
               atPos(value.pos) {
                 transform(q"$expr[..${tpts map createTypeTree}](${trees.remoteValue})(..$exprs)")
@@ -1222,10 +1254,23 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                     val invokeRemoteAccess =
                       q"$$loci$$sys.invokeRemoteAccess($arguments, $placedValue, $placedValuePeer, $instances, false)"
 
-                    if (dynamicRemoteSequence)
-                      transform(q"val $instances = $remotes; if($instances.nonEmpty) $invokeRemoteAccess")
-                    else
-                      transform(q"val $instances = $remotes; $invokeRemoteAccess")
+                    if (dynamicRemoteSequence) {
+                      transform(q"val $instances = $remotes map ${trees.reference}; if($instances.nonEmpty) $invokeRemoteAccess")
+                    } else {
+                      val remotesIdentifier = c.freshName(TermName("remotes"))
+                      val remotesAssignment = q"val $remotesIdentifier = $remotes"
+                      val remoteInvocation = q"val $instances = $remotesIdentifier map ${trees.reference}; $invokeRemoteAccess"
+                      val localExecutionOrRemoteInvocation =
+                        q"""
+                        $remotesIdentifier match {
+                          case remotes: ${names.root}.scala.collection.immutable.Seq[_] if remotes.size == 1 && remotes.head.isInstanceOf[${types.selfReference}] =>
+                            $value
+                          case _ =>
+                            $remoteInvocation
+                        }
+                       """
+                      transform(q"$remotesAssignment; $localExecutionOrRemoteInvocation")
+                    }
                   }
                 }
                 getOrElse {

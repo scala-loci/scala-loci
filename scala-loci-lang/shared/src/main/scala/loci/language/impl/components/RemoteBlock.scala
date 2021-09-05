@@ -202,7 +202,9 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           traverser traverse liftedDefinition
 
           // generate the invocation of the lifted definition
-          val lifted = q"${module.className}.this.$name(..$arguments)"
+          // symbol of `module.this` needs to be set, to fix references to the function call in "values:fixrefs"
+          val moduleThis = internal.setSymbol(q"${module.className}.this", module.symbol.info.baseClasses.head)
+          val lifted = q"$moduleThis.$name(..$arguments)"
           internal.setSymbol(lifted, symbol)
           internal.setType(lifted, tpe.resultType)
 

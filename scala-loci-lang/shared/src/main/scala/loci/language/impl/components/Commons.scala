@@ -76,7 +76,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
 
   object types {
     val function = typeOf[_ => _]
+    val biFunction = typeOf[(_, _) => _]
     val stringList = typeOf[List[String]]
+    val future = typeOf[concurrent.Future[_]]
     val unitFuture = typeOf[concurrent.Future[Unit]]
     val nothingFuture = typeOf[concurrent.Future[Nothing]]
     val on = typeOf[_ on _]
@@ -126,6 +128,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val placedValues = symbols.placedValues.companion.asType.toType
     val transmitterMultiple = typeOf[language.Tie.Multiple]
     val defaultMultipleGateway = typeOf[language.Gateway.DefaultMultipleGateway[_]]
+    val selfReference = typeOf[SelfReference[_]]
+    val selfReferenceDummyRequest = typeOf[runtime.SelfReferenceDummyRequest[_, _, _, _, _]]
+    val blockingRemoteAccessor = typeOf[transmitter.Blocking]
   }
 
   object trees {
