@@ -1213,9 +1213,18 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                 case _ => false // rescala accessors are ignored
               })
 
-              val exprs = if (transmissionOutputIsFuture) {
-                val selfReferenceDummyRequest =
+              val accessedValuePeerType = value.tpe.finalResultType.widen.asSeenFrom(module.classSymbol).typeArgs(1)
+              val accessingPeerType = peer.asType.toType.asSeenFrom(module.classSymbol)
+              val localExecutionIsLegal: Boolean = accessingPeerType real_<:< accessedValuePeerType
+
+              val exprs = if (transmissionOutputIsFuture && localExecutionIsLegal) {
+                val transmissionInputIsSubjectiveValue: Boolean = value.tpe real_<:< types.per
+                val selfReferenceDummyRequest = if (transmissionInputIsSubjectiveValue) {
+                  q"new ${createTypeTree(types.selfReferenceDummyRequest.typeConstructor, value.pos)}($value(remotes.head))"
+                } else {
                   q"new ${createTypeTree(types.selfReferenceDummyRequest.typeConstructor, value.pos)}($value)"
+                }
+
                 val localExecutionOrRemoteRequest =
                   q"""
                   $remotesIdentifier match {
@@ -1249,6 +1258,10 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   val (placedValue, placedValuePeer, _, arguments) =
                     extractRemoteAccess(value, peer, remotesType)
 
+                  val accessedValuePeerType = value.tpe.finalResultType.widen.asSeenFrom(module.classSymbol).typeArgs(1)
+                  val accessingPeerType = peer.asType.toType.asSeenFrom(module.classSymbol)
+                  val localExecutionIsLegal: Boolean = accessingPeerType real_<:< accessedValuePeerType
+
                   atPos(value.pos) {
                     val instances = c.freshName(TermName("instances"))
                     val invokeRemoteAccess =
@@ -1256,20 +1269,30 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                     if (dynamicRemoteSequence) {
                       transform(q"val $instances = $remotes map ${trees.reference}; if($instances.nonEmpty) $invokeRemoteAccess")
-                    } else {
+                    } else if (localExecutionIsLegal) {
                       val remotesIdentifier = c.freshName(TermName("remotes"))
                       val remotesAssignment = q"val $remotesIdentifier = $remotes"
                       val remoteInvocation = q"val $instances = $remotesIdentifier map ${trees.reference}; $invokeRemoteAccess"
+
+                      val transmissionInputIsSubjectiveValue: Boolean = value.tpe real_<:< types.per
+                      val localExecution = if (transmissionInputIsSubjectiveValue) {
+                        q"$value(remotes.head)"
+                      } else {
+                        q"$value"
+                      }
+
                       val localExecutionOrRemoteInvocation =
                         q"""
                         $remotesIdentifier match {
                           case remotes: ${names.root}.scala.collection.immutable.Seq[_] if remotes.size == 1 && remotes.head.isInstanceOf[${types.selfReference}] =>
-                            $value
+                            $localExecution
                           case _ =>
                             $remoteInvocation
                         }
                        """
                       transform(q"$remotesAssignment; $localExecutionOrRemoteInvocation")
+                    } else {
+                      transform(q"val $instances = $remotes map ${trees.reference}; $invokeRemoteAccess")
                     }
                   }
                 }
