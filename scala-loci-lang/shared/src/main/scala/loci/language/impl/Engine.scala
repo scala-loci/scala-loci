@@ -105,23 +105,25 @@ object Engine {
       }
     }
 
+    val codeDumper = CodeDumper(ctx)
+
     val results =
       phases.foldLeft(Seq.empty[PhaseResult]) { (results, phase) =>
         logging.debug(s"Running multitier expansion phase ${phase.name}")
         val records = results.lastOption.map(_.records).getOrElse(List.empty[Any])
         val result = phase transform records
-        results.appended(PhaseResult(phase.name, result))
+        val updatedResults = results.appended(PhaseResult(phase.name, result))
+
+        if (codeDumper.isEnabled) {
+          codeDumper.dump(
+            updatedResults,
+            s"${ctx.internal.enclosingOwner.fullName}.${code.name}",
+            engine
+          )
+        }
+
+        updatedResults
       }
-
-    val codeDumper = CodeDumper(ctx)
-    if (codeDumper.isEnabled) {
-      codeDumper.dump(
-        results,
-        s"${ctx.internal.enclosingOwner.fullName}.${code.name}",
-        engine
-      )
-    }
-
 
     Result(engine, results.lastOption.map(_.records).getOrElse(List.empty[Any]))
   }
