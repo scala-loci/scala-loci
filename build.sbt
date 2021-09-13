@@ -105,6 +105,12 @@ val scalajsDom = libraryDependencies +=
 val javalin = libraryDependencies +=
   "io.javalin" % "javalin" % "3.13.7"
 
+val jetty = libraryDependencies ++= Seq(
+  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.43.v20210629",
+  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.43.v20210629",
+  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.43.v20210629"
+)
+
 
 lazy val loci = (project
   in file(".")
@@ -292,4 +298,14 @@ lazy val lociCommunicatorWebRtc = (crossProject(JSPlatform, JVMPlatform)
 
 lazy val lociCommunicatorWebRtcJVM = lociCommunicatorWebRtc.jvm
 lazy val lociCommunicatorWebRtcJS = lociCommunicatorWebRtc.js
+
+lazy val lociCommunicatorWsJetty = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Dummy
+  in file("scala-loci-communicator-ws-jetty")
+  settings (normalizedName := "scala-loci-communicator-ws-jetty",
+            jetty, scalatest)
+  dependsOn (lociCommunication, lociLang, lociLangTransmitterRescala, lociSerializerUpickle))
+
+lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
+lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
 
