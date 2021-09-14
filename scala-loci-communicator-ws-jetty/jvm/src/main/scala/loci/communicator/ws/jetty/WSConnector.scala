@@ -4,7 +4,7 @@ package ws.jetty
 
 import org.eclipse.jetty.websocket.client.WebSocketClient
 
-import java.net.URI
+import java.net.{InetSocketAddress, URI}
 import scala.util.{Failure, Success}
 
 private class WSConnector[P <: WS : WSProtocolFactory](
@@ -16,52 +16,51 @@ private class WSConnector[P <: WS : WSProtocolFactory](
 
     val client = new WebSocketClient()
 
-    try {
-      client.start()
+    client.start()
 
-      // Socket
+    // Socket
 
-      val doClosed = Notice.Steady[Unit]
-      val doReceive = Notice.Stream[MessageBuffer]
+    val doClosed = Notice.Steady[Unit]
+    val doReceive = Notice.Stream[MessageBuffer]
 
-      val socket = new Socket[P](properties, doReceive, doClosed, connectionEstablished.trySet(_))
+    val socket = new Socket[P](properties, doReceive, doClosed, connectionEstablished.trySet(_))
 
-      val session = client.connect(socket, uri).get()
+    val fut = client.connect(socket, uri)
 
-      // Protocol
+    val session = fut.get()
 
-      val tls = session.isSecure
-      val host = Some(session.getRemoteAddress.getHostName)
-      val port = Some(session.getRemoteAddress.getPort)
+    // Protocol
 
-      val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls)
+    val tls = session.isSecure
+    val host = Some(session.getRemoteAddress.asInstanceOf[InetSocketAddress].getHostName)
+    val port = Some(session.getRemoteAddress.asInstanceOf[InetSocketAddress].getPort)
 
-      if (tryMakeProtocol.isFailure) {
-        connectionEstablished.set(Failure(tryMakeProtocol.failed.get))
-        return
-      }
+    val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls)
 
-      val prot = tryMakeProtocol.get
-
-      // Connection interface
-
-      val connection = new Connection[P] {
-        val protocol = prot
-        val closed = doClosed.notice
-        val receive = doReceive.notice
-
-        def open = session.isOpen
-        def send(data: MessageBuffer) = {
-          session.getRemote.sendBytes(data.asByteBuffer)
-        }
-        def close() = session.close()
-      }
-
-      connectionEstablished.set(Success(connection))
-
-    } finally {
-      client.stop()
+    if (tryMakeProtocol.isFailure) {
+      connectionEstablished.set(Failure(tryMakeProtocol.failed.get))
+      return
     }
+
+    val prot = tryMakeProtocol.get
+
+    // Connection interface
+
+    val connection = new Connection[P] {
+      val protocol = prot
+      val closed = doClosed.notice
+      val receive = doReceive.notice
+
+      def open = session.isOpen
+      def send(data: MessageBuffer) = {
+        session.getRemote.sendBytes(data.asByteBuffer)
+      }
+      def close() = session.close()
+    }
+
+    doClosed.notice.foreach(_ => client.stop())
+
+    connectionEstablished.set(Success(connection))
   }
 }
 

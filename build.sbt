@@ -106,9 +106,9 @@ val javalin = libraryDependencies +=
   "io.javalin" % "javalin" % "3.13.7"
 
 val jetty = libraryDependencies ++= Seq(
-  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.43.v20210629",
-  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.43.v20210629",
-  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.43.v20210629"
+  "org.eclipse.jetty.websocket" % "websocket-jetty-server" % "11.0.6",
+  "org.eclipse.jetty.websocket" % "websocket-jetty-client" % "11.0.6",
+  "org.eclipse.jetty.websocket" % "websocket-jetty-api" % "11.0.6"
 )
 
 
