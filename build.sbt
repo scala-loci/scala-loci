@@ -127,7 +127,8 @@ lazy val lociJVM = (project
              lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
              lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
              lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
-             lociCommunicationJVM, lociCommunicatorWsJavalinJVM))
+             lociCommunicationJVM, lociCommunicatorWsJavalinJVM,
+             lociCommunicatorWsJettyJVM))
 
 lazy val lociJS = (project
   in file(".js")
@@ -139,7 +140,8 @@ lazy val lociJS = (project
              lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
              lociCommunicatorTcpJS, lociCommunicatorWsJS,
              lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
-             lociCommunicationJS, lociCommunicatorWsJavalinJS))
+             lociCommunicationJS, lociCommunicatorWsJavalinJS,
+             lociCommunicatorWsJettyJS))
 
 
 lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
