@@ -4,15 +4,13 @@ package registry
 import contexts.Immediate.Implicits.global
 import loci.communicator.ws.jetty._
 import loci.serializer.upickle._
-
 import org.eclipse.jetty.server.{Server, ServerConnector}
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable
-import scala.concurrent.{Future, Promise}
-import scala.util.Success
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future, Promise}
 
 class RegistrySpec extends AnyFlatSpec with Matchers {
   behavior of "Registry"
@@ -33,14 +31,16 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       registry0.bind("intfun")(() => (???): Int)
       registry0.listen(listener)
 
-      connector.setPort(4040)
+      connector.setPort(8080)
       server.start()
+
+      registry0.remotes.foreach(println)
 
       var futureValue: Future[(Int, String)] = null
       var intfunValue: Future[Int] = null
 
       val registry1 = new Registry
-      registry1.connect(WS("ws://localhost:4040/registry/")) foreach { remote =>
+      registry1.connect(WS("ws://localhost:8080/registry/")) foreach { remote =>
         val result0 = registry1.lookup[concurrent.Future[(Int, String)]]("future", remote)
         val result1 = registry1.lookup[() => Int]("intfun", remote)
         futureValue = result0
@@ -53,12 +53,14 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       if (seed % 2 != 0)
         promise.success(5 -> "yay")
 
-      registry0.terminate()
-      registry1.terminate()
+      try {
+        Await.result(futureValue, Duration(5, "s")) should be (5 -> "yay")
+      } finally {
+        registry0.terminate()
+        registry1.terminate()
 
-      server.stop()
-
-      futureValue.value should be (Some(Success(5 -> "yay")))
+        server.stop()
+      }
 
 //      val remoteException = intercept[RemoteAccessException] { intfunValue.value.get.get }
 //      remoteException.reason should matchPattern { case RemoteAccessException.RemoteException("scala.NotImplementedError", _) => }
@@ -96,10 +98,17 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       connector.setPort(8080)
       server.start()
 
+      var valueFuture: Future[String] = null
+      var methodFuture: Future[String] = null
+      var testFuture: Future[String] = null
+
       val registry1 = new Registry
       registry1.connect(WS("ws://localhost:8080/registry/")) foreach { remote =>
         val result0 = registry1.lookup(valueBinding, remote)
         val result1 = registry1.lookup(methodBinding, remote)
+
+        valueFuture = result0
+        methodFuture = result1()
 
         result0 foreach { events += _ }
         result0 foreach { events += _ }
@@ -107,10 +116,17 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
         result1() foreach { events += _ }
       }
 
-      registry0.terminate()
-      registry1.terminate()
+      try {
+        Await.ready(testFuture, Duration(5, "s"))
+        println("waited for test future")
+        Await.ready(valueFuture, Duration(5, "s"))
+        Await.ready(methodFuture, Duration(5, "s"))
+      } finally {
+        registry0.terminate()
+        registry1.terminate()
 
-      server.stop()
+        server.stop()
+      }
 
       events should contain theSameElementsAs Seq(
         "value called",
