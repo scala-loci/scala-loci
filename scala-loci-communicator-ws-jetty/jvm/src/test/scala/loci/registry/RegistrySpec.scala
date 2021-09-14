@@ -4,15 +4,17 @@ package registry
 import contexts.Immediate.Implicits.global
 import loci.communicator.ws.jetty._
 import loci.serializer.upickle._
+import loci.transmitter.RemoteAccessException
 import org.eclipse.jetty.server.{Server, ServerConnector}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future, Promise}
+import scala.concurrent.{Future, Promise}
 
 class RegistrySpec extends AnyFlatSpec with Matchers {
+  logging.root.clearHandlers().clearModifiers().replace()
+
   behavior of "Registry"
 
   it should "handle binding and lookup correctly" in {
@@ -53,17 +55,15 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       if (seed % 2 != 0)
         promise.success(5 -> "yay")
 
-      try {
-        Await.result(futureValue, Duration(5, "s")) should be (5 -> "yay")
-      } finally {
-        registry0.terminate()
-        registry1.terminate()
+      Thread.sleep(100)
 
-        server.stop()
-      }
+      registry0.terminate()
+      registry1.terminate()
 
-//      val remoteException = intercept[RemoteAccessException] { intfunValue.value.get.get }
-//      remoteException.reason should matchPattern { case RemoteAccessException.RemoteException("scala.NotImplementedError", _) => }
+      server.stop()
+
+      val remoteException = intercept[RemoteAccessException] { intfunValue.value.get.get }
+      remoteException.reason should matchPattern { case RemoteAccessException.RemoteException("scala.NotImplementedError", _) => }
     }
   }
 
@@ -98,35 +98,23 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       connector.setPort(8080)
       server.start()
 
-      var valueFuture: Future[String] = null
-      var methodFuture: Future[String] = null
-      var testFuture: Future[String] = null
-
       val registry1 = new Registry
       registry1.connect(WS("ws://localhost:8080/registry/")) foreach { remote =>
         val result0 = registry1.lookup(valueBinding, remote)
         val result1 = registry1.lookup(methodBinding, remote)
 
-        valueFuture = result0
-        methodFuture = result1()
-
         result0 foreach { events += _ }
         result0 foreach { events += _ }
         result1() foreach { events += _ }
         result1() foreach { events += _ }
       }
 
-      try {
-        Await.ready(testFuture, Duration(5, "s"))
-        println("waited for test future")
-        Await.ready(valueFuture, Duration(5, "s"))
-        Await.ready(methodFuture, Duration(5, "s"))
-      } finally {
-        registry0.terminate()
-        registry1.terminate()
+      Thread.sleep(100)
 
-        server.stop()
-      }
+      registry0.terminate()
+      registry1.terminate()
+
+      server.stop()
 
       events should contain theSameElementsAs Seq(
         "value called",

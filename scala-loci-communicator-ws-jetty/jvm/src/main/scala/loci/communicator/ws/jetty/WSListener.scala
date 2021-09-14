@@ -15,6 +15,7 @@ class WSListener[P <: WS : WSProtocolFactory](server: Server, contextPath: Strin
   override protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
     val doClosed = Notice.Steady[Unit]
     val doReceive = Notice.Stream[MessageBuffer]
+    val doConnect = Notice.Steady[Unit]
 
     val context = new ServletContextHandler(ServletContextHandler.SESSIONS)
     context.setContextPath(contextPath)
@@ -22,7 +23,7 @@ class WSListener[P <: WS : WSProtocolFactory](server: Server, contextPath: Strin
 
     JettyWebSocketServletContainerInitializer.configure(context, (_, wsContainer) => {
       wsContainer.addMapping(pathspec, (_: JettyServerUpgradeRequest, _: JettyServerUpgradeResponse) => {
-        val socket = new Socket[P](properties, doReceive, doClosed, _ => {})
+        val socket = new Socket[P](properties, doConnect, doReceive, doClosed, _ => {})
 
         val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(
           pathspec,
@@ -52,10 +53,10 @@ class WSListener[P <: WS : WSProtocolFactory](server: Server, contextPath: Strin
                 }
               }
 
-                def close() = socket.getSession.close()
-              }
+              def close() = socket.getSession.close()
+            }
 
-            connectionEstablished.fire(Success(connection))
+            doConnect.notice.foreach(_ => connectionEstablished.fire(Success(connection)))
         }
 
         socket

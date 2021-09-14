@@ -22,8 +22,9 @@ private class WSConnector[P <: WS : WSProtocolFactory](
 
     val doClosed = Notice.Steady[Unit]
     val doReceive = Notice.Stream[MessageBuffer]
+    val doConnect = Notice.Steady[Unit]
 
-    val socket = new Socket[P](properties, doReceive, doClosed, connectionEstablished.trySet(_))
+    val socket = new Socket[P](properties, doConnect, doReceive, doClosed, connectionEstablished.trySet(_))
 
     val fut = client.connect(socket, uri)
 
@@ -60,7 +61,7 @@ private class WSConnector[P <: WS : WSProtocolFactory](
 
     doClosed.notice.foreach(_ => client.stop())
 
-    connectionEstablished.set(Success(connection))
+    doConnect.notice.foreach(_ => connectionEstablished.set(Success(connection)))
   }
 }
 

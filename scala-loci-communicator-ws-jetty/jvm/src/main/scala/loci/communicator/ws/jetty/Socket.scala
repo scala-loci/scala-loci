@@ -9,6 +9,7 @@ import scala.util.{Failure, Try}
 
 class Socket[P <: WS : WSProtocolFactory](
   properties: WS.Properties,
+  doConnect: Notice.Steady.NoticeSource[Unit],
   doReceive: Notice.Stream.NoticeSource[MessageBuffer],
   doClosed: Notice.Steady.NoticeSource[Unit],
   onError: Try[Connection[P]] => Unit
@@ -41,6 +42,8 @@ class Socket[P <: WS : WSProtocolFactory](
 
   override def onWebSocketConnect(sess: Session): Unit = {
     super.onWebSocketConnect(sess)
+
+    doConnect.set()
 
     heartbeatTask = executor.scheduleWithFixedDelay(
       () => getRemote.sendString(heartbeat),
