@@ -28,6 +28,9 @@ object Placement {
     def apply[P](rule: => Remote[P]): Command[P, fromSingle]
     def apply[P](implicit rule: Seq[Remote[P]] => Remote[P]): Command[P, fromSingle]
     def apply[P](rule: (Seq[Remote[P]], SelfReference[P]) => Remote[P]): Command[P, fromSingle]
+    def recursive[P](rule: => Remote[P]): Command[P, fromSingle]
+    def recursive[P](implicit rule: Seq[Remote[P]] => Remote[P]): Command[P, fromSingle]
+    def recursive[P](rule: (Seq[Remote[P]], SelfReference[P]) => Remote[P]): Command[P, fromSingle]
   }
 
   sealed trait Run[P, placed[_, _]] {

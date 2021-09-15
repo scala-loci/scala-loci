@@ -30,15 +30,24 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
   private val placedName = TermName("placed")
   private val callName = TermName("call")
   private val selectName = TermName("select")
+  private val selectAnyName = TermName("selectAny")
 
   private val placedSymbol = internal.newMethodSymbol(symbols.Placed, placedName, flags = Flag.SYNTHETIC)
   private val callSymbol = internal.newMethodSymbol(symbols.Call, callName, flags = Flag.SYNTHETIC)
   private val selectSymbol = internal.newMethodSymbol(symbols.Select, selectName, flags = Flag.SYNTHETIC)
+  private val selectAnySymbol = internal.newMethodSymbol(symbols.SelectAny, selectAnyName, flags = Flag.SYNTHETIC)
+  private val recursiveSymbol = internal.newMethodSymbol(symbols.SelectAny, names.recursive, flags = Flag.SYNTHETIC)
 
   private def placed = internal.setSymbol(q"$syntheticName.$placedName", placedSymbol)
   private def call = internal.setSymbol(q"$syntheticName.$callName", callSymbol)
-  private def select(selection: List[Tree], selectionType: Tree) = {
+  private def select(selection: List[Tree], selectionType: Tree): Tree = {
     val tree = internal.setSymbol(q"$syntheticName.$selectName[$selectionType](..$selection)", selectSymbol)
+    internal.setSymbol(q"$tree.$callName", callSymbol)
+  }
+  private def selectAny(selection: List[Tree], selectionType: Tree, recursive: Boolean): Tree = {
+    val selectName = if (recursive) names.recursive else selectAnyName
+    val symbol = if (recursive) recursiveSymbol else selectAnySymbol
+    val tree = internal.setSymbol(q"$syntheticName.$selectName[$selectionType](..$selection)", symbol)
     internal.setSymbol(q"$tree.$callName", callSymbol)
   }
 
@@ -92,20 +101,21 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           }
 
           // extract list of selected remote references
-          val (selection, selectionType) = runExpr match {
+          val (selection, selectionType, dynamicallyPlaced, recursiveSelection) = runExpr match {
             case q"$expr[..$tpts](...$exprss).$_"
               if expr.nonEmpty &&
                 expr.symbol != null &&
                 expr.symbol.owner == symbols.Select =>
-              exprss.head -> tpts.head
+              (exprss.head, tpts.head, false, false)
             case q"$apply[..$peerType](...$ruleParam).$_"
               if apply.nonEmpty &&
                 apply.symbol != null &&
                 apply.symbol.owner == symbols.SelectAny =>
               val rule: Tree = ruleParam.head.head
-              List(rule) -> peerType.head
+              val recursive = apply.symbol.name == names.recursive
+              (List(rule), peerType.head, true, recursive)
             case _ =>
-              List.empty -> EmptyTree
+              (List.empty, EmptyTree, false, false)
           }
 
           // the Scala compiler dealiases the type of the tree
@@ -209,10 +219,13 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           internal.setType(lifted, tpe.resultType)
 
           val liftedCall =
-            if (selection.nonEmpty)
+            if (selection.nonEmpty && dynamicallyPlaced) {
+              q"${selectAny(selection, selectionType, recursiveSelection)}($lifted)"
+            } else if (selection.nonEmpty) {
               q"${select(selection, selectionType)}($lifted)"
-            else
+            } else {
               q"$call($lifted)"
+            }
 
           atPos(expr.pos) { internal.setType(liftedCall, fixedTreeType) }
         }

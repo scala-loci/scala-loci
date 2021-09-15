@@ -5,10 +5,11 @@ import loci.language.impl.Engine
 import loci.language.impl.Phase
 
 import scala.annotation.tailrec
+import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object DynamicPlacement extends Component.Factory[DynamicPlacement](
-  requires = Seq(Commons, Initialization, GatewayAccess)
+  requires = Seq(Commons, Initialization, GatewayAccess, ModuleInfo, Values)
 ) {
   override def asInstance[C <: blackbox.Context]: PartialFunction[Component[C], DynamicPlacement[C]] = {
     case c: DynamicPlacement[C] => c
@@ -25,23 +26,33 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
       normalizedSelectionRules,
       after = Set("init:inst"),
       before = Set("*", "remote:block")
+    ),
+    Phase(
+      "dynamic:remotecall:recursive",
+      recursiveDynamicallyPlacedRemoteCalls,
+      after = Set("dynamic:selection:normalize", "remote:block"),
+      before = Set("*", "values:collect")
     )
   )
 
   private val commons = engine.require(Commons)
   private val initialization = engine.require(Initialization)
   private val gatewayAccess = engine.require(GatewayAccess)
+  private val moduleInfo = engine.require(ModuleInfo)
+  private val values = engine.require(Values)
 
   import commons._
   import gatewayAccess._
   import initialization._
+  import moduleInfo._
+  import values._
   import engine.c
   import engine.c.universe._
 
 
   /**
    * This phase is executed before "remote:block".
-   * All arguments passed to `SelectAny.apply` in multitier code are normalized to type `Remote[_]`.
+   * All arguments passed to `SelectAny._` in multitier code are normalized to type `Remote[_]`.
    */
   def normalizedSelectionRules(records: List[Any]): List[Any] = {
     records process {
@@ -207,6 +218,224 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
   }
 
   /**
+   * This phase is executed after "remote:block"
+   * It transforms dynamically placed remote calls of the form `SelectAny.recursive[P](selection _).call(f(...))` into
+   * calls of a new recursive function. The recursive function first calls the selection to get a remote reference.
+   * If it is a SelfReference, f is called. If it is not, the recursive function is called remotely on the selected
+   * remote reference.
+   */
+  def recursiveDynamicallyPlacedRemoteCalls(records: List[Any]): List[Any] = {
+    records process {
+      case Initialized(tree) =>
+        val liftedRecursiveDefinitions = mutable.ListBuffer.empty[Tree]
+
+        /**
+         * Lift the recursively placed remote call to a remote call of a new recursive function. Add this recursive
+         * function to the module.
+         * @param tree the original remote call to be lifted
+         * @param recursiveCallAccessor a remote accessor to be wrapped around the recursive remote call in the created function;
+         *                              only defined if the original remote call is accessed via remote accessor (i.e.
+         *                              in [[liftDynamicallyPlacedRemoteCallInsideRemoteAccessor]]
+         * @return the lifted remote call
+         */
+        def liftDynamicallyPlacedRemoteCall(tree: Tree, recursiveCallAccessor: Option[Tree => Tree] = None): Tree = {
+          val q"$expr.$call[..$callTpts](...$exprss)" = tree: @unchecked
+          val q"$selectAny.recursive[$peerType]($ruleArg)" = expr: @unchecked
+          val callExpr: Tree = exprss.head.head
+          val q"$calledFunction[..$tpts](...$callArgs)" = callExpr: @unchecked
+
+          val liftedNameIndex = liftedRecursiveDefinitions.length
+          val liftedName = TermName(s"$$loci$$dynamic$$remotecall$$$liftedNameIndex")
+          val liftedSymbol = internal.newMethodSymbol(
+            module.classSymbol,
+            liftedName,
+            callExpr.pos,
+            Flag.SYNTHETIC | Flag.PRIVATE | Flag.LOCAL
+          )
+          val liftedArgs = callArgs.asInstanceOf[List[List[Tree]]].zipWithIndex.map {
+            case (callArgsSublist, outerIndex) => callArgsSublist.zipWithIndex.map {
+              case (callArg, innerIndex) =>
+                val liftedParamName = TermName(s"$$loci$$dynamic$$remotecall$$$liftedNameIndex$$param$$$outerIndex$$$innerIndex")
+                internal.setInfo(
+                  internal.newTermSymbol(liftedSymbol, liftedParamName, callArg.pos, Flag.PARAM),
+                  callArg.tpe.underlying // transform ConstantType into its non-constant equivalent
+                ) -> callArg
+            }
+          }
+          val liftedTpe = internal.methodType(
+            liftedArgs.flatten.map(_._1),
+            types.on mapArgs { _ =>
+              val Seq(value, peer) = extractTag(callExpr.tpe, types.placedValue, callExpr.pos).typeArgs: @unchecked
+              if (value real_<:< types.per) {
+                c.abort(callExpr.pos, "Recursive selection of subjective remote block currently not supported")
+              }
+              val dispatchedValue = recursiveCallAccessor match {
+                case Some(_) => value
+                case None => definitions.UnitTpe
+              }
+              List(dispatchedValue, peer)
+            }
+          )
+          internal.setInfo(liftedSymbol, liftedTpe)
+          val liftedParams = liftedArgs.map(_.map{
+            case (symbol, tree) =>
+              internal.setSymbol(
+                q"${Modifiers(Flag.PARAM)} val ${symbol.name}: ${createTypeTree(tree.tpe, tree.pos)}",
+                symbol
+              )
+          })
+          val liftedResult = createTypeTree(liftedTpe.resultType, callExpr.pos)
+
+          val moduleThis = internal.setSymbol(q"${module.className}.this", module.symbol.info.baseClasses.head)
+          val liftedCall = q"$moduleThis.$liftedName(..${callArgs.asInstanceOf[List[List[Tree]]].flatten})"
+          internal.setSymbol(liftedCall, liftedSymbol)
+          internal.setType(liftedCall, liftedTpe.resultType)
+
+          val syntheticName = TermName("$loci$synthetic")
+          val placedName = TermName("placed")
+          val placedSymbol = internal.newMethodSymbol(symbols.Placed, placedName, flags = Flag.SYNTHETIC)
+          val placed = internal.setSymbol(q"$syntheticName.$placedName", placedSymbol)
+          val placedContextTypeTree: Tree = createTypeTree(types.context.mapArgs(_ => List(liftedTpe.resultType.typeArgs.last)), callExpr.pos)
+          val placedContextParam = internal.setPos(
+            ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), placedContextTypeTree, EmptyTree),
+            callExpr.pos
+          )
+          val calledFunctionApplication = q"$calledFunction[..$tpts](...${liftedParams.map(_.map(_.symbol.name))})"
+          val innerLiftedCall = q"$moduleThis.$liftedName(..${liftedParams.flatten.map(_.symbol.name)})"
+          internal.setSymbol(innerLiftedCall, liftedSymbol)
+          internal.setType(innerLiftedCall, liftedTpe.resultType)
+          val remoteIdentifier = TermName("selectedRemote")
+
+          val remoteApplySymbol = internal.newMethodSymbol(symbols.Select, TermName("apply"))
+          val remoteIdentifierExpr = internal.setType(q"$remoteIdentifier", types.remote)
+          val remoteApply = internal.setSymbol(
+            q"${trees.remote}[$peerType]($remoteIdentifierExpr)",
+            remoteApplySymbol
+          )
+          val recursiveCall = internal.setSymbol(
+            internal.setType(
+              q"$remoteApply.$call[..$callTpts]($innerLiftedCall)",
+              tree.tpe
+            ),
+            tree.symbol
+          )
+          val accessedRecursiveCall = recursiveCallAccessor.map(_(recursiveCall)).getOrElse(recursiveCall)
+
+          val localExecutionOrRecursiveCall =
+            q"""
+              val $remoteIdentifier = $ruleArg
+              $remoteIdentifier match {
+                case remote: ${types.selfReference} =>
+                  $calledFunctionApplication
+                case _ =>
+                  $accessedRecursiveCall
+              }
+             """
+
+          internal.setType(localExecutionOrRecursiveCall, liftedTpe.resultType)
+          val liftedBody = internal.setType(
+            q"$placed((..$placedContextParam) => $localExecutionOrRecursiveCall)",
+            liftedTpe.resultType
+          )
+
+          val liftedDefinition = q"${Flag.SYNTHETIC} private[this] def $liftedName(..${liftedParams.flatten}): $liftedResult = $liftedBody"
+          internal.setSymbol(liftedDefinition, liftedSymbol)
+          internal.setType(liftedDefinition, liftedTpe)
+
+          liftedRecursiveDefinitions += atPos(callExpr.pos)(liftedDefinition)
+
+          val selectAnyApply = internal.setSymbol(q"$selectAny.apply[$peerType]($ruleArg)", expr.symbol)
+
+          atPos(tree.pos) {
+            internal.setSymbol(
+              internal.setType(
+                q"$selectAnyApply.$call[..$callTpts]($liftedCall)",
+                tree.tpe
+              ), tree.symbol
+            )
+          }
+        }
+
+        /**
+         * Lift the recursively placed remote call to a remote call of a new recursive function. Add this recursive
+         * function to the module. The original remote call must be in a remote accessor
+         * @param tree the original remote call inside a remote accessor
+         * @return the lifted remote call inside the original remote accessor
+         */
+        def liftDynamicallyPlacedRemoteCallInsideRemoteAccessor(tree: Tree): Tree = {
+          val q"$accessor(...$exprss)" = tree: @unchecked
+          val transmission: Tree = exprss(1).head
+
+          val basicBlockingSingleAccessorTypeArgs = if (tree.tpe real_<:< types.blockingRemoteAccessor) {
+            tree.tpe.typeArgs
+          } else {
+            tree.tpe.typeArgs match {
+              case List(v, r, t, l) if t real_<:< types.future => List(v, r, t.typeArgs.head, l)
+              case _ => c.abort(
+                tree.pos,
+                s"Recursive call in unexpected remote accessor with type args: ${tree.tpe.typeArgs}"
+              )
+            }
+          }
+
+          val recursiveCallAccessor = (recursiveCall: Tree) => {
+            val accessor = internal.setType(
+              q"${trees.basicBlockingSingleAccessor}[..$basicBlockingSingleAccessorTypeArgs]($recursiveCall)($transmission)",
+              types.basicBlockingSingleAccessor
+            )
+            internal.setType(
+              q"$accessor.asLocal_!",
+              basicBlockingSingleAccessorTypeArgs(2)
+            )
+          }
+
+          val liftedRemoteCall = liftDynamicallyPlacedRemoteCall(exprss.head.head, Option(recursiveCallAccessor))
+          atPos(tree.pos) {
+            internal.setSymbol(
+              internal.setType(
+                q"$accessor($liftedRemoteCall)($transmission)",
+                tree.tpe
+              ),
+              tree.symbol
+            )
+          }
+        }
+
+        object transformer extends Transformer {
+          override def transform(tree: Tree): Tree = tree match {
+            case tree if isDynamicallyPlacedRemoteCallWithRecursiveSelectionInsideRemoteAccessor(tree) =>
+              super.transform(liftDynamicallyPlacedRemoteCallInsideRemoteAccessor(tree))
+            case tree if isDynamicallyPlacedRemoteCallWithRecursiveSelection(tree) =>
+              super.transform(liftDynamicallyPlacedRemoteCall(tree))
+            case tree => super.transform(tree)
+          }
+        }
+
+        val result = Initialized(ImplDefOps(tree).map { (mods, parents, self, body) =>
+          (mods, parents, self, transformer.transformTrees(body) ++ liftedRecursiveDefinitions)
+        })
+
+        // add the generated lifted definitons to the module's scope
+        def classInfoType(parents: List[Type], decls: Scope, typeSymbol: Symbol): ClassInfoType = {
+          val scope = internal.newScopeWith(decls.toSeq ++ (liftedRecursiveDefinitions map { _.symbol }): _*)
+          internal.classInfoType(parents, scope, typeSymbol)
+        }
+
+        val info = (module.classSymbol.info: @unchecked) match {
+          case PolyType(typeParams, ClassInfoType(parents, decls, typeSymbol)) =>
+            internal.polyType(typeParams, classInfoType(parents, decls, typeSymbol))
+          case ClassInfoType(parents, decls, typeSymbol) =>
+            classInfoType(parents, decls, typeSymbol)
+        }
+
+        internal.setInfo(module.classSymbol, info)
+
+        logging.debug(s" Expanded ${liftedRecursiveDefinitions.size} dynamically placed remote calls recursively")
+        result
+    }
+  }
+
+  /**
    * Is the tree the application of a method belonging to [[symbols.SelectAny]]?
    * It needs to have a defined peerType type argument and a rule argument
    */
@@ -218,6 +447,38 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
           apply.symbol.owner == symbols.SelectAny &&
           peerType.nonEmpty &&
           ruleArg.nonEmpty =>
+        true
+      case _ => false
+    }
+  }
+
+  private def isRecursiveDynamicSelection(tree: Tree): Boolean = {
+    isDynamicSelection(tree) && (tree match {
+      case q"$expr.$recursive[$peerType]($ruleArg)" =>
+        recursive == names.recursive
+      case _ => false
+    })
+  }
+
+  private def isDynamicallyPlacedRemoteCallWithRecursiveSelection(tree: Tree): Boolean = {
+    tree match {
+      case tree @ q"$expr.$call[..$_](...$exprss)"
+        if tree.nonEmpty &&
+          tree.symbol != null &&
+          tree.symbol.owner == symbols.Call &&
+          exprss.nonEmpty &&
+          isRecursiveDynamicSelection(expr) =>
+        true
+      case _ => false
+    }
+  }
+
+  private def isDynamicallyPlacedRemoteCallWithRecursiveSelectionInsideRemoteAccessor(tree: Tree): Boolean = {
+    tree match {
+      case tree @ q"$accessor(...$exprss)"
+        if tree.nonEmpty &&
+          (tree.tpe real_<:< types.remoteAccessor) &&
+          isDynamicallyPlacedRemoteCallWithRecursiveSelection(exprss.head.head) =>
         true
       case _ => false
     }

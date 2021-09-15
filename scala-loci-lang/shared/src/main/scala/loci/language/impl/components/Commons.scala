@@ -40,6 +40,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val transmittables = TypeName("Transmittables")
     val running = TermName("running")
     val terminate = TermName("terminate")
+    val recursive = TermName("recursive")
     val placedValues = TermName(NameTransformer encode "<placed values>")
     def placedValues(symbol: Symbol) =
       TypeName(NameTransformer encode s"<placed values of ${uniqueRealisticName(symbol)}>")
@@ -131,6 +132,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val selfReference = typeOf[SelfReference[_]]
     val selfReferenceDummyRequest = typeOf[runtime.SelfReferenceDummyRequest[_, _, _, _, _]]
     val blockingRemoteAccessor = typeOf[transmitter.Blocking]
+    val basicBlockingSingleAccessor = typeOf[PlacedValue.BasicBlockingSingleAccessor[_, _, _, _]]
+    val context = typeOf[Placement.Context[_]]
   }
 
   object trees {
@@ -158,6 +161,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val none = q"${names.root}.loci.transmitter.transmittable.ContextBuilder.none"
     val delegate = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.delegate"
     val list = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.list"
+    val basicBlockingSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicBlockingSingleAccessor"
+    val remote = q"${names.root}.loci.`package`.remote.apply"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {
