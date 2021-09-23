@@ -999,13 +999,13 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
         createTypeTree(tpe, pos),
         TermName(s"$$loci$$peer$$sig$$${tpe.typeSymbol.name}"))
 
-    def extractRemoteCall(tree: Tree) =
+    def extractRemoteCall(tree: Tree): Option[(Tree, Tree, Tree, Boolean, Type, Boolean)] =
       if (tree.nonEmpty &&
           tree.symbol != null &&
           tree.symbol.owner == symbols.Call) {
         val q"$expr.$_[..$tpts](...$exprss)" = tree: @unchecked
 
-        val (remotes, instanceBased, remotesType, signature) = {
+        val (remotes, instanceBased, remotesType, signature, dynamicallyPlaced) = {
           val q"$_[..$tpts](...$exprss)" = expr: @unchecked
 
           if (expr.symbol.owner == symbols.Select || expr.symbol.owner == symbols.SelectAny) {
@@ -1020,20 +1020,20 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                   q"$result.::($remote)"
                 }
 
-            (remotes, dynamicRemoteSequence, tpts.head.tpe, EmptyTree)
+            (remotes, dynamicRemoteSequence, tpts.head.tpe, EmptyTree, expr.symbol.owner == symbols.SelectAny)
           }
           else if (tpts.nonEmpty)
-            (trees.nil, false, tpts.head.tpe, accessPeerSignatureByTree(tpts.head))
+            (trees.nil, false, tpts.head.tpe, accessPeerSignatureByTree(tpts.head), expr.symbol.owner == symbols.SelectAny)
           else
-            (trees.nil, false, definitions.NothingTpe, EmptyTree)
+            (trees.nil, false, definitions.NothingTpe, EmptyTree, expr.symbol.owner == symbols.SelectAny)
         }
 
-        Some((exprss.head.head, signature, remotes, instanceBased, remotesType))
+        Some((exprss.head.head, signature, remotes, instanceBased, remotesType, dynamicallyPlaced))
       }
       else
         None
 
-    def extractSelection(tree: Tree) =
+    def extractSelection(tree: Tree): (Tree, Tree, Tree, Boolean, Type) =
       if (symbols.froms contains tree.symbol) {
         val (expr, tpts, exprss) = (tree: @unchecked) match {
           case q"$expr.$_[..$tpts]($selection(new $tuple(...$exprss)))"
@@ -1168,9 +1168,12 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
               val (index, result, proxy) = checkForTransmission(tree, peer)
 
-              val (value, _, remotes, dynamicRemoteSequence, remotesType) =
+              val (value, _, remotes, dynamicRemoteSequence, remotesType, dynamicallyPlaced) =
                 extractRemoteCall(exprss.head.head) getOrElse
-                extractSelection(exprss.head.head)
+                  (extractSelection(exprss.head.head) match {
+                    case (value, signature, remotes, dynamicRemoteSequence, remoteType) =>
+                      (value, signature, remotes, dynamicRemoteSequence, remoteType, false)
+                  })
 
               val (placedValue, placedValuePeer, info, arguments) =
                 extractRemoteAccess(value, peer, remotesType)
@@ -1217,7 +1220,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               val accessingPeerType = peer.asType.toType.asSeenFrom(module.classSymbol)
               val localExecutionIsLegal: Boolean = accessingPeerType real_<:< accessedValuePeerType
 
-              val exprs = if (transmissionOutputIsFuture && localExecutionIsLegal) {
+              val exprs = if (dynamicallyPlaced && transmissionOutputIsFuture && localExecutionIsLegal) {
                 val transmissionInputIsSubjectiveValue: Boolean = value.tpe real_<:< types.per
                 val selfReferenceDummyRequest = if (transmissionInputIsSubjectiveValue) {
                   q"new ${createTypeTree(types.selfReferenceDummyRequest.typeConstructor, value.pos)}($value(remotes.head))"
@@ -1252,7 +1255,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
             case _ =>
               (extractRemoteCall(tree)
-                map { case (value, _, remotes, dynamicRemoteSequence, remotesType) =>
+                map { case (value, _, remotes, dynamicRemoteSequence, remotesType, dynamicallyPlaced) =>
                   count += 1
 
                   val (placedValue, placedValuePeer, _, arguments) =
@@ -1269,7 +1272,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                     if (dynamicRemoteSequence) {
                       transform(q"val $instances = $remotes map ${trees.reference}; if($instances.nonEmpty) $invokeRemoteAccess")
-                    } else if (localExecutionIsLegal) {
+                    } else if (dynamicallyPlaced && localExecutionIsLegal) {
                       val remotesIdentifier = c.freshName(TermName("remotes"))
                       val remotesAssignment = q"val $remotesIdentifier = $remotes"
                       val remoteInvocation = q"val $instances = $remotesIdentifier map ${trees.reference}; $invokeRemoteAccess"
@@ -1597,7 +1600,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
   }
 
   object PlacedValues {
-    def resolve(path: String, symbol: Symbol, pos: Position): (TermName, Option[(Type, Type, Type, Type)], Option[Type]) =
+    def resolve(path: String, symbol: Symbol, pos: Position): (TermName, Option[(Type, Type, Type, Type)], Option[Type]) = {
       cache.getOrElseUpdate(path -> symbol, {
         val (resultType, peerType) =
           if (symbol.isMethod) {
@@ -1658,6 +1661,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
           }
           getOrElse c.abort(pos, s"Could not find remote accessor for placed $symbol"))
       })
+    }
 
     def makeResolvable(path: String, symbol: Symbol, name: TermName, info: Option[(Type, Type, Type, Type)], subjective: Option[Type]): Unit = {
       cache += path -> symbol -> ((name, info, subjective))
