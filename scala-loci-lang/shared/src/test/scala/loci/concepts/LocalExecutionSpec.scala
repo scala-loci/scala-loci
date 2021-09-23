@@ -8,7 +8,7 @@ import org.scalatest.matchers.should.Matchers
 import transmitter.Serializables._
 
 
-@multitier object Module {
+@multitier object LocalExecutionModule {
   @peer type Node <: {type Tie <: Multiple[Node]}
 
   def select(connected: Seq[Remote[Node]], self: SelfReference[Node]): Local[Remote[Node]] on Node = on[Node] { implicit! =>
@@ -31,36 +31,36 @@ class LocalExecutionSpec extends AnyFlatSpec with Matchers with NoLogging {
   it should "execute blocks locally only when SelfReference is selected" in {
     val listener = new NetworkListener
 
-    val nodeA = multitier start new Instance[Module.Node](
+    val nodeA = multitier start new Instance[LocalExecutionModule.Node](
       contexts.Immediate.global,
-      listen[Module.Node](listener)
+      listen[LocalExecutionModule.Node](listener)
     )
-    val nodeB = multitier start new Instance[Module.Node](
+    val nodeB = multitier start new Instance[LocalExecutionModule.Node](
       contexts.Immediate.global,
-      connect[Module.Node](listener.createConnector())
+      connect[LocalExecutionModule.Node](listener.createConnector())
     )
 
-    nodeA.instance.current map { _ retrieve Module.executeLocally shouldEqual true }
-    nodeB.instance.current map { _ retrieve Module.executeLocally shouldEqual true }
+    nodeA.instance.current map { _ retrieve LocalExecutionModule.executeLocally shouldEqual true }
+    nodeB.instance.current map { _ retrieve LocalExecutionModule.executeLocally shouldEqual true }
 
-    nodeA.instance.current map { _ retrieve Module.value shouldEqual 0 }
-    nodeB.instance.current map { _ retrieve Module.value shouldEqual 0 }
+    nodeA.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 0 }
+    nodeB.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 0 }
 
-    nodeA.instance.current foreach { _ retrieve Module.incValue() }
-    nodeA.instance.current map { _ retrieve Module.value shouldEqual 1 }
-    nodeB.instance.current map { _ retrieve Module.value shouldEqual 0 }
+    nodeA.instance.current foreach { _ retrieve LocalExecutionModule.incValue() }
+    nodeA.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 1 }
+    nodeB.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 0 }
 
-    nodeA.instance.current foreach { _ retrieve (Module.executeLocally = false) }
-    nodeA.instance.current map { _ retrieve Module.executeLocally shouldEqual false }
-    nodeB.instance.current map { _ retrieve Module.executeLocally shouldEqual true }
+    nodeA.instance.current foreach { _ retrieve (LocalExecutionModule.executeLocally = false) }
+    nodeA.instance.current map { _ retrieve LocalExecutionModule.executeLocally shouldEqual false }
+    nodeB.instance.current map { _ retrieve LocalExecutionModule.executeLocally shouldEqual true }
 
-    nodeA.instance.current foreach { _ retrieve Module.incValue() }
-    nodeA.instance.current map { _ retrieve Module.value shouldEqual 1 }
-    nodeB.instance.current map { _ retrieve Module.value shouldEqual 1 }
+    nodeA.instance.current foreach { _ retrieve LocalExecutionModule.incValue() }
+    nodeA.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 1 }
+    nodeB.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 1 }
 
-    nodeB.instance.current foreach { _ retrieve Module.incValue() }
-    nodeA.instance.current map { _ retrieve Module.value shouldEqual 1 }
-    nodeB.instance.current map { _ retrieve Module.value shouldEqual 2 }
+    nodeB.instance.current foreach { _ retrieve LocalExecutionModule.incValue() }
+    nodeA.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 1 }
+    nodeB.instance.current map { _ retrieve LocalExecutionModule.value shouldEqual 2 }
   }
 
 }
