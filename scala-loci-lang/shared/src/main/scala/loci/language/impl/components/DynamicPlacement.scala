@@ -230,6 +230,37 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
         val liftedRecursiveDefinitions = mutable.ListBuffer.empty[Tree]
 
         /**
+         * Transform RefTrees in the given tree by swapping their names with new term names. Collect the newly
+         * introduced term names together with their original RefTrees.
+         * @param tree the tree to be transformed
+         * @param replacedNamePrefix the prefix of the newly introduced term names, appended by indexes
+         * @return list of original RefTree -> new term name, transformed tree
+         */
+        def transformUnboundReferences(tree: Tree, replacedNamePrefix: String): (List[(RefTree, TermName)], Tree) = {
+          val extractedRefsWithNewNames = mutable.ListBuffer.empty[(RefTree, TermName)]
+
+          case class UnboundReferenceTransformer(knownParams: Set[Name]) extends Transformer {
+            override def transform(tree: Tree): Tree = tree match {
+              case tree @ Function(params, _) if params.forall(param => knownParams.contains(param.name.decodedName)) =>
+                super.transform(tree)
+              case tree @ Function(params, _) =>
+                UnboundReferenceTransformer(params.map(_.name.decodedName).toSet).transform(tree)
+              case tree @ RefTree(qualifier, name)
+                if tree.symbol != NoSymbol &&
+                  isLocalIdentifier(tree.symbol.owner) &&
+                  !knownParams.contains(name) =>
+                val newName = TermName(s"$replacedNamePrefix${extractedRefsWithNewNames.length}")
+                extractedRefsWithNewNames.append(tree -> newName)
+                treeCopy.RefTree(tree, qualifier, newName)
+              case _ => super.transform(tree)
+            }
+          }
+
+          val treeWithReplacedReferences = UnboundReferenceTransformer(Set.empty[Name]).transform(tree)
+          (extractedRefsWithNewNames.toList, treeWithReplacedReferences)
+        }
+
+        /**
          * Lift the recursively placed remote call to a remote call of a new recursive function. Add this recursive
          * function to the module.
          * @param tree the original remote call to be lifted
@@ -252,6 +283,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
             callExpr.pos,
             Flag.SYNTHETIC | Flag.PRIVATE | Flag.LOCAL
           )
+
           val liftedArgs = callArgs.asInstanceOf[List[List[Tree]]].zipWithIndex.map {
             case (callArgsSublist, outerIndex) => callArgsSublist.zipWithIndex.map {
               case (callArg, innerIndex) =>
@@ -262,8 +294,21 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
                 ) -> callArg
             }
           }
+
+          val (unboundRefs, ruleArgWithReplacedReferences) = transformUnboundReferences(
+            ruleArg,
+            s"$$loci$$dynamic$$remotecall$$$liftedNameIndex$$ref$$"
+          )
+          val unboundRefArgs = unboundRefs.zipWithIndex.map {
+            case ((ref, refParamName), index) =>
+              internal.setInfo(
+                internal.newTermSymbol(liftedSymbol, refParamName, ref.pos, Flag.PARAM),
+                ref.tpe
+              ) -> ref
+          }
+
           val liftedTpe = internal.methodType(
-            liftedArgs.flatten.map(_._1),
+            (liftedArgs.flatten ++ unboundRefArgs).map(_._1),
             types.on mapArgs { _ =>
               val Seq(value, peer) = extractTag(callExpr.tpe, types.placedValue, callExpr.pos).typeArgs: @unchecked
               if (value real_<:< types.per) {
@@ -277,6 +322,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
             }
           )
           internal.setInfo(liftedSymbol, liftedTpe)
+
           val liftedParams = liftedArgs.map(_.map{
             case (symbol, tree) =>
               internal.setSymbol(
@@ -284,10 +330,18 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
                 symbol
               )
           })
+          val unboundRefParams = unboundRefArgs.map {
+            case (symbol, tree) =>
+              internal.setSymbol(
+                q"${Modifiers(Flag.PARAM)} val ${symbol.name}: ${createTypeTree(tree.tpe, tree.pos)}",
+                symbol
+              )
+          }
+
           val liftedResult = createTypeTree(liftedTpe.resultType, callExpr.pos)
 
           val moduleThis = internal.setSymbol(q"${module.className}.this", module.symbol.info.baseClasses.head)
-          val liftedCall = q"$moduleThis.$liftedName(..${callArgs.asInstanceOf[List[List[Tree]]].flatten})"
+          val liftedCall = q"$moduleThis.$liftedName(..${callArgs.asInstanceOf[List[List[Tree]]].flatten ++ unboundRefs.map(_._1)})"
           internal.setSymbol(liftedCall, liftedSymbol)
           internal.setType(liftedCall, liftedTpe.resultType)
 
@@ -301,7 +355,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
             callExpr.pos
           )
           val calledFunctionApplication = q"$calledFunction[..$tpts](...${liftedParams.map(_.map(_.symbol.name))})"
-          val innerLiftedCall = q"$moduleThis.$liftedName(..${liftedParams.flatten.map(_.symbol.name)})"
+          val innerLiftedCall = q"$moduleThis.$liftedName(..${(liftedParams.flatten ++ unboundRefParams).map(_.symbol.name)})"
           internal.setSymbol(innerLiftedCall, liftedSymbol)
           internal.setType(innerLiftedCall, liftedTpe.resultType)
           val remoteIdentifier = TermName("selectedRemote")
@@ -323,7 +377,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
 
           val localExecutionOrRecursiveCall =
             q"""
-              val $remoteIdentifier = $ruleArg
+              val $remoteIdentifier = $ruleArgWithReplacedReferences
               $remoteIdentifier match {
                 case remote: ${types.selfReference} =>
                   $calledFunctionApplication
@@ -338,7 +392,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
             liftedTpe.resultType
           )
 
-          val liftedDefinition = q"${Flag.SYNTHETIC} private[this] def $liftedName(..${liftedParams.flatten}): $liftedResult = $liftedBody"
+          val liftedDefinition = q"${Flag.SYNTHETIC} private[this] def $liftedName(..${liftedParams.flatten ++ unboundRefParams}): $liftedResult = $liftedBody"
           internal.setSymbol(liftedDefinition, liftedSymbol)
           internal.setType(liftedDefinition, liftedTpe)
 

@@ -46,4 +46,8 @@ class ModuleInfo[C <: blackbox.Context](val engine: Engine[C]) extends Component
   }).toSet
 
   def underEnclosingExpansion(symbol: Symbol): Boolean = underEnclosingExpansion contains symbol
+
+  def isLocalIdentifier(symbol: Symbol): Boolean =
+    symbol != NoSymbol && symbol.owner != NoSymbol && symbol != module.classSymbol &&
+      (symbol.isTerm && symbol.owner == module.classSymbol || isLocalIdentifier(symbol.owner))
 }

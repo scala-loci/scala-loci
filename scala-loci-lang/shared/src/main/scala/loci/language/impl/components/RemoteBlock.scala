@@ -230,10 +230,6 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
           atPos(expr.pos) { internal.setType(liftedCall, fixedTreeType) }
         }
 
-        def isLocalIdentifier(symbol: Symbol): Boolean =
-          symbol != NoSymbol && symbol.owner != NoSymbol && symbol != module.classSymbol &&
-          (symbol.isTerm && symbol.owner == module.classSymbol || isLocalIdentifier(symbol.owner))
-
         def isRemoteBlock(tree: Tree) = tree match {
           case q"$expr[..$_](...$exprss)" =>
             tree.nonEmpty &&
