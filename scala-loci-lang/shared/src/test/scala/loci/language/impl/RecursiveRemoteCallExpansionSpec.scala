@@ -48,4 +48,41 @@ class RecursiveRemoteCallExpansionSpec extends AnyFlatSpec with Matchers with No
     }""" should compile
   }
 
+  it should "compile for recursive placement of a remote call given a selection rule expression containing local values" in {
+    """@multitier object Module {
+      @peer type Node <: { type Tie <: Multiple[Node] }
+      @peer type A <: Node { type Tie <: Multiple[Node] }
+      @peer type B <: Node { type Tie <: Multiple[Node] }
+      @peer type C <: Node { type Tie <: Multiple[Node] }
+
+      def select(s: String)(a: Int, b: Int)(connected: Seq[Remote[Node]], self: SelfReference[Node]): Local[Remote[Node]] on Node = on[Node] { implicit! =>
+        throw new NotImplementedError
+      } and on[A] { implicit! =>
+        println(s)
+        connected.flatMap(_.asRemote[B]).head
+      } and on[B] { implicit! =>
+        println(a + b)
+        connected.flatMap(_.asRemote[C]).head
+      } and on[C] { implicit! =>
+        self
+      }
+
+      def f(a: Int): Int on Node = on[Node] { implicit! =>
+        throw new NotImplementedError
+      } and on[A] { implicit! =>
+        a
+      } and on[B] { implicit! =>
+        a + 1
+      } and on[C] { implicit! =>
+        a * 2
+      }
+
+      def remoteExecution(): Unit on Node = on[Node] { implicit! =>
+        val s1 = "test"
+        val a = 12
+        remoteAny.recursive[Node](select(s1)(a, 42) _).call(f(1))
+      }
+    }""" should compile
+  }
+
 }

@@ -41,6 +41,41 @@ import transmitter.Serializables._
   }
 }
 
+@multitier object RecursiveSelectionWithLocalValuesModule {
+  @peer type Node <: { type Tie <: Multiple[Node] }
+  @peer type A <: Node { type Tie <: Multiple[Node] }
+  @peer type B <: Node { type Tie <: Multiple[Node] }
+  @peer type C <: Node { type Tie <: Multiple[Node] }
+
+  def select(
+    connected: Seq[Remote[Node]],
+    self: SelfReference[Node],
+    peerId: String
+  ): Local[Remote[Node]] on Node = on[Node] { implicit! =>
+    throw new NotImplementedError
+  } and on[A] { implicit! =>
+    if (peerId == "A") { self } else { connected.flatMap(_.asRemote[B]).head }
+  } and on[B] { implicit! =>
+    if (peerId == "B") { self } else { connected.flatMap(_.asRemote[C]).head }
+  } and on[C] { implicit! =>
+    if (peerId == "C") { self } else { throw new RuntimeException }
+  }
+
+  def f(): String on Node = on[Node] { implicit! =>
+    throw new NotImplementedError
+  } and on[A] { implicit! =>
+    s"A"
+  } and on[B] { implicit! =>
+    s"B"
+  } and on[C] { implicit! =>
+    s"C"
+  }
+
+  def run(id: String): String on Node = on[Node] { implicit! =>
+    remoteAny.recursive[Node](select(_, _, id)).call(f()).asLocal_!
+  }
+}
+
 class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Recursive selection of executing peer of a remote call"
 
@@ -94,6 +129,36 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
 
     a[RuntimeException] shouldBe thrownBy {
       nodeA.instance.current foreach { _ retrieve RecursiveSelectionModule.run(1) }
+    }
+  }
+
+  it should "use the value passed to the selection rule in its recursive executions correctly" in {
+    val listenerAB = new NetworkListener
+    val listenerBC = new NetworkListener
+
+    val nodeA = multitier start new Instance[RecursiveSelectionWithLocalValuesModule.A](
+      contexts.Immediate.global,
+      listen[RecursiveSelectionWithLocalValuesModule.B](listenerAB)
+    )
+    val nodeB = multitier start new Instance[RecursiveSelectionWithLocalValuesModule.B](
+      contexts.Immediate.global,
+      connect[RecursiveSelectionWithLocalValuesModule.A](listenerAB.createConnector()) and
+        listen[RecursiveSelectionWithLocalValuesModule.C](listenerBC)
+    )
+    val nodeC = multitier start new Instance[RecursiveSelectionWithLocalValuesModule.C](
+      contexts.Immediate.global,
+      connect[RecursiveSelectionWithLocalValuesModule.B](listenerBC.createConnector())
+    )
+
+    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") shouldEqual "A" }
+    nodeB.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") shouldEqual "B" }
+    nodeC.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") shouldEqual "C" }
+
+    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") shouldEqual "B" }
+    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") shouldEqual "C" }
+
+    a[RuntimeException] shouldBe thrownBy {
+      nodeB.instance.current foreach { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") }
     }
   }
 
