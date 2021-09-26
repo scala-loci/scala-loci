@@ -3,9 +3,8 @@ package runtime
 
 import scala.concurrent.Future
 
-final class SelfReferenceDummyRequest[V, R, T, L, M](
-  value: T
-) extends transmitter.Transmission[V, R, Future[T], L, M] {
+sealed trait SelfReferenceDummyRequest[R] {
+  this: transmitter.Transmission[_, R, _, _, _] =>
 
   /**
    * caching is unnecessary for local values
@@ -23,11 +22,27 @@ final class SelfReferenceDummyRequest[V, R, T, L, M](
   override private[loci] def remotesReferences: Seq[Remote[R]] = {
     throw new NotImplementedError(s"remoteReferences should not be called on ${getClass.getSimpleName}")
   }
+}
 
-  /**
-   * Just wrap the value into a future to streamline the type with what [[RemoteRequest]] returns
-   */
+/**
+ * Wrap value into a Future to streamline with what [[RemoteRequest]] returns (only use if [[T]] is itself not a Future)
+ */
+final class FutureWrappingSelfReferenceDummyRequest[V, R, T, L, M](
+  value: T
+) extends transmitter.Transmission[V, R, Future[T], L, M] with SelfReferenceDummyRequest[R] {
   override private[loci] def retrieveValues: Seq[Future[T]] = {
     Seq(Future.successful(value))
+  }
+}
+
+/**
+ * Return value as is if it is already a Future, in order to avoid unnecessarily nested Futures, which is in line with
+ * [[RemoteRequest]]
+ */
+final class IdenticalSelfReferenceDummyRequest[V, R, T <: Future[_], L, M](
+  value: T
+) extends transmitter.Transmission[V, R, T, L, M] with SelfReferenceDummyRequest[R] {
+  override private[loci] def retrieveValues: Seq[T] = {
+    Seq(value)
   }
 }

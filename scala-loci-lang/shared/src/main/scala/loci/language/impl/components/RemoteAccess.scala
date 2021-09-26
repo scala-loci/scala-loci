@@ -1222,10 +1222,16 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
               val exprs = if (dynamicallyPlaced && transmissionOutputIsFuture && localExecutionIsLegal) {
                 val transmissionInputIsSubjectiveValue: Boolean = value.tpe real_<:< types.per
+                val selfReferenceDummyRequestTypeTree = value.tpe match {
+                  case t if t real_<:< types.future =>
+                    q"${createTypeTree(types.identicalSelfReferenceDummyRequest.typeConstructor, value.pos)}"
+                  case _ =>
+                    q"${createTypeTree(types.futureWrappingSelfReferenceDummyRequest.typeConstructor, value.pos)}"
+                }
                 val selfReferenceDummyRequest = if (transmissionInputIsSubjectiveValue) {
-                  q"new ${createTypeTree(types.selfReferenceDummyRequest.typeConstructor, value.pos)}($value(remotes.head))"
+                  q"new $selfReferenceDummyRequestTypeTree($value(remotes.head))"
                 } else {
-                  q"new ${createTypeTree(types.selfReferenceDummyRequest.typeConstructor, value.pos)}($value)"
+                  q"new $selfReferenceDummyRequestTypeTree($value)"
                 }
 
                 val localExecutionOrRemoteRequest =
