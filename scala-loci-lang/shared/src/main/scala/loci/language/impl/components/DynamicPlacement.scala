@@ -442,15 +442,12 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
               q"$accessor($recursiveCall)($transmission)",
               tree.tpe
             )
-            val accessTerm = tree.tpe match {
-              case tpe if tpe real_<:< types.basicSingleAccessor => TermName("asLocal")
-              case tpe if tpe real_<:< types.basicBlockingSingleAccessor => TermName("asLocal_!")
+            val access = tree.tpe match {
+              case tpe if tpe real_<:< types.basicSingleAccessor => q"$newAccessor.asLocal"
+              case tpe if tpe real_<:< types.basicBlockingSingleAccessor => q"$newAccessor.asLocal_!"
               case tpe => c.abort(tree.pos, s"Unexpected remote accessor of type $tpe in remote call with recursive selection")
             }
-            internal.setType(
-              q"$newAccessor.$accessTerm",
-              tree.tpe.typeArgs(2)
-            )
+            internal.setType(access, tree.tpe.typeArgs(2))
           }
 
           val liftedRemoteCall = liftDynamicallyPlacedRemoteCall(
