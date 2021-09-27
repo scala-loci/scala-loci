@@ -4,8 +4,10 @@ package concepts
 import loci.communicator.NetworkListener
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-
 import transmitter.Serializables._
+
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 
 @multitier object RecursiveSelectionModule {
@@ -36,8 +38,8 @@ import transmitter.Serializables._
     s"C: $x"
   }
 
-  def run(x: Int): String on Node = on[Node] { implicit! =>
-    remoteAny.recursive[Node](select _).call(f(x)).asLocal_!
+  def run(x: Int): Future[String] on Node = on[Node] { implicit! =>
+    remoteAny.recursive[Node](select _).call(f(x)).asLocal
   }
 }
 
@@ -71,13 +73,15 @@ import transmitter.Serializables._
     s"C"
   }
 
-  def run(id: String): String on Node = on[Node] { implicit! =>
-    remoteAny.recursive[Node](select(_, _, id)).call(f()).asLocal_!
+  def run(id: String): Future[String] on Node = on[Node] { implicit! =>
+    remoteAny.recursive[Node](select(_, _, id)).call(f()).asLocal
   }
 }
 
 class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Recursive selection of executing peer of a remote call"
+
+  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   it should "execute the call locally when SelfReference is selected and otherwise pass execution to the next peer" in {
     val listenerAB = new NetworkListener
@@ -101,9 +105,9 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) shouldEqual "A: 1" }
-    nodeB.instance.current map { _ retrieve RecursiveSelectionModule.run(2) shouldEqual "B: 2" }
-    nodeC.instance.current map { _ retrieve RecursiveSelectionModule.run(3) shouldEqual "C: 3" }
+    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) map { _ shouldEqual "A: 1" }}
+    nodeB.instance.current map { _ retrieve RecursiveSelectionModule.run(2) map { _ shouldEqual "B: 2" }}
+    nodeC.instance.current map { _ retrieve RecursiveSelectionModule.run(3) map { _ shouldEqual "C: 3" }}
 
     nodeA.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
 
@@ -111,7 +115,7 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) shouldEqual "B: 1" }
+    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) map { _ shouldEqual "B: 1" }}
 
     nodeB.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
 
@@ -119,7 +123,7 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) shouldEqual "C: 1" }
+    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) map { _ shouldEqual "C: 1" }}
 
     nodeC.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
 
@@ -127,9 +131,7 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
 
-    a[RuntimeException] shouldBe thrownBy {
-      nodeA.instance.current foreach { _ retrieve RecursiveSelectionModule.run(1) }
-    }
+    nodeA.instance.current foreach { _ retrieve RecursiveSelectionModule.run(1) map { result => a[RuntimeException] shouldBe thrownBy(result) } }
   }
 
   it should "use the value passed to the selection rule in its recursive executions correctly" in {
@@ -150,16 +152,14 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
       connect[RecursiveSelectionWithLocalValuesModule.B](listenerBC.createConnector())
     )
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") shouldEqual "A" }
-    nodeB.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") shouldEqual "B" }
-    nodeC.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") shouldEqual "C" }
+    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") map { _ shouldEqual "A" }}
+    nodeB.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") map { _ shouldEqual "B" }}
+    nodeC.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") map { _ shouldEqual "C" }}
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") shouldEqual "B" }
-    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") shouldEqual "C" }
+    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") map { _ shouldEqual "B" }}
+    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") map { _ shouldEqual "C" }}
 
-    a[RuntimeException] shouldBe thrownBy {
-      nodeB.instance.current foreach { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") }
-    }
+    nodeB.instance.current foreach { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") map { result => a[RuntimeException] shouldBe thrownBy(result) } }
   }
 
 }
