@@ -267,9 +267,16 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
          * @param recursiveCallAccessor a remote accessor to be wrapped around the recursive remote call in the created function;
          *                              only defined if the original remote call is accessed via remote accessor (i.e.
          *                              in [[liftDynamicallyPlacedRemoteCallInsideRemoteAccessor]]
+         * @param recursiveCallAccessorIsBlocking Is recursiveCallAccessor blocking? If not the recursive function will return a Future
          * @return the lifted remote call
          */
-        def liftDynamicallyPlacedRemoteCall(tree: Tree, recursiveCallAccessor: Option[Tree => Tree] = None): Tree = {
+        def liftDynamicallyPlacedRemoteCall(
+          tree: Tree,
+          recursiveCallAccessor: Option[Tree => Tree] = None,
+          recursiveCallAccessorIsBlocking: Option[Boolean] = None
+        ): Tree = {
+          require(recursiveCallAccessor.isDefined == recursiveCallAccessorIsBlocking.isDefined)
+
           val q"$expr.$call[..$callTpts](...$exprss)" = tree: @unchecked
           val q"$selectAny.recursive[$peerType]($ruleArg)" = expr: @unchecked
           val callExpr: Tree = exprss.head.head
@@ -314,8 +321,9 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
               if (value real_<:< types.per) {
                 c.abort(callExpr.pos, "Recursive selection of subjective remote block currently not supported")
               }
-              val dispatchedValue = recursiveCallAccessor match {
-                case Some(_) => value
+              val dispatchedValue = recursiveCallAccessorIsBlocking match {
+                case Some(false) => types.future mapArgs { _ => List(value) }
+                case Some(true) => value
                 case None => definitions.UnitTpe
               }
               List(dispatchedValue, peer)
@@ -354,7 +362,14 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
             ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), placedContextTypeTree, EmptyTree),
             callExpr.pos
           )
-          val calledFunctionApplication = q"$calledFunction[..$tpts](...${liftedParams.map(_.map(_.symbol.name))})"
+
+          val calledFunctionApplication = recursiveCallAccessorIsBlocking match {
+            case Some(false) =>
+              q"${trees.futureSuccessful}($calledFunction[..$tpts](...${liftedParams.map(_.map(_.symbol.name))}))"
+            case _ =>
+              q"$calledFunction[..$tpts](...${liftedParams.map(_.map(_.symbol.name))})"
+          }
+
           val innerLiftedCall = q"$moduleThis.$liftedName(..${(liftedParams.flatten ++ unboundRefParams).map(_.symbol.name)})"
           internal.setSymbol(innerLiftedCall, liftedSymbol)
           internal.setType(innerLiftedCall, liftedTpe.resultType)
@@ -420,30 +435,29 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
           val q"$accessor(...$exprss)" = tree: @unchecked
           val transmission: Tree = exprss(1).head
 
-          val basicBlockingSingleAccessorTypeArgs = if (tree.tpe real_<:< types.blockingRemoteAccessor) {
-            tree.tpe.typeArgs
-          } else {
-            tree.tpe.typeArgs match {
-              case List(v, r, t, l) if t real_<:< types.future => List(v, r, t.typeArgs.head, l)
-              case _ => c.abort(
-                tree.pos,
-                s"Recursive call in unexpected remote accessor with type args: ${tree.tpe.typeArgs}"
-              )
-            }
-          }
+          val isBlocking: Boolean = tree.tpe real_<:< types.blockingRemoteAccessor
 
           val recursiveCallAccessor = (recursiveCall: Tree) => {
-            val accessor = internal.setType(
-              q"${trees.basicBlockingSingleAccessor}[..$basicBlockingSingleAccessorTypeArgs]($recursiveCall)($transmission)",
-              types.basicBlockingSingleAccessor
+            val newAccessor = internal.setType(
+              q"$accessor($recursiveCall)($transmission)",
+              tree.tpe
             )
+            val accessTerm = tree.tpe match {
+              case tpe if tpe real_<:< types.basicSingleAccessor => TermName("asLocal")
+              case tpe if tpe real_<:< types.basicBlockingSingleAccessor => TermName("asLocal_!")
+              case tpe => c.abort(tree.pos, s"Unexpected remote accessor of type $tpe in remote call with recursive selection")
+            }
             internal.setType(
-              q"$accessor.asLocal_!",
-              basicBlockingSingleAccessorTypeArgs(2)
+              q"$newAccessor.$accessTerm",
+              tree.tpe.typeArgs(2)
             )
           }
 
-          val liftedRemoteCall = liftDynamicallyPlacedRemoteCall(exprss.head.head, Option(recursiveCallAccessor))
+          val liftedRemoteCall = liftDynamicallyPlacedRemoteCall(
+            exprss.head.head,
+            Option(recursiveCallAccessor),
+            Option(isBlocking)
+          )
           atPos(tree.pos) {
             internal.setSymbol(
               internal.setType(

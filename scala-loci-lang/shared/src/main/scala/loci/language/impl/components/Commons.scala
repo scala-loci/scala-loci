@@ -134,6 +134,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val identicalSelfReferenceDummyRequest = typeOf[runtime.IdenticalSelfReferenceDummyRequest[_, _, _, _, _]]
     val blockingRemoteAccessor = typeOf[transmitter.Blocking]
     val basicBlockingSingleAccessor = typeOf[PlacedValue.BasicBlockingSingleAccessor[_, _, _, _]]
+    val basicSingleAccessor = typeOf[PlacedValue.BasicSingleAccessor[_, _, _, _]]
     val context = typeOf[Placement.Context[_]]
   }
 
@@ -164,6 +165,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val list = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.list"
     val basicBlockingSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicBlockingSingleAccessor"
     val remote = q"${names.root}.loci.`package`.remote.apply"
+    val futureSuccessful = q"${names.root}.scala.concurrent.Future.successful"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {
