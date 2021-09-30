@@ -1220,7 +1220,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
               val accessingPeerType = peer.asType.toType.asSeenFrom(module.classSymbol)
               val localExecutionIsLegal: Boolean = accessingPeerType real_<:< accessedValuePeerType
 
-              val exprs = if (dynamicallyPlaced && transmissionOutputIsFuture && localExecutionIsLegal) {
+              val exprs = if (transmissionOutputIsFuture && localExecutionIsLegal) {
                 val transmissionInputIsSubjectiveValue: Boolean = value.tpe real_<:< types.per
                 val selfReferenceDummyRequestTypeTree = value.tpe match {
                   case t if t real_<:< types.future =>
@@ -1278,7 +1278,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
 
                     if (dynamicRemoteSequence) {
                       transform(q"val $instances = $remotes map ${trees.reference}; if($instances.nonEmpty) $invokeRemoteAccess")
-                    } else if (dynamicallyPlaced && localExecutionIsLegal) {
+                    } else if (localExecutionIsLegal) {
                       val remotesIdentifier = c.freshName(TermName("remotes"))
                       val remotesAssignment = q"val $remotesIdentifier = $remotes"
                       val remoteInvocation = q"val $instances = $remotesIdentifier map ${trees.reference}; $invokeRemoteAccess"
