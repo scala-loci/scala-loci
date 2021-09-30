@@ -32,9 +32,7 @@ package loci {
   trait Remote[+P] extends Equals
   object Remote extends transmitter.RemoteReference
 
-  final class SelfReference[P] extends Remote[P] {
-    override def canEqual(that: Any): Boolean = false
-  }
+  trait SelfReference[P] extends Remote.Reference[P]
 }
 
 package object loci {
