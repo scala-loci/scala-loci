@@ -140,9 +140,8 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
           val gateway = createRemoteGateway(ruleFunction, ruleOutputPeerType)
 
           val selfReferenceType = ruleType.typeArgs(1)
-          val selfReferencePeerType = selfReferenceType.typeArgs.head
           val selfReference = internal.setType(
-            q"new ${names.root}.loci.runtime.Remote.SelfReference[$selfReferencePeerType]",
+            q"new ${names.root}.loci.runtime.Remote.SelfReference(${peerSignature(ruleOutputPeerType, ruleFunction.pos)})",
             selfReferenceType
           )
 

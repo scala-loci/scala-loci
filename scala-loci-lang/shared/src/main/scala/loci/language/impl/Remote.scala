@@ -38,6 +38,7 @@ object Remote {
     if (!enclosingMultitierMacro && !documentationCompiler) {
       val remote = weakTypeOf[Remote[P]]
       val reference = typeOf[runtime.Remote.Reference]
+      val selfReference = typeOf[runtime.Remote.SelfReference]
       val name = TermName(s"$$loci$$peer$$sig$$${tpt.symbol.name}")
 
       val prefix = tpt match {
@@ -54,6 +55,8 @@ object Remote {
 
       q"""$expr match {
         case $ref: $reference if $ref.signature <= $signature =>
+          ${termNames.ROOTPKG}.scala.Some[$remote]($ref)
+        case $ref: $selfReference if $ref.signature <= $signature =>
           ${termNames.ROOTPKG}.scala.Some[$remote]($ref)
         case _ =>
           ${termNames.ROOTPKG}.scala.None

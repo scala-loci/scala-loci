@@ -34,7 +34,9 @@ object Remote {
    * SelfReference as dummy to execute local remote calls on. Some operations that do not make sense to execute on
    * a SelfReference (compared to a real Reference) are throwing exceptions
    */
-  final class SelfReference[P] extends loci.SelfReference[P] {
+  final class SelfReference(
+    val signature: Peer.Signature
+  ) extends loci.SelfReference[Nothing] {
 
     /**
      * SelfReference is (in a way) always connected
@@ -43,7 +45,7 @@ object Remote {
 
     override def canEqual(that: Any): Boolean = true
 
-    override def asReference: loci.Remote.Reference[P] = this
+    override def asReference: SelfReference = this
 
     override val disconnected: Notice.Steady[Unit] = Notice.Steady[Unit].notice
 
@@ -51,6 +53,8 @@ object Remote {
     override def authenticate(): Unit = throw IllegalSelfReferenceAccessException("authenticate")
     override def protocol: ProtocolCommon = throw IllegalSelfReferenceAccessException("protocol")
     override def disconnect(): Unit = throw IllegalSelfReferenceAccessException("disconnect")
+
+    override def toString: String = s"selfReference($signature)"
   }
 
   case class IllegalSelfReferenceAccessException(method: String) extends RuntimeException(

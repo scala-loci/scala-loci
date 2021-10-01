@@ -32,7 +32,7 @@ package loci {
   trait Remote[+P] extends Equals
   object Remote extends transmitter.RemoteReference
 
-  trait SelfReference[P] extends Remote.Reference[P]
+  trait SelfReference[+P] extends Remote.Reference[P]
 }
 
 package object loci {
