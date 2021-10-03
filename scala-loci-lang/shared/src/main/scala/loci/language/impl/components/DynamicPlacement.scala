@@ -32,6 +32,11 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
       recursiveDynamicallyPlacedRemoteCalls,
       after = Set("dynamic:selection:normalize", "remote:block"),
       before = Set("*", "values:collect")
+    ),
+    Phase(
+      "dynamic:selfreference:validate",
+      validateSelfReferences,
+      after = Set("values:collect")
     )
   )
 
@@ -217,7 +222,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
   }
 
   /**
-   * This phase is executed after "remote:block"
+   * This phase is executed after "remote:block".
    * It transforms dynamically placed remote calls of the form `SelectAny.recursive[P](selection _).call(f(...))` into
    * calls of a new recursive function. The recursive function first calls the selection to get a remote reference.
    * If it is a SelfReference, f is called. If it is not, the recursive function is called remotely on the selected
@@ -497,6 +502,44 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
         logging.debug(s" Expanded ${liftedRecursiveDefinitions.size} dynamically placed remote calls recursively")
         result
     }
+  }
+
+  /**
+   * This phase is executed after "values:collect".
+   * It validates that SelfReferences are only created were they are legal by their type, i.e. a `SelfReference[A]` may
+   * only be created on a peer `B` if `B <: A`. Also SelfReferences may not be created in ModuleValues.
+   * Aborts compilation if a SelfReference violates these assumptions.
+   */
+  def validateSelfReferences(records: List[Any]): List[Any] = {
+    logging.debug(s" Validating creations of SelfReference to fulfill type constraints")
+
+    case class SelfReferencePeerTypeValidator(peer: Option[Type]) extends Traverser {
+      override def traverse(tree: Tree): Unit = tree match {
+        case tree @ q"new $_[..$_](...$_)" if tree.tpe real_<:< types.selfReference =>
+          peer match {
+            case Some(peer) if peer real_<:< tree.tpe.typeArgs.head =>
+            case Some(peer) => c.abort(
+              tree.pos,
+              s"SelfReference of type ${tree.tpe.typeArgs.head} appeared on peer $peer, which is not a subtype of ${tree.tpe.typeArgs.head}"
+            )
+            case None => c.abort(
+              tree.pos,
+              s"SelfReference of type ${tree.tpe.typeArgs.head} appeared on a non-placed value"
+            )
+          }
+        case tree => super.traverse(tree)
+      }
+    }
+
+    records foreach {
+      case PlacedValue(_, tree, peer, _) =>
+        SelfReferencePeerTypeValidator(peer.map(_.asType.toType.asSeenFrom(module.classSymbol))).traverse(tree)
+      case ModuleValue(_, tree) =>
+        SelfReferencePeerTypeValidator(None).traverse(tree)
+      case _ =>
+    }
+
+    records
   }
 
   /**

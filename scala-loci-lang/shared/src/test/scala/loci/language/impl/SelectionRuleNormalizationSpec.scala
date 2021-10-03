@@ -72,4 +72,39 @@ class SelectionRuleNormalizationSpec extends AnyFlatSpec with Matchers with NoLo
       }
     }""" should compile
   }
+
+  it should "not compile for a selection rule with self reference that is used on a placed value with incoherent peer type" in {
+    """@multitier object Module {
+      @peer type A <: { type Tie <: Multiple[B] }
+      @peer type B <: { type Tie <: Multiple[A] }
+
+      def select(connected: Seq[Remote[B]], self: SelfReference[B]): Local[Remote[B]] on A = on[A] { implicit! =>
+        self
+      }
+
+      def f: Int on B = on[B] { 42 }
+
+      def main(): Unit = on[A] { implicit! =>
+        remoteAny.apply[B](select _).call(f)
+      }
+    }""" shouldNot compile
+  }
+
+  it should "not compile for a selection rule with self reference that is used on a module value" in {
+    """@multitier object Module {
+        @peer type A <: { type Tie <: Multiple[B] }
+        @peer type B <: { type Tie <: Multiple[A] }
+
+        def select(connected: Seq[Remote[B]], self: SelfReference[B]): Local[Remote[B]] on A = on[A] { implicit! =>
+          self
+        }
+
+        def f: Int on B = on[B] { 42 }
+
+        def main(): Unit = {
+          remoteAny.apply[B](select _).call(f)
+        }
+      }""" shouldNot compile
+  }
+
 }
