@@ -184,7 +184,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
   }
 
   private def subPeerTree(peer: Peer): PeerTreeNode = {
-    PeerTreeNode(peer, modulePeers.filter(_.bases.map(_.tpe).contains(peer.symbol.asType.toType)).map(subPeerTree))
+    PeerTreeNode(peer, modulePeers.filter(_.bases.map(_.tpe).contains(peer.symbol.asType.toType.asSeenFrom(module.classSymbol))).map(subPeerTree))
   }
 
   def subPeerTree(peer: Symbol): PeerTreeNode = {
