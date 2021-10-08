@@ -97,7 +97,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       (placedValuesImpl, signatureImpl, moduleImpl, selfType)
     }
 
-    val peerValues = modulePeers map { case Peer(symbol, name, bases, ties, _) =>
+    val peerValues = modulePeers map { case Peer(symbol, name, bases, ties, instantiable) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
       val overriddenBases = module.tree.impl.parents flatMap { parent =>
@@ -127,11 +127,17 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
       // generate peer implementations
       val parents = overriddenBases ++ inheritedBases :+ tq"${names.placedValues(module.symbol)}"
-      val peerImpl =
+      val peerImpl = if (instantiable) {
         q"""${Flag.SYNTHETIC} trait $name extends ..$parents {
           this: $selfType =>
           ..$placedValues
         }"""
+      } else {
+        q"""@$nonInstantiableAnnotation ${Flag.SYNTHETIC} trait $name extends ..$parents {
+          this: $selfType =>
+          ..$placedValues
+        }"""
+      }
 
       // generate peer signature
       val signatureBases = bases.foldRight[Tree](trees.nil) { (base, tree) =>
@@ -292,4 +298,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
   private val peerAnnotation =
     internal.setType(q"new ${types.peer}", types.peer)
+
+  private val nonInstantiableAnnotation =
+    internal.setType(q"new ${types.nonInstantiable}", types.nonInstantiable)
 }
