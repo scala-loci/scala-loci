@@ -2,24 +2,19 @@ package loci
 package communicator
 package ws.jetty
 
-import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.websocket.server.config.JettyWebSocketServletContainerInitializer
 import org.eclipse.jetty.websocket.server.{JettyServerUpgradeRequest, JettyServerUpgradeResponse}
 
 import scala.util.{Failure, Success, Try}
 
-class WSListener[P <: WS : WSProtocolFactory](server: Server, contextPath: String, pathspec: String, properties: WS.Properties) extends Listener[P] {
+class WSListener[P <: WS : WSProtocolFactory](context: ServletContextHandler, pathspec: String, properties: WS.Properties) extends Listener[P] {
   self =>
 
   override protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
     val doClosed = Notice.Steady[Unit]
     val doReceive = Notice.Stream[MessageBuffer]
     val doConnect = Notice.Steady[Unit]
-
-    val context = new ServletContextHandler(ServletContextHandler.SESSIONS)
-    context.setContextPath(contextPath)
-    server.setHandler(context)
 
     JettyWebSocketServletContainerInitializer.configure(context, (_, wsContainer) => {
       wsContainer.addMapping(pathspec, (_: JettyServerUpgradeRequest, _: JettyServerUpgradeResponse) => {

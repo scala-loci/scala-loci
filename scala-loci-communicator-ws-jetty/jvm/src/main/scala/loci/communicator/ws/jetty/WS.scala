@@ -2,7 +2,7 @@ package loci
 package communicator
 package ws.jetty
 
-import org.eclipse.jetty.server.Server
+import org.eclipse.jetty.servlet.ServletContextHandler
 
 import scala.concurrent.duration._
 
@@ -12,6 +12,7 @@ trait WS extends
   SecurityInfo with
   SymmetryInfo with Bidirectional {
   val path: String
+  // TODO: these are unused, can they be removed?
   val host: Option[String]
   val port: Option[Int]
 
@@ -25,11 +26,11 @@ object WS extends WSSetupFactory {
                          heartbeatDelay: FiniteDuration = 3.seconds,
                          heartbeatTimeout: FiniteDuration = 10.seconds)
 
-  def apply(server: Server, contextPath: String, pathspec: String): Listener[WS] =
-    new WSListener[WS](server, contextPath, pathspec, Properties())
+  def apply(context: ServletContextHandler, pathspec: String): Listener[WS] =
+    new WSListener[WS](context, pathspec, Properties())
 
-  def apply(server: Server, contextPath: String, pathspec: String, properties: Properties): Listener[WS] =
-    new WSListener[WS](server, contextPath, pathspec, properties)
+  def apply(context: ServletContextHandler, pathspec: String, properties: Properties): Listener[WS] =
+    new WSListener[WS](context, pathspec, properties)
 
   def apply(url: String): Connector[WS] =
     new WSConnector[WS](url, Properties())
