@@ -9,7 +9,7 @@ class PeergroupSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Peergroups"
 
   it should "compile for a missing implementation on a peergroup with all concrete peers implemented" in {
-    """@multitier object AbstractPeer {
+    """@multitier object Module {
       @peergroup type Node
       @peer type A <: Node { type Tie <: Multiple[Node] }
       @peer type B <: Node { type Tie <: Multiple[Node] }
@@ -23,7 +23,7 @@ class PeergroupSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "compile for a missing implementation on the top-level peer group with a lower-level peergroup being implemented" in {
-    """@multitier object AbstractPeer {
+    """@multitier object Module {
       @peergroup type Node
       @peergroup type AB <: Node
       @peer type A <: AB { type Tie <: Multiple[Node] }
@@ -39,7 +39,7 @@ class PeergroupSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "not compile for a missing concrete peer implementation of a non-leaf peer" in {
-    """@multitier object AbstractPeer {
+    """@multitier object Module {
       @peer type Node
       @peer type A <: Node { type Tie <: Multiple[Node] }
       @peer type B <: Node { type Tie <: Multiple[Node] }
@@ -53,7 +53,7 @@ class PeergroupSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "not compile for a missing concrete peer implementation of a leaf peer" in {
-    """@multitier object AbstractPeer {
+    """@multitier object Module {
       @peergroup type Node
       @peer type A <: Node { type Tie <: Multiple[Node] }
       @peer type B <: Node { type Tie <: Multiple[Node] }
@@ -65,7 +65,7 @@ class PeergroupSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "not compile for an implementation on a peer that is not a sub-peer of the top-level peer" in {
-    """@multitier object AbstractPeer {
+    """@multitier object Module {
       @peergroup type Node
       @peer type A <: Node { type Tie <: Multiple[Node] }
       @peer type B <: Node { type Tie <: Multiple[Node] }
