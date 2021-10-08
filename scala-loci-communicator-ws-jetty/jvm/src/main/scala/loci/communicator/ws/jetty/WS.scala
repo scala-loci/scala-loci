@@ -3,6 +3,7 @@ package communicator
 package ws.jetty
 
 import org.eclipse.jetty.servlet.ServletContextHandler
+import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest
 
 import scala.concurrent.duration._
 
@@ -12,6 +13,7 @@ trait WS extends
   SecurityInfo with
   SymmetryInfo with Bidirectional {
   val path: String
+  val request: Option[JettyServerUpgradeRequest]
   // TODO: these are unused, can they be removed?
   val host: Option[String]
   val port: Option[Int]

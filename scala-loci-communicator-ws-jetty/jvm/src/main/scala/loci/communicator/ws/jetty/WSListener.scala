@@ -17,7 +17,7 @@ class WSListener[P <: WS : WSProtocolFactory](context: ServletContextHandler, pa
     val doConnect = Notice.Steady[Unit]
 
     JettyWebSocketServletContainerInitializer.configure(context, (_, wsContainer) => {
-      wsContainer.addMapping(pathspec, (_: JettyServerUpgradeRequest, _: JettyServerUpgradeResponse) => {
+      wsContainer.addMapping(pathspec, (request: JettyServerUpgradeRequest, _: JettyServerUpgradeResponse) => {
         val socket = new Socket[P](properties, doConnect, doReceive, doClosed, _ => {})
 
         val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(
@@ -27,7 +27,8 @@ class WSListener[P <: WS : WSProtocolFactory](context: ServletContextHandler, pa
           self,
           authenticated = false,
           encrypted = false,
-          integrityProtected = false
+          integrityProtected = false,
+          request = Some(request),
         )
 
         tryMakeProtocol match {

@@ -36,7 +36,7 @@ private class WSConnector[P <: WS : WSProtocolFactory](
     val host = Some(session.getRemoteAddress.asInstanceOf[InetSocketAddress].getHostName)
     val port = Some(session.getRemoteAddress.asInstanceOf[InetSocketAddress].getPort)
 
-    val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls)
+    val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls, request = None)
 
     if (tryMakeProtocol.isFailure) {
       connectionEstablished.set(Failure(tryMakeProtocol.failed.get))
