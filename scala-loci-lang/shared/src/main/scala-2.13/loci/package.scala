@@ -24,6 +24,7 @@ package loci {
   }
 
   final class peer extends StaticAnnotation
+  final class peergroup extends StaticAnnotation
 
   sealed trait Single[P] extends Multiple[P]
   sealed trait Optional[P] extends Multiple[P]
