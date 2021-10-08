@@ -300,13 +300,38 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               }
 
               // ensure that peer-specific specialized implementations exist
-              // 1) for the common super peer
+              // 1) for each concrete peer, or any of its upper bounds up to the peer the value is placed on
               // 2) with at most one implementation per peer
               val peers = mutable.Set.empty[Symbol]
 
               specializations foreach { case (tree, peer, _) =>
                 if (!peers.add(peer))
                   c.abort(tree.pos, s"Duplicate implementation for ${peer.name}")
+              }
+
+              val peerTree = subPeerTree(peer)
+
+              peers.foreach { p =>
+                if (!peerTree.contains(_.symbol == p)) {
+                  c.abort(tree.pos, s"Invalid implementation for ${p.name} which is not a sub-peer of ${peer.name}")
+                }
+              }
+
+              def collectPeersWithMissingImplementation(node: PeerTreeNode): Seq[Peer] = {
+                val implemented = specializations.map(_._2).contains(node.peer.symbol)
+                val requiresImplementation = node.peer.instantiable
+                if (implemented) {
+                  Seq()
+                } else if (requiresImplementation) {
+                  node.peer +: node.subPeers.flatMap(collectPeersWithMissingImplementation)
+                } else {
+                  node.subPeers.flatMap(collectPeersWithMissingImplementation)
+                }
+              }
+
+              collectPeersWithMissingImplementation(peerTree) match {
+                case Seq() =>
+                case peers => c.abort(tree.pos, s"Missing implementation for the following concrete peers: ${peers.map(_.symbol.name).mkString(", ")}")
               }
 
               val inferredUnit =
@@ -317,7 +342,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                     case _ if tpe =:= definitions.UnitTpe =>
                       List((q"()", peer, modality))
                     case _ =>
-                      c.abort(tree.pos, s"Missing implementation for common super peer ${peer.name}")
+                      List((q"throw new _root_.scala.NotImplementedError()", peer, modality))
                   }
                 else
                   List.empty

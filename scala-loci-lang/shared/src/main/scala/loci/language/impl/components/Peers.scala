@@ -43,8 +43,13 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     }
   }
 
-  case class Peer(symbol: Symbol, name: TypeName,
-    bases: List[Peer.Base], ties: List[Peer.Tie])
+  case class Peer(
+    symbol: Symbol,
+    name: TypeName,
+    bases: List[Peer.Base],
+    ties: List[Peer.Tie],
+    instantiable: Boolean
+  )
 
   object Peer {
     sealed trait Base {
@@ -174,6 +179,21 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
         None
     })
 
+  case class PeerTreeNode(peer: Peer, subPeers: Seq[PeerTreeNode]) {
+    def contains(f: Peer => Boolean): Boolean = f(peer) || subPeers.exists(_.contains(f))
+  }
+
+  private def subPeerTree(peer: Peer): PeerTreeNode = {
+    PeerTreeNode(peer, modulePeers.filter(_.bases.map(_.tpe).contains(peer.symbol.asType.toType)).map(subPeerTree))
+  }
+
+  def subPeerTree(peer: Symbol): PeerTreeNode = {
+    checkPeerType(peer) match {
+      case Some(p) => subPeerTree(p)
+      case None => c.abort(peer.pos, s"Symbol $peer is not a peer type")
+    }
+  }
+
   def modulePeer(tpe: Type): Boolean = {
     val symbol = tpe.typeSymbol
 
@@ -235,7 +255,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     // force loading of annotations
     val symbolType = symbol.info
 
-    if (symbol.annotations exists { _.tree.tpe <:< types.peer }) {
+    if (symbol.annotations exists { a => (a.tree.tpe <:< types.peer) || (a.tree.tpe <:< types.peergroup) }) {
       // recompute result if the peer symbol is currently under expansion and
       // we are given a tree to ensure the result contains the correct trees
       val cached =
@@ -372,10 +392,17 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
         val computedTies = tieMultiplicities(inferredTies getOrElse ties)
 
+        val isConcretePeer = symbol.annotations.exists(_.tree.tpe <:< types.peer)
+        val isAbstractPeer = symbol.annotations.exists(_.tree.tpe <:< types.peergroup)
+        val instantiable = (isConcretePeer, isAbstractPeer) match {
+          case (true, true) => c.abort(symbol.pos, "type can't be both peer and peergroup")
+          case (concrete, _) => concrete
+        }
+
         // construct peer and add it to the cache
         // so we do not run checks again
         val name = TypeName(s"$$loci$$peer$$${uniqueName(module.symbol, symbol.name.toString)}")
-        val peer = Peer(symbol, name, bases, computedTies)
+        val peer = Peer(symbol, name, bases, computedTies, instantiable)
         cache += symbol -> peer
 
         // ensure that tied types are peer types

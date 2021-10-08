@@ -97,7 +97,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       (placedValuesImpl, signatureImpl, moduleImpl, selfType)
     }
 
-    val peerValues = modulePeers map { case Peer(symbol, name, bases, ties) =>
+    val peerValues = modulePeers map { case Peer(symbol, name, bases, ties, _) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
       val overriddenBases = module.tree.impl.parents flatMap { parent =>
