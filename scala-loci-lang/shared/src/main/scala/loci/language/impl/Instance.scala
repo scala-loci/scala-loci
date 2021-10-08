@@ -22,6 +22,7 @@ class Instance(val c: blackbox.Context) {
     val connections = typeOf[language.Connections]
     val executionContext = typeOf[ExecutionContext]
     val placedValues = c.mirror.staticClass("_root_.loci.runtime.PlacedValues").asType.toType
+    val nonInstantiable = typeOf[NonInstantiable]
   }
 
   object symbols {
@@ -294,6 +295,9 @@ class Instance(val c: blackbox.Context) {
 
         if (!placedValues.isType)
           c.abort(pos, s"$tpt is not a peer type")
+
+        if (placedValues.annotations.exists(_.tree.tpe <:< types.nonInstantiable))
+          c.abort(pos, s"$tpt is a non-instantiable peergroup type")
 
         // parse named arguments for constructor invocation of anonymous class
         val (args, exprs) =
