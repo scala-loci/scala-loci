@@ -137,6 +137,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val basicBlockingSingleAccessor = typeOf[PlacedValue.BasicBlockingSingleAccessor[_, _, _, _]]
     val basicSingleAccessor = typeOf[PlacedValue.BasicSingleAccessor[_, _, _, _]]
     val context = typeOf[Placement.Context[_]]
+    val nonInstantiable = typeOf[NonInstantiable]
   }
 
   object trees {
