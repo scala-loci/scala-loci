@@ -46,7 +46,7 @@ val scalatest = libraryDependencies +=
 
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "3.5.4"
+    "com.outr" %%% "scribe" % "3.6.0"
   else
     "com.outr" %%% "scribe" % "2.7.9"
 }
