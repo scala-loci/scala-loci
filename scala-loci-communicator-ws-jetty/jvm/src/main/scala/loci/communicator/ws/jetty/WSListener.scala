@@ -3,7 +3,7 @@ package communicator
 package ws.jetty
 
 import org.eclipse.jetty.servlet.ServletContextHandler
-import org.eclipse.jetty.websocket.server.NativeWebSocketServletContainerInitializer
+import org.eclipse.jetty.websocket.server.{NativeWebSocketServletContainerInitializer, WebSocketUpgradeFilter}
 import org.eclipse.jetty.websocket.servlet.{ServletUpgradeRequest, ServletUpgradeResponse, WebSocketCreator}
 
 import scala.util.{Failure, Success, Try}
@@ -46,6 +46,7 @@ class WSListener[P <: WS: WSProtocolFactory](
 
       }
       )
+    WebSocketUpgradeFilter.configure(context)
 
     Success(() => ())
   }

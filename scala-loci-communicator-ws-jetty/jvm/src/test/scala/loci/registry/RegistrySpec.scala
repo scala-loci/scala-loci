@@ -30,14 +30,12 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       val context = new ServletContextHandler(ServletContextHandler.SESSIONS)
       server.setHandler(context)
 
-      val listener = WS(context, "/registry/*")
-
       val promise = Promise[(Int, String)]()
 
       val registry0 = new Registry
       registry0.bind("future")(promise.future)
       registry0.bind("intfun")(() => (???): Int)
-      registry0.listen(listener)
+      registry0.listen(WS(context, "/registry/*"))
 
       connector.setPort(port)
       server.start()
@@ -61,7 +59,7 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       if (seed % 2 != 0)
         promise.success(5 -> "yay")
 
-      Thread.sleep(100)
+      Thread.sleep(300)
 
       assert(futureValue.value.get.get == (5 -> "yay"))
 

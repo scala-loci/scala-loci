@@ -47,7 +47,6 @@ class Socket[P <: WS: WSProtocolFactory](
   resetTimeout()
 
   override def onWebSocketConnect(sess: Session): Unit = {
-    println(s"received connection, saving sesison $sess")
     super.onWebSocketConnect(sess)
 
     connectionEstablished(Success(this))
@@ -109,7 +108,7 @@ class Socket[P <: WS: WSProtocolFactory](
   }
 
   def close(): Unit = {
-    getSession.close()
+    if (getSession != null) getSession.close()
   }
 
 }
