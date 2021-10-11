@@ -5,15 +5,17 @@ package ws.jetty
 import org.eclipse.jetty.websocket.api.{Session, WebSocketAdapter}
 
 import java.util.concurrent.{Executors, ScheduledFuture, TimeUnit}
-import scala.util.{Failure, Try}
+import scala.util.{Failure, Success, Try}
 
-class Socket[P <: WS : WSProtocolFactory](
-  properties: WS.Properties,
-  doConnect: Notice.Steady.NoticeSource[Unit],
-  doReceive: Notice.Stream.NoticeSource[MessageBuffer],
-  doClosed: Notice.Steady.NoticeSource[Unit],
-  onError: Try[Connection[P]] => Unit
-) extends WebSocketAdapter {
+class Socket[P <: WS: WSProtocolFactory](
+    override val protocol: P,
+    properties: WS.Properties,
+    onError: Try[Connection[P]] => Unit,
+    connectionEstablished: Try[Connection[P]] => Unit
+) extends WebSocketAdapter with Connection[P] {
+
+  val doClosed  = Notice.Steady[Unit]
+  val doReceive = Notice.Stream[MessageBuffer]
 
   private val executor = Executors.newSingleThreadScheduledExecutor((runnable: Runnable) => {
     val thread = Executors.defaultThreadFactory.newThread(runnable)
@@ -22,8 +24,8 @@ class Socket[P <: WS : WSProtocolFactory](
   })
 
   private val timeout: Int = properties.heartbeatTimeout.toMillis.toInt
-  private val delay: Long = properties.heartbeatDelay.toMillis
-  private val heartbeat = "\uD83D\uDC93"
+  private val delay: Long  = properties.heartbeatDelay.toMillis
+  private val heartbeat    = "\uD83D\uDC93"
 
   private var heartbeatTask: ScheduledFuture[_] = _
 
@@ -33,21 +35,29 @@ class Socket[P <: WS : WSProtocolFactory](
     if (timeoutTask != null)
       timeoutTask.cancel(true)
 
-    timeoutTask = executor.schedule(new Runnable {
-      override def run(): Unit = getSession.close()
-    }, timeout, TimeUnit.MILLISECONDS)
+    timeoutTask = executor.schedule(
+      new Runnable {
+        override def run(): Unit = getSession.close()
+      },
+      timeout,
+      TimeUnit.MILLISECONDS
+    )
   }
 
   resetTimeout()
 
   override def onWebSocketConnect(sess: Session): Unit = {
+    println(s"received connection, saving sesison $sess")
     super.onWebSocketConnect(sess)
 
-    doConnect.set()
+    connectionEstablished(Success(this))
 
     heartbeatTask = executor.scheduleWithFixedDelay(
       () => getRemote.sendString(heartbeat),
-      delay, delay, TimeUnit.MILLISECONDS)
+      delay,
+      delay,
+      TimeUnit.MILLISECONDS
+    )
 
     resetTimeout()
   }
@@ -62,7 +72,7 @@ class Socket[P <: WS : WSProtocolFactory](
 
   override def onWebSocketText(message: String): Unit = {
     super.onWebSocketText(message)
-
+    // TODO: strangely enough … text messages are not handled?
     resetTimeout()
   }
 
@@ -75,10 +85,31 @@ class Socket[P <: WS : WSProtocolFactory](
   }
 
   override def onWebSocketError(cause: Throwable): Unit = {
+    loci.logging.warn(s"connection failed ${cause}")
+    cause.printStackTrace()
     super.onWebSocketError(cause)
 
-    onError(Failure(new ConnectionException("WebSocket failed to connect")))
+    onError(Failure(cause))
+    doClosed.set()
 
     if (getSession != null) getSession.close()
   }
+
+  val closed  = doClosed.notice
+  val receive = doReceive.notice
+
+  override def open: Boolean = {
+    getSession != null && getSession.isOpen
+  }
+
+  def send(data: MessageBuffer): Unit = {
+    if (isConnected) {
+      getRemote.sendBytes(data.asByteBuffer)
+    }
+  }
+
+  def close(): Unit = {
+    getSession.close()
+  }
+
 }

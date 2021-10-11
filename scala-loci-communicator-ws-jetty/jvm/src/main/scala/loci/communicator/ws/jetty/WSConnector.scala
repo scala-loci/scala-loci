@@ -4,8 +4,8 @@ package ws.jetty
 
 import org.eclipse.jetty.websocket.client.WebSocketClient
 
-import java.net.{InetSocketAddress, URI}
-import scala.util.{Failure, Success}
+import java.net.URI
+import scala.util.Failure
 
 private class WSConnector[P <: WS : WSProtocolFactory](
   url: String, properties: WS.Properties)
@@ -14,27 +14,11 @@ private class WSConnector[P <: WS : WSProtocolFactory](
   protected def connect(connectionEstablished: Connected[P]): Unit = {
     val uri = URI.create(url)
 
-    val client = new WebSocketClient()
-
-    client.start()
-
-    // Socket
-
-    val doClosed = Notice.Steady[Unit]
-    val doReceive = Notice.Stream[MessageBuffer]
-    val doConnect = Notice.Steady[Unit]
-
-    val socket = new Socket[P](properties, doConnect, doReceive, doClosed, connectionEstablished.trySet(_))
-
-    val fut = client.connect(socket, uri)
-
-    val session = fut.get()
-
     // Protocol
 
-    val tls = session.isSecure
-    val host = Some(session.getRemoteAddress.asInstanceOf[InetSocketAddress].getHostName)
-    val port = Some(session.getRemoteAddress.asInstanceOf[InetSocketAddress].getPort)
+    val tls = uri.getScheme == "wss"
+    val host = Some(uri.getHost)
+    val port = Some(uri.getPort)
 
     val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls, request = None)
 
@@ -45,23 +29,15 @@ private class WSConnector[P <: WS : WSProtocolFactory](
 
     val prot = tryMakeProtocol.get
 
-    // Connection interface
 
-    val connection = new Connection[P] {
-      val protocol = prot
-      val closed = doClosed.notice
-      val receive = doReceive.notice
+    // Socket
 
-      def open = session.isOpen
-      def send(data: MessageBuffer) = {
-        session.getRemote.sendBytes(data.asByteBuffer)
-      }
-      def close() = session.close()
-    }
+    val socket = new Socket[P](prot, properties, connectionEstablished.trySet(_), connectionEstablished.trySet(_))
 
-    doClosed.notice.foreach(_ => client.stop())
-
-    doConnect.notice.foreach(_ => connectionEstablished.set(Success(connection)))
+    val client = new WebSocketClient()
+    client.start()
+    client.connect(socket, uri)
+    socket.doClosed.notice.foreach(_ => client.stop())
   }
 }
 

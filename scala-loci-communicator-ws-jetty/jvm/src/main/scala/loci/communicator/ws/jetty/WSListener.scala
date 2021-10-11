@@ -8,56 +8,43 @@ import org.eclipse.jetty.websocket.server.{JettyServerUpgradeRequest, JettyServe
 
 import scala.util.{Failure, Success, Try}
 
-class WSListener[P <: WS : WSProtocolFactory](context: ServletContextHandler, pathspec: String, properties: WS.Properties) extends Listener[P] {
+class WSListener[P <: WS: WSProtocolFactory](
+    context: ServletContextHandler,
+    pathspec: String,
+    properties: WS.Properties
+) extends Listener[P] {
   self =>
 
   override protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
-    val doClosed = Notice.Steady[Unit]
-    val doReceive = Notice.Stream[MessageBuffer]
-    val doConnect = Notice.Steady[Unit]
-
-    JettyWebSocketServletContainerInitializer.configure(context, (_, wsContainer) => {
-      wsContainer.addMapping(pathspec, (request: JettyServerUpgradeRequest, _: JettyServerUpgradeResponse) => {
-        val socket = new Socket[P](properties, doConnect, doReceive, doClosed, _ => {})
-
-        val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(
+    JettyWebSocketServletContainerInitializer.configure(
+      context,
+      (_, wsContainer) => {
+        wsContainer.addMapping(
           pathspec,
-          None,
-          None,
-          self,
-          authenticated = false,
-          encrypted = false,
-          integrityProtected = false,
-          request = Some(request),
-        )
+          (request: JettyServerUpgradeRequest, _: JettyServerUpgradeResponse) => {
+            val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(
+              pathspec,
+              None,
+              None,
+              self,
+              authenticated = false,
+              encrypted = false,
+              integrityProtected = false,
+              request = Some(request),
+            )
 
-        tryMakeProtocol match {
-          case Failure(_) =>
+            tryMakeProtocol match {
+              case Failure(cause) =>
+                throw new IllegalStateException(s"creating protocol should not fail: $cause")
 
-          case Success(prot) =>
-            val connection = new Connection[P] {
-              val protocol = prot
+              case Success(prot) =>
+                new Socket[P](prot, properties, _ => {}, connectionEstablished.fire)
 
-              val closed = doClosed.notice
-              val receive = doReceive.notice
-
-              override def open: Boolean = socket.getSession != null && socket.getSession.isOpen
-
-              def send(data: MessageBuffer) = {
-                if (socket.isConnected) {
-                  socket.getRemote.sendBytes(data.asByteBuffer)
-                }
-              }
-
-              def close() = socket.getSession.close()
             }
-
-            doConnect.notice.foreach(_ => connectionEstablished.fire(Success(connection)))
-        }
-
-        socket
-      })
-    })
+          }
+        )
+      }
+    )
 
     Success(() => ())
   }
