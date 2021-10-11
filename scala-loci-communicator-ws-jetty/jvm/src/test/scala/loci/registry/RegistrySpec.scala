@@ -16,6 +16,8 @@ import scala.concurrent.{Future, Promise}
 class RegistrySpec extends AnyFlatSpec with Matchers {
   logging.root.clearHandlers().clearModifiers().replace()
 
+  val port = 45849
+
   behavior of "Registry"
 
   it should "handle binding and lookup correctly" in {
@@ -37,7 +39,7 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       registry0.bind("intfun")(() => (???): Int)
       registry0.listen(listener)
 
-      connector.setPort(8080)
+      connector.setPort(port)
       server.start()
 
       registry0.remotes.foreach(println)
@@ -49,7 +51,7 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
         promise.success(5 -> "yay")
 
       val registry1 = new Registry
-      registry1.connect(WS("ws://localhost:8080/registry/")) foreach { remote =>
+      registry1.connect(WS(s"ws://localhost:$port/registry/")) foreach { remote =>
         val result0 = registry1.lookup[concurrent.Future[(Int, String)]]("future", remote)
         val result1 = registry1.lookup[() => Int]("intfun", remote)
         futureValue = result0
@@ -104,11 +106,11 @@ class RegistrySpec extends AnyFlatSpec with Matchers {
       registry0.bindSbj(methodBinding)(method _)
       registry0.listen(listener)
 
-      connector.setPort(8080)
+      connector.setPort(port)
       server.start()
 
       val registry1 = new Registry
-      registry1.connect(WS("ws://localhost:8080/registry/")) foreach { remote =>
+      registry1.connect(WS(s"ws://localhost:$port/registry/")) foreach { remote =>
         val result0 = registry1.lookup(valueBinding, remote)
         val result1 = registry1.lookup(methodBinding, remote)
 
