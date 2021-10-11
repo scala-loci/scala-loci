@@ -105,10 +105,11 @@ val scalajsDom = libraryDependencies +=
 val javalin = libraryDependencies +=
   "io.javalin" % "javalin" % "3.13.7"
 
+val jettyVersion = "9.4.44.v20210927"
 val jetty = libraryDependencies ++= Seq(
-  "org.eclipse.jetty.websocket" % "websocket-jetty-server" % "11.0.6",
-  "org.eclipse.jetty.websocket" % "websocket-jetty-client" % "11.0.6",
-  "org.eclipse.jetty.websocket" % "websocket-jetty-api" % "11.0.6"
+  "org.eclipse.jetty.websocket" % "websocket-server" % jettyVersion,
+  "org.eclipse.jetty.websocket" % "websocket-client" % jettyVersion,
+  "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion
 )
 
 

@@ -2,7 +2,8 @@ package loci
 package communicator
 package ws.jetty
 
-import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest
+
+import org.eclipse.jetty.websocket.servlet.ServletUpgradeRequest
 
 import java.security.cert.Certificate
 import scala.util.{Failure, Success, Try}
@@ -12,7 +13,7 @@ private sealed trait WSProtocolFactory[P <: WS] {
            setup: ConnectionSetup[P], authenticated: Boolean,
            encrypted: Boolean, integrityProtected: Boolean,
            authentication: Either[Seq[Certificate], String] = Left(Seq.empty),
-           request: Option[JettyServerUpgradeRequest]): Try[P]
+           request: Option[ServletUpgradeRequest]): Try[P]
 }
 
 private object WSProtocolFactory {
@@ -23,7 +24,7 @@ private object WSProtocolFactory {
              setup: ConnectionSetup[WS], authenticated: Boolean,
              encrypted: Boolean, integrityProtected: Boolean,
              authentication: Either[Seq[Certificate], String],
-             request: Option[JettyServerUpgradeRequest]): Try[WS] =
+             request: Option[ServletUpgradeRequest]): Try[WS] =
       Success(construct(
         url, host, port, setup, authenticated,
         encrypted, integrityProtected, authentication, request))
@@ -34,7 +35,7 @@ private object WSProtocolFactory {
              setup: ConnectionSetup[WS.Secure], authenticated: Boolean,
              encrypted: Boolean, integrityProtected: Boolean,
              authentication: Either[Seq[Certificate], String],
-              request: Option[JettyServerUpgradeRequest]): Try[WS.Secure] =
+              request: Option[ServletUpgradeRequest]): Try[WS.Secure] =
       construct(
         url, host, port, setup, authenticated,
         encrypted, integrityProtected, authentication, request) match {
@@ -48,7 +49,7 @@ private object WSProtocolFactory {
                          _setup: ConnectionSetup[WS], _authenticated: Boolean,
                          _encrypted: Boolean, _integrityProtected: Boolean,
                          _authentication: Either[Seq[Certificate], String],
-                         _request: Option[JettyServerUpgradeRequest]) =
+                         _request: Option[ServletUpgradeRequest]) =
     if (_encrypted && _integrityProtected)
       _authentication match {
         case Left(_certificates) if _certificates.isEmpty =>
