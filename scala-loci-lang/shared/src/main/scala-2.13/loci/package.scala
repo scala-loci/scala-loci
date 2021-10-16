@@ -42,6 +42,8 @@ package object loci {
   @showAsInfix type on[T, P] = Placed[T, P] with T
   @showAsInfix type per[T, P] = Placed.Subjective[T, P]
 
+  @showAsInfix type |[T1, T2]
+
   def connect[P](setup: Connector[ConnectionsBase.Protocol]): Connections =
     macro impl.Connections.setup
   def connect[P](factory: ConnectionSetupFactory[ConnectionsBase.Protocol])(

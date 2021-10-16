@@ -138,6 +138,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val basicSingleAccessor = typeOf[PlacedValue.BasicSingleAccessor[_, _, _, _]]
     val context = typeOf[Placement.Context[_]]
     val nonInstantiable = typeOf[NonInstantiable]
+    val union = typeOf[_ | _]
   }
 
   object trees {
@@ -231,11 +232,12 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
       else if (name.nonEmpty) {
         val separator = if (symbol.isType && !symbol.isModuleClass) projection else selection
 
-        val suffix =
+        val suffix = (
           if (name endsWith termNames.LOCAL_SUFFIX_STRING)
             name.dropRight(termNames.LOCAL_SUFFIX_STRING.length)
           else
             name
+        ).stripPrefix("$") // avoid "$$" in name (https://github.com/sbt/zinc/issues/531)
 
         s"$prefix$separator$suffix"
       }
