@@ -162,34 +162,41 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     readingRemoteAccesses.toMap
   }
 
-
   private val cache = mutable.Map.empty[Symbol, Peer]
 
-  val modulePeers: Seq[Peer] =
-    (module.tree.impl.body flatMap {
+  def removeFromPeerCache(symbol: Symbol): Unit = cache.remove(symbol)
+
+  def getModulePeers(moduleBody: List[Tree]): Seq[Peer] = {
+    (moduleBody flatMap {
       case tree @ q"$_ type $_[..$_] = $tpt" =>
         checkPeerType(tree.symbol, tpt, tree.pos)
       case _ =>
         None
     }) ++
-    (module.classSymbol.selfType.members flatMap { symbol =>
-      if (symbol.isType && (module.symbol.info decl symbol.name) == NoSymbol)
-        checkPeerType(symbol, symbol.pos)
-      else
-        None
-    })
+      (module.classSymbol.selfType.members flatMap { symbol =>
+        if (symbol.isType && (module.symbol.info decl symbol.name) == NoSymbol)
+          checkPeerType(symbol, symbol.pos)
+        else
+          None
+      })
+  }
 
   case class PeerTreeNode(peer: Peer, subPeers: Seq[PeerTreeNode]) {
     def contains(f: Peer => Boolean): Boolean = f(peer) || subPeers.exists(_.contains(f))
   }
 
-  private def subPeerTree(peer: Peer): PeerTreeNode = {
-    PeerTreeNode(peer, modulePeers.filter(_.bases.map(_.tpe).contains(peer.symbol.asType.toType.asSeenFrom(module.classSymbol))).map(subPeerTree))
+  private def subPeerTree(peer: Peer, moduleBody: List[Tree]): PeerTreeNode = {
+    PeerTreeNode(
+      peer,
+      getModulePeers(moduleBody)
+        .filter(_.bases.map(_.tpe).contains(peer.symbol.asType.toType.asSeenFrom(module.classSymbol)))
+        .map(subPeerTree(_, moduleBody))
+    )
   }
 
-  def subPeerTree(peer: Symbol): PeerTreeNode = {
+  def subPeerTree(peer: Symbol, moduleBody: List[Tree]): PeerTreeNode = {
     checkPeerType(peer) match {
-      case Some(p) => subPeerTree(p)
+      case Some(p) => subPeerTree(p, moduleBody)
       case None => c.abort(peer.pos, s"Symbol $peer is not a peer type")
     }
   }
@@ -232,7 +239,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     })
 
     val name = TypeName(s"$$loci$$peer$$${uniqueName(symbol.owner, symbol.name.toString)}")
-    if ((symbol.owner.info member name) == NoSymbol &&
+    if (!symbol.isSynthetic && (symbol.owner.info member name) == NoSymbol &&
         (!underEnclosingExpansion(symbol) ||
          !isMultitierModule(symbol.owner.info)))
       c.abort(symbolPos,

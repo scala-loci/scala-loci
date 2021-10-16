@@ -6,7 +6,7 @@ package components
 import scala.reflect.macros.blackbox
 
 object Assembly extends Component.Factory[Assembly](
-    requires = Seq(Commons, ModuleInfo, Peers, Values)) {
+    requires = Seq(Commons, ModuleInfo, Peers, Values, Initialization)) {
   def apply[C <: blackbox.Context](engine: Engine[C]) = new Assembly(engine)
   def asInstance[C <: blackbox.Context] = { case c: Assembly[C] => c }
 }
@@ -19,6 +19,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   val moduleInfo = engine.require(ModuleInfo)
   val peers = engine.require(Peers)
   val values = engine.require(Values)
+  val initialization = engine.require(Initialization)
 
   import engine._
   import engine.c.universe._
@@ -26,11 +27,16 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
   import moduleInfo._
   import peers._
   import values._
+  import initialization._
 
   case class Assembly(tree: ImplDef)
 
   def assemblePeerImplementation(records: List[Any]): List[Any] = {
     logging.debug(" Assembling expanded multitier module")
+
+    val moduleBody = records.collectFirst {
+      case Initialized(tree) => tree.impl.body
+    }.getOrElse(c.abort(NoPosition, "Did not find initialized module body"))
 
     val (placedValuesImpl, signatureImpl, moduleImpl, selfType) = {
       // inherit implementation for placed values defined in the module bases
@@ -97,7 +103,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       (placedValuesImpl, signatureImpl, moduleImpl, selfType)
     }
 
-    val peerValues = modulePeers map { case Peer(symbol, name, bases, ties, instantiable) =>
+    val peerValues = getModulePeers(moduleBody) map { case Peer(symbol, name, bases, ties, instantiable) =>
       // inherit implementation for overridden peer types
       // i.e., types of the same name in the module base types
       val overriddenBases = module.tree.impl.parents flatMap { parent =>
@@ -198,7 +204,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
         // we outsource the tie specification into a separate synthetically generated trait
         // to work around http://github.com/scala/bug/issues/10928
         Some(symbol -> body) -> atPos(rhs.pos orElse tree.pos) {
-          val tieName = TypeName(s"$$loci$$peer$$tie$$${uniqueName(tree.symbol)}")
+          val tieName = TypeName(s"$$loci$$peer$$tie$$${uniqueName(module.symbol, tree.symbol.name.toString)}")
           val tieParents = tq"${types.peerMarker} with ..$parents with $tieName"
           val rhs = TypeBoundsTree(EmptyTree, tieParents)
           treeCopy.TypeDef(tree, mods, name, tparams, rhs)
@@ -210,7 +216,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
     val peerTypeBodies = peerTypeBodySymbolTrees.flatten.toMap
 
-    val peerTypeTieTrees = modulePeers map { peer =>
+    val peerTypeTieTrees = getModulePeers(moduleBody) map { peer =>
       // collect inherited synthetic peer traits
       val parents = (module.tree.impl.parents collect {
         case parent if

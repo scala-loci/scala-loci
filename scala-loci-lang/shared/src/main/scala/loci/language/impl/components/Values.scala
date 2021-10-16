@@ -91,10 +91,14 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     val expr = s"$$loci$$expr$$${uniqueName(module.symbol)}$$"
     var index = 0
 
+    val moduleBody = records.collectFirst {
+      case Initialized(tree) => tree.impl.body
+    }.getOrElse(c.abort(NoPosition, "Did not find initialized module body"))
+
     // create a member for initializing a multitier module reference
     // at the level of placed values for every peer
     def setupMultitierModule(tree: Tree, multitierName: TermName, multitierType: Tree, signature: String): Seq[Value] =
-      modulePeers map { peer =>
+      getModulePeers(moduleBody) map { peer =>
         val bases = multitierType :: (peer.bases collect {
           case Peer.DelegatedBase(TypeRef(pre, sym, _), _)
               if pre.termSymbol == tree.symbol =>
@@ -309,7 +313,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                   c.abort(tree.pos, s"Duplicate implementation for ${peer.name}")
               }
 
-              val peerTree = subPeerTree(peer)
+              val peerTree = subPeerTree(peer, moduleBody)
 
               peers.foreach { p =>
                 if (!peerTree.contains(_.symbol == p)) {
@@ -318,15 +322,30 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               }
 
               def collectPeersWithMissingImplementation(node: PeerTreeNode): Seq[Peer] = {
-                val implemented = specializations.map(_._2).contains(node.peer.symbol)
-                val requiresImplementation = node.peer.instantiable
-                if (implemented) {
-                  Seq()
-                } else if (requiresImplementation) {
-                  node.peer +: node.subPeers.flatMap(collectPeersWithMissingImplementation)
-                } else {
-                  node.subPeers.flatMap(collectPeersWithMissingImplementation)
+                val missingImplementation = mutable.Set.empty[Peer]
+                val alreadyImplemented = mutable.Set.empty[Peer]
+
+                def markSubtreeAsImplemented(node: PeerTreeNode): Unit = {
+                  missingImplementation.remove(node.peer)
+                  alreadyImplemented.add(node.peer)
+                  node.subPeers.foreach(markSubtreeAsImplemented)
                 }
+
+                def collectPeersWithMissingImplementation(node: PeerTreeNode): Unit = {
+                  val implemented = specializations.map(_._2).contains(node.peer.symbol)
+                  val requiresImplementation = node.peer.instantiable
+                  if (implemented || alreadyImplemented.contains(node.peer)) {
+                    markSubtreeAsImplemented(node)
+                  } else if (requiresImplementation) {
+                    missingImplementation.add(node.peer)
+                    node.subPeers.foreach(collectPeersWithMissingImplementation)
+                  } else {
+                    node.subPeers.foreach(collectPeersWithMissingImplementation)
+                  }
+                }
+
+                collectPeersWithMissingImplementation(node)
+                missingImplementation.toSeq
               }
 
               collectPeersWithMissingImplementation(peerTree) match {
