@@ -2,6 +2,8 @@ package loci
 package language
 package impl
 
+import org.json4s.Formats
+
 import scala.reflect.macros.blackbox
 
 trait Engine[C <: blackbox.Context] {
@@ -106,19 +108,20 @@ object Engine {
     }
 
     val codeDumper = CodeDumper(ctx)
+    implicit val formats: Formats = codeDumper.recordsFormats(engine)
 
     val results =
       phases.foldLeft(Seq.empty[PhaseResult]) { (results, phase) =>
         logging.debug(s"Running multitier expansion phase ${phase.name}")
         val records = results.lastOption.map(_.records).getOrElse(List.empty[Any])
         val result = phase transform records
-        val updatedResults = results.appended(PhaseResult(phase.name, result))
+        val json = codeDumper.toJValue(result)
+        val updatedResults = results.appended(PhaseResult(phase.name, result, json))
 
         if (codeDumper.isEnabled) {
           codeDumper.dump(
             updatedResults,
-            s"${ctx.internal.enclosingOwner.fullName}.${code.name}",
-            engine
+            s"${ctx.internal.enclosingOwner.fullName}.${code.name}"
           )
         }
 
