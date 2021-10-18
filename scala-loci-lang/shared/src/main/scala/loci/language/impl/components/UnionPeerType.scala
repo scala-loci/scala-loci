@@ -4,6 +4,7 @@ import loci.language.impl.Component
 import loci.language.impl.Engine
 import loci.language.impl.Phase
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
@@ -50,7 +51,7 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     case class SyntheticPeergroup(
       name: TypeName,
       definition: Tree,
-      children: Set[Peer],
+      children: Set[Symbol],
       typeRef: Type,
     )
 
@@ -64,7 +65,7 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
 
       object SyntheticPeergroupCollector extends Traverser {
         override def traverse(tree: Tree): Unit = tree match {
-          case tree: TypeTree if isUnionPeerType(tree) =>
+          case tree: TypTree if isUnionPeerType(tree) =>
             collectUnionedPeers(tree.tpe) match {
               case peers if syntheticPeergroups.exists(_.children == peers) =>
               case peers =>
@@ -84,6 +85,7 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
 
                 syntheticPeergroups.append(SyntheticPeergroup(syntheticName, peergroupDef, peers, typeRef))
             }
+          case tree: TypeTree if tree.original != null => super.traverse(tree.original)
           case tree => super.traverse(tree)
         }
       }
@@ -95,25 +97,31 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     /**
      * Replace union types occurring anywhere within the potentially deep (nested) type `tpe` with the respective
      * generated type ref of the generated SyntheticPeergroup.
-     *
-     * Handles nested types in form of typeArgs. Also handles the resultType of MethodType.
      */
+    @tailrec
     def replaceUnionTypesWithSyntheticPeergroupTypes(tpe: Type, syntheticPeergroups: Seq[SyntheticPeergroup]): Type = {
       tpe match {
         case null => null
-        case tpe if tpe real_<:< types.union =>
-          val unionedPeers = collectUnionedPeers(tpe)
-          val syntheticPeergroupType = syntheticPeergroups.collectFirst {
-            case SyntheticPeergroup(_, _, children, typeRef) if children == unionedPeers => typeRef
-          }.getOrElse(
-            c.abort(NoPosition, s"No generated peergroup found for union peer type $tpe. This should never happen!")
-          )
-          syntheticPeergroupType
-        case MethodType(params, resultType) =>
-          internal.methodType(params, replaceUnionTypesWithSyntheticPeergroupTypes(resultType, syntheticPeergroups))
         case tpe =>
-          val replacedTypeArgs = tpe.typeArgs.map(replaceUnionTypesWithSyntheticPeergroupTypes(_, syntheticPeergroups))
-          tpe mapArgs { _ => replacedTypeArgs }
+          // using 'find' to get the top-level union, as 'map' works bottom-up and therefore would try to replace
+          // the bottom-level union (i.e. 2 peers) first
+          val firstUnionType = tpe.find(_ real_<:< types.union)
+          firstUnionType match {
+            case Some(unionType) =>
+              val tpeWithFirstUnionTypeReplaced = tpe.map {
+                case tpePart if tpePart =:= unionType =>
+                  val unionedPeers = collectUnionedPeers(tpePart)
+                  val syntheticPeergroupType = syntheticPeergroups.collectFirst {
+                    case SyntheticPeergroup(_, _, children, typeRef) if children == unionedPeers => typeRef
+                  }.getOrElse(
+                    c.abort(NoPosition, s"No generated peergroup found for union peer type $tpePart. This should never happen!")
+                  )
+                  syntheticPeergroupType
+                case tpePart => tpePart
+              }
+              replaceUnionTypesWithSyntheticPeergroupTypes(tpeWithFirstUnionTypeReplaced, syntheticPeergroups)
+            case None => tpe
+          }
       }
     }
 
@@ -126,11 +134,28 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     def transformUnionPeers(trees: List[Tree], syntheticPeergroups: Seq[SyntheticPeergroup]): List[Tree] = {
       object UnionPeerTypeTransformer extends Transformer {
         override def transform(tree: Tree): Tree = {
-          if (tree.symbol != null) {
-            internal.setInfo(tree.symbol, replaceUnionTypesWithSyntheticPeergroupTypes(tree.symbol.info, syntheticPeergroups))
+          val newType = replaceUnionTypesWithSyntheticPeergroupTypes(tree.tpe, syntheticPeergroups)
+          val newInfo = tree.symbol match {
+            case null => None
+            case sym => Option(replaceUnionTypesWithSyntheticPeergroupTypes(sym.info, syntheticPeergroups))
           }
-          internal.setType(tree, replaceUnionTypesWithSyntheticPeergroupTypes(tree.tpe, syntheticPeergroups))
-          super.transform(tree)
+
+          if (newType != null && newType =:= tree.tpe && newInfo.forall(_ == tree.symbol.info)) {
+            super.transform(tree)
+          } else {
+            tree match {
+              case tree: TypTree if newType != null =>
+                val newTree: Tree = createTypeTree(newType, tree.pos)
+                internal.setType(newTree, newType)
+                newTree
+              case tree =>
+                if (tree.symbol != null && tree.symbol != NoSymbol) {
+                  newInfo.foreach(internal.setInfo(tree.symbol, _))
+                }
+                internal.setType(tree, newType)
+                super.transform(tree)
+            }
+          }
         }
       }
 
@@ -144,7 +169,7 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
      * For instance the peers `A` and `B` both get an upper bound to the synthetic peergroup generated for `A | B`.
      * Also, the generated peergroup for `A | B` gets an upper bound to the synthetic peergroup generated for `A | B | C`.
      */
-    def refinePeerTypeUpperBound(peerTypeDef: TypeDef, peer: Peer, syntheticPeergroups: Seq[SyntheticPeergroup]): TypeDef = {
+    def refinePeerTypeUpperBound(peerTypeDef: TypeDef, peer: Symbol, syntheticPeergroups: Seq[SyntheticPeergroup]): TypeDef = {
       val TypeDef(mods, name, tparams, rhs) = peerTypeDef: @unchecked
       val syntheticUpperBounds = syntheticPeergroups.collect {
         case SyntheticPeergroup(_, _, children, typeRef) if children.contains(peer) => typeRef
@@ -185,18 +210,14 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
         val syntheticPeergroups = collectSyntheticPeergroups(tree.impl.body)
 
         // replace union peer type occurrences with generated peergroup types in the existing module code
-        // and add the synthetic peergroup defintions to the body
+        // and add the synthetic peergroup definitions to the body
         val bodyWithSyntheticPeergroups = transformUnionPeers(tree.impl.body, syntheticPeergroups) ++ syntheticPeergroups.map(_.definition)
 
-        // refine the upper bounds of the peer type defintions in the module code
+        // refine the upper bounds of the peer type definitions in the module code
         val bodyWithRefinedPeerTypeUpperBounds = bodyWithSyntheticPeergroups.map {
           case tree: TypeDef =>
-            checkPeerType(tree.symbol, tree.pos) match {
-              case Some(peer) =>
-                val refinedDef = refinePeerTypeUpperBound(tree, peer, syntheticPeergroups)
-                // we have to remove the Peer from the cache, as its definition is potentially updated
-                removeFromPeerCache(tree.symbol)
-                refinedDef
+            validatePeerType(tree.symbol, tree.pos) match {
+              case Some(peer) => refinePeerTypeUpperBound(tree, peer, syntheticPeergroups)
               case None => tree
             }
           case tree => tree
@@ -227,15 +248,16 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
     }
   }
 
-  private def isUnionPeerType(tree: TypeTree): Boolean = tree.tpe real_<:< types.union
+  private def isUnionPeerType(tree: TypTree): Boolean = tree.tpe real_<:< types.union
 
-  private def collectUnionedPeers(tpe: Type): Set[Peer] = {
+  private def collectUnionedPeers(tpe: Type): Set[Symbol] = {
     tpe match {
       case union if union.typeArgs.size == 2 =>
         val List(left, right) = union.typeArgs: @unchecked
         collectUnionedPeers(left) ++ collectUnionedPeers(right)
       case singlePeer =>
-        val peer: Peer = requirePeerType(singlePeer.typeSymbol, singlePeer.typeSymbol.pos)
+        val peer = validatePeerType(singlePeer.typeSymbol, singlePeer.typeSymbol.pos)
+          .getOrElse(c.abort(singlePeer.typeSymbol.pos, s"Expected peer type but found: ${singlePeer.typeSymbol}"))
         Set(peer)
     }
 

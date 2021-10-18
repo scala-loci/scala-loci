@@ -4,6 +4,7 @@ package impl
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import scala.concurrent.Future
 
 class UnionPeerTypeSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Union peer types"
@@ -37,6 +38,19 @@ class UnionPeerTypeSpec extends AnyFlatSpec with Matchers with NoLogging {
         x + 1
       } and on[B | U] { implicit! =>
         x + 2
+      }
+    }""" should compile
+  }
+
+  it should "compile for a tie to a union peer type" in {
+    """@multitier object Module {
+      @peer type A <: { type Tie <: Single[A | B] }
+      @peer type B
+
+      def f(): Int on (A | B) = 5
+
+      val y: Future[Int] on A = on[A] { implicit! =>
+        remote[A | B].call(f()).asLocal
       }
     }""" should compile
   }

@@ -164,8 +164,6 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
   private val cache = mutable.Map.empty[Symbol, Peer]
 
-  def removeFromPeerCache(symbol: Symbol): Unit = cache.remove(symbol)
-
   def getModulePeers(moduleBody: List[Tree]): Seq[Peer] = {
     (moduleBody flatMap {
       case tree @ q"$_ type $_[..$_] = $tpt" =>
@@ -218,6 +216,13 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       false
   }
 
+  def validatePeerType(symbol: Symbol, pos: Position): Option[Symbol] = {
+    if (symbol.annotations exists { a => (a.tree.tpe <:< types.peer) || (a.tree.tpe <:< types.peergroup) }) {
+      Option(symbol)
+    } else {
+      None
+    }
+  }
 
   @inline def requirePeerType(symbol: Symbol): Peer =
     requirePeerType(symbol, EmptyTree, NoPosition)
