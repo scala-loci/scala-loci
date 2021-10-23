@@ -55,6 +55,8 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
       typeRef: Type,
     )
 
+    val syntheticPeergroupNamePrefix = "$loci$synthetic$peergroup"
+
     /**
      * Traverse the body of the module and create one SyntheticPeergroup for each distinct union peer type.
      * For different occurrences of the same union peer type with different order of the types, e.g. `A | B` and
@@ -69,7 +71,8 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
             collectUnionedPeers(tree.tpe) match {
               case peers if syntheticPeergroups.exists(_.children == peers) =>
               case peers =>
-                val syntheticName = TypeName(s"$$loci$$synthetic$$peergroup$$${syntheticPeergroups.size}")
+                // syntheticName contains the className to avoid conflicts when mixing in multitier traits
+                val syntheticName = TypeName(s"$syntheticPeergroupNamePrefix$$${module.className.toString}$$${syntheticPeergroups.size}")
                 val syntheticTypeSymbol = internal.newTypeSymbol(module.classSymbol, syntheticName, tree.pos, Flag.SYNTHETIC | Flag.DEFERRED)
                 internal.setInfo(syntheticTypeSymbol, internal.typeBounds(definitions.NothingTpe, definitions.AnyTpe))
                 internal.setAnnotations(syntheticTypeSymbol, Annotation.apply(peergroupAnnotation))
@@ -171,7 +174,24 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
      */
     def refinePeerTypeUpperBound(peerTypeDef: TypeDef, peer: Symbol, syntheticPeergroups: Seq[SyntheticPeergroup]): TypeDef = {
       val TypeDef(mods, name, tparams, rhs) = peerTypeDef: @unchecked
-      val syntheticUpperBounds = syntheticPeergroups.collect {
+
+      // if a peer type overrides another peer type of a parent, we need to add the synthetic peergroups this overridden
+      // peer type is subtype of to the overriding peer type as well
+      val overriddenPeerTypesSyntheticUpperBounds = module.tree.impl.parents
+        .filter(p => p.tpe =:!= definitions.AnyTpe && p.tpe =:!= definitions.AnyRefTpe: Boolean)
+        .map(_.tpe.member(name))
+        .collect {
+          case sym if sym != NoSymbol && sym.isType && sym != peer => sym.info
+        }
+        .collect {
+          case TypeBounds(_, RefinedType(parents, _)) => parents.filter { parent =>
+            parent.typeSymbol.asType.isSynthetic && parent.typeSymbol.name.toString.contains(syntheticPeergroupNamePrefix)
+          }
+        }
+        .flatten
+        .map(_.asSeenFrom(module.classSymbol))
+
+      val syntheticUpperBounds = overriddenPeerTypesSyntheticUpperBounds ++ syntheticPeergroups.collect {
         case SyntheticPeergroup(_, _, children, typeRef) if children.contains(peer) => typeRef
       }.toList ++ (if (peerTypeDef.symbol.isSynthetic) {
         val ownChildren = syntheticPeergroups.collectFirst {

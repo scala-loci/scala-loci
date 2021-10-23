@@ -491,7 +491,11 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
     if (!tiesInferred) {
       // ensure peer ties conform to super and overridden peer ties
-      def tieSymbol(symbol: Symbol) = symbol.info member names.tie
+      def tieSymbol(symbol: Symbol) = {
+        // we use `decl` instead of `member` as the member scope is somehow distorted when creating a new RefinedType
+        // in phase "unionpeer:group"
+        symbol.info.decl(names.tie)
+      }
 
       def tieType(symbol: Symbol) = tieSymbol(symbol).info match {
         case TypeBounds(_, high) => high
@@ -666,7 +670,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
       orElse pos) -> symbol.nameInEnclosing
   }
 
-  private def overriddenPeers(symbol: Symbol) =
+  private def overriddenPeers(symbol: Symbol): List[Peer] =
     (module.tree.impl.parents collect {
       case parent
           if parent.tpe =:!= definitions.AnyTpe &&
