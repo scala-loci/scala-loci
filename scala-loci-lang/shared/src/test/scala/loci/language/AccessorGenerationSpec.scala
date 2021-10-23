@@ -3,10 +3,12 @@ package language
 
 import transmitter.transmittable.IdenticallyTransmittable
 import transmitter.Serializable
+import transmitter.Serializables.serializableUUID
 import runtime.MarshallableValue
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.util.UUID
 import scala.concurrent.Future
 import scala.util.Try
 
@@ -49,9 +51,9 @@ class AccessorGenerationSpec extends AnyFlatSpec with Matchers {
     @multitier(AccessorGeneration.Required) trait Mod2 extends ForcedSuperModByImport
     @multitier(AccessorGeneration.Forced) trait Mod3 extends ForcedSuperModByImport
 
-    CompileTimeUtils.containsValueOfType[Mod0, MarshallableValue[_, _, _, _]] should be (false)
-    CompileTimeUtils.containsValueOfType[Mod1, MarshallableValue[_, _, _, _]] should be (false)
-    CompileTimeUtils.containsValueOfType[Mod2, MarshallableValue[_, _, _, _]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod0, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod1, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod2, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
   }
 
   it should "use same inherited accessor for marshallable value" in {
@@ -60,10 +62,10 @@ class AccessorGenerationSpec extends AnyFlatSpec with Matchers {
     @multitier(AccessorGeneration.Required) trait Mod2 extends ForcedSuperModByCompanion
     @multitier(AccessorGeneration.Forced) trait Mod3 extends ForcedSuperModByCompanion
 
-    CompileTimeUtils.containsValueOfType[Mod0, MarshallableValue[_, _, _, _]] should be (false)
-    CompileTimeUtils.containsValueOfType[Mod1, MarshallableValue[_, _, _, _]] should be (false)
-    CompileTimeUtils.containsValueOfType[Mod2, MarshallableValue[_, _, _, _]] should be (false)
-    CompileTimeUtils.containsValueOfType[Mod3, MarshallableValue[_, _, _, _]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod0, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod1, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod2, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
+    CompileTimeUtils.containsValueOfTypeExcept[Mod3, MarshallableValue[_, _, _, _], MarshallableValue[UUID, UUID, UUID, Future[UUID]]] should be (false)
   }
 
   it should "defer accessor for unused marshallable value" in {

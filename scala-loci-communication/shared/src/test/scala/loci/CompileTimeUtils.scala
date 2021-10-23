@@ -122,6 +122,19 @@ object CompileTimeUtils {
     q"${T.decls exists { _.info.finalResultType <:< U } }"
   }
 
+  def containsValueOfTypeExcept[T, U, V]: Boolean =
+    macro containsValueOfTypeExceptImpl[T, U, V]
+
+  def containsValueOfTypeExceptImpl[T: c.WeakTypeTag, U: c.WeakTypeTag, V: c.WeakTypeTag](c: whitebox.Context): c.Tree = {
+    import c.universe._
+
+    val T = weakTypeOf[T]
+    val U = weakTypeOf[U]
+    val V = weakTypeOf[V]
+
+    q"${T.decls exists { decl => decl.info.finalResultType <:< U && !(decl.info.finalResultType <:< V) } }"
+  }
+
   private def compileLiteralString(c: whitebox.Context)(tree: c.Tree) = {
     def reportException(pos: Position, msg: String) = pos match {
       case pos: c.universe.Position @unchecked => c.abort(pos, msg)
