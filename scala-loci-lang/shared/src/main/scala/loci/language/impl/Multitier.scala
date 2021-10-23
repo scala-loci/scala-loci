@@ -191,6 +191,7 @@ class Multitier(val c: blackbox.Context) {
                 Initialization,
                 DynamicPlacement,
                 UnionPeerType,
+                RemoteValueReference,
                 RemoteBlock,
                 Peers,
                 Values,
