@@ -5,6 +5,7 @@ package components
 
 import retypecheck._
 
+import java.util.UUID
 import scala.collection.mutable
 import scala.reflect.NameTransformer
 import scala.reflect.macros.blackbox
@@ -139,6 +140,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val context = typeOf[Placement.Context[_]]
     val nonInstantiable = typeOf[NonInstantiable]
     val union = typeOf[_ | _]
+    val uniquePeerId = typeOf[UUID]
   }
 
   object trees {
@@ -169,6 +171,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val basicBlockingSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicBlockingSingleAccessor"
     val remote = q"${names.root}.loci.`package`.remote.apply"
     val futureSuccessful = q"${names.root}.scala.concurrent.Future.successful"
+    val generateUniquePeerId = q"${names.root}.loci.language.impl.UniquePeerId.generate()"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {

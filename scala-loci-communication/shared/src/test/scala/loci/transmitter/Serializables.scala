@@ -3,6 +3,7 @@ package transmitter
 
 import Parser._
 
+import java.util.UUID
 import scala.util.Try
 
 object Serializables {
@@ -162,6 +163,15 @@ object Serializables {
          (intDeserializer(element1), stringDeserializer(element2))
        },
        optionDeserializer(element2) map stringDeserializer)
+    }
+  }
+
+  implicit object serializableUUID extends Serializable[UUID] {
+    override def serialize(value: UUID) =
+      MessageBuffer.encodeString(stringSerializer(value.toString).toString)
+
+    override def deserialize(value: MessageBuffer): Try[UUID] = Try {
+      UUID.fromString(stringDeserializer(parse(value.decodeString)))
     }
   }
 }
