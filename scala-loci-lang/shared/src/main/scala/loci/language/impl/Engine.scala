@@ -121,7 +121,7 @@ object Engine {
         if (codeDumper.isEnabled) {
           codeDumper.dump(
             updatedResults,
-            s"${ctx.internal.enclosingOwner.fullName}.${code.name}"
+            s"${ctx.internal.enclosingOwner.fullName}.${code.symbol.fullName}"
           )
         }
 
