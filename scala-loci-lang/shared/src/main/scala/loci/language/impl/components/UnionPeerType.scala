@@ -172,7 +172,12 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
      * For instance the peers `A` and `B` both get an upper bound to the synthetic peergroup generated for `A | B`.
      * Also, the generated peergroup for `A | B` gets an upper bound to the synthetic peergroup generated for `A | B | C`.
      */
-    def refinePeerTypeUpperBound(peerTypeDef: TypeDef, peer: Symbol, syntheticPeergroups: Seq[SyntheticPeergroup]): TypeDef = {
+    def refinePeerTypeUpperBound(
+      peerTypeDef: TypeDef,
+      peer: Symbol,
+      syntheticPeergroups: Seq[SyntheticPeergroup],
+      peerTieMember: Option[Symbol]
+    ): TypeDef = {
       val TypeDef(mods, name, tparams, rhs) = peerTypeDef: @unchecked
 
       // if a peer type overrides another peer type of a parent, we need to add the synthetic peergroups this overridden
@@ -209,11 +214,14 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
         case syntheticUpperBounds =>
           val refinedBounds = peerTypeDef.symbol.info match {
             case TypeBounds(lo, hi) => internal.typeBounds(lo, hi match {
-              case RefinedType(parents, decls) => internal.refinedType(parents ++ syntheticUpperBounds, decls)
+              case RefinedType(parents, _) =>
+                internal.refinedType(parents ++ syntheticUpperBounds, internal.newScopeWith(peerTieMember.toSeq: _*))
               case TypeRef(_, sym, _) if sym == definitions.AnyTpe.typeSymbol =>
-                internal.refinedType(syntheticUpperBounds, internal.newScopeWith())
-              case singleTypeRef: TypeRef =>
-                internal.refinedType(singleTypeRef +: syntheticUpperBounds, internal.newScopeWith())
+                internal.refinedType(syntheticUpperBounds, internal.newScopeWith(peerTieMember.toSeq: _*))
+              case singleTypeRef: TypeRef => internal.refinedType(
+                singleTypeRef +: syntheticUpperBounds,
+                internal.newScopeWith(peerTieMember.toSeq: _*)
+              )
             })
           }
           val refinedRhs: Tree = createTypeTree(refinedBounds, peerTypeDef.pos)
@@ -233,13 +241,21 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
         // and add the synthetic peergroup definitions to the body
         val bodyWithSyntheticPeergroups = transformUnionPeers(tree.impl.body, syntheticPeergroups) ++ syntheticPeergroups.map(_.definition)
 
+        // we collect the Tie member of all peers, including ones that are inherited; the member scope is distorted
+        // in `refinePeerTypeUpperBound`, hence we have to collect first and then add them as explicit declaration
+        val peerTieMembers = bodyWithSyntheticPeergroups.collect {
+          case tree: TypeDef if validatePeerType(tree.symbol, tree.pos).isDefined =>
+            tree.symbol.name -> tree.symbol.info.member(names.tie)
+        }.filter {
+          case (_, symbol) => symbol != null && symbol != NoSymbol
+        }.toMap
+
         // refine the upper bounds of the peer type definitions in the module code
         val bodyWithRefinedPeerTypeUpperBounds = bodyWithSyntheticPeergroups.map {
-          case tree: TypeDef =>
-            validatePeerType(tree.symbol, tree.pos) match {
-              case Some(peer) => refinePeerTypeUpperBound(tree, peer, syntheticPeergroups)
-              case None => tree
-            }
+          case tree: TypeDef => validatePeerType(tree.symbol, tree.pos) match {
+            case Some(peer) => refinePeerTypeUpperBound(tree, peer, syntheticPeergroups, peerTieMembers.get(tree.symbol.name))
+            case None => tree
+          }
           case tree => tree
         }
 

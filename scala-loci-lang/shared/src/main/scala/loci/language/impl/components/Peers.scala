@@ -491,13 +491,18 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
 
     if (!tiesInferred) {
       // ensure peer ties conform to super and overridden peer ties
-      def tieSymbol(symbol: Symbol) = {
+      def tieSymbol(symbol: Symbol): Symbol = {
         // we use `decl` instead of `member` as the member scope is somehow distorted when creating a new RefinedType
-        // in phase "unionpeer:group"
-        symbol.info.decl(names.tie)
+        // in phase "unionpeer:group"; if we do refine upper bounds of a type in "unionpeer:group" we always add
+        // the inherited tie member as explicit declaration to the inheriting type, hence using `decl` is also sufficient
+        // for those types; `member` is used as fallback for all other types that inherit the Tie member
+        symbol.info.decl(names.tie) match {
+          case null | NoSymbol => symbol.info.member(names.tie)
+          case tie => tie
+        }
       }
 
-      def tieType(symbol: Symbol) = tieSymbol(symbol).info match {
+      def tieType(symbol: Symbol): Type = tieSymbol(symbol).info match {
         case TypeBounds(_, high) => high
         case _ => definitions.AnyTpe
       }
