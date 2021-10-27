@@ -228,6 +228,33 @@ class Instance(val c: blackbox.Context) {
           "Access to peer values must be of the form: <peer instance of module> retrieve <module>.<value>")
     }
 
+  def retrieveUniquePeerId(): Tree = {
+    c.macroApplication match {
+      case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
+      case q"$_[..$_]($instance).$_()" =>
+        val (instancePeer, instanceModule) = instance.tpe.widen.typeArgs.head match {
+          case tpe @ TypeRef(pre, _, _) =>
+            tpe -> pre.termSymbol
+          case tpe =>
+            val symbol = tpe.typeSymbol.owner
+            if (symbol.isModuleClass)
+              tpe -> symbol.asClass.module
+            else
+              tpe -> symbol
+        }
+        val moduleName = instanceModule.asTerm.name.toTermName
+        val uniquePeerIdName = TermName(s"$$loci$$peer$$unique$$id$$${moduleName.toString}")
+        q"""$instance match {
+          case instance: ${termNames.ROOTPKG}.loci.runtime.Instance[_] => instance.values match {
+            case values: $moduleName.${names.placedValues(instanceModule.info.typeSymbol)} => values.$uniquePeerIdName
+            case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
+          }
+          case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
+        }"""
+      case _ => c.abort(c.enclosingPosition, "Access to unique peer id failed")
+    }
+  }
+
   def start(instance: Tree): Tree = {
     // parse named arguments for constructor invocation
     val (stats, expr) = instance match {

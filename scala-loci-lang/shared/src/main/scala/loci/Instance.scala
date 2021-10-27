@@ -2,6 +2,7 @@ package loci
 
 import language._
 
+import java.util.UUID
 import scala.annotation.compileTimeOnly
 import scala.concurrent.ExecutionContext
 import scala.language.experimental.macros
@@ -37,6 +38,9 @@ object Instance {
   final implicit class Ops[P](instance: Instance[P]) {
     def retrieve[T](retrievable: Retrievable[T]): T =
       macro language.impl.Instance.retrieve
+
+    def retrieveUniquePeerId(): UUID =
+      macro language.impl.Instance.retrieveUniquePeerId
 
     def terminate(): Unit = instance match {
       case instance: runtime.Instance[P] => instance.terminate()
