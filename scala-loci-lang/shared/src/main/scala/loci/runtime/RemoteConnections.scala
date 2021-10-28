@@ -285,12 +285,7 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
     if (violations.nonEmpty)
       logging.trace(s"Constraints violated for [${violations mkString ", "}]")
 
-    /**
-     * This is an ugly fix for https://github.com/LukasL97/scala-loci/issues/24
-     * TODO: validate that there are no situations in which connecting to an untied synthetic peergroup would actually be a problem
-     */
-    val violationsExcludingSyntheticPeergroups = violations.filterNot(peer => peer.name.contains("$loci$synthetic$peergroup"))
-    violationsExcludingSyntheticPeergroups
+    violations
   }
 
   private def connections(includePotentials: Boolean): Seq[Peer.Signature] = {
