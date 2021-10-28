@@ -243,7 +243,7 @@ class Instance(val c: blackbox.Context) {
               tpe -> symbol
         }
         val moduleName = instanceModule.asTerm.name.toTermName
-        val uniquePeerIdName = TermName(s"$$loci$$peer$$unique$$id$$${moduleName.toString}")
+        val uniquePeerIdName = TermName("$loci$peer$unique$id")
         q"""$instance match {
           case instance: ${termNames.ROOTPKG}.loci.runtime.Instance[_] => instance.values match {
             case values: $moduleName.${names.placedValues(instanceModule.info.typeSymbol)} => values.$uniquePeerIdName
