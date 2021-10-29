@@ -3,6 +3,8 @@ package language
 package impl
 package components
 
+import loci.valueref.PeerValueCache
+import loci.valueref.PeerValueMapCache
 import retypecheck._
 
 import java.util.UUID
@@ -141,6 +143,9 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val nonInstantiable = typeOf[NonInstantiable]
     val union = typeOf[_ | _]
     val uniquePeerId = typeOf[UUID]
+    val valueRefCreator = typeOf[valueref.ValueRefCreator[_, _]]
+    val peerValueCache = typeOf[PeerValueCache[_]]
+    val peerValueMapCache = typeOf[PeerValueMapCache[_]]
   }
 
   object trees {
@@ -171,7 +176,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val basicBlockingSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicBlockingSingleAccessor"
     val remote = q"${names.root}.loci.`package`.remote.apply"
     val futureSuccessful = q"${names.root}.scala.concurrent.Future.successful"
-    val generateUniquePeerId = q"${names.root}.loci.language.impl.UniquePeerId.generate()"
+    val generateUniquePeerId = q"${names.root}.loci.valueref.UniquePeerId.generate()"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {
