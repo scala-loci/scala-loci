@@ -1,6 +1,7 @@
 package loci
 
 import language._
+import loci.valueref.PeerValueCache
 
 import java.util.UUID
 import scala.annotation.compileTimeOnly
@@ -41,6 +42,9 @@ object Instance {
 
     def retrieveUniquePeerId(): UUID =
       macro language.impl.Instance.retrieveUniquePeerId
+
+    def retrievePeerValueCache[V](): PeerValueCache[V] =
+      macro language.impl.Instance.retrievePeerValueCache[V]
 
     def terminate(): Unit = instance match {
       case instance: runtime.Instance[P] => instance.terminate()

@@ -232,27 +232,41 @@ class Instance(val c: blackbox.Context) {
     c.macroApplication match {
       case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
       case q"$_[..$_]($instance).$_()" =>
-        val (instancePeer, instanceModule) = instance.tpe.widen.typeArgs.head match {
-          case tpe @ TypeRef(pre, _, _) =>
-            tpe -> pre.termSymbol
-          case tpe =>
-            val symbol = tpe.typeSymbol.owner
-            if (symbol.isModuleClass)
-              tpe -> symbol.asClass.module
-            else
-              tpe -> symbol
-        }
-        val moduleName = instanceModule.asTerm.name.toTermName
         val uniquePeerIdName = TermName("$loci$peer$unique$id")
-        q"""$instance match {
-          case instance: ${termNames.ROOTPKG}.loci.runtime.Instance[_] => instance.values match {
-            case values: $moduleName.${names.placedValues(instanceModule.info.typeSymbol)} => values.$uniquePeerIdName
-            case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
-          }
-          case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
-        }"""
+        retrieveByName(uniquePeerIdName, instance)
       case _ => c.abort(c.enclosingPosition, "Access to unique peer id failed")
     }
+  }
+
+  def retrievePeerValueCache[V: WeakTypeTag](): Tree = {
+    c.macroApplication match {
+      case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
+      case q"$_[..$_]($instance).$_[$_]()" =>
+        val valueTypeName = weakTypeOf[V].typeSymbol.fullName.replace('.', '$')
+        val cacheName = TermName(s"$$loci$$value$$cache$$$valueTypeName")
+        retrieveByName(cacheName, instance)
+      case _ => c.abort(c.enclosingPosition, s"Access to peer value cache failed")
+    }
+  }
+
+  def retrieveByName(valueName: TermName, instance: Tree): Tree = {
+    val instanceModule = instance.tpe.widen.typeArgs.head match {
+      case tpe @ TypeRef(pre, _, _) => pre.termSymbol
+      case tpe =>
+        val symbol = tpe.typeSymbol.owner
+        if (symbol.isModuleClass)
+          symbol.asClass.module
+        else
+          symbol
+    }
+    val moduleName = instanceModule.asTerm.name.toTermName
+    q"""$instance match {
+      case instance: ${termNames.ROOTPKG}.loci.runtime.Instance[_] => instance.values match {
+        case values: $moduleName.${names.placedValues(instanceModule.info.typeSymbol)} => values.$valueName
+        case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
+      }
+      case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
+    }"""
   }
 
   def start(instance: Tree): Tree = {
