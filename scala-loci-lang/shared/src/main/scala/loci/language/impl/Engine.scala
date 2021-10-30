@@ -119,10 +119,7 @@ object Engine {
         val updatedResults = results.appended(PhaseResult(phase.name, result, json))
 
         if (codeDumper.isEnabled) {
-          codeDumper.dump(
-            updatedResults,
-            s"${ctx.internal.enclosingOwner.fullName}.${code.symbol.fullName}"
-          )
+          codeDumper.dump(updatedResults, code.symbol.fullName)
         }
 
         updatedResults
