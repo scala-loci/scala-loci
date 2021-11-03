@@ -76,6 +76,10 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
     val lifts = (symbolOf[Placed[_, _]].companion.info member TermName("lift")).alternatives
     val multitier = symbolOf[loci.multitier.type]
+    val SelectApply = typeOf[Placement.Select[Placement.Run]] member TermName("apply")
+    val BlockApply = typeOf[Placement.Block[_, PlacedValue]] member TermName("apply")
+    val CaptureCapture = typeOf[Placement.Capture[_, PlacedValue]] member TermName("capture")
+    val valueRefAccessor = symbolOf[valueref.ValueRefAccessor[_, _, _]]
   }
 
   object types {
@@ -83,6 +87,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val biFunction = typeOf[(_, _) => _]
     val stringList = typeOf[List[String]]
     val future = typeOf[concurrent.Future[_]]
+    val option = typeOf[Option[_]]
     val unitFuture = typeOf[concurrent.Future[Unit]]
     val nothingFuture = typeOf[concurrent.Future[Nothing]]
     val on = typeOf[_ on _]
@@ -144,6 +149,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val union = typeOf[_ | _]
     val uniquePeerId = typeOf[UUID]
     val valueRefCreator = typeOf[valueref.ValueRefCreator[_, _]]
+    val valueRefAccessor = typeOf[valueref.ValueRefAccessor[_, _, _]]
     val peerValueCache = typeOf[PeerValueCache[_]]
     val peerValueMapCache = typeOf[PeerValueMapCache[_]]
   }
@@ -173,7 +179,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val none = q"${names.root}.loci.transmitter.transmittable.ContextBuilder.none"
     val delegate = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.delegate"
     val list = q"${names.root}.loci.transmitter.transmittable.ContextBuilders.list"
-    val basicBlockingSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicBlockingSingleAccessor"
+    val basicSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicSingleAccessor"
     val remote = q"${names.root}.loci.`package`.remote.apply"
     val futureSuccessful = q"${names.root}.scala.concurrent.Future.successful"
     val generateUniquePeerId = q"${names.root}.loci.valueref.UniquePeerId.generate()"

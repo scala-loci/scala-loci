@@ -100,7 +100,7 @@ class Peers[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] {
     }
 
 
-  private val readingRemoteAccesses: Map[Symbol, List[(Type, Position)]] = {
+  private lazy val readingRemoteAccesses: Map[Symbol, List[(Type, Position)]] = {
     val readingRemoteAccesses = mutable.Map.empty[Symbol, List[(Type, Position)]]
     val peerContext = mutable.ListBuffer.empty[(Symbol, String)]
 
