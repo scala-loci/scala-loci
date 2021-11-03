@@ -3,9 +3,11 @@ package communicator
 package ws.jetty
 
 import org.eclipse.jetty.servlet.ServletContextHandler
-import org.eclipse.jetty.websocket.server.{NativeWebSocketServletContainerInitializer, WebSocketUpgradeFilter}
+import org.eclipse.jetty.websocket.server.NativeWebSocketServletContainerInitializer.Configurator
+import org.eclipse.jetty.websocket.server.{NativeWebSocketConfiguration, NativeWebSocketServletContainerInitializer, WebSocketUpgradeFilter}
 import org.eclipse.jetty.websocket.servlet.{ServletUpgradeRequest, ServletUpgradeResponse, WebSocketCreator}
 
+import javax.servlet.ServletContext
 import scala.util.{Failure, Success, Try}
 
 class WSListener[P <: WS: WSProtocolFactory](
@@ -18,11 +20,12 @@ class WSListener[P <: WS: WSProtocolFactory](
   override protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
     NativeWebSocketServletContainerInitializer.configure(
       context,
-      (_, wsContainer) => {
+      new Configurator {
+        def accept(context: ServletContext, wsContainer: NativeWebSocketConfiguration): Unit =
         wsContainer.addMapping(
           pathspec,
           new WebSocketCreator {
-            override def createWebSocket(request: ServletUpgradeRequest, repsonse: ServletUpgradeResponse): AnyRef = {
+            def createWebSocket(request: ServletUpgradeRequest, repsonse: ServletUpgradeResponse): AnyRef = {
               val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(
                 pathspec,
                 None,
@@ -31,7 +34,7 @@ class WSListener[P <: WS: WSProtocolFactory](
                 authenticated = false,
                 encrypted = false,
                 integrityProtected = false,
-                request = Some(request),
+                request = Some(request)
                 )
 
               tryMakeProtocol match {
@@ -43,11 +46,12 @@ class WSListener[P <: WS: WSProtocolFactory](
               }
             }
           })
-
       }
       )
     WebSocketUpgradeFilter.configure(context)
 
-    Success(() => ())
+    Success(new Listening {
+      def stopListening() = ()
+    })
   }
 }

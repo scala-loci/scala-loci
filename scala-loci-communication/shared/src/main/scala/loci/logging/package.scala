@@ -7,9 +7,6 @@ package object logging extends LoggerSupport {
 
   def root = Logger("scala-loci")
 
-  //TODO: seems to define at what level output is logged … maybe?
-  override def includes(level: Level): Boolean = level.value >= Level.Info.value
-
   val reportException: Throwable => Unit = exception =>
     error("unhandled exception", exception)
 

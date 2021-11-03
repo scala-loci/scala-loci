@@ -4,7 +4,7 @@ package ws.jetty
 
 import org.eclipse.jetty.websocket.api.{Session, WebSocketAdapter}
 
-import java.util.concurrent.{Executors, ScheduledFuture, TimeUnit}
+import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
 import scala.util.{Failure, Success, Try}
 
 class Socket[P <: WS: WSProtocolFactory](
@@ -17,10 +17,12 @@ class Socket[P <: WS: WSProtocolFactory](
   val doClosed  = Notice.Steady[Unit]
   val doReceive = Notice.Stream[MessageBuffer]
 
-  private val executor = Executors.newSingleThreadScheduledExecutor((runnable: Runnable) => {
-    val thread = Executors.defaultThreadFactory.newThread(runnable)
-    thread.setDaemon(true)
-    thread
+  private val executor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory {
+    def newThread(runnable: Runnable) = {
+      val thread = Executors.defaultThreadFactory.newThread(runnable)
+      thread.setDaemon(true)
+      thread
+    }
   })
 
   private val timeout: Int = properties.heartbeatTimeout.toMillis.toInt
@@ -52,7 +54,7 @@ class Socket[P <: WS: WSProtocolFactory](
     connectionEstablished(Success(this))
 
     heartbeatTask = executor.scheduleWithFixedDelay(
-      () => getRemote.sendString(heartbeat),
+      new Runnable { def run(): Unit = getRemote.sendString(heartbeat) },
       delay,
       delay,
       TimeUnit.MILLISECONDS

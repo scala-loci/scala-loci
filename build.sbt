@@ -41,12 +41,20 @@ val macroparadise = Seq(
 val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
 
+val jsweakreferences = Seq(
+  libraryDependencies ++= {
+    if ("0.6" != System.getenv("SCALAJS"))
+      Seq("org.scala-js" %%% "scalajs-fake-weakreferences" % "1.0.0")
+    else
+      Seq.empty
+  })
+
 val scalatest = libraryDependencies +=
   "org.scalatest" %%% "scalatest" % "3.2.8" % Test
 
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "3.6.0"
+    "com.outr" %%% "scribe" % "3.6.2"
   else
     "com.outr" %%% "scribe" % "2.7.9"
 }
@@ -152,6 +160,7 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
             SourceGenerator.remoteSelection,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scribe, scalatest)
+  jsSettings jsweakreferences
   dependsOn lociCommunication % "compile->compile;test->test")
 
 lazy val lociLangJVM = lociLang.jvm
