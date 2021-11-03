@@ -120,4 +120,21 @@ class GatewayAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compon
 
     result
   }
+
+  def createMultipleGateway(remoteType: Type, pos: Position): Tree = {
+    //GatewayConnection is replaced in gateway:access, but its typeArgs are reused
+    val gatewayConnectionTypeArgs = List(remoteType, types.transmitterMultiple)
+    val gatewayConnection: Tree = createTypeTree(TypeOps(types.gatewayConnection).mapArgs(_ => gatewayConnectionTypeArgs), pos)
+    val connection = internal.setType(
+      q"new $gatewayConnection(${peerSignature(remoteType, pos)}, $$loci$$sys)",
+      gatewayConnection.tpe
+    )
+
+    val defaultMultipleGatewayTypeArgs = List(remoteType)
+    val defaultMultipleGateway: Tree = createTypeTree(TypeOps(types.defaultMultipleGateway).mapArgs(_ => defaultMultipleGatewayTypeArgs), pos)
+    internal.setType(
+      q"new $defaultMultipleGateway(${names.root}.loci.`package`.remote[$remoteType])($connection)",
+      defaultMultipleGateway.tpe
+    )
+  }
 }

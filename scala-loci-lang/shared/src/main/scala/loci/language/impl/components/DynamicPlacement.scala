@@ -98,23 +98,6 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
           }
         }
 
-        def createRemoteGateway(ruleFunction: Tree, ruleOutputPeerType: Type): Tree = {
-          //GatewayConnection is replaced in gateway:access, but its typeArgs are reused
-          val gatewayConnectionTypeArgs = List(ruleOutputPeerType, types.transmitterMultiple)
-          val gatewayConnection: Tree = createTypeTree(TypeOps(types.gatewayConnection).mapArgs(_ => gatewayConnectionTypeArgs), ruleFunction.pos)
-          val connection = internal.setType(
-            q"new $gatewayConnection(${peerSignature(ruleOutputPeerType, ruleFunction.pos)}, $$loci$$sys)",
-            gatewayConnection.tpe
-          )
-
-          val defaultMultipleGatewayTypeArgs = List(ruleOutputPeerType)
-          val defaultMultipleGateway: Tree = createTypeTree(TypeOps(types.defaultMultipleGateway).mapArgs(_ => defaultMultipleGatewayTypeArgs), ruleFunction.pos)
-          internal.setType(
-            q"new $defaultMultipleGateway(${names.root}.loci.`package`.remote[$ruleOutputPeerType])($connection)",
-            defaultMultipleGateway.tpe
-          )
-        }
-
         /**
          * A rule argument of type `Seq[Remote[P]] => Remote[P]` is replaced by its application on
          * `remote[P].connected`, which yields return type `Remote[P]`
@@ -124,7 +107,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
          * @param ruleType           the type of the selection rule
          */
         def normalizeRuleFunctionOnRemoteSeq(ruleFunction: Tree, ruleOutputPeerType: Type, ruleType: Type): Tree = {
-          val gateway = createRemoteGateway(ruleFunction, ruleOutputPeerType)
+          val gateway = createMultipleGateway(ruleOutputPeerType, ruleFunction.pos)
           val returnType = ruleType.typeArgs.last
           internal.setType(q"$ruleFunction($gateway.connected)", returnType)
         }
@@ -142,7 +125,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
           ruleOutputPeerType: Type,
           ruleType: Type
         ): Tree = {
-          val gateway = createRemoteGateway(ruleFunction, ruleOutputPeerType)
+          val gateway = createMultipleGateway(ruleOutputPeerType, ruleFunction.pos)
 
           val selfReferenceType = ruleType.typeArgs(1)
           val selfReference = internal.setType(
@@ -573,20 +556,16 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
         if tree.nonEmpty &&
           tree.symbol != null &&
           tree.symbol.owner == symbols.Call &&
-          exprss.nonEmpty &&
-          isRecursiveDynamicSelection(expr) =>
-        true
+          exprss.nonEmpty =>
+        isRecursiveDynamicSelection(expr)
       case _ => false
     }
   }
 
   private def isDynamicallyPlacedRemoteCallWithRecursiveSelectionInsideRemoteAccessor(tree: Tree): Boolean = {
     tree match {
-      case tree @ q"$accessor(...$exprss)"
-        if tree.nonEmpty &&
-          (tree.tpe real_<:< types.remoteAccessor) &&
-          isDynamicallyPlacedRemoteCallWithRecursiveSelection(exprss.head.head) =>
-        true
+      case tree @ q"$accessor(...$exprss)" if tree.nonEmpty && (tree.tpe real_<:< types.remoteAccessor) && exprss.nonEmpty && exprss.head.nonEmpty =>
+        isDynamicallyPlacedRemoteCallWithRecursiveSelection(exprss.head.head)
       case _ => false
     }
   }
