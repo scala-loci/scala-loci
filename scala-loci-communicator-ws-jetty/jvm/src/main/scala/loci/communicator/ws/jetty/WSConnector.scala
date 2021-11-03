@@ -5,7 +5,7 @@ package ws.jetty
 import org.eclipse.jetty.websocket.client.WebSocketClient
 
 import java.net.URI
-import scala.util.Failure
+import scala.util.{Failure, Success}
 
 private class WSConnector[P <: WS : WSProtocolFactory](
   url: String, properties: WS.Properties)
@@ -13,31 +13,22 @@ private class WSConnector[P <: WS : WSProtocolFactory](
 
   protected def connect(connectionEstablished: Connected[P]): Unit = {
     val uri = URI.create(url)
-
-    // Protocol
-
     val tls = uri.getScheme == "wss"
-    val host = Some(uri.getHost)
-    val port = Some(uri.getPort)
 
-    val tryMakeProtocol = implicitly[WSProtocolFactory[P]].make(url, host, port, this, tls, tls, tls, request = None)
+    implicitly[WSProtocolFactory[P]].make(
+        url, Some(uri.getHost), Some(uri.getPort),
+        this, tls, tls, tls, None) match {
+      case Failure(exception) =>
+        connectionEstablished.set(Failure(exception))
 
-    if (tryMakeProtocol.isFailure) {
-      connectionEstablished.set(Failure(tryMakeProtocol.failed.get))
-      return
+      case Success(ws) =>
+        val socket = new Socket(ws, properties)(connectionEstablished.trySet(_), connectionEstablished.trySet(_))
+
+        val client = new WebSocketClient()
+        client.start()
+        client.connect(socket, uri)
+        socket.doClosed.notice foreach { _ => client.stop() }
     }
-
-    val prot = tryMakeProtocol.get
-
-
-    // Socket
-
-    val socket = new Socket[P](prot, properties, connectionEstablished.trySet(_), connectionEstablished.trySet(_))
-
-    val client = new WebSocketClient()
-    client.start()
-    client.connect(socket, uri)
-    socket.doClosed.notice.foreach(_ => client.stop())
   }
 }
 

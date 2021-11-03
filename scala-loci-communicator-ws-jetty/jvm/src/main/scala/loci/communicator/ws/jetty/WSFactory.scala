@@ -7,8 +7,8 @@ import loci.communicator.ConnectionSetupFactory.Implementation
 import scala.concurrent.duration.FiniteDuration
 
 private object WSSetupParser extends
-  ConnectionSetupParser with
-  SimpleConnectionSetupProperties {
+    ConnectionSetupParser with
+    SimpleConnectionSetupProperties {
 
   type Properties = WS.Properties
 
@@ -19,22 +19,20 @@ private object WSSetupParser extends
 }
 
 trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
-  this: WS.type =>
+    this: WS.type =>
 
-  //val schemes = Seq("ws", "wss")
-
-  val schemes = Seq()
+  val schemes = Seq("ws", "wss")
 
   protected def properties(
-                            implicit props: ConnectionSetupFactory.Properties): Properties =
+      implicit props: ConnectionSetupFactory.Properties): Properties =
     WSSetupParser.properties
 
   protected def listener(
-                          url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: Properties) =
     None
 
   protected def connector(
-                           url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: Properties) =
     Some(WS(url, properties))
 }
 
@@ -46,15 +44,15 @@ trait WSSecureSetupFactory extends Implementation[WS.Secure] {
   val schemes = Seq("wss")
 
   protected def properties(
-                            implicit props: ConnectionSetupFactory.Properties): Properties =
+      implicit props: ConnectionSetupFactory.Properties): Properties =
     WSSetupParser.properties
 
   protected def listener(
-                          url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: Properties) =
     None
 
   protected def connector(
-                           url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: Properties) =
     Some(WS.Secure(url, properties))
 }
 

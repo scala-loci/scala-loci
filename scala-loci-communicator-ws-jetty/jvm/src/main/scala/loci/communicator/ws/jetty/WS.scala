@@ -8,15 +8,14 @@ import org.eclipse.jetty.websocket.servlet.ServletUpgradeRequest
 import scala.concurrent.duration._
 
 trait WS extends
-  Protocol with
-  SetupInfo with
-  SecurityInfo with
-  SymmetryInfo with Bidirectional {
+    Protocol with
+    SetupInfo with
+    SecurityInfo with
+    SymmetryInfo with Bidirectional {
   val path: String
-  val request: Option[ServletUpgradeRequest]
-  // TODO: these are unused, can they be removed?
   val host: Option[String]
   val port: Option[Int]
+  val request: Option[ServletUpgradeRequest]
 
   override def toString = s"WS($path, $host, $port)"
 }
@@ -25,8 +24,8 @@ object WS extends WSSetupFactory {
   def unapply(ws: WS) = Some((ws.path, ws.host, ws.port))
 
   case class Properties(
-                         heartbeatDelay: FiniteDuration = 3.seconds,
-                         heartbeatTimeout: FiniteDuration = 10.seconds)
+    heartbeatDelay: FiniteDuration = 3.seconds,
+    heartbeatTimeout: FiniteDuration = 10.seconds)
 
   def apply(context: ServletContextHandler, pathspec: String): Listener[WS] =
     new WSListener[WS](context, pathspec, Properties())

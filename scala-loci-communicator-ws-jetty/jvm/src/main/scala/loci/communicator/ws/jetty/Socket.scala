@@ -5,14 +5,13 @@ package ws.jetty
 import org.eclipse.jetty.websocket.api.{Session, WebSocketAdapter}
 
 import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 
-class Socket[P <: WS: WSProtocolFactory](
-    override val protocol: P,
-    properties: WS.Properties,
-    onError: Try[Connection[P]] => Unit,
-    connectionEstablished: Try[Connection[P]] => Unit
-) extends WebSocketAdapter with Connection[P] {
+private class Socket[P <: WS: WSProtocolFactory](
+  val protocol: P,
+  properties: WS.Properties)(
+  connectionEstablished: Success[Connection[P]] => Unit,
+  connectionFailed: Failure[Connection[P]] => Unit) extends WebSocketAdapter with Connection[P] {
 
   val doClosed  = Notice.Steady[Unit]
   val doReceive = Notice.Stream[MessageBuffer]
@@ -25,9 +24,9 @@ class Socket[P <: WS: WSProtocolFactory](
     }
   })
 
-  private val timeout: Int = properties.heartbeatTimeout.toMillis.toInt
-  private val delay: Long  = properties.heartbeatDelay.toMillis
-  private val heartbeat    = "\uD83D\uDC93"
+  private val timeout = properties.heartbeatTimeout.toMillis
+  private val delay  = properties.heartbeatDelay.toMillis
+  private val heartbeat = "\uD83D\uDC93"
 
   private var heartbeatTask: ScheduledFuture[_] = _
 
@@ -38,12 +37,9 @@ class Socket[P <: WS: WSProtocolFactory](
       timeoutTask.cancel(true)
 
     timeoutTask = executor.schedule(
-      new Runnable {
-        override def run(): Unit = getSession.close()
-      },
+      new Runnable { def run(): Unit = getSession.close() },
       timeout,
-      TimeUnit.MILLISECONDS
-    )
+      TimeUnit.MILLISECONDS)
   }
 
   resetTimeout()
@@ -57,8 +53,7 @@ class Socket[P <: WS: WSProtocolFactory](
       new Runnable { def run(): Unit = getRemote.sendString(heartbeat) },
       delay,
       delay,
-      TimeUnit.MILLISECONDS
-    )
+      TimeUnit.MILLISECONDS)
 
     resetTimeout()
   }
@@ -66,14 +61,19 @@ class Socket[P <: WS: WSProtocolFactory](
   override def onWebSocketBinary(payload: Array[Byte], offset: Int, len: Int): Unit = {
     super.onWebSocketBinary(payload, offset, len)
 
-    doReceive.fire(MessageBuffer.wrapArray(payload.drop(offset)))
+    val data =
+      if (offset == 0 && len == payload.length)
+        payload
+      else
+        payload.slice(offset, len)
+
+    doReceive.fire(MessageBuffer.wrapArray(data))
 
     resetTimeout()
   }
 
   override def onWebSocketText(message: String): Unit = {
     super.onWebSocketText(message)
-    // TODO: strangely enough … text messages are not handled?
     resetTimeout()
   }
 
@@ -82,35 +82,33 @@ class Socket[P <: WS: WSProtocolFactory](
 
     heartbeatTask.cancel(true)
     timeoutTask.cancel(true)
-    doClosed.set()
+
+    doClosed.trySet()
   }
 
   override def onWebSocketError(cause: Throwable): Unit = {
-    loci.logging.warn(s"connection failed ${cause}")
-    cause.printStackTrace()
     super.onWebSocketError(cause)
-
-    onError(Failure(cause))
-    doClosed.set()
-
-    if (getSession != null) getSession.close()
+    connectionFailed(Failure(cause))
+    close()
   }
 
   val closed  = doClosed.notice
   val receive = doReceive.notice
 
-  override def open: Boolean = {
-    getSession != null && getSession.isOpen
+  def open: Boolean = {
+    val session = getSession
+    session != null && session.isOpen
   }
 
-  def send(data: MessageBuffer): Unit = {
-    if (isConnected) {
+  def send(data: MessageBuffer): Unit =
+    if (isConnected)
       getRemote.sendBytes(data.asByteBuffer)
-    }
-  }
 
   def close(): Unit = {
-    if (getSession != null) getSession.close()
-  }
+    val session = getSession
+    if (session != null)
+      session.close()
 
+    doClosed.trySet()
+  }
 }
