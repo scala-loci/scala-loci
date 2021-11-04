@@ -22,7 +22,13 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
   override val phases: Seq[Phase] = Seq(
     Phase(
       "valueref:uuid",
-      introduceUniquePeerIds,
+      introduceUniquePeerId,
+      after = Set("init:inst"),
+      before = Set("*", "values:collect")
+    ),
+    Phase(
+      "valueref:cache",
+      introducePeerValueCache,
       after = Set("init:inst"),
       before = Set("*", "values:collect")
     ),
@@ -52,18 +58,14 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
   import engine.c.universe._
 
   private val uniquePeerIdName = TermName("$loci$peer$unique$id")
-
-  private def getCacheName(valueType: Type): TermName = {
-    val valueTypeName = valueType.typeSymbol.fullName.replace('.', '$')
-    TermName(s"$$loci$$value$$cache$$$valueTypeName")
-  }
+  private val peerValueCacheName = TermName("$loci$peer$value$cache")
 
   /**
    * This phase is executed before "values:collect".
    * It adds a `val $loci$peer$unique$id` as a module value. The value is generated
    * for each instance and should be unique for each instance. It can be used to identify an instance.
    */
-  def introduceUniquePeerIds(records: List[Any]): List[Any] = {
+  def introduceUniquePeerId(records: List[Any]): List[Any] = {
 
     /**
      * Create a `val $loci$peer$unique$id: UUID = UniquePeerId.generate()`
@@ -94,7 +96,45 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
           (mods, parents, self, body :+ uniquePeerId)
         })
 
-        logging.debug(s" Created placed unique peer id")
+        logging.debug(s" Created unique peer id")
+
+        result
+    }
+  }
+
+  /**
+   * This phase is executed before "values:collect".
+   * It adds a `val $loci$peer$value$cache` as a module value. The value is generated
+   * for each instance and can be used to store values of any type given a key of type UUID.
+   */
+  def introducePeerValueCache(records: List[Any]): List[Any] = {
+
+    def createPeerValueCache: ValDef = {
+      val cacheTypeTree: Tree = createTypeTree(types.peerValueCache, NoPosition)
+      val cacheImplType = types.peerValueMapCache
+      val cacheImplTypeTree: Tree = createTypeTree(cacheImplType, NoPosition)
+
+      val symbol = internal.newTermSymbol(module.classSymbol, peerValueCacheName, NoPosition, Flag.SYNTHETIC | Flag.PRIVATE | Flag.LOCAL)
+      internal.setInfo(symbol, types.peerValueCache)
+
+      val newCache = internal.setType(q"new $cacheImplTypeTree", types.peerValueCache)
+
+      val definition: ValDef = q"${Flag.SYNTHETIC} val $peerValueCacheName: $cacheTypeTree = $newCache"
+      internal.setSymbol(definition, symbol)
+      internal.setType(definition, types.peerValueCache)
+
+      definition
+    }
+
+    records process {
+      case Initialized(tree) =>
+        val peerValueCache = createPeerValueCache
+
+        val result = Initialized(ImplDefOps(tree).map { (mods, parents, self, body) =>
+          (mods, parents, self, body :+ peerValueCache)
+        })
+
+        logging.debug(s" Created peer value cache")
 
         result
     }
@@ -104,51 +144,22 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
    * This phase is executed before "values:collect" but after "valueref:uuid".
    * It processes occurrences of the `ValueRefCreator` implicit class and transforms its implicit parameters, which
    * are filled with compile-time dummies. The context parameter is set to null, the peerId is replaced with the
-   * unique peer id value introduced in "valueref:uuid", and the cache is replaced with a new cache `ValDef`.
-   * For each value type there is one cache that is added as a module value.
+   * unique peer id value introduced in "valueref:uuid", and the cache is replaced with the peer value cache
+   * introduced in "valueref:cache".
    */
   def processValueRefCreations(records: List[Any]): List[Any] = {
     var count = 0
 
-    case class SyntheticCacheDefinition(name: TermName, definition: ValDef, valueType: Type)
-
-    val syntheticCacheDefinitions = mutable.ListBuffer.empty[SyntheticCacheDefinition]
-
-    def getOrCreateSyntheticCacheDefintion(valueType: Type): SyntheticCacheDefinition = {
-      syntheticCacheDefinitions.find(_.valueType == valueType).getOrElse {
-        val cacheType = types.peerValueCache mapArgs { _ => List(valueType) }
-        val cacheTypeTree: Tree = createTypeTree(cacheType, NoPosition)
-        val cacheImplType = types.peerValueMapCache mapArgs { _ => List(valueType) }
-        val cacheImplTypeTree: Tree = createTypeTree(cacheImplType, NoPosition)
-
-        val name = getCacheName(valueType)
-
-        val symbol = internal.newTermSymbol(module.classSymbol, name, NoPosition, Flag.SYNTHETIC | Flag.PRIVATE | Flag.LOCAL)
-        internal.setInfo(symbol, cacheType)
-
-        val newCache = internal.setType(q"new $cacheImplTypeTree", cacheType)
-
-        val definition: ValDef = q"${Flag.SYNTHETIC} val $name: $cacheTypeTree = $newCache"
-        internal.setSymbol(definition, symbol)
-        internal.setType(definition, cacheType)
-
-        val cacheDef = SyntheticCacheDefinition(name, definition, valueType)
-        syntheticCacheDefinitions.append(cacheDef)
-        cacheDef
-      }
-    }
-
     def replaceValueRefCreatorArgs(valueRefCreator: Tree): Tree = {
       val q"$creator[..$tpts](...$exprss)" = valueRefCreator: @unchecked
       val List(List(value), List(_, cache, _)) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
-      val valueType = cache.tpe.typeArgs.head
 
       val peerId = Ident(uniquePeerIdName)
-      val generatedCache = Ident(getOrCreateSyntheticCacheDefintion(valueType).name)
+      val peerValueCache = Ident(peerValueCacheName)
       val nullContext = q"null" // nulling the context ensures that it does not fail due to unexpected multitier construct in "values:validate"
 
       val replacedCreator = internal.setType(
-        q"$creator[..$tpts]($value)($peerId, $generatedCache, $nullContext)",
+        q"$creator[..$tpts]($value)($peerId, $peerValueCache, $nullContext)",
         valueRefCreator.tpe
       )
       replacedCreator
@@ -166,12 +177,9 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
     records process {
       case Initialized(tree) =>
         val result = Initialized(ImplDefOps(tree).map { (mods, parents, self, body) =>
-          (mods, parents, self, ValueRefCreatorTransformer.transformTrees(body) ++ syntheticCacheDefinitions.map(_.definition))
+          (mods, parents, self, ValueRefCreatorTransformer.transformTrees(body))
         })
 
-        syntheticCacheDefinitions.foreach {
-          case SyntheticCacheDefinition(name, _, _) => logging.debug(s" Created peer value cache $name")
-        }
         logging.debug(s" Processed $count value reference creations")
 
         result
@@ -257,11 +265,10 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
     /**
      * Uses transmission, placedClean, and canonicalPlacedTypeAlias that are given as implicit parameters in the
      * dummy access ([[loci.valueref.CompileTimeDummyImplicits.dummyCacheValueAccess]]. Returns a function that maps
-     * a value id and a remote to an access of the cache on that particular remote at the particular value id. The
-     * cache to be used is identified by the respective type argument of the dummy access.
+     * a value id and a remote to an access of the peer value cache on that particular remote.
      *
      * The access happens in the form of a remote block with a single capture, namely the value id, which needs to be
-     * passed to the accessed remote, so that it can fetch the respective value from the cache.
+     * passed to the accessed remote, so that it can fetch the respective value from its cache.
      */
     def generateCacheValueAccess(dummyAccess: Tree): Tree = {
       val q"$_[..$tpts]($transmission, $placedClean, $canonicalPlacedTypeAlias)" = dummyAccess: @unchecked
@@ -269,7 +276,7 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
 
       val cacheValueType = tpts.head.tpe
       val cacheValueOptionType = types.option.mapArgs(_ => List(cacheValueType))
-      val cache = Ident(getCacheName(cacheValueType))
+      val cache = Ident(peerValueCacheName)
 
       val valueId: Tree = createTypeTree(valueIdType, dummyAccess.pos)
       val remote: Tree = createTypeTree(remoteType, dummyAccess.pos)
@@ -290,7 +297,7 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
       )
 
       val remoteBlockBody = internal.setType(
-        q"(..$placedContextParam) => $cache.get($valueIdIdent)",
+        q"(..$placedContextParam) => $cache.getAs[$cacheValueType]($valueIdIdent)",
         types.function.mapArgs(_ => List(placedContextTypeTree.tpe, cacheValueOptionType))
       )
 

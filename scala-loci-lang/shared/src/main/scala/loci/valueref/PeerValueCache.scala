@@ -3,15 +3,15 @@ package loci.valueref
 import java.util.UUID
 import scala.collection.mutable
 
-trait PeerValueCache[V] {
-  def get(key: UUID): Option[V]
-  def apply(key: UUID): V
-  def put(key: UUID, value: V): Unit
+trait PeerValueCache {
+  def get(key: UUID): Option[Any]
+  def getAs[V](key: UUID): Option[V] = get(key).map(_.asInstanceOf[V])
+  def apply(key: UUID): Any = get(key).get
+  def put(key: UUID, value: Any): Unit
 }
 
-class PeerValueMapCache[V] extends PeerValueCache[V] {
-  private val map = mutable.Map.empty[UUID, V]
-  override def get(key: UUID): Option[V] = map.get(key)
-  override def apply(key: UUID): V = map.apply(key)
-  override def put(key: UUID, value: V): Unit = map.put(key, value)
+class PeerValueMapCache extends PeerValueCache {
+  private val map = mutable.Map.empty[UUID, Any]
+  override def get(key: UUID): Option[Any] = map.get(key)
+  override def put(key: UUID, value: Any): Unit = map.put(key, value)
 }

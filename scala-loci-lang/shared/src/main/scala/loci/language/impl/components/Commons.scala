@@ -150,8 +150,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val uniquePeerId = typeOf[UUID]
     val valueRefCreator = typeOf[valueref.ValueRefCreator[_, _]]
     val valueRefAccessor = typeOf[valueref.ValueRefAccessor[_, _, _]]
-    val peerValueCache = typeOf[PeerValueCache[_]]
-    val peerValueMapCache = typeOf[PeerValueMapCache[_]]
+    val peerValueCache = typeOf[PeerValueCache]
+    val peerValueMapCache = typeOf[PeerValueMapCache]
   }
 
   object trees {

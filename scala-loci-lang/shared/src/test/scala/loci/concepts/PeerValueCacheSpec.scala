@@ -23,8 +23,8 @@ class PeerValueCacheSpec extends AnyFlatSpec with Matchers with NoLogging {
       node.instance.current.foreach { inst =>
         val ref = inst retrieve PeerValueCacheModule.f(x)
         ref.peerId shouldEqual inst.retrieveUniquePeerId()
-        val cache = inst.retrievePeerValueCache[Int]()
-        cache.get(ref.valueId) shouldEqual Some(x)
+        val cache = inst.retrievePeerValueCache()
+        cache(ref.valueId) shouldEqual x
       }
     }
   }

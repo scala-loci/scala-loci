@@ -8,7 +8,7 @@ trait ValueRefCreators {
 
   implicit class ValueRefCreator[V, P](value: V)(
     implicit val peerId: UUID,
-    implicit val cache: PeerValueCache[V],
+    implicit val cache: PeerValueCache,
     implicit val context: Context[P]
   ) {
     def asValueRef: V via P = {

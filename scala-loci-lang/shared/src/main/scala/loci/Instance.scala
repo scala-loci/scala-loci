@@ -43,8 +43,8 @@ object Instance {
     def retrieveUniquePeerId(): UUID =
       macro language.impl.Instance.retrieveUniquePeerId
 
-    def retrievePeerValueCache[V](): PeerValueCache[V] =
-      macro language.impl.Instance.retrievePeerValueCache[V]
+    def retrievePeerValueCache(): PeerValueCache =
+      macro language.impl.Instance.retrievePeerValueCache
 
     def terminate(): Unit = instance match {
       case instance: runtime.Instance[P] => instance.terminate()

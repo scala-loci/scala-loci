@@ -238,12 +238,11 @@ class Instance(val c: blackbox.Context) {
     }
   }
 
-  def retrievePeerValueCache[V: WeakTypeTag](): Tree = {
+  def retrievePeerValueCache(): Tree = {
     c.macroApplication match {
       case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
-      case q"$_[..$_]($instance).$_[$_]()" =>
-        val valueTypeName = weakTypeOf[V].typeSymbol.fullName.replace('.', '$')
-        val cacheName = TermName(s"$$loci$$value$$cache$$$valueTypeName")
+      case q"$_[..$_]($instance).$_()" =>
+        val cacheName = TermName("$loci$peer$value$cache")
         retrieveByName(cacheName, instance)
       case _ => c.abort(c.enclosingPosition, s"Access to peer value cache failed")
     }

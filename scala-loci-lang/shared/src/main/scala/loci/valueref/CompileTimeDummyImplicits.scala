@@ -21,7 +21,7 @@ trait CompileTimeDummyImplicits {
   implicit def dummyPeerId: UUID = erased
 
   @compileTimeOnly("dummyCache can only be invoked in multitier code and should be replaced at compile time")
-  implicit def dummyCache[V]: PeerValueCache[V] = erased
+  implicit def dummyCache: PeerValueCache = erased
 
   @compileTimeOnly("dummyGateway can only be invoked in multitier code and should be replaced at compile time")
   implicit def dummyGateway[R]: loci.language.Gateway.DefaultMultipleGateway[R] = erased
