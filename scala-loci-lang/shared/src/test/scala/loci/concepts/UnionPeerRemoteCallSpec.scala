@@ -2,11 +2,10 @@ package loci
 package concepts
 
 import loci.communicator.NetworkListener
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import transmitter.Serializables._
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 @multitier object UnionPeerRemoteCallModule {
@@ -17,10 +16,8 @@ import scala.concurrent.Future
   def remoteF(): Future[Int] on A = on[A] { implicit! => remote[A | B].call(f()).asLocal }
 }
 
-class UnionPeerRemoteCallSpec extends AnyFlatSpec with Matchers with NoLogging {
+class UnionPeerRemoteCallSpec extends AsyncFlatSpec with Matchers with NoLogging {
   behavior of "Remote call on union peer"
-
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   it should "execute the remote call on the correct peer" in {
     val listener = new NetworkListener
@@ -37,7 +34,7 @@ class UnionPeerRemoteCallSpec extends AnyFlatSpec with Matchers with NoLogging {
     a.instance.current map { _ retrieve UnionPeerRemoteCallModule.f() shouldEqual 1 }
     b.instance.current map { _ retrieve UnionPeerRemoteCallModule.f() shouldEqual 2 }
 
-    a.instance.current map { _ retrieve UnionPeerRemoteCallModule.remoteF() map { _ shouldEqual 2 }}
+    a.instance.current.map { _ retrieve[Future[Int]] UnionPeerRemoteCallModule.remoteF() map { _ shouldEqual 2 }}.get
   }
 
 }

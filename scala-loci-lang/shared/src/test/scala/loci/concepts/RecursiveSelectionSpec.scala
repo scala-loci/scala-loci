@@ -2,11 +2,11 @@ package loci
 package concepts
 
 import loci.communicator.NetworkListener
-import org.scalatest.flatspec.AnyFlatSpec
+import loci.transmitter.RemoteAccessException
+import org.scalatest.flatspec.AsyncFlatSpec
 import org.scalatest.matchers.should.Matchers
 import transmitter.Serializables._
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 
@@ -78,10 +78,8 @@ import scala.concurrent.Future
   }
 }
 
-class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
+class RecursiveSelectionSpec extends AsyncFlatSpec with Matchers with NoLogging {
   behavior of "Recursive selection of executing peer of a remote call"
-
-  implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   it should "execute the call locally when SelfReference is selected and otherwise pass execution to the next peer" in {
     val listenerAB = new NetworkListener
@@ -105,9 +103,9 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) map { _ shouldEqual "A: 1" }}
-    nodeB.instance.current map { _ retrieve RecursiveSelectionModule.run(2) map { _ shouldEqual "B: 2" }}
-    nodeC.instance.current map { _ retrieve RecursiveSelectionModule.run(3) map { _ shouldEqual "C: 3" }}
+    val a1 = nodeA.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionModule.run(1) map { _ -> "A: 1" }}.get
+    val b2 = nodeB.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionModule.run(2) map { _ -> "B: 2" }}.get
+    val c3 = nodeC.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionModule.run(3) map { _ -> "C: 3" }}.get
 
     nodeA.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
 
@@ -115,7 +113,7 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) map { _ shouldEqual "B: 1" }}
+    val b1 = nodeA.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionModule.run(1) map { _ -> "B: 1" }}.get
 
     nodeB.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
 
@@ -123,15 +121,43 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe true }
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionModule.run(1) map { _ shouldEqual "C: 1" }}
+    val c1 = nodeA.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionModule.run(1) map { _ -> "C: 1" }}.get
 
+    Future.sequence(Seq(a1, b2, c3, b1, c1)).map(_.unzip).map {
+      case (actual, expected) => actual shouldEqual expected
+    }
+
+  }
+
+  it should "throw an exception when all peers don't execute locally" in {
+    val listenerAB = new NetworkListener
+    val listenerBC = new NetworkListener
+
+    val nodeA = multitier start new Instance[RecursiveSelectionModule.A](
+      contexts.Immediate.global,
+      listen[RecursiveSelectionModule.B](listenerAB)
+    )
+    val nodeB = multitier start new Instance[RecursiveSelectionModule.B](
+      contexts.Immediate.global,
+      connect[RecursiveSelectionModule.A](listenerAB.createConnector()) and
+        listen[RecursiveSelectionModule.C](listenerBC)
+    )
+    val nodeC = multitier start new Instance[RecursiveSelectionModule.C](
+      contexts.Immediate.global,
+      connect[RecursiveSelectionModule.B](listenerBC.createConnector())
+    )
+
+    nodeA.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
+    nodeB.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
     nodeC.instance.current foreach { _ retrieve (RecursiveSelectionModule.executeLocally = false) }
 
     nodeA.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
     nodeB.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
     nodeC.instance.current map { _ retrieve RecursiveSelectionModule.executeLocally shouldBe false }
 
-    nodeA.instance.current foreach { _ retrieve RecursiveSelectionModule.run(1) map { result => a[RuntimeException] shouldBe thrownBy(result) } }
+    nodeA.instance.current.map {
+      _.retrieve[Future[String]](RecursiveSelectionModule.run(1)).failed.map { _ shouldBe a[RemoteAccessException] }
+    }.get
   }
 
   it should "use the value passed to the selection rule in its recursive executions correctly" in {
@@ -152,14 +178,16 @@ class RecursiveSelectionSpec extends AnyFlatSpec with Matchers with NoLogging {
       connect[RecursiveSelectionWithLocalValuesModule.B](listenerBC.createConnector())
     )
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") map { _ shouldEqual "A" }}
-    nodeB.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") map { _ shouldEqual "B" }}
-    nodeC.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") map { _ shouldEqual "C" }}
+    val aa = nodeA.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionWithLocalValuesModule.run("A") map { _ -> "A" }}.get
+    val bb = nodeB.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionWithLocalValuesModule.run("B") map { _ -> "B" }}.get
+    val cc = nodeC.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionWithLocalValuesModule.run("C") map { _ -> "C" }}.get
 
-    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("B") map { _ shouldEqual "B" }}
-    nodeA.instance.current map { _ retrieve RecursiveSelectionWithLocalValuesModule.run("C") map { _ shouldEqual "C" }}
+    val ab = nodeA.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionWithLocalValuesModule.run("B") map { _ -> "B" }}.get
+    val ac = nodeA.instance.current.map { _ retrieve[Future[String]] RecursiveSelectionWithLocalValuesModule.run("C") map { _ -> "C" }}.get
 
-    nodeB.instance.current foreach { _ retrieve RecursiveSelectionWithLocalValuesModule.run("A") map { result => a[RuntimeException] shouldBe thrownBy(result) } }
+    Future.sequence(Seq(aa, bb, cc, ab, ac)).map(_.unzip).map {
+      case (actual, expected) => actual shouldEqual expected
+    }
   }
 
 }
