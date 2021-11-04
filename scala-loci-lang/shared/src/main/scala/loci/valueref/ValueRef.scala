@@ -7,7 +7,10 @@ import loci.transmitter.Serializable
 import java.util.UUID
 import scala.util.Try
 
-case class ValueRef[V, P](peerId: UUID, valueId: UUID)
+case class ValueRef[+V, P](
+  peerId: UUID,
+  valueId: UUID
+)
 
 object ValueRef {
   implicit def transmittable[V, P]: IdenticallyTransmittable[ValueRef[V, P]] = IdenticallyTransmittable()
