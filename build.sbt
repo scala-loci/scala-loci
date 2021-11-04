@@ -259,8 +259,9 @@ lazy val lociLangTransmitterRescalaJS = lociLangTransmitterRescala.js
 lazy val lociCommunicatorTcp = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-tcp")
-  settings (normalizedName := "scala-loci-communicator-tcp")
-  dependsOn lociCommunication)
+  settings (normalizedName := "scala-loci-communicator-tcp",
+            scalatest)
+  dependsOn lociCommunication % "compile->compile;test->test")
 
 lazy val lociCommunicatorTcpJVM = lociCommunicatorTcp.jvm
 lazy val lociCommunicatorTcpJS = lociCommunicatorTcp.js
@@ -270,8 +271,8 @@ lazy val lociCommunicatorWs = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-ws-akka")
   settings (normalizedName := "scala-loci-communicator-ws-akka",
-            akkaHttp, scalajsDom)
-  dependsOn lociCommunication)
+            akkaHttp, scalajsDom, scalatest)
+  dependsOn lociCommunication % "compile->compile;test->test")
 
 lazy val lociCommunicatorWsJVM = lociCommunicatorWs.jvm
 lazy val lociCommunicatorWsJS = lociCommunicatorWs.js

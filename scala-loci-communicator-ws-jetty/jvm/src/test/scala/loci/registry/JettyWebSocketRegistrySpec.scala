@@ -11,9 +11,9 @@ import org.scalatest.matchers.must.Matchers
 class JettyWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Jetty WebSocket Registry"
 
-  def run(test: RegistryTests.Test) = {
-    val port = 45849
+  val port = 45849
 
+  def run(test: RegistryTests.Test) = {
     val server = new Server()
 
     val connector = new ServerConnector(server)
