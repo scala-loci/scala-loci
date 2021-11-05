@@ -10,7 +10,7 @@ import org.eclipse.jetty.websocket.servlet.{ServletUpgradeRequest, ServletUpgrad
 import javax.servlet.ServletContext
 import scala.util.{Failure, Success, Try}
 
-class WSListener[P <: WS: WSProtocolFactory](
+private class WSListener[P <: WS: WSProtocolFactory](
     context: ServletContextHandler,
     pathspec: String,
     properties: WS.Properties) extends Listener[P] {

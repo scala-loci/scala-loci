@@ -128,28 +128,30 @@ lazy val loci = (project
 lazy val lociJVM = (project
   in file(".jvm")
   settings ((publish / skip) := true)
-  aggregate (lociLangJVM, lociArchitecturesBasicJVM,
+  aggregate (lociLangJVM, lociCommunicationJVM, lociArchitecturesBasicJVM,
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
              lociSerializerJsoniterScalaJVM,
              lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
-             lociCommunicatorTcpJVM, lociCommunicatorWsJVM,
-             lociCommunicatorWsPlayJVM, lociCommunicatorWebRtcJVM,
-             lociCommunicationJVM, lociCommunicatorWsJavalinJVM,
-             lociCommunicatorWsJettyJVM))
+             lociCommunicatorTcpJVM,
+             lociCommunicatorWsWebNativeJVM,
+             lociCommunicatorWsAkkaJVM, lociCommunicatorWsAkkaPlayJVM,
+             lociCommunicatorWsJavalinJVM, lociCommunicatorWsJettyJVM,
+             lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = (project
   in file(".js")
   settings ((publish / skip) := true)
-  aggregate (lociLangJS, lociArchitecturesBasicJS,
+  aggregate (lociLangJS, lociCommunicationJS, lociArchitecturesBasicJS,
              lociSerializerUpickleJS,
              lociSerializerCirceJS,
              lociSerializerJsoniterScalaJS,
              lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
-             lociCommunicatorTcpJS, lociCommunicatorWsJS,
-             lociCommunicatorWsPlayJS, lociCommunicatorWebRtcJS,
-             lociCommunicationJS, lociCommunicatorWsJavalinJS,
-             lociCommunicatorWsJettyJS))
+             lociCommunicatorTcpJS,
+             lociCommunicatorWsWebNativeJS,
+             lociCommunicatorWsAkkaJS, lociCommunicatorWsAkkaPlayJS,
+             lociCommunicatorWsJavalinJS, lociCommunicatorWsJettyJS,
+             lociCommunicatorWebRtcJS))
 
 
 lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
@@ -267,15 +269,48 @@ lazy val lociCommunicatorTcpJVM = lociCommunicatorTcp.jvm
 lazy val lociCommunicatorTcpJS = lociCommunicatorTcp.js
 
 
-lazy val lociCommunicatorWs = (crossProject(JSPlatform, JVMPlatform)
+lazy val lociCommunicatorWsWebNative = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Dummy
+  in file("scala-loci-communicator-ws-webnative")
+  settings (normalizedName := "scala-loci-communicator-ws-webnative",
+            akkaHttp, scalajsDom, scalatest)
+  dependsOn lociCommunication)
+
+lazy val lociCommunicatorWsWebNativeJVM = lociCommunicatorWsWebNative.jvm
+lazy val lociCommunicatorWsWebNativeJS = lociCommunicatorWsWebNative.js
+
+
+lazy val lociCommunicatorWsAkka = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
   in file("scala-loci-communicator-ws-akka")
   settings (normalizedName := "scala-loci-communicator-ws-akka",
             akkaHttp, scalajsDom, scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")
 
-lazy val lociCommunicatorWsJVM = lociCommunicatorWs.jvm
-lazy val lociCommunicatorWsJS = lociCommunicatorWs.js
+lazy val lociCommunicatorWsAkkaJVM = lociCommunicatorWsAkka.jvm
+lazy val lociCommunicatorWsAkkaJS = lociCommunicatorWsAkka.js
+
+
+lazy val lociCommunicatorWsAkkaPlay = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Dummy
+  in file("scala-loci-communicator-ws-akka-play")
+  settings (normalizedName := "scala-loci-communicator-ws-akka-play",
+            play)
+  dependsOn lociCommunicatorWsAkka)
+
+lazy val lociCommunicatorWsAkkaPlayJVM = lociCommunicatorWsAkkaPlay.jvm
+lazy val lociCommunicatorWsAkkaPlayJS = lociCommunicatorWsAkkaPlay.js
+
+
+lazy val lociCommunicatorWsJetty = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Dummy
+  in file("scala-loci-communicator-ws-jetty")
+  settings (normalizedName := "scala-loci-communicator-ws-jetty",
+            jetty, scalatest)
+  dependsOn lociCommunication % "compile->compile;test->test")
+
+lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
+lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
 
 
 lazy val lociCommunicatorWsJavalin = (crossProject(JSPlatform, JVMPlatform)
@@ -290,17 +325,6 @@ lazy val lociCommunicatorWsJavalinJVM = lociCommunicatorWsJavalin.jvm
 lazy val lociCommunicatorWsJavalinJS = lociCommunicatorWsJavalin.js
 
 
-lazy val lociCommunicatorWsPlay = (crossProject(JSPlatform, JVMPlatform)
-  crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-akka-play")
-  settings (normalizedName := "scala-loci-communicator-ws-akka-play",
-            play)
-  dependsOn lociCommunicatorWs)
-
-lazy val lociCommunicatorWsPlayJVM = lociCommunicatorWsPlay.jvm
-lazy val lociCommunicatorWsPlayJS = lociCommunicatorWsPlay.js
-
-
 lazy val lociCommunicatorWebRtc = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("scala-loci-communicator-webrtc")
@@ -310,14 +334,4 @@ lazy val lociCommunicatorWebRtc = (crossProject(JSPlatform, JVMPlatform)
 
 lazy val lociCommunicatorWebRtcJVM = lociCommunicatorWebRtc.jvm
 lazy val lociCommunicatorWebRtcJS = lociCommunicatorWebRtc.js
-
-lazy val lociCommunicatorWsJetty = (crossProject(JSPlatform, JVMPlatform)
-  crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-jetty")
-  settings (normalizedName := "scala-loci-communicator-ws-jetty",
-            jetty, scalatest)
-  dependsOn lociCommunication % "compile->compile;test->test")
-
-lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
-lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
 

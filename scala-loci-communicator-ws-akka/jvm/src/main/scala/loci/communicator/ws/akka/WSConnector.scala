@@ -70,7 +70,7 @@ private object WSConnector {
               uri.toString,
               Some(uri.authority.host.address), Some(uri.effectivePort),
               WSConnector.this, isAuthenticated, isEncrypted, isProtected,
-              Some(Right(response)), Left(certificates))  match {
+              Some(Right(response)), Left(certificates)) match {
             case Failure(exception) =>
               connected(Failure(exception))
 

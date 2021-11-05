@@ -1,10 +1,12 @@
 package loci
 package communicator
-package ws.akka
+package ws.jetty
+
+import loci.communicator.ConnectionSetupFactory.Implementation
 
 import scala.annotation.compileTimeOnly
 
-@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
+@compileTimeOnly("Jetty WebSocket communicator only available on the JVM")
 trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
     this: WS.type =>
 
@@ -23,9 +25,9 @@ trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
     None
 }
 
-@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
-trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secure] {
-    this: WS.Secure.type =>
+@compileTimeOnly("Jetty WebSocket communicator only available on the JVM")
+trait WSSecureSetupFactory extends Implementation[WS.Secure] {
+  this: WS.Secure.type =>
 
   type Properties = WS.Properties
 
@@ -43,3 +45,4 @@ trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secu
       url: String, scheme: String, location: String, properties: Properties) =
     None
 }
+

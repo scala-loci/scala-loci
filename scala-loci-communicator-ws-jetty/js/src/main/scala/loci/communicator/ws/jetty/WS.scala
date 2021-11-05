@@ -5,6 +5,7 @@ package ws.jetty
 import org.eclipse.jetty.servlet.ServletContextHandler
 import org.eclipse.jetty.websocket.servlet.ServletUpgradeRequest
 
+import scala.annotation.compileTimeOnly
 import scala.concurrent.duration._
 
 trait WS extends
@@ -20,6 +21,7 @@ trait WS extends
   override def toString = s"WS($path, $host, $port)"
 }
 
+@compileTimeOnly("Jetty WebSocket communicator only available on the JVM")
 object WS extends WSSetupFactory {
   def unapply(ws: WS) = Some((ws.path, ws.host, ws.port))
 
@@ -27,15 +29,14 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
-  def apply(context: ServletContextHandler, pathspec: String): Listener[WS] =
-    new WSListener[WS](context, pathspec, Properties())
-  def apply(context: ServletContextHandler, pathspec: String, properties: Properties): Listener[WS] =
-    new WSListener[WS](context, pathspec, properties)
+  private def ??? =
+    sys.error("Jetty WebSocket communicator only available on the JVM")
 
-  def apply(url: String): Connector[WS] =
-    new WSConnector[WS](url, Properties())
-  def apply(url: String, properties: Properties): Connector[WS] =
-    new WSConnector[WS](url, properties)
+  def apply(context: ServletContextHandler, pathspec: String): Listener[WS] = ???
+  def apply(context: ServletContextHandler, pathspec: String, properties: Properties): Listener[WS] = ???
+
+  def apply(url: String): Connector[WS] = ???
+  def apply(url: String, properties: Properties): Connector[WS] = ???
 
   trait Secure extends WS with communicator.Secure {
     override def toString = s"WS.Secure($path, $host, $port)"
@@ -44,9 +45,7 @@ object WS extends WSSetupFactory {
   object Secure {
     def unapply(ws: Secure) = Some((ws.path, ws.host, ws.port))
 
-    def apply(url: String): Connector[WS.Secure] =
-      new WSConnector[WS.Secure](url, Properties())
-    def apply(url: String, properties: Properties): Connector[WS.Secure] =
-      new WSConnector[WS.Secure](url, properties)
+    def apply(url: String): Connector[WS.Secure] = ???
+    def apply(url: String, properties: Properties): Connector[WS.Secure] = ???
   }
 }

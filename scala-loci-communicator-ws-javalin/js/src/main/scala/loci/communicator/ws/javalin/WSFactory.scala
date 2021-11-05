@@ -2,48 +2,19 @@ package loci
 package communicator
 package ws.javalin
 
-import scala.concurrent.duration.FiniteDuration
+import scala.annotation.compileTimeOnly
 
-private object WSSetupParser extends
-    ConnectionSetupParser with
-    SimpleConnectionSetupProperties {
-
-  type Properties = WS.Properties
-
-  def properties(implicit props: ConnectionSetupFactory.Properties) =
-    WS.Properties()
-      .set[FiniteDuration]("heartbeat-delay") { v => _.copy(heartbeatDelay = v) }
-      .set[FiniteDuration]("heartbeat-timeout") { v => _.copy(heartbeatTimeout = v) }
-}
-
-trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
+@compileTimeOnly("Javalin WebSocket communicator only available on the JVM")
+trait WSSetupFactory extends
+  ConnectionSetupFactory.Implementation[WS] with
+  ConnectionSetupParser with
+  SimpleConnectionSetupProperties {
     this: WS.type =>
 
-  val schemes = Seq("ws", "wss")
+  val schemes = Seq.empty[String]
 
-  protected def properties(
-      implicit props: ConnectionSetupFactory.Properties): Properties =
-    WSSetupParser.properties
-
-  protected def listener(
-      url: String, scheme: String, location: String, properties: Properties) =
-    None
-
-  protected def connector(
-      url: String, scheme: String, location: String, properties: Properties) =
-    Some(WS(url, properties))
-}
-
-trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secure] {
-    this: WS.Secure.type =>
-
-  type Properties = WS.Properties
-
-  val schemes = Seq("wss")
-
-  protected def properties(
-      implicit props: ConnectionSetupFactory.Properties): Properties =
-    WSSetupParser.properties
+  protected def properties(implicit props: ConnectionSetupFactory.Properties) =
+    Properties()
 
   protected def listener(
       url: String, scheme: String, location: String, properties: Properties) =
@@ -51,5 +22,5 @@ trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secu
 
   protected def connector(
       url: String, scheme: String, location: String, properties: Properties) =
-    Some(WS.Secure(url, properties))
+    None
 }

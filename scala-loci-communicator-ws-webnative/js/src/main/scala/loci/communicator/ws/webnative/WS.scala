@@ -1,9 +1,6 @@
 package loci
 package communicator
-package ws.jetty
-
-import org.eclipse.jetty.servlet.ServletContextHandler
-import org.eclipse.jetty.websocket.servlet.ServletUpgradeRequest
+package ws.webnative
 
 import scala.concurrent.duration._
 
@@ -12,25 +9,19 @@ trait WS extends
     SetupInfo with
     SecurityInfo with
     SymmetryInfo with Bidirectional {
-  val path: String
+  val url: String
   val host: Option[String]
   val port: Option[Int]
-  val request: Option[ServletUpgradeRequest]
 
-  override def toString = s"WS($path, $host, $port)"
+  override def toString = s"WS($url, $host, $port)"
 }
 
 object WS extends WSSetupFactory {
-  def unapply(ws: WS) = Some((ws.path, ws.host, ws.port))
+  def unapply(ws: WS) = Some((ws.url, ws.host, ws.port))
 
   case class Properties(
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
-
-  def apply(context: ServletContextHandler, pathspec: String): Listener[WS] =
-    new WSListener[WS](context, pathspec, Properties())
-  def apply(context: ServletContextHandler, pathspec: String, properties: Properties): Listener[WS] =
-    new WSListener[WS](context, pathspec, properties)
 
   def apply(url: String): Connector[WS] =
     new WSConnector[WS](url, Properties())
@@ -38,11 +29,11 @@ object WS extends WSSetupFactory {
     new WSConnector[WS](url, properties)
 
   trait Secure extends WS with communicator.Secure {
-    override def toString = s"WS.Secure($path, $host, $port)"
+    override def toString = s"WS.Secure($url, $host, $port)"
   }
 
   object Secure {
-    def unapply(ws: Secure) = Some((ws.path, ws.host, ws.port))
+    def unapply(ws: Secure) = Some((ws.url, ws.host, ws.port))
 
     def apply(url: String): Connector[WS.Secure] =
       new WSConnector[WS.Secure](url, Properties())

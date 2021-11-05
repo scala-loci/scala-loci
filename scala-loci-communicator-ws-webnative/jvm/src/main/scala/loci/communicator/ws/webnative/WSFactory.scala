@@ -1,10 +1,10 @@
 package loci
 package communicator
-package ws.akka
+package ws.webnative
 
 import scala.annotation.compileTimeOnly
 
-@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
+@compileTimeOnly("Web native WebSocket communicator only available in JS")
 trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
     this: WS.type =>
 
@@ -23,13 +23,13 @@ trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
     None
 }
 
-@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
+@compileTimeOnly("Web native WebSocket communicator only available in JS")
 trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secure] {
     this: WS.Secure.type =>
 
   type Properties = WS.Properties
 
-  val schemes = Seq.empty[String]
+  val schemes = Seq("wss")
 
   protected def properties(
       implicit props: ConnectionSetupFactory.Properties): Properties =

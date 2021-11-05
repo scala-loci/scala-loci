@@ -2,6 +2,7 @@ package loci
 package communicator
 package ws.javalin
 
+import scala.annotation.compileTimeOnly
 import scala.concurrent.duration._
 
 trait WS extends
@@ -12,10 +13,12 @@ trait WS extends
   val path: String
   val host: Option[String]
   val port: Option[Int]
+  val context: AnyRef
 
   override def toString = s"WS($path, $host, $port)"
 }
 
+@compileTimeOnly("Javalin WebSocket communicator only available on the JVM")
 object WS extends WSSetupFactory {
   def unapply(ws: WS) = Some((ws.path, ws.host, ws.port))
 
@@ -23,26 +26,9 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
-  private def ??? = sys.error("WebSocket communicator method only available on the JVM")
+  private def ??? =
+    sys.error("Javalin WebSocket communicator only available on the JVM")
 
   def apply(javalin: AnyRef, path: String): Listener[WS] = ???
   def apply(javalin: AnyRef, path: String, properties: Properties): Listener[WS] = ???
-
-  def apply(url: String): Connector[WS] =
-    new WSConnector[WS](url, Properties())
-  def apply(url: String, properties: Properties): Connector[WS] =
-    new WSConnector[WS](url, properties)
-
-  trait Secure extends WS with communicator.Secure {
-    override def toString = s"WS.Secure($path, $host, $port)"
-  }
-
-  object Secure {
-    def unapply(ws: Secure) = Some((ws.path, ws.host, ws.port))
-
-    def apply(url: String): Connector[WS.Secure] =
-      new WSConnector[WS.Secure](url, Properties())
-    def apply(url: String, properties: Properties): Connector[WS.Secure] =
-      new WSConnector[WS.Secure](url, properties)
-  }
 }

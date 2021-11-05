@@ -1,6 +1,6 @@
 package loci
 package communicator
-package ws.javalin
+package ws.webnative
 
 import org.scalajs.dom
 

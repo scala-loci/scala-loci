@@ -9,6 +9,7 @@ import akka.http.scaladsl.model.ws.WebSocketRequest
 import akka.http.scaladsl.server.Route
 import akka.stream.Materializer
 
+import scala.annotation.compileTimeOnly
 import scala.concurrent.duration._
 
 trait WS extends
@@ -23,6 +24,7 @@ trait WS extends
   override def toString = s"WS($url, $host, $port)"
 }
 
+@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
 object WS extends WSSetupFactory {
   def unapply(ws: WS) = Some((ws.url, ws.host, ws.port))
 
@@ -31,7 +33,7 @@ object WS extends WSSetupFactory {
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
   private[akka] def ??? =
-    sys.error("WebSocket communicator method only available on the JVM")
+    sys.error("Akka WebSocket communicator only available on the JVM")
 
   def apply(
     http: HttpExt, port: Int)(implicit
@@ -85,10 +87,8 @@ object WS extends WSSetupFactory {
     properties: Properties): Connector[WS] = ???
   def apply(url: Uri, properties: Properties): Connector[WS] = ???
 
-  def apply(url: String): Connector[WS] =
-    new WSConnector[WS](url, Properties())
-  def apply(url: String, properties: Properties): Connector[WS] =
-    new WSConnector[WS](url, properties)
+  def apply(url: String): Connector[WS] = ???
+  def apply(url: String, properties: Properties): Connector[WS] = ???
 
   trait Secure extends WS with communicator.Secure {
     override def toString = s"WS.Secure($url, $host, $port)"
@@ -149,13 +149,12 @@ object WS extends WSSetupFactory {
       properties: Properties): Connector[WS.Secure] = ???
     def apply(url: Uri, properties: Properties): Connector[WS.Secure] = ???
 
-    def apply(url: String): Connector[WS.Secure] =
-      new WSConnector[WS.Secure](url, Properties())
-    def apply(url: String, properties: Properties): Connector[WS.Secure] =
-      new WSConnector[WS.Secure](url, properties)
+    def apply(url: String): Connector[WS.Secure] = ???
+    def apply(url: String, properties: Properties): Connector[WS.Secure] = ???
   }
 }
 
+@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
 object WebSocketListener {
   def apply(): Listener[WS] with WebSocketRoute = WS.???
   def apply(properties: WS.Properties): Listener[WS] with WebSocketRoute = WS.???
@@ -166,6 +165,7 @@ object WebSocketListener {
   }
 }
 
+@compileTimeOnly("Akka WebSocket communicator only available on the JVM")
 trait WebSocketRoute extends Route {
   def apply(authenticatedName: String): Route
   def apply(authenticatedName: Option[String]): Route
