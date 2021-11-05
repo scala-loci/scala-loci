@@ -92,19 +92,21 @@ private object WSListener {
     }
   }
 
-  protected sealed abstract class BoundRoute[P <: WS: WSProtocolFactory](
+  sealed abstract class BoundRoute[P <: WS: WSProtocolFactory](
       properties: WS.Properties) extends Listener[P] {
-    private var running: Future[Http.ServerBinding] = _
+    private var running = Option.empty[Future[Http.ServerBinding]]
     private val connected = new ConcurrentLinkedQueue[Connected[P]]
+
+    def binding = running
 
     protected def bindRoute(
         http: HttpExt, port: Int, interface: String)(
         connectionEstablished: Try[Connection[P]] => Unit)(implicit
         actorRefFactory: ActorSystem,
         materializer: Materializer) =
-      running = http.bindAndHandle(
+      running = Some(http.bindAndHandle(
         webSocketRoute(this, None, properties)(connectionEstablished),
-        interface, port)
+        interface, port))
 
     protected def connectionEstablished(connection: Try[Connection[P]]) = {
       val iterator = connected.iterator
@@ -125,8 +127,8 @@ private object WSListener {
 
             if (connected.isEmpty) {
               stopping()
-              running foreach { _.unbind() }
-              running = null
+              running foreach { _ foreach { _.unbind() } }
+              running = None
             }
           }
         })

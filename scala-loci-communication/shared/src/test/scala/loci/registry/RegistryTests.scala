@@ -80,12 +80,12 @@ object RegistryTests extends Matchers {
       val methodBinding = registry.Binding[() => String]("method")
 
       def value(remote: transmitter.RemoteRef) = {
-        events += "value called"
+        events.synchronized { events += "value called" }
         "value result"
       }
 
       def method(remote: transmitter.RemoteRef) = {
-        events += "method called"
+        events.synchronized { events += "method called" }
         "method result"
       }
 
@@ -107,10 +107,10 @@ object RegistryTests extends Matchers {
       val result0 = registry1.lookup(valueBinding, remote)
       val result1 = registry1.lookup(methodBinding, remote)
 
-      val result0a = result0 map { events += _ }
-      val result0b = result0 map { events += _ }
-      val result1a = result1() map { events += _ }
-      val result1b = result1() map { events += _ }
+      val result0a = result0 map { result => events.synchronized { events += result } }
+      val result0b = result0 map { result => events.synchronized { events += result } }
+      val result1a = result1() map { result => events.synchronized { events += result } }
+      val result1b = result1() map { result => events.synchronized { events += result } }
 
       Await.ready(Future.sequence(Seq(result0a, result0b, result1a, result1b)), 1.minute)
 
