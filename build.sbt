@@ -183,7 +183,7 @@ lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
             SourceGenerator.functionSubjectiveBinding,
-            macrodeclaration, scribe, scalatest))
+            macroparadise, macrodeclaration, scribe, scalatest))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js
