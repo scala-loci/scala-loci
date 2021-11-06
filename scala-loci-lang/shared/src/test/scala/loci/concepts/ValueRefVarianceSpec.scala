@@ -34,6 +34,19 @@ object Thing {
   }
 }
 
+@multitier object ValueRefPeerTypeVarianceModule {
+  @peer type Node <: { type Tie <: Optional[Node] }
+  @peer type ConcreteNode <: Node { type Tie <: Optional[Node] }
+
+  def generateRef(x: String): String via Node on ConcreteNode = on[ConcreteNode] { implicit! =>
+    x.asValueRef
+  }
+
+  def accessRef(ref: String via Node): Future[String] on Node = on[Node] { implicit! =>
+    ref.getValue
+  }
+}
+
 class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
   behavior of "variance for value references"
 
@@ -57,6 +70,28 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     nodeB.instance.current.map {
       _.retrieve[Future[Thing]](ValueRefValueTypeVarianceModule.accessRef(ref)).map {
         _ shouldEqual ConcreteThing()
+      }
+    }.get
+  }
+
+  it should "generate value references with variant peer type and access them on another peer" in {
+    val listener = new NetworkListener
+    val nodeA = multitier start new Instance[ValueRefPeerTypeVarianceModule.ConcreteNode](
+      contexts.Immediate.global,
+      listen[ValueRefPeerTypeVarianceModule.ConcreteNode](listener)
+    )
+    val nodeB = multitier start new Instance[ValueRefPeerTypeVarianceModule.ConcreteNode](
+      contexts.Immediate.global,
+      connect[ValueRefPeerTypeVarianceModule.ConcreteNode](listener.createConnector())
+    )
+
+    val ref = nodeA.instance.current.map {
+      _.retrieve[String via ValueRefPeerTypeVarianceModule.Node](ValueRefPeerTypeVarianceModule.generateRef("test"))
+    }.get
+
+    nodeB.instance.current.map {
+      _.retrieve[Future[String]](ValueRefPeerTypeVarianceModule.accessRef(ref)).map {
+        _ shouldEqual "test"
       }
     }.get
   }
