@@ -7,7 +7,7 @@ import loci.transmitter.Serializable
 import java.util.UUID
 import scala.util.Try
 
-case class ValueRef[+V, P](
+case class ValueRef[+V, +P](
   peerId: UUID,
   valueId: UUID
 )
