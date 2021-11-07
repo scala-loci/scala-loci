@@ -152,14 +152,16 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
 
     def replaceValueRefCreatorArgs(valueRefCreator: Tree): Tree = {
       val q"$creator[..$tpts](...$exprss)" = valueRefCreator: @unchecked
-      val List(List(value), List(_, cache, _)) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
+      val List(List(value), List(_, _, _, _)) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
+      val peerType = tpts.last.tpe
 
       val peerId = Ident(uniquePeerIdName)
       val peerValueCache = Ident(peerValueCacheName)
+      val signature = Ident(TermName(s"$$loci$$peer$$sig$$${peerType.typeSymbol.name}"))
       val nullContext = q"null" // nulling the context ensures that it does not fail due to unexpected multitier construct in "values:validate"
 
       val replacedCreator = internal.setType(
-        q"$creator[..$tpts]($value)($peerId, $peerValueCache, $nullContext)",
+        q"$creator[..$tpts]($value)($peerId, $peerValueCache, $signature, $nullContext)",
         valueRefCreator.tpe
       )
       replacedCreator

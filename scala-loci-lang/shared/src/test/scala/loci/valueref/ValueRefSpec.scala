@@ -1,5 +1,6 @@
 package loci.valueref
 
+import loci.runtime.Peer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -14,7 +15,13 @@ class ValueRefSpec extends AnyFlatSpec with Matchers {
   private val refSerializable = ValueRef.serializable[V, P]
   private val pairSerializable = ValueRef.serializableOptionValueRefOptionString[V, P]
 
-  private val ref = ValueRef[V, P](UUID.randomUUID(), UUID.randomUUID())
+  private val moduleSignature = loci.runtime.Module.Signature("module", List("some", "path"))
+  private val ref = ValueRef[V, P](
+    UUID.randomUUID(),
+    UUID.randomUUID(),
+    Peer.Signature("P", List(Peer.Signature("Q", List(), moduleSignature)), moduleSignature)
+  )
+
   private val string = "asda;asdaasd-xknnkldg; asfjjsdjjjsdfjnjsd235rgrge"
 
   it should "serialize and deserialize ValueRef" in {

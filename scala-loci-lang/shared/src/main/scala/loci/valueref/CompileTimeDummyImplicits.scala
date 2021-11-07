@@ -8,6 +8,7 @@ import loci.language.PlacedValue
 import loci.language.erased
 import loci.language.fromSingle
 import loci.on
+import loci.runtime.Peer
 import loci.transmitter.Single
 import loci.transmitter.Transmission
 
@@ -22,6 +23,9 @@ trait CompileTimeDummyImplicits {
 
   @compileTimeOnly("dummyCache can only be invoked in multitier code and should be replaced at compile time")
   implicit def dummyCache: PeerValueCache = erased
+
+  @compileTimeOnly("dummySignature can only be invoked in multitier code and should be replaced at compile time")
+  implicit def dummySignature: Peer.Signature = erased
 
   @compileTimeOnly("dummyGateway can only be invoked in multitier code and should be replaced at compile time")
   implicit def dummyGateway[R]: loci.language.Gateway.DefaultMultipleGateway[R] = erased

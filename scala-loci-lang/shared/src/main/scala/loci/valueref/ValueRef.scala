@@ -1,30 +1,48 @@
 package loci.valueref
 
 import loci.MessageBuffer
+import loci.runtime.Peer
+import loci.runtime.Peer.Signature
+import loci.transmitter
 import loci.transmitter.transmittable.IdenticallyTransmittable
 import loci.transmitter.Serializable
+import transmitter.Parser._
 
 import java.util.UUID
 import scala.util.Try
 
 case class ValueRef[+V, +P](
   peerId: UUID,
-  valueId: UUID
+  valueId: UUID,
+  signature: Peer.Signature
 )
 
 object ValueRef {
   implicit def transmittable[V, P]: IdenticallyTransmittable[ValueRef[V, P]] = IdenticallyTransmittable()
 
+  def serializeRef[V, P](value: ValueRef[V, P]): Serializer = elements(
+    string(value.peerId.toString),
+    string(value.valueId.toString),
+    Signature.serialize(value.signature)
+  )
+
+  def deserializeRef[V, P](value: String): ValueRef[V, P] = {
+    val Seq(peerId, valueId, signature) = parse(value).asElements(3): @unchecked
+    ValueRef(
+      UUID.fromString(peerId.asString),
+      UUID.fromString(valueId.asString),
+      Signature.deserialize(signature.asString).get
+    )
+  }
+
   implicit def serializable[V, P]: Serializable[ValueRef[V, P]] = new Serializable[ValueRef[V, P]] {
-    private val separator = ","
 
     override def serialize(value: ValueRef[V, P]): MessageBuffer = {
-      MessageBuffer.encodeString(Seq(value.peerId, value.valueId).map(_.toString).mkString(separator))
+      MessageBuffer.encodeString(serializeRef(value).toString)
     }
 
     override def deserialize(value: MessageBuffer): Try[ValueRef[V, P]] = Try {
-      val fields = value.decodeString.split(separator)
-      ValueRef(UUID.fromString(fields(0)), UUID.fromString(fields(1)))
+      deserializeRef[V, P](value.decodeString)
     }
   }
 
@@ -33,24 +51,14 @@ object ValueRef {
 
     new Serializable[(Option[ValueRef[V, P]], Option[String])] {
       override def serialize(value: (Option[ValueRef[V, P]], Option[String])): MessageBuffer = {
-        val (ref, string) = value
-        val serializedRef = "[" + ref.map(serializable[V, P].serialize(_)).map(_.decodeString).getOrElse("") + "]"
-        MessageBuffer.encodeString(serializedRef + string.map(s => separator + s).getOrElse(""))
+        MessageBuffer.encodeString(
+          elements(list(value._1.map(serializeRef).toList), list(value._2.map(string).toList)).toString
+        )
       }
 
       override def deserialize(value: MessageBuffer): Try[(Option[ValueRef[V, P]], Option[String])] = Try {
-        val decodedValue = value.decodeString
-        val pair = decodedValue.indexOf(separator) match {
-          case -1 => (decodedValue, None)
-          case i => (decodedValue.slice(0, i), Some(decodedValue.slice(i + 1, decodedValue.length)))
-        }
-        pair match {
-          case (ref, string) if ref == "[]" => (None, string)
-          case (ref, string) => (
-            serializable[V, P].deserialize(MessageBuffer.encodeString(ref.stripPrefix("[").stripSuffix("]"))).toOption,
-            string
-          )
-        }
+        val Seq(refOpt, strOpt) = parse(value.decodeString).asElements(2): @unchecked
+        (refOpt.asList.headOption.map(_.asString).map(deserializeRef), strOpt.asList.headOption.map(_.asString))
       }
     }
   }
