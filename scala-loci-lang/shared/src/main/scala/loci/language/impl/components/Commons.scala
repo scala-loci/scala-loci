@@ -70,7 +70,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val transmittableDummy = symbolOf[transmitter.transmittable.TransmittableDummy]
     val remoteSelection = symbolOf[RemoteSelection.type]
     val placedValues = engine.c.mirror.staticModule("_root_.loci.runtime.PlacedValues")
-    val cast = typeOf[runtime.Remote.type] member TermName("cast")
+    val remoteCast = typeOf[runtime.Remote.type] member TermName("cast")
     val and = typeOf[Placed[_, _]] member TermName("and")
     val to = typeOf[Placed[_, _]] member TermName("to")
     val froms = (typeOf[Placed[_, _]] member TermName("from")).alternatives
@@ -80,6 +80,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val BlockApply = typeOf[Placement.Block[_, PlacedValue]] member TermName("apply")
     val CaptureCapture = typeOf[Placement.Capture[_, PlacedValue]] member TermName("capture")
     val valueRefAccessor = symbolOf[valueref.ValueRefAccessor[_, _, _]]
+    val valueRefCast = symbolOf[valueref.ValueRef[_, _]].companion.info member TermName("cast")
   }
 
   object types {

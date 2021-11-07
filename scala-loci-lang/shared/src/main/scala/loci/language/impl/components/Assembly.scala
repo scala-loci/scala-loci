@@ -292,8 +292,10 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
 
   private object castsInserter extends Transformer {
     override def transform(tree: Tree): Tree = tree match {
-      case q"$recv[$tpt]($arg)" if recv.symbol == symbols.cast =>
+      case q"$recv[$tpt]($arg)" if recv.symbol == symbols.remoteCast =>
         atPos(tree.pos) { q"$arg.asRemote[$tpt]" }
+      case q"$cast[..$tpts]($arg)" if cast.symbol == symbols.valueRefCast =>
+        atPos(tree.pos) { q"$arg.asVia[${tpts.last}]" }
       case _ =>
         super.transform(tree)
     }

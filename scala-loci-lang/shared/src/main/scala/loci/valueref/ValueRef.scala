@@ -1,6 +1,8 @@
 package loci.valueref
 
 import loci.MessageBuffer
+import loci.language.erased
+import loci.language.impl
 import loci.runtime.Peer
 import loci.runtime.Peer.Signature
 import loci.transmitter
@@ -9,15 +11,23 @@ import loci.transmitter.Serializable
 import transmitter.Parser._
 
 import java.util.UUID
+import scala.annotation.compileTimeOnly
+import scala.language.experimental.macros
 import scala.util.Try
 
 case class ValueRef[+V, +P](
   peerId: UUID,
   valueId: UUID,
   signature: Peer.Signature
-)
+) {
+  def asVia[R]: Option[ValueRef[V, R]] = macro impl.ValueRef.asVia[V, R]
+}
 
 object ValueRef {
+
+  @compileTimeOnly("Call only allowed in multitier code. Use `ref.asVia[P]` instead.")
+  def cast[V, P](ref: ValueRef[V, _]): Option[ValueRef[V, P]] = erased
+
   implicit def transmittable[V, P]: IdenticallyTransmittable[ValueRef[V, P]] = IdenticallyTransmittable()
 
   def serializeRef[V, P](value: ValueRef[V, P]): Serializer = elements(
