@@ -76,12 +76,14 @@ object Peer {
           serializeBases(signature.parents))
       })
 
-    def serialize(signature: Signature): String =
-      elements(
-        string(signature.name),
-        list(signature.module.path map string),
-        serializeBases(signature.parents),
-        string(signature.module.name)).toString
+    def serialize(signature: Signature): Serializer = elements(
+      string(signature.name),
+      list(signature.module.path map string),
+      serializeBases(signature.parents),
+      string(signature.module.name)
+    )
+
+    def serializeRaw(signature: Signature): String = serialize(signature).toString
 
     private def deserializeBases(signatures: Deserializer, moduleName: String): List[Signature] =
       signatures.asList map { signature =>

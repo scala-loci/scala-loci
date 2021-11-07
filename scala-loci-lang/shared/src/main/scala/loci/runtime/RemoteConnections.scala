@@ -108,8 +108,8 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
 
             connection.send(serializeMessage(
               RequestMessage(
-                Peer.Signature.serialize(remotePeer),
-                Peer.Signature.serialize(peer))))
+                Peer.Signature.serializeRaw(remotePeer),
+                Peer.Signature.serializeRaw(peer))))
 
           case Failure(exception) =>
             logging.trace(s"connecting to remote failed: $remotePeer", exception)
