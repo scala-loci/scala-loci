@@ -47,6 +47,22 @@ object Thing {
   }
 }
 
+@multitier object ValueRefPeerCastingModule {
+  @peergroup type Node <: { type Tie <: Optional[A] with Optional[B] }
+  @peer type A <: Node { type Tie <: Optional[A] with Optional[B] }
+  @peer type B <: Node { type Tie <: Optional[A] with Optional[B] }
+
+  def generateRef(x: String): String via Node on Node = on[A] { implicit! =>
+    s"$x via A".asValueRef
+  } and on[B] { implicit! =>
+    s"$x via B".asValueRef
+  }
+
+  def isViaA(ref: String via Node): Boolean on Node = { implicit! =>
+    ref.asVia[A].isDefined
+  }
+}
+
 class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
   behavior of "variance for value references"
 
@@ -94,5 +110,47 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
         _ shouldEqual "test"
       }
     }.get
+  }
+
+  it should "cast a value reference to its actual type given the signature" in {
+    val listener = new NetworkListener
+    val nodeA = multitier start new Instance[ValueRefPeerCastingModule.A](
+      contexts.Immediate.global,
+      listen[ValueRefPeerCastingModule.B](listener)
+    )
+    val nodeB = multitier start new Instance[ValueRefPeerCastingModule.B](
+      contexts.Immediate.global,
+      connect[ValueRefPeerCastingModule.A](listener.createConnector())
+    )
+
+    val ref = nodeA.instance.current.map {
+      _.retrieve[String via ValueRefPeerCastingModule.Node](ValueRefPeerCastingModule.generateRef("test"))
+    }.get
+
+    val isViaA = nodeB.instance.current.map {
+      _.retrieve[Boolean](ValueRefPeerCastingModule.isViaA(ref))
+    }.get
+    isViaA shouldEqual true
+  }
+
+  it should "not cast a value reference to a type not matching the signature" in {
+    val listener = new NetworkListener
+    val b1 = multitier start new Instance[ValueRefPeerCastingModule.B](
+      contexts.Immediate.global,
+      listen[ValueRefPeerCastingModule.B](listener)
+    )
+    val b2 = multitier start new Instance[ValueRefPeerCastingModule.B](
+      contexts.Immediate.global,
+      connect[ValueRefPeerCastingModule.B](listener.createConnector())
+    )
+
+    val ref = b1.instance.current.map {
+      _.retrieve[String via ValueRefPeerCastingModule.Node](ValueRefPeerCastingModule.generateRef("test"))
+    }.get
+
+    val isViaA = b2.instance.current.map {
+      _.retrieve[Boolean](ValueRefPeerCastingModule.isViaA(ref))
+    }.get
+    isViaA shouldEqual false
   }
 }
