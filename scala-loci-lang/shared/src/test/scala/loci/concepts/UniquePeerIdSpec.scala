@@ -3,9 +3,6 @@ package concepts
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-import scala.language.experimental.macros
-import scala.reflect.macros.blackbox
-
 @multitier object UniquePeerIdModule {
   @peer type Node
 }

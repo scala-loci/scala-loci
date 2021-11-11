@@ -107,11 +107,14 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
         case null => null
         case tpe =>
           // using 'find' to get the top-level union, as 'map' works bottom-up and therefore would try to replace
-          // the bottom-level union (i.e. 2 peers) first
-          val firstUnionType = tpe.find(_ real_<:< types.union)
+          // the bottom-level union (i.e. 2 peers) first;
+          // sometimes the union type is hidden in the underlying type, if so we replace the underlying type
+          val firstUnionType = tpe.find(_ real_<:< types.union).map(_ -> false)
+            .orElse(tpe.underlying.find(_ real_<:< types.union).map(_ -> true))
           firstUnionType match {
-            case Some(unionType) =>
-              val tpeWithFirstUnionTypeReplaced = tpe.map {
+            case Some((unionType, foundInUnderlyingType)) =>
+              val tpeOrUnderlying = if(foundInUnderlyingType) tpe.underlying else tpe
+              val tpeWithFirstUnionTypeReplaced = tpeOrUnderlying.map {
                 case tpePart if tpePart =:= unionType =>
                   val unionedPeers = collectUnionedPeers(tpePart)
                   val syntheticPeergroupType = syntheticPeergroups.collectFirst {

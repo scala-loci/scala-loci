@@ -83,4 +83,18 @@ class UnionPeerTypeSpec extends AnyFlatSpec with Matchers with NoLogging {
     }""" shouldNot compile
   }
 
+  it should "compile for a remote block on a concrete peer accessing a value placed on the union" in {
+    """@multitier object Module {
+      @peer type Node <: { type Tie <: Single[A] with Single[B] }
+      @peer type A <: { type Tie <: Single[Node] }
+      @peer type B <: { type Tie <: Single[Node] }
+
+      val x: Int on (A | B) = on[A | B] { implicit! => 42 }
+
+      val f: Future[Int] on Node = on[Node] { implicit! =>
+        on[A].run { implicit! => x + 1 }.asLocal
+      }
+    }""" should compile
+  }
+
 }
