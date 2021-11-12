@@ -157,7 +157,7 @@ class Multitier(val c: blackbox.Context) {
 
       val preprocessedAnnottee = Preprocessor.run(c)(
         annottee,
-        Seq(MultitierTypes, AbstractValues, ImplicitContext, SelectionTupling))
+        Seq(MultitierTypes, AbstractValues, ImplicitContext, SelectionTupling, UnionPeerTypes))
 
       if (expandMultitierMacro) {
         try {
@@ -190,7 +190,6 @@ class Multitier(val c: blackbox.Context) {
                 ModuleInfo,
                 Initialization,
                 DynamicPlacement,
-                UnionPeerType,
                 RemoteValueReference,
                 RemoteBlock,
                 Peers,

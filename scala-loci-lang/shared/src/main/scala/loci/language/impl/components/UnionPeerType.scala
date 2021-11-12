@@ -46,6 +46,7 @@ class UnionPeerType[C <: blackbox.Context](val engine: Engine[C]) extends Compon
    * It introduces synthetic peer type definitions for each occurrence of a union peer type `A | B | ...`
    * Each occurrence of such a union peer type in the code is then replaced with the generated synthetic type.
    */
+  @deprecated("grouping union peer types has been moved to preprocessor 'UnionPeerTypes'")
   def groupUnionPeerTypes(records: List[Any]): List[Any] = {
 
     case class SyntheticPeergroup(
