@@ -682,7 +682,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
                    tree.symbol == symbols.and)
             c.abort(tree.pos, "Unexpected multitier construct")
 
-        case tree: TypeTree if tree.original != null =>
+        case tree: TypeTree
+            if tree.original != null &&
+               internal.attachments(tree.original).contains[preprocessors.StatedTyping.type] =>
           val treeTypes = Option(tree.tpe) ++ Option(tree.original.tpe)
 
           val placementType = treeTypes exists {
