@@ -1,15 +1,14 @@
 package loci
 package communicator
 
-import scala.concurrent.ExecutionContext
 import scala.util.{Success, Try}
 
 sealed trait ConnectionSetup[+P <: ProtocolCommon]
 
 trait Connector[+P <: ProtocolCommon] extends ConnectionSetup[P] {
-  final def connect(failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
+  final def connect(failureReporter: Throwable => Unit = logging.reportException)
       (handler: Try[Connection[P]] => Unit): Unit = synchronized {
-    val connected = Notice.Steady[Try[Connection[P]]]
+    val connected = Notice.Steady[Try[Connection[P]]](failureReporter)
     connected.notice foreach handler
     connect(connected)
   }
@@ -20,9 +19,9 @@ trait Connector[+P <: ProtocolCommon] extends ConnectionSetup[P] {
 }
 
 trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
-  final def startListening(failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
+  final def startListening(failureReporter: Throwable => Unit = logging.reportException)
       (handler: Try[Connection[P]] => Unit): Try[Listening] = synchronized {
-    val connected = Notice.Stream[Try[Connection[P]]]
+    val connected = Notice.Stream[Try[Connection[P]]](failureReporter)
     connected.notice foreach handler
     startListening(connected) map { listening =>
       new Listening {
@@ -40,7 +39,7 @@ trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
       var firstConnection: Connection[P] = null
       var listening: Try[Listening] = null
 
-      listening = startListening() {
+      listening = startListening(connectionEstablished.failureReporter) {
         case success @ Success(connection) =>
           if (connectionEstablished.trySet(success)) {
             connection.closed foreach { _ =>

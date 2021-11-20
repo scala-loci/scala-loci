@@ -22,9 +22,9 @@ object Notice {
 
     protected def apply(v: T @uncheckedVariance): Boolean
 
-    protected def failureReporter: FailureReporter
-
     protected def create[U](failureReporter: FailureReporter): C[U]
+
+    def failureReporter: FailureReporter
 
     def monitor[U, R](notice: T => R)(implicit ev: notice.type <:< (U => R)): Notice[U] =
       foreach(notice)
@@ -87,7 +87,7 @@ object Notice {
   }
 
 
-  final class Stream[+T] private (protected val failureReporter: FailureReporter)
+  final class Stream[+T] private (val failureReporter: FailureReporter)
     extends Consumer[Stream, T] with
       Consumer.TotalOperations[Stream, T] with
       Consumer.PartialOperations[Stream, T] with
@@ -98,6 +98,7 @@ object Notice {
 
   object Stream {
     sealed class Source[-T] private[Stream] (notice: Stream[T]) {
+      def failureReporter = notice.failureReporter
       def fire(v: T): Unit = notice(v)
       def fire()(implicit ev: Unit =:= T @uncheckedVariance): Unit = notice(())
     }
@@ -112,7 +113,7 @@ object Notice {
   }
 
 
-  final class Steady[+T] private (protected val failureReporter: FailureReporter)
+  final class Steady[+T] private (val failureReporter: FailureReporter)
     extends Consumer[Steady, T] with
       Consumer.TotalOperations[Steady, T] with
       Consumer.PartialOperations[Steady, T] with
@@ -194,6 +195,7 @@ object Notice {
 
   object Steady {
     sealed class Source[-T] private[Steady] (notice: Steady[T]) {
+      def failureReporter = notice.failureReporter
       def trySet(v: T): Boolean = notice(v)
       def trySet()(implicit ev: Unit =:= T @uncheckedVariance): Boolean = notice(())
       def set(v: T): Unit =
@@ -212,7 +214,7 @@ object Notice {
   }
 
 
-  final class Varying[+T] private (protected val failureReporter: FailureReporter)
+  final class Varying[+T] private (val failureReporter: FailureReporter)
     extends Consumer[Varying, T] with
       Consumer.TotalOperations[Varying, T] with
       Consumer.MultiNotice[Varying, T] {
@@ -253,6 +255,7 @@ object Notice {
 
   object Varying {
     sealed class Source[-T] private[Varying] (notice: Varying[T], init: T){
+      def failureReporter = notice.failureReporter
       def set(v: T): Unit = notice(v)
       def set()(implicit ev: Unit =:= T @uncheckedVariance): Unit = notice(())
       notice(init)
