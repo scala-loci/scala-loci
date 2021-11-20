@@ -32,40 +32,44 @@ private class Socket[P <: WS: WSProtocolFactory](
 
   private var timeoutTask: ScheduledFuture[_] = _
 
-  private def resetTimeout(): Unit = {
+  private def resetTimeout(): Unit = synchronized {
     if (timeoutTask != null)
       timeoutTask.cancel(true)
 
-    timeoutTask = executor.schedule(
-      new Runnable { def run(): Unit = getSession.close() },
-      timeout,
-      TimeUnit.MILLISECONDS)
+    timeoutTask = executor.schedule(new Runnable {
+      def run(): Unit = Socket.this synchronized {
+        getSession.close()
+      }
+    }, timeout, TimeUnit.MILLISECONDS)
   }
 
   resetTimeout()
 
-  override def onWebSocketConnect(sess: Session): Unit = {
-    super.onWebSocketConnect(sess)
+  override def onWebSocketConnect(session: Session): Unit = {
+    synchronized {
+      super.onWebSocketConnect(session)
+
+      heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
+        def run(): Unit = Socket.this synchronized {
+          getRemote.sendStringByFuture(heartbeat)
+        }
+      }, delay, delay, TimeUnit.MILLISECONDS)
+    }
 
     connectionEstablished(Success(this))
-
-    heartbeatTask = executor.scheduleWithFixedDelay(
-      new Runnable { def run(): Unit = getRemote.sendString(heartbeat) },
-      delay,
-      delay,
-      TimeUnit.MILLISECONDS)
 
     resetTimeout()
   }
 
   override def onWebSocketBinary(payload: Array[Byte], offset: Int, len: Int): Unit = {
-    super.onWebSocketBinary(payload, offset, len)
+    val data = synchronized {
+      super.onWebSocketBinary(payload, offset, len)
 
-    val data =
       if (offset == 0 && len == payload.length)
         payload
       else
         payload.slice(offset, len)
+    }
 
     doReceive.fire(MessageBuffer.wrapArray(data))
 
@@ -73,21 +77,22 @@ private class Socket[P <: WS: WSProtocolFactory](
   }
 
   override def onWebSocketText(message: String): Unit = {
-    super.onWebSocketText(message)
+    synchronized { super.onWebSocketText(message) }
     resetTimeout()
   }
 
   override def onWebSocketClose(statusCode: Int, reason: String): Unit = {
-    super.onWebSocketClose(statusCode, reason)
-
-    heartbeatTask.cancel(true)
-    timeoutTask.cancel(true)
+    synchronized {
+      super.onWebSocketClose(statusCode, reason)
+      heartbeatTask.cancel(true)
+      timeoutTask.cancel(true)
+    }
 
     doClosed.trySet()
   }
 
   override def onWebSocketError(cause: Throwable): Unit = {
-    super.onWebSocketError(cause)
+    synchronized { super.onWebSocketError(cause) }
     connectionFailed(Failure(cause))
     close()
   }
@@ -95,19 +100,22 @@ private class Socket[P <: WS: WSProtocolFactory](
   val closed  = doClosed.notice
   val receive = doReceive.notice
 
-  def open: Boolean = {
+  def open: Boolean = synchronized {
     val session = getSession
     session != null && session.isOpen
   }
 
-  def send(data: MessageBuffer): Unit =
+  def send(data: MessageBuffer): Unit = synchronized {
     if (isConnected)
-      getRemote.sendBytes(data.asByteBuffer)
+      getRemote.sendBytesByFuture(data.asByteBuffer)
+  }
 
   def close(): Unit = {
-    val session = getSession
-    if (session != null)
-      session.close()
+    synchronized {
+      val session = getSession
+      if (session != null)
+        session.close()
+    }
 
     doClosed.trySet()
   }

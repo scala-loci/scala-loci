@@ -11,6 +11,7 @@ import scala.concurrent.duration._
 import scala.scalajs.js
 import scala.scalajs.js.typedarray.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+import scala.util.control.NonFatal
 
 private object WebRTCConnector {
   val channelLabel = "loci-webrtc-channel"
@@ -34,12 +35,16 @@ private abstract class WebRTCConnector(
       }
   }
 
+  private var connectionCount = 0
+
   protected def handleConnectionClosing(connection: Try[Connection[WebRTC]]) = {
-    connection match {
-      case Success(connection) =>
-        connection.closed foreach { _ => peerConnection.close() }
-      case _ =>
-        peerConnection.close()
+    connection foreach { connection =>
+      connectionCount += 1
+      connection.closed foreach { _ =>
+        connectionCount -= 1
+        if (connectionCount < 1)
+          peerConnection.close()
+      }
     }
   }
 
@@ -74,24 +79,29 @@ private class WebRTCOffer(
   update: Either[IncrementalUpdate => Unit, CompleteSession => Unit])
     extends WebRTCConnector(configuration, update) {
 
-  protected def connect(connectionEstablished: Connected[WebRTC]) = {
-    val channel = peerConnection.createDataChannel(
-      WebRTCConnector.channelLabel,
-      RTCDataChannelInit())
+  protected def connect(connectionEstablished: Connected[WebRTC]) =
+    try {
+      val channel = peerConnection.createDataChannel(
+        WebRTCConnector.channelLabel,
+        RTCDataChannelInit())
 
-    (peerConnection.createOffer(options)) `then` { description: RTCSessionDescription =>
-      (peerConnection.setLocalDescription(description)) `then` { _: Unit =>
-        update.left foreach { _(InitialSession(description)) }
+      peerConnection.createOffer(options) `then` { description: RTCSessionDescription =>
+        peerConnection.setLocalDescription(description) `then` { _: Unit =>
+          update.left foreach { _(InitialSession(description)) }
+          unit
+        }
         unit
       }
-      unit
-    }
 
-    new WebRTCChannelConnector(channel, Some(this)).connect() { connection =>
-      handleConnectionClosing(connection)
-      connectionEstablished.set(connection)
+      new WebRTCChannelConnector(channel, Some(this)).connect() { connection =>
+        handleConnectionClosing(connection)
+        connectionEstablished.trySet(connection)
+      }
     }
-  }
+    catch {
+      case NonFatal(exception) =>
+        connectionEstablished.set(Failure(exception))
+    }
 
   protected def setRemoteDescription(description: RTCSessionDescription) =
     peerConnection.setRemoteDescription(description)
@@ -102,30 +112,35 @@ private class WebRTCAnswer(
   update: Either[IncrementalUpdate => Unit, CompleteSession => Unit])
     extends WebRTCConnector(configuration, update) {
 
-  private var connector: Connector[WebRTC] = _
-  private var connected: Connected[WebRTC] = _
+  private val connectorQueue = new js.Array[Connector[WebRTC]](0)
+  private val connectedQueue = new js.Array[Connected[WebRTC]](0)
 
-  protected def connect(connectionEstablished: Connected[WebRTC]) =
-    if (connector != null)
+  private def connect() = 
+    if (connectorQueue.length != 0 && connectedQueue.length != 0) {
+      val connector = connectorQueue.shift()
+      val connected = connectedQueue.shift()
       connector.connect() { connection =>
         handleConnectionClosing(connection)
-        connectionEstablished.set(connection)
+        connected.trySet(connection)
       }
-    else
-      connected = connectionEstablished
+    }
+
+  protected def connect(connectionEstablished: Connected[WebRTC]) = {
+    connectedQueue.push(connectionEstablished)
+    connect()
+  }
 
   peerConnection.ondatachannel = { event: RTCDataChannelEvent =>
-    if (event.channel.label == WebRTCConnector.channelLabel && connector == null) {
-      connector = new WebRTCChannelConnector(event.channel, Some(this))
-      if (connected != null)
-        connect(connected)
+    if (event.channel.label == WebRTCConnector.channelLabel) {
+      connectorQueue.push(new WebRTCChannelConnector(event.channel, Some(this)))
+      connect()
     }
   }
 
   protected def setRemoteDescription(description: RTCSessionDescription) =
-    (peerConnection.setRemoteDescription(description)) `then` { _: Unit =>
+    peerConnection.setRemoteDescription(description) `then` { _: Unit =>
       peerConnection.createAnswer() `then` { description: RTCSessionDescription =>
-        (peerConnection.setLocalDescription(description)) `then` { _: Unit =>
+        peerConnection.setLocalDescription(description) `then` { _: Unit =>
           update.left foreach { _(InitialSession(description)) }
           unit
         }

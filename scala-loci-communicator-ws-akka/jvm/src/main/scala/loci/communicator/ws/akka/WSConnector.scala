@@ -20,14 +20,16 @@ private object WSConnector {
       properties: WS.Properties)(implicit
       materializer: Materializer) =
     new WSConnector[P](
-      http, properties, webSocketRequest, Function const { })
+      properties, webSocketRequest, { () => http -> materializer }, Function const { })
 
   def apply[P <: WS: WSProtocolFactory](
       webSocketRequest: WebSocketRequest,
       properties: WS.Properties) = {
-    implicit val (actorSystem, actorMaterializer) = WSActorSystem.retrieve()
     new WSConnector[P](
-      Http(), properties, webSocketRequest, {
+      properties, webSocketRequest, { () =>
+        implicit val (system, materializer) = WSActorSystem.retrieve()
+        Http() -> materializer
+      }, {
         case Success(connection) =>
           connection.closed foreach { _ => WSActorSystem.release() }
         case _ =>
@@ -36,14 +38,15 @@ private object WSConnector {
   }
 
   class WSConnector[P <: WS: WSProtocolFactory](
-    http: HttpExt,
     properties: WS.Properties,
     webSocketRequest: WebSocketRequest,
-    webSocketConnectionEstablished: Try[Connection[P]] => Unit)(implicit
-    materializer: Materializer)
+    retrieveHttpSystem: () => (HttpExt, Materializer),
+    webSocketConnectionEstablished: Try[Connection[P]] => Unit)
       extends Connector[P] {
 
     def connect(connectionEstablished: Connected[P]) = {
+      implicit val (http, materializer) = retrieveHttpSystem()
+
       val protocolPromise = Promise[P]()
 
       def connected(connection: Try[Connection[P]]) = {

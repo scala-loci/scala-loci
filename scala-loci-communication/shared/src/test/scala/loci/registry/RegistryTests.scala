@@ -3,6 +3,7 @@ package registry
 
 import communicator.{Connector, Listener}
 import transmitter.RemoteAccessException
+import transmitter.RemoteRef
 import transmitter.Serializables._
 
 import org.scalatest.matchers.should.Matchers
@@ -11,10 +12,28 @@ import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
-import scala.util.Success
+import scala.util.{Success, Try}
 
 object RegistryTests extends Matchers {
   type Test = (Listener[Connections.Protocol], Connector[Connections.Protocol], => Unit, => Unit, => Unit) => Unit
+
+  private implicit class RegistryRetryingOps(registry: Registry) {
+    private def retrying[T](operation: => Try[T], count: Int = 0): T = {
+      val result = operation
+      if (result.isFailure && count < 600) {
+        Thread.sleep(100)
+        retrying(operation, count + 1)
+      }
+      else
+        result.get
+    }
+
+    def listenRetrying(listener: Listener[Connections.Protocol]): Unit =
+      retrying { registry.listen(listener) }
+
+    def connectRetrying(connector: Connector[Connections.Protocol]): RemoteRef =
+      retrying { Await.ready(registry.connect(connector), 1.minute).value.get }
+  }
 
   def `handle binding and lookup correctly`(
       listener: Listener[Connections.Protocol],
@@ -31,17 +50,14 @@ object RegistryTests extends Matchers {
       registry0 = new Registry
       registry0.bind("future")(promise.future)
       registry0.bind("intfun")(() => (???): Int)
-      registry0.listen(listener)
+      registry0.listenRetrying(listener)
 
       setupListener
 
       registry1 = new Registry
-      val futureRemote = registry1.connect(connector)
+      val remote = registry1.connectRetrying(connector)
 
       setupConnector
-
-      Await.ready(futureRemote, 1.minute)
-      val remote = futureRemote.value.get.get
 
       val result0 = registry1.lookup[concurrent.Future[(Int, String)]]("future", remote)
       val result1 = registry1.lookup[() => Int]("intfun", remote)
@@ -58,8 +74,16 @@ object RegistryTests extends Matchers {
       remoteException.reason should matchPattern { case RemoteAccessException.RemoteException("scala.NotImplementedError", _) => }
     }
     finally {
-      registry0.terminate()
-      registry1.terminate()
+      if (registry1 != null)
+        registry1.terminate()
+
+      if (registry0 != null) {
+        registry0.remotes.headOption foreach { remote =>
+          Await.ready(remote.disconnected, 1.minute)
+        }
+        registry0.terminate()
+      }
+
       cleanup
     }
   }
@@ -92,17 +116,14 @@ object RegistryTests extends Matchers {
       registry0 = new Registry
       registry0.bindSbj(valueBinding)(value _)
       registry0.bindSbj(methodBinding)(method _)
-      registry0.listen(listener)
+      registry0.listenRetrying(listener)
 
       setupListener
 
       registry1 = new Registry
-      val futureRemote = registry1.connect(connector)
+      val remote = registry1.connectRetrying(connector)
 
       setupConnector
-
-      Await.ready(futureRemote, 1.minute)
-      val remote = futureRemote.value.get.get
 
       val result0 = registry1.lookup(valueBinding, remote)
       val result1 = registry1.lookup(methodBinding, remote)
@@ -135,8 +156,16 @@ object RegistryTests extends Matchers {
         "method called", "method result")
     }
     finally {
-      registry0.terminate()
-      registry1.terminate()
+      if (registry1 != null)
+        registry1.terminate()
+
+      if (registry0 != null) {
+        registry0.remotes.headOption foreach { remote =>
+          Await.ready(remote.disconnected, 1.minute)
+        }
+        registry0.terminate()
+      }
+
       cleanup
     }
   }

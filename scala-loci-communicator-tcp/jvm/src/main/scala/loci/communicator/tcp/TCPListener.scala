@@ -3,7 +3,7 @@ package communicator
 package tcp
 
 import java.io.IOException
-import java.net.{InetAddress, ServerSocket, SocketException}
+import java.net.{InetAddress, InetSocketAddress, ServerSocket, SocketException}
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -17,8 +17,15 @@ private class TCPListener(
   protected def startListening(connectionEstablished: Connected[TCP]): Try[Listening] =
     try {
       val running = new AtomicBoolean(true)
-      val socket = new ServerSocket(port, 0, InetAddress.getByName(interface))
       val executor = Executors.newCachedThreadPool()
+      val socket = new ServerSocket
+
+      try socket.setReuseAddress(true) catch {
+        case _: SocketException =>
+          // some implementations may not allow SO_REUSEADDR to be set
+      }
+
+      socket.bind(new InetSocketAddress(InetAddress.getByName(interface), port))
 
       def terminate() = {
         try socket.close()

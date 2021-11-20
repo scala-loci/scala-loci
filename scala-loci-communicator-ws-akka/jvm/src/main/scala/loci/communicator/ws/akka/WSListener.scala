@@ -97,7 +97,7 @@ private object WSListener {
     private var running = Option.empty[Future[Http.ServerBinding]]
     private val connected = new ConcurrentLinkedQueue[Connected[P]]
 
-    def binding = running
+    private[akka] def binding = running
 
     protected def bindRoute(
         http: HttpExt, port: Int, interface: String)(
@@ -126,9 +126,9 @@ private object WSListener {
             connected.remove(connectionEstablished)
 
             if (connected.isEmpty) {
-              stopping()
               running foreach { _ foreach { _.unbind() } }
               running = None
+              stopping()
             }
           }
         })

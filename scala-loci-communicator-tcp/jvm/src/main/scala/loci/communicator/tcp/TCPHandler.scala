@@ -57,7 +57,6 @@ private object TCPHandler {
     // connection interface
 
     var isOpen = true
-    val socketLock = new Object()
     val doClosed = Notice.Steady[Unit]
     val doReceive = Notice.Stream[MessageBuffer]
 
@@ -74,9 +73,9 @@ private object TCPHandler {
       val closed = doClosed.notice
       val receive = doReceive.notice
 
-      def open: Boolean = socketLock synchronized { isOpen }
+      def open: Boolean = synchronized { isOpen }
 
-      def send(data: MessageBuffer) = socketLock synchronized {
+      def send(data: MessageBuffer) = synchronized {
         if (isOpen)
           try {
             val size = data.length
@@ -94,22 +93,24 @@ private object TCPHandler {
           catch { case _: IOException => close() }
         }
 
-      def close() = socketLock synchronized {
-        if (isOpen) {
-          def ignoreIOException(body: => Unit) =
-            try body catch { case _: IOException => }
+      def close() = {
+        synchronized {
+          if (isOpen) {
+            def ignoreIOException(body: => Unit) =
+              try body catch { case _: IOException => }
 
-          isOpen = false
+            isOpen = false
 
-          if (heartbeatTask != null)
-            heartbeatTask.cancel(true)
+            if (heartbeatTask != null)
+              heartbeatTask.cancel(true)
 
-          ignoreIOException { socket.shutdownOutput() }
-          ignoreIOException { while (inputStream.read != -1) { } }
-          ignoreIOException { socket.close() }
-
-          doClosed.set()
+            ignoreIOException { socket.shutdownOutput() }
+            ignoreIOException { while (inputStream.read != -1) { } }
+            ignoreIOException { socket.close() }
+          }
         }
+
+        doClosed.trySet()
       }
     }
 
@@ -118,7 +119,7 @@ private object TCPHandler {
     socket.setSoTimeout(timeout)
 
     heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
-      def run()  = socketLock synchronized {
+      def run() = connection synchronized {
         if (isOpen)
           try {
             outputStream.write(heartbeat)

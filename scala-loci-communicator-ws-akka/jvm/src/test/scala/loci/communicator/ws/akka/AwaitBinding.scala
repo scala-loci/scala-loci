@@ -5,7 +5,7 @@ package ws.akka
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
-object AwaitBinding {
+object awaitBinding {
   def apply(listener: Listener[WS], atMost: Duration): Unit = {
     val binding = listener match {
       case listener: WSListener.BoundRoute[WS] => listener.binding

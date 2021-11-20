@@ -72,13 +72,16 @@ private abstract class WSAbstractHandler[M] {
       }
     }
 
-    def connectionClose() = promises synchronized {
-      if (connectionOpen) {
-        isOpen.set(false)
-        promises foreach { _.trySuccess(None) }
-        promises.clear()
-        doClosed.set()
+    def connectionClose() = {
+      promises synchronized {
+        if (connectionOpen) {
+          isOpen.set(false)
+          promises foreach { _.trySuccess(None) }
+          promises.clear()
+        }
       }
+
+      doClosed.trySet()
     }
 
     ws foreach { ws =>

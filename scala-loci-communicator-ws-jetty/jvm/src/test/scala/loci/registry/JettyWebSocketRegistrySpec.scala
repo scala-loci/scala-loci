@@ -30,10 +30,12 @@ class JettyWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLoggin
   }
 
   it should "handle binding and lookup correctly" in {
-    run(RegistryTests.`handle binding and lookup correctly`)
+    for (_ <- 1 to 50)
+      run(RegistryTests.`handle binding and lookup correctly`)
   }
 
   it should "handle subjective binding and lookup correctly" in {
-    run(RegistryTests.`handle subjective binding and lookup correctly`)
+    for (_ <- 1 to 50)
+      run(RegistryTests.`handle subjective binding and lookup correctly`)
   }
 }

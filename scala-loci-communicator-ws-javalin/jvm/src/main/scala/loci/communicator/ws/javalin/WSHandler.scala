@@ -39,73 +39,87 @@ private object WSHandler {
       connectionEstablished: Try[Connection[WS]] => Unit): Unit = {
     wsHandler.onConnect(new WsConnectHandler {
       override def handleConnect(ctx: WsConnectContext): Unit = {
+        val connection = synchronized {
 
-        // heartbeat
+          // heartbeat
 
-        val timeout = properties.heartbeatTimeout.toMillis.toInt
-        val delay = properties.heartbeatDelay.toMillis
-        val heartbeat = "\uD83D\uDC93"
+          val timeout = properties.heartbeatTimeout.toMillis.toInt
+          val delay = properties.heartbeatDelay.toMillis
+          val heartbeat = "\uD83D\uDC93"
 
-        val heartbeatTask = executor.scheduleWithFixedDelay(
-          new Runnable { def run() = ctx.send(heartbeat) },
-          delay, delay, TimeUnit.MILLISECONDS)
+          var heartbeatTask: ScheduledFuture[_] = null
 
-        var timeoutTask: ScheduledFuture[_] = null
+          var timeoutTask: ScheduledFuture[_] = null
 
 
-        // connection interface
+          // connection interface
 
-        var isOpen     = true
-        val socketLock = new Object()
-        val doClosed   = Notice.Steady[Unit]
-        val doReceive  = Notice.Stream[MessageBuffer]
+          var isOpen = true
+          val doClosed = Notice.Steady[Unit]
+          val doReceive = Notice.Stream[MessageBuffer]
 
-        val connection = new Connection[WS] {
-          val protocol = new WS {
-            val path = wsPath
-            val host = None
-            val port = None
-            val context = ctx
-            val setup = connectionSetup
-            val authenticated = false
-            val encrypted = false
-            val integrityProtected = false
-          }
+          val connection = new Connection[WS] {
+            val protocol = new WS {
+              val path = wsPath
+              val host = None
+              val port = None
+              val context = ctx
+              val setup = connectionSetup
+              val authenticated = false
+              val encrypted = false
+              val integrityProtected = false
+            }
 
-          val closed  = doClosed.notice
-          val receive = doReceive.notice
+            val closed  = doClosed.notice
+            val receive = doReceive.notice
 
-          override def open: Boolean = socketLock synchronized { isOpen }
+            def open: Boolean = synchronized { isOpen }
 
-          def send(data: MessageBuffer) = socketLock synchronized {
-            if (open)
-              ctx.send(data.asByteBuffer)
-          }
+            def send(data: MessageBuffer) = synchronized {
+              if (open)
+                ctx.send(data.asByteBuffer)
+            }
 
-          def close() = socketLock synchronized {
-            if (open) {
-              heartbeatTask.cancel(true)
-              timeoutTask.cancel(true)
-              ctx.session.close()
+            def close() = {
+              synchronized {
+                if (open) {
+                  heartbeatTask.cancel(true)
+                  timeoutTask.cancel(true)
+                  ctx.session.close()
 
-              isOpen = false
-              doClosed.set()
+                  isOpen = false
+                }
+              }
+
+              doClosed.trySet()
             }
           }
+
+          // heartbeat
+
+          heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
+            def run() = connection synchronized {
+              ctx.send(heartbeat)
+            }
+          }, delay, delay, TimeUnit.MILLISECONDS)
+
+          def resetTimeout(): Unit = synchronized {
+            if (timeoutTask != null)
+              timeoutTask.cancel(true)
+
+            timeoutTask = executor.schedule(new Runnable {
+              def run() = connection synchronized {
+                connection.close()
+              }
+            }, timeout, TimeUnit.MILLISECONDS)
+          }
+
+          connectionAttribute(ctx, connection, doReceive, resetTimeout _)
+
+          resetTimeout()
+
+          connection
         }
-
-        def resetTimeout(): Unit = {
-          if (timeoutTask != null)
-            timeoutTask.cancel(true)
-
-          timeoutTask = executor.schedule(
-            new Runnable { def run = connection.close() },
-            timeout, TimeUnit.MILLISECONDS)
-        }
-
-        resetTimeout()
-
-        connectionAttribute(ctx, connection, doReceive, resetTimeout _)
 
         connectionEstablished(Success(connection))
       }
@@ -115,7 +129,7 @@ private object WSHandler {
     // frame parsing
 
     wsHandler.onMessage(new WsMessageHandler {
-      override def handleMessage(ctx: WsMessageContext): Unit = {
+      override def handleMessage(ctx: WsMessageContext): Unit = synchronized {
         val (_, _, resetTimeout) = connectionAttribute(ctx)
         resetTimeout()
       }
@@ -123,14 +137,15 @@ private object WSHandler {
 
     wsHandler.onBinaryMessage(new WsBinaryMessageHandler {
       override def handleBinaryMessage(ctx: WsBinaryMessageContext): Unit = {
-        val (_, doReceive, resetTimeout) = connectionAttribute(ctx)
-        resetTimeout()
+        val (doReceive, data) = synchronized {
+          val (_, doReceive, resetTimeout) = connectionAttribute(ctx)
+          resetTimeout()
 
-        val data =
           if (ctx.offset == 0 && ctx.length == ctx.data.length)
-            ctx.data
+            doReceive -> ctx.data
           else
-            ctx.data.slice(ctx.offset, ctx.length)
+            doReceive -> ctx.data.slice(ctx.offset, ctx.length)
+        }
 
         doReceive.fire(MessageBuffer.wrapArray(data))
       }
@@ -138,7 +153,10 @@ private object WSHandler {
 
     wsHandler.onClose(new WsCloseHandler {
       override def handleClose(ctx: WsCloseContext): Unit = {
-        val (connection, _, _) = connectionAttribute(ctx)
+        val connection = synchronized {
+          val (connection, _, _) = connectionAttribute(ctx)
+          connection
+        }
         connection.close()
       }
     })

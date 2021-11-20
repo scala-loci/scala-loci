@@ -8,7 +8,7 @@ sealed trait ConnectionSetup[+P <: ProtocolCommon]
 
 trait Connector[+P <: ProtocolCommon] extends ConnectionSetup[P] {
   final def connect(failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
-      (handler: Try[Connection[P]] => Unit): Unit = {
+      (handler: Try[Connection[P]] => Unit): Unit = synchronized {
     val connected = Notice.Steady[Try[Connection[P]]]
     connected.notice foreach handler
     connect(connected)
@@ -21,10 +21,14 @@ trait Connector[+P <: ProtocolCommon] extends ConnectionSetup[P] {
 
 trait Listener[+P <: ProtocolCommon] extends ConnectionSetup[P] {
   final def startListening(failureReporter: Throwable => Unit = ExecutionContext.defaultReporter)
-      (handler: Try[Connection[P]] => Unit): Try[Listening] = {
+      (handler: Try[Connection[P]] => Unit): Try[Listening] = synchronized {
     val connected = Notice.Stream[Try[Connection[P]]]
     connected.notice foreach handler
-    startListening(connected)
+    startListening(connected) map { listening =>
+      new Listening {
+        def stopListening() = Listener.this synchronized { listening.stopListening() }
+      }
+    }
   }
 
   protected type Connected[-C <: ProtocolCommon] = Notice.Stream.Source[Try[Connection[C]]]
