@@ -3,12 +3,14 @@ package runtime
 
 import communicator.Connector
 import compatibility.jdkCollectionConverters._
+import loci.valueref.PeerValueCache
+import loci.valueref.UniquePeerId
 import messaging.Message
 import transmitter.{RemoteAccessException, RemoteRef}
 
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.collection.mutable
 import scala.concurrent.{ExecutionContext, Future}
 import scala.ref.WeakReference
@@ -22,14 +24,18 @@ object System {
 }
 
 class System(
-    values: PlacedValues,
-    main: Option[() => Unit],
-    separateMainThread: Boolean,
-    ties: Map[Peer.Signature, Peer.Tie],
-    executionContext: ExecutionContext,
-    remoteConnections: RemoteConnections,
-    singleConnectedRemotes: Seq[Remote.Reference],
-    connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]]) {
+  values: PlacedValues,
+  main: Option[() => Unit],
+  separateMainThread: Boolean,
+  ties: Map[Peer.Signature, Peer.Tie],
+  executionContext: ExecutionContext,
+  remoteConnections: RemoteConnections,
+  singleConnectedRemotes: Seq[Remote.Reference],
+  connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]]
+) {
+
+  val peerId: UUID = UniquePeerId.generate()
+  val peerValueCache: PeerValueCache = PeerValueCache.create()
 
   private implicit val context: ExecutionContext = executionContext
 

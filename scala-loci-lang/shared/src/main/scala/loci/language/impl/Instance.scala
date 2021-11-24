@@ -232,8 +232,8 @@ class Instance(val c: blackbox.Context) {
     c.macroApplication match {
       case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
       case q"$_[..$_]($instance).$_()" =>
-        val uniquePeerIdName = TermName("$loci$peer$unique$id")
-        retrieveByName(uniquePeerIdName, instance)
+        val uniquePeerIdName = TermName("peerId")
+        retrieveFromSystem(uniquePeerIdName, instance)
       case _ => c.abort(c.enclosingPosition, "Access to unique peer id failed")
     }
   }
@@ -242,13 +242,13 @@ class Instance(val c: blackbox.Context) {
     c.macroApplication match {
       case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
       case q"$_[..$_]($instance).$_()" =>
-        val cacheName = TermName("$loci$peer$value$cache")
-        retrieveByName(cacheName, instance)
+        val cacheName = TermName("peerValueCache")
+        retrieveFromSystem(cacheName, instance)
       case _ => c.abort(c.enclosingPosition, s"Access to peer value cache failed")
     }
   }
 
-  def retrieveByName(valueName: TermName, instance: Tree): Tree = {
+  private def retrieveFromSystem(valueName: TermName, instance: Tree): Tree = {
     val instanceModule = instance.tpe.widen.typeArgs.head match {
       case tpe @ TypeRef(pre, _, _) => pre.termSymbol
       case tpe =>
@@ -261,7 +261,7 @@ class Instance(val c: blackbox.Context) {
     val moduleName = instanceModule.asTerm.name.toTermName
     q"""$instance match {
       case instance: ${termNames.ROOTPKG}.loci.runtime.Instance[_] => instance.values match {
-        case values: $moduleName.${names.placedValues(instanceModule.info.typeSymbol)} => values.$valueName
+        case values: $moduleName.${names.placedValues(instanceModule.info.typeSymbol)} => values.$$loci$$sys.$valueName
         case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError
       }
       case _ => throw new ${termNames.ROOTPKG}.loci.runtime.PeerImplementationError

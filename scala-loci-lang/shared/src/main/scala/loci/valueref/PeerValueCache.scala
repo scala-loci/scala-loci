@@ -15,3 +15,7 @@ class PeerValueMapCache extends PeerValueCache {
   override def get(key: UUID): Option[Any] = map.get(key)
   override def put(key: UUID, value: Any): Unit = map.put(key, value)
 }
+
+object PeerValueCache {
+  def create(): PeerValueCache = new PeerValueMapCache
+}
