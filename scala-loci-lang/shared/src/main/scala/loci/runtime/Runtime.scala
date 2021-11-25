@@ -223,7 +223,7 @@ class Runtime[P](
             val instance = state.synchronized {
               if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {
                 val values = system(
-                  ties, context, remoteConnections,
+                  peer, ties, context, remoteConnections,
                   requiredListenedRemotes ++ requiredConnectedRemotes, remotes)
 
                 val instance = new Instance[P](values, remoteConnections)
@@ -291,12 +291,14 @@ object Runtime {
   type Ties =
     Map[Peer.Signature, Peer.Tie]
 
-  type SystemFactory =
-    (Ties,
-     ExecutionContext,
-     RemoteConnections,
-     Seq[Remote.Reference],
-     Seq[Notice.Steady[Try[Remote.Reference]]]) => PlacedValues
+  type SystemFactory = (
+    Peer.Signature,
+    Ties,
+    ExecutionContext,
+    RemoteConnections,
+    Seq[Remote.Reference],
+    Seq[Notice.Steady[Try[Remote.Reference]]]
+  ) => PlacedValues
 
   @throws[IllegalArgumentException](
     "if the connection setup does not respect the tie specification")

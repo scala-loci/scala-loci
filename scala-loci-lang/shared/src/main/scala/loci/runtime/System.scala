@@ -25,6 +25,7 @@ object System {
 
 class System(
   values: PlacedValues,
+  val instanceSignature: Peer.Signature,
   main: Option[() => Unit],
   separateMainThread: Boolean,
   ties: Map[Peer.Signature, Peer.Tie],

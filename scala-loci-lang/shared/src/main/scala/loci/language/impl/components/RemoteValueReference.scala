@@ -61,7 +61,7 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
 
       val peerId = q"$$loci$$sys.peerId"
       val peerValueCache = q"$$loci$$sys.peerValueCache"
-      val signature = Ident(TermName(s"$$loci$$peer$$sig$$${peerType.typeSymbol.name}"))
+      val signature = q"$$loci$$sys.instanceSignature"
       val nullContext = q"null" // nulling the context ensures that it does not fail due to unexpected multitier construct in "values:validate"
 
       val replacedCreator = internal.setType(
