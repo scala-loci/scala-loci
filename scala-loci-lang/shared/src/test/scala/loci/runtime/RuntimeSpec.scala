@@ -37,7 +37,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
         (listen[ServerClientApp.Client] { listener }).setup(
           ServerClientApp.$loci$peer$sig$Server,
           ServerClientApp.$loci$peer$ties$Server.keys.flatMap(_.bases).toList),
-        { (ties, context, connections, connected, connecting) =>
+        { (sig, ties, context, connections, connected, connecting) =>
           events += Server(New)
 
           connections.receive foreach { remoteMessage =>
@@ -54,7 +54,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
           }
 
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Client {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, sig, None, false, ties, context, connections, connected, connecting)
           }
           instance.$loci$sys.start()
           instance
@@ -68,7 +68,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
-        { (ties, context, connections, connected, connecting) =>
+        { (sig, ties, context, connections, connected, connecting) =>
           events += Client0(New)
 
           connections.receive foreach { remoteMessage =>
@@ -83,7 +83,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
             ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client0"))
 
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Server {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, sig, None, false, ties, context, connections, connected, connecting)
           }
           instance.$loci$sys.start()
           instance
@@ -96,7 +96,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
-        { (ties, context, connections, connected, connecting) =>
+        { (sig, ties, context, connections, connected, connecting) =>
           events += Client1(New)
 
           connections.receive foreach { remoteMessage =>
@@ -111,7 +111,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
             ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client1"))
 
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Server {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, sig, None, false, ties, context, connections, connected, connecting)
           }
           instance.$loci$sys.start()
           instance

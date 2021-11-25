@@ -26,9 +26,9 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
         (listen[ServerClientApp.Client] { listener }).setup(
           ServerClientApp.$loci$peer$sig$Server,
           ServerClientApp.$loci$peer$ties$Server.keys.flatMap(_.bases).toList),
-        { (ties, context, connections, connected, connecting) =>
+        { (sig, ties, context, connections, connected, connecting) =>
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Server {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, sig, None, false, ties, context, connections, connected, connecting)
           }
           serverSystem = instance.$loci$sys
           instance.$loci$sys.start()
@@ -42,9 +42,9 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
-        { (ties, context, connections, connected, connecting) =>
+        { (sig, ties, context, connections, connected, connecting) =>
           val instance = new { override val id = 20 } with ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Client {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, sig, None, false, ties, context, connections, connected, connecting)
           }: @compatibility.nowarn("msg=early initializers")
           client0System = instance.$loci$sys
           instance.$loci$sys.start()
@@ -58,9 +58,9 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
           ServerClientApp.$loci$peer$sig$Client,
           ServerClientApp.$loci$peer$ties$Client.keys.flatMap(_.bases).toList),
-        { (ties, context, connections, connected, connecting) =>
+        { (sig, ties, context, connections, connected, connecting) =>
           val instance = new { override val id = 21 } with ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Client {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, sig, None, false, ties, context, connections, connected, connecting)
           }: @compatibility.nowarn("msg=early initializers")
           client1System = instance.$loci$sys
           instance.$loci$sys.start()

@@ -206,6 +206,7 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
 
   def emptySystem(peer: runtime.PlacedValues) = new runtime.System(
     peer,
+    runtime.Peer.Signature("", List.empty, runtime.Module.Signature("", List.empty)),
     None,
     false,
     Map.empty,
