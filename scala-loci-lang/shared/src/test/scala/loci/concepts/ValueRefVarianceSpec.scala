@@ -63,6 +63,20 @@ object Thing {
   }
 }
 
+@multitier object ValueRefDowncastModule {
+  @peergroup type Node
+  @peer type A <: Node
+  @peer type B <: Node
+
+  def generateRef(x: String): String via Node on Node = on[Node] { implicit! =>
+    x.asValueRef
+  }
+
+  def isViaA(ref: String via Node): Boolean on Node = { implicit! =>
+    ref.asVia[A].isDefined
+  }
+}
+
 class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
   behavior of "variance for value references"
 
@@ -150,6 +164,32 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
 
     val isViaA = b2.instance.current.map {
       _.retrieve[Boolean](ValueRefPeerCastingModule.isViaA(ref))
+    }.get
+    isViaA shouldEqual false
+  }
+
+  it should "cast a value reference instantiated in peergroup context to its concrete instance peer" in {
+    val a = multitier start new Instance[ValueRefDowncastModule.A](contexts.Immediate.global)
+
+    val ref = a.instance.current.map {
+      _.retrieve[String via ValueRefDowncastModule.Node](ValueRefDowncastModule.generateRef("test"))
+    }.get
+
+    val isViaA = a.instance.current.map {
+      _.retrieve[Boolean](ValueRefDowncastModule.isViaA(ref))
+    }.get
+    isViaA shouldEqual true
+  }
+
+  it should "not cast a value reference instantiated in peergroup context to a non-matching concrete instance peer" in {
+    val b = multitier start new Instance[ValueRefDowncastModule.B](contexts.Immediate.global)
+
+    val ref = b.instance.current.map {
+      _.retrieve[String via ValueRefDowncastModule.Node](ValueRefDowncastModule.generateRef("test"))
+    }.get
+
+    val isViaA = b.instance.current.map {
+      _.retrieve[Boolean](ValueRefDowncastModule.isViaA(ref))
     }.get
     isViaA shouldEqual false
   }
