@@ -4,6 +4,7 @@ package runtime
 import communicator.Connector
 import compatibility.jdkCollectionConverters._
 import loci.valueref.PeerValueCache
+import loci.valueref.PeerValueCacheProvider
 import loci.valueref.UniquePeerId
 import messaging.Message
 import transmitter.{RemoteAccessException, RemoteRef}
@@ -36,7 +37,7 @@ class System(
 ) {
 
   val peerId: UUID = UniquePeerId.generate()
-  val peerValueCache: PeerValueCache = PeerValueCache.create()
+  val peerValueCache: PeerValueCache = PeerValueCacheProvider.create()
 
   private implicit val context: ExecutionContext = executionContext
 

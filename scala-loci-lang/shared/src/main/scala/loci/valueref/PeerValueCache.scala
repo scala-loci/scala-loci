@@ -1,5 +1,8 @@
 package loci.valueref
 
+import scalacache.caffeine.CaffeineCache
+import scalacache.modes.sync.mode
+
 import java.util.UUID
 import scala.collection.mutable
 
@@ -16,6 +19,11 @@ class PeerValueMapCache extends PeerValueCache {
   override def put(key: UUID, value: Any): Unit = map.put(key, value)
 }
 
-object PeerValueCache {
-  def create(): PeerValueCache = new PeerValueMapCache
+/**
+ * Only for use on JVM. It won't compile with Scala.js.
+ */
+class PeerValueCaffeineCache extends PeerValueCache {
+  private val cache = CaffeineCache[Any]
+  override def get(key: UUID): Option[Any] = cache.get(key).asInstanceOf[Option[Any]]
+  override def put(key: UUID, value: Any): Unit = cache.put(key)(value)
 }
