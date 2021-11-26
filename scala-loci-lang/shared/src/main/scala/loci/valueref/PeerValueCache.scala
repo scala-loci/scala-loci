@@ -1,7 +1,7 @@
 package loci.valueref
 
-import scala.collection.concurrent
 import java.util.UUID
+import scala.collection.mutable
 
 trait PeerValueCache {
   def get(key: UUID): Option[Any]
@@ -11,7 +11,7 @@ trait PeerValueCache {
 }
 
 class PeerValueMapCache extends PeerValueCache {
-  private val map = concurrent.TrieMap.empty[UUID, Any]
+  private val map = mutable.Map.empty[UUID, Any]
   override def get(key: UUID): Option[Any] = map.get(key)
   override def put(key: UUID, value: Any): Unit = map.put(key, value)
 }
