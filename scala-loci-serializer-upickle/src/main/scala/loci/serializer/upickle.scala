@@ -7,7 +7,7 @@ import _root_.upickle.default._
 
 import scala.util.Try
 
-object upickle {
+object upickle extends LanguageConstructs {
   implicit def upickleBasedSerializable[T]
       (implicit reader: Reader[T], writer: Writer[T]): Serializable[T] = new Serializable[T] {
     def serialize(value: T) =

@@ -210,7 +210,7 @@ lazy val lociSerializerUpickle = (crossProject(JSPlatform, JVMPlatform)
   in file("scala-loci-serializer-upickle")
   settings (normalizedName := "scala-loci-serializer-upickle",
             upickle)
-  dependsOn lociCommunication)
+  dependsOn (lociCommunication, lociLang))
 
 lazy val lociSerializerUpickleJVM = lociSerializerUpickle.jvm
 lazy val lociSerializerUpickleJS = lociSerializerUpickle.js
