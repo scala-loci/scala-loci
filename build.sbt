@@ -122,6 +122,8 @@ val jetty = libraryDependencies ++= Seq(
 val json4sNative = libraryDependencies +=
   "org.json4s" %% "json4s-native" % "4.0.3"
 
+val scalacacheCaffeine = libraryDependencies += "com.github.cb372" %% "scalacache-caffeine" % "0.28.0"
+
 lazy val loci = (project
   in file(".")
   settings ((publish / skip) := true)
@@ -161,7 +163,7 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
             SourceGenerator.remoteSelection,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scribe, scalatest,
-            json4sNative)
+            json4sNative, scalacacheCaffeine)
   jsSettings jsweakreferences
   dependsOn lociCommunication % "compile->compile;test->test")
 
