@@ -1,11 +1,10 @@
 package loci
 package communicator
-package experimental.webrtc
+package webrtc
 
 import WebRTC.{CompleteSession, CompleteUpdate, IncrementalUpdate, InitialSession, SessionUpdate}
 
 import org.scalajs.dom
-import org.scalajs.dom.experimental.webrtc._
 
 import scala.concurrent.duration._
 import scala.scalajs.js
@@ -18,13 +17,13 @@ private object WebRTCConnector {
 }
 
 private abstract class WebRTCConnector(
-  configuration: RTCConfiguration,
+  configuration: dom.RTCConfiguration,
   update: Either[IncrementalUpdate => Unit, CompleteSession => Unit])
     extends WebRTC.Connector {
 
-  val peerConnection = new RTCPeerConnection(configuration)
+  val peerConnection = new dom.RTCPeerConnection(configuration)
 
-  peerConnection.onicecandidate = { event: RTCPeerConnectionIceEvent =>
+  peerConnection.onicecandidate = { event: dom.RTCPeerConnectionIceEvent =>
     if (event.candidate != null)
       update.left foreach {
         _(SessionUpdate(event.candidate))
@@ -70,12 +69,12 @@ private abstract class WebRTCConnector(
 
   protected val unit = (): js.|[Unit, js.Thenable[Unit]]
 
-  protected def setRemoteDescription(description: RTCSessionDescription): Unit
+  protected def setRemoteDescription(description: dom.RTCSessionDescription): Unit
 }
 
 private class WebRTCOffer(
-  configuration: RTCConfiguration,
-  options: RTCOfferOptions,
+  configuration: dom.RTCConfiguration,
+  options: dom.RTCOfferOptions,
   update: Either[IncrementalUpdate => Unit, CompleteSession => Unit])
     extends WebRTCConnector(configuration, update) {
 
@@ -83,9 +82,9 @@ private class WebRTCOffer(
     try {
       val channel = peerConnection.createDataChannel(
         WebRTCConnector.channelLabel,
-        RTCDataChannelInit())
+        new dom.RTCDataChannelInit { })
 
-      peerConnection.createOffer(options) `then` { description: RTCSessionDescription =>
+      peerConnection.createOffer(options) `then` { description: dom.RTCSessionDescription =>
         peerConnection.setLocalDescription(description) `then` { _: Unit =>
           update.left foreach { _(InitialSession(description)) }
           unit
@@ -103,12 +102,12 @@ private class WebRTCOffer(
         connectionEstablished.set(Failure(exception))
     }
 
-  protected def setRemoteDescription(description: RTCSessionDescription) =
+  protected def setRemoteDescription(description: dom.RTCSessionDescription) =
     peerConnection.setRemoteDescription(description)
 }
 
 private class WebRTCAnswer(
-  configuration: RTCConfiguration,
+  configuration: dom.RTCConfiguration,
   update: Either[IncrementalUpdate => Unit, CompleteSession => Unit])
     extends WebRTCConnector(configuration, update) {
 
@@ -130,16 +129,16 @@ private class WebRTCAnswer(
     connect()
   }
 
-  peerConnection.ondatachannel = { event: RTCDataChannelEvent =>
+  peerConnection.ondatachannel = { event: dom.RTCDataChannelEvent =>
     if (event.channel.label == WebRTCConnector.channelLabel) {
       connectorQueue.push(new WebRTCChannelConnector(event.channel, Some(this)))
       connect()
     }
   }
 
-  protected def setRemoteDescription(description: RTCSessionDescription) =
+  protected def setRemoteDescription(description: dom.RTCSessionDescription) =
     peerConnection.setRemoteDescription(description) `then` { _: Unit =>
-      peerConnection.createAnswer() `then` { description: RTCSessionDescription =>
+      peerConnection.createAnswer() `then` { description: dom.RTCSessionDescription =>
         peerConnection.setLocalDescription(description) `then` { _: Unit =>
           update.left foreach { _(InitialSession(description)) }
           unit
@@ -151,7 +150,7 @@ private class WebRTCAnswer(
 }
 
 private class WebRTCChannelConnector(
-  channel: RTCDataChannel,
+  channel: dom.RTCDataChannel,
   optionalConnectionSetup: Option[ConnectionSetup[WebRTC]])
     extends Connector[WebRTC] {
 
@@ -216,7 +215,7 @@ private class WebRTCChannelConnector(
       }
 
       (channel.readyState: @unchecked) match {
-        case RTCDataChannelState.connecting =>
+        case dom.RTCDataChannelState.connecting =>
           // strange fix for strange issue with Chromium
           val handle = js.timers.setTimeout(1.day) { channel.readyState }
   
@@ -225,10 +224,10 @@ private class WebRTCChannelConnector(
             connectionEstablished.trySet(Success(connection))
           }
   
-        case RTCDataChannelState.open =>
+        case dom.RTCDataChannelState.open =>
           connectionEstablished.trySet(Success(connection))
 
-        case RTCDataChannelState.closing | RTCDataChannelState.closed =>
+        case dom.RTCDataChannelState.closing | dom.RTCDataChannelState.closed =>
           connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
       }
     }

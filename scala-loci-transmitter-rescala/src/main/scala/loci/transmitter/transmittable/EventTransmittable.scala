@@ -2,23 +2,22 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.core.{Pulse, Scheduler, Struct}
 import _root_.rescala.interface.RescalaInterface
-import _root_.rescala.reactives.{Event, Evt}
+import _root_.rescala.operator.Pulse
 
 protected[transmitter] trait EventTransmittable {
-  implicit def rescalaEventTransmittable[T, I, U, S <: Struct](implicit
-      scheduler: Scheduler[S],
+  val interface: RescalaInterface
+  import interface._
+
+  implicit def rescalaEventTransmittable[T, I, U](implicit
       transmittable: Transmittable[(Option[T], Option[String]), I, (Option[U], Option[String])])
-  : ConnectedTransmittable.Proxy[Event[T, S], I, Event[U, S]] {
-      type Proxy = Event[U, S]
-      type Internal = Evt[U, S]
+  : ConnectedTransmittable.Proxy[Event[T], I, Event[U]] {
+      type Proxy = Event[U]
+      type Internal = Evt[U]
       type Message = transmittable.Type
   } = {
-    val interface = RescalaInterface.interfaceFor(scheduler)
-
     ConnectedTransmittable.Proxy(
-      internal = interface.Evt[U](),
+      internal = Evt[U](),
 
       provide = (value, context) => {
         val observer =
@@ -38,7 +37,7 @@ protected[transmitter] trait EventTransmittable {
             event.fire(value)
 
           case (_, Some(value)) =>
-            interface.transaction(event) { implicit turn =>
+            transaction(event) { implicit ticket =>
               event.admitPulse(Pulse.Exceptional(RemoteAccessException.deserialize(value)))
             }
 

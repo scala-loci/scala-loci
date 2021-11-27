@@ -24,8 +24,10 @@ object Multitier {
 
 class Multitier(val c: blackbox.Context) {
   import c.universe._
+  import retypecheck._
 
   val logging = Logging(c)
+  val retyper = c.retyper
 
   def annotation(annottees: Tree*): Tree = {
     val multitierAnnotationType = c.mirror.staticClass("_root_.loci.multitier").toType
@@ -88,17 +90,6 @@ class Multitier(val c: blackbox.Context) {
 
     val (annottee, companion) = annottees match {
       case ClassDef(mods, tpname, tparams, impl @ Template(parents, self, _)) :: companion =>
-        def reducedFlags(mods: Modifiers): Modifiers = {
-          val reducedFlags =
-            Seq(Flag.ARTIFACT, Flag.BYNAMEPARAM, Flag.CONTRAVARIANT, Flag.COVARIANT,
-                Flag.FINAL, Flag.IMPLICIT, Flag.LOCAL, Flag.MUTABLE, Flag.OVERRIDE,
-                Flag.PARAM, Flag.PARAMACCESSOR, Flag.PRIVATE, Flag.PROTECTED, Flag.SYNTHETIC)
-              .foldLeft(NoFlags) { (flagAcc, flag) =>
-                if (mods hasFlag flag) flagAcc | flag else flagAcc
-              }
-          Modifiers(reducedFlags, mods.privateWithin, mods.annotations)
-        }
-
         val body = impl.body map {
           case tree @ DefDef(mods, termNames.CONSTRUCTOR, tparams, _, tpt, rhs) =>
             constructorParams += tree.vparamss
@@ -107,7 +98,7 @@ class Multitier(val c: blackbox.Context) {
               _ map { tree =>
                 val ValDef(mods, name, tpt, rhs) = tree: @unchecked
                 if ((mods hasFlag Flag.DEFAULTPARAM) && rhs.nonEmpty)
-                  treeCopy.ValDef(tree, reducedFlags(mods), name, tpt, EmptyTree)
+                  treeCopy.ValDef(tree, retyper.cleanModifiers(mods), name, tpt, EmptyTree)
                 else
                   tree
               }
@@ -152,7 +143,6 @@ class Multitier(val c: blackbox.Context) {
     val processedAnnotee: Tree = try {
       import preprocessors._
       import components._
-      import retypecheck._
 
       val preprocessedAnnottee = Preprocessor.run(c)(
         annottee,
@@ -160,8 +150,6 @@ class Multitier(val c: blackbox.Context) {
 
       if (expandMultitierMacro) {
         try {
-          val retyper = c.retyper
-
           logging.info(
             s"Expanding multitier code for ${c.internal.enclosingOwner.fullName}.${annottee.name} " +
             s"in ${c.enclosingPosition.source.file.path}")

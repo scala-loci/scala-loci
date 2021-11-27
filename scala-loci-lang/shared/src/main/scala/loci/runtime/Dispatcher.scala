@@ -39,7 +39,7 @@ class Dispatcher[D <: Dispatch[D]](implicit context: ExecutionContext) {
 
     compatibility.listBuffer.mapInPlace(dispatches) { case (dispatch, running) =>
       dispatch match {
-        case _: Undispatchable[D] =>
+        case _: Undispatchable[_] =>
           pendings += dispatch
           dispatch -> false
 

@@ -1,27 +1,22 @@
 package loci
 package transmitter
 
-import _root_.rescala.core.{ReSerializable, Scheduler, Struct}
 import _root_.rescala.interface.RescalaInterface
-import _root_.rescala.macros.cutOutOfUserComputation
-import _root_.rescala.reactives.Signal
+import _root_.rescala.operator.cutOutOfUserComputation
 
 protected[transmitter] trait SignalAccessor {
+  val interface: RescalaInterface
+  import interface._
+
   private final val asLocalId = 0
 
-  implicit class RescalaSignalMultipleAccessor[S <: Struct, V, R, T, L](
+  implicit class RescalaSignalMultipleAccessor[V, R, T, L](
     value: V from R)(implicit
-    ev: Transmission[V, R, Signal[T, S], L, Multiple],
-    protected val scheduler: Scheduler[S])
+    ev: Transmission[V, R, Signal[T], L, Multiple])
       extends RemoteAccessor {
-    protected val interface = RescalaInterface.interfaceFor(scheduler)
-
-    import interface.{Signal, Var, transaction}
 
     @cutOutOfUserComputation lazy val asLocalFromAll: Signal[Seq[(Remote[R], Signal[T])]] =
       value.cache(asLocalId) {
-        implicit val serializer = ReSerializable.noSerializer[Seq[(Remote[R], Signal[T])]]
-
         val mapping = transaction() { _ => Var(Seq.empty[(Remote[R], Signal[T])]) }
 
         def update() = mapping.set(value.remotes zip value.retrieveValues)
@@ -34,19 +29,13 @@ protected[transmitter] trait SignalAccessor {
       }
   }
 
-  implicit class RescalaSignalOptionalAccessor[S <: Struct, V, R, T, L](
+  implicit class RescalaSignalOptionalAccessor[V, R, T, L](
     value: V from R)(implicit
-    ev: Transmission[V, R, Signal[T, S], L, Optional],
-    protected val scheduler: Scheduler[S])
+    ev: Transmission[V, R, Signal[T], L, Optional])
       extends RemoteAccessor {
-    protected val interface = RescalaInterface.interfaceFor(scheduler)
-
-    import interface.{Signal, Var, transaction}
 
     @cutOutOfUserComputation lazy val asLocal: Signal[Option[T]] =
       value.cache(asLocalId) {
-        implicit val serializer = ReSerializable.noSerializer[Option[Signal[T]]]
-
         val option = transaction() { _ => Var(Option.empty[Signal[T]]) }
 
         def update() = option.set(value.retrieveValue)
@@ -59,14 +48,10 @@ protected[transmitter] trait SignalAccessor {
       }
   }
 
-  implicit class RescalaSignalSingleAccessor[S <: Struct, V, R, T, L](
+  implicit class RescalaSignalSingleAccessor[V, R, T, L](
     value: V from R)(implicit
-    ev: Transmission[V, R, Signal[T, S], L, Single],
-    protected val scheduler: Scheduler[S])
+    ev: Transmission[V, R, Signal[T], L, Single])
       extends RemoteAccessor {
-    protected val interface = RescalaInterface.interfaceFor(scheduler)
-
-    import interface.Signal
 
     @cutOutOfUserComputation lazy val asLocal: Signal[T] =
       value.retrieveValue

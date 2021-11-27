@@ -3,7 +3,7 @@ import sbt._
 
 object SourceGenerator {
   val transmittableTuples =
-    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+    Compile / sourceGenerators += Compile / sourceManaged map { dir =>
       val members = (1 to 22) map { i =>
         val tuple = s"Tuple$i"
         val tupleArgsT = (0 until i) map { i => s"T$i" } mkString ", "
@@ -75,7 +75,7 @@ object SourceGenerator {
     }
 
   val remoteSelection =
-    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+    Compile / sourceGenerators += Compile / sourceManaged map { dir =>
       val members = (2 to 22) map { i =>
         val args = s"Remote[R]${", Remote[R]" * (i - 1)}"
         s"""  implicit def tuple$i[R](r: Tuple$i[$args]): RemoteSelection[R, fromMultiple] = erased
@@ -103,7 +103,7 @@ object SourceGenerator {
     }
 
   val functionsBindingBuilder =
-    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+    Compile / sourceGenerators += Compile / sourceManaged map { dir =>
       val builders = (0 to 22) map { i =>
         val argTypes = (0 until i) map { i => s"T$i" } mkString ", "
         val typedArgs = (0 until i) map { i => s"v$i: T$i" } mkString ", "
@@ -178,7 +178,7 @@ object SourceGenerator {
     }
 
   val functionSubjectiveBinding =
-    sourceGenerators in Compile += sourceManaged in Compile map { dir =>
+    Compile / sourceGenerators += Compile / sourceManaged map { dir =>
       val subjectiveBinding = (0 to 21) map { i =>
         val argTypes = (0 until i) map { i => s"T$i" } mkString ", "
         val typedArgs = (0 until i) map { i => s"v$i: T$i" } mkString ", "

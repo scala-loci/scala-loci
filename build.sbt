@@ -3,19 +3,23 @@ import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
 
 enablePlugins(GitVersioning)
 
-(ThisBuild / git.useGitDescribe) := true
+Global / excludeLintKeys += git.useGitDescribe
 
-(ThisBuild / scalaVersion) := "2.13.5"
+ThisBuild / git.useGitDescribe := true
 
-(ThisBuild / crossScalaVersions) := Seq("2.11.12", "2.12.11", "2.13.5")
+ThisBuild / organization := "io.github.scala-loci"
 
-(ThisBuild / organization) := "de.tuda.stg"
+ThisBuild / homepage := Some(url("https://scala-loci.github.io/"))
 
-(ThisBuild / licenses) += "Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")
+ThisBuild / licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")
 
-(ThisBuild / scalacOptions) ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
+ThisBuild / scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 
-(ThisBuild / resolvers) += ("STG old bintray repo" at "http://www.st.informatik.tu-darmstadt.de/maven/").withAllowInsecureProtocol(true)
+ThisBuild / resolvers += "jitpack" at "https://jitpack.io"
+
+ThisBuild / scalaVersion := "2.13.7"
+
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.7")
 
 def `is 2.12+`(scalaVersion: String): Boolean =
   CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 12 } getOrElse false
@@ -41,58 +45,44 @@ val macroparadise = Seq(
 val macrodeclaration = libraryDependencies +=
   scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
 
-val jsweakreferences = Seq(
-  libraryDependencies ++= {
-    if ("0.6" != System.getenv("SCALAJS"))
-      Seq("org.scala-js" %%% "scalajs-fake-weakreferences" % "1.0.0")
-    else
-      Seq.empty
-  })
+val jsweakreferences = libraryDependencies += 
+  "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0"
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.8" % Test
+  "org.scalatest" %%% "scalatest" % "3.2.10" % Test
 
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "3.6.2"
+    "com.outr" %%% "scribe" % "3.6.3"
   else
-    "com.outr" %%% "scribe" % "2.7.9"
+    "com.outr" %%% "scribe" % "3.6.2"
 }
-
-val retypecheckRepo =
-  resolvers += Resolver.bintrayRepo("stg-tud", "maven")
 
 val retypecheck = libraryDependencies +=
-  "de.tuda.stg" %% "retypecheck" % "0.7.0"
-
-val rescalaRepo =
-  resolvers += Resolver.bintrayRepo("stg-tud", "maven")
+  "io.github.scala-loci" %% "retypecheck" % "0.9.0"
 
 val rescala = libraryDependencies +=
-  "de.tuda.stg" %%% "rescala" % "0.30.0"
+  "com.github.rescala-lang.rescala" %%% "rescala" % "cbb7980"
 
-val upickle = libraryDependencies += {
-  if (`is 2.12+`(scalaVersion.value))
-    "com.lihaoyi" %%% "upickle" % "1.3.12"
-  else
-    "com.lihaoyi" %%% "upickle" % "0.7.4"
-}
+val upickle = libraryDependencies +=
+  "com.lihaoyi" %%% "upickle" % "1.4.2"
 
-val circe = libraryDependencies ++= {
-  if (`is 2.12+`(scalaVersion.value))
-    Seq(
-      "io.circe" %%% "circe-core" % "0.13.0",
-      "io.circe" %%% "circe-parser" % "0.13.0")
-  else
-    Seq(
-      "io.circe" %%% "circe-core" % "0.11.2",
-      "io.circe" %%% "circe-parser" % "0.11.2")
-}
+val circe = Seq(
+  libraryDependencies ++= {
+    if (`is 2.12+`(scalaVersion.value))
+      Seq(
+        "io.circe" %%% "circe-core" % "0.14.1",
+        "io.circe" %%% "circe-parser" % "0.14.1")
+    else
+      Seq.empty
+  },
+  (compile / skip) := !`is 2.12+`(scalaVersion.value),
+  (publish / skip) := !`is 2.12+`(scalaVersion.value))
 
 val jsoniter = Seq(
   libraryDependencies ++= {
     if (`is 2.12+`(scalaVersion.value))
-      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.8.0")
+      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.12.0")
     else
       Seq.empty
   },
@@ -108,10 +98,10 @@ val play = libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play" % "[2.5,2.8)" % Provided)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "1.1.0" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "2.0.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "3.13.7"
+  "io.javalin" % "javalin" % "4.1.1"
 
 val jetty = libraryDependencies ++= Seq(
   "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.44.v20210927",
@@ -159,8 +149,7 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
   in file("scala-loci-lang")
   settings (normalizedName := "scala-loci-lang",
             SourceGenerator.remoteSelection,
-            retypecheckRepo, retypecheck,
-            macroparadise, macrodeclaration, scribe, scalatest)
+            retypecheck, macroparadise, macrodeclaration, scribe, scalatest)
   jsSettings jsweakreferences
   dependsOn lociCommunication % "compile->compile;test->test")
 
@@ -224,7 +213,7 @@ lazy val lociSerializerCirceJVM = lociSerializerCirce.jvm
 lazy val lociSerializerCirceJS = lociSerializerCirce.js
 
 
-lazy val lociSerializerJsoniterScala = (crossProject(JSPlatform, JVMPlatform) 
+lazy val lociSerializerJsoniterScala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-serializer-jsoniter-scala")
   settings (normalizedName := "scala-loci-serializer-jsoniter-scala",
@@ -239,7 +228,7 @@ lazy val lociTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("scala-loci-transmitter-rescala")
   settings (normalizedName := "scala-loci-transmitter-rescala",
-            rescalaRepo, rescala, scalatest)
+            rescala, scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")
 
 lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
@@ -334,4 +323,3 @@ lazy val lociCommunicatorWebRtc = (crossProject(JSPlatform, JVMPlatform)
 
 lazy val lociCommunicatorWebRtcJVM = lociCommunicatorWebRtc.jvm
 lazy val lociCommunicatorWebRtcJS = lociCommunicatorWebRtc.js
-

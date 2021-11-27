@@ -337,20 +337,8 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     def withFlags(flags: FlagSet): Modifiers =
       Modifiers(mods.flags | flags, mods.privateWithin, mods.annotations)
 
-    def withoutFlags(flags: FlagSet): Modifiers = {
-      val reducedFlags =
-        Seq(Flag.ABSOVERRIDE, Flag.ABSTRACT, Flag.ARTIFACT, Flag.BYNAMEPARAM,
-            Flag.CASE, Flag.CASEACCESSOR, Flag.CONTRAVARIANT, Flag.COVARIANT,
-            Flag.DEFAULTINIT, Flag.DEFAULTPARAM, Flag.DEFERRED, Flag.FINAL,
-            Flag.IMPLICIT, Flag.INTERFACE, Flag.LAZY, Flag.LOCAL, Flag.MACRO,
-            Flag.MUTABLE, Flag.OVERRIDE, Flag.PARAM, Flag.PARAMACCESSOR,
-            Flag.PRESUPER, Flag.PRIVATE, Flag.PROTECTED, Flag.SEALED,
-            Flag.STABLE, Flag.SYNTHETIC, Flag.TRAIT)
-          .foldLeft(NoFlags) { (flagAcc, flag) =>
-            if ((flags != (flags | flag)) && (mods hasFlag flag)) flagAcc | flag else flagAcc
-          }
-      Modifiers(reducedFlags, mods.privateWithin, mods.annotations)
-    }
+    def withoutFlags(flags: FlagSet): Modifiers =
+      retyper.cleanModifiers(mods, flags)
   }
 
   implicit class TreeOps(tree: Tree) {

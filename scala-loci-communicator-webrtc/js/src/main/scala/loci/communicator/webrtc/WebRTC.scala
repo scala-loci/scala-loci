@@ -1,8 +1,8 @@
 package loci
 package communicator
-package experimental.webrtc
+package webrtc
 
-import org.scalajs.dom.experimental.webrtc._
+import org.scalajs.dom
 
 import scala.scalajs.js.Array
 
@@ -27,14 +27,14 @@ object WebRTC extends WebRTCUpdate {
     def complete(update: CompleteSession => Unit): Connector
   }
 
-  def apply(channel: RTCDataChannel): communicator.Connector[WebRTC] =
+  def apply(channel: dom.RTCDataChannel): communicator.Connector[WebRTC] =
     new WebRTCChannelConnector(channel, None)
 
   def offer(
-      configuration: RTCConfiguration =
-        RTCConfiguration(iceServers = Array[RTCIceServer]()),
-      options: RTCOfferOptions =
-        RTCOfferOptions()): ConnectorFactory =
+      configuration: dom.RTCConfiguration =
+        new dom.RTCConfiguration { iceServers = Array[dom.RTCIceServer]() },
+      options: dom.RTCOfferOptions =
+        new dom.RTCOfferOptions { }): ConnectorFactory =
     new ConnectorFactory {
       def incremental(update: IncrementalUpdate => Unit) =
         new WebRTCOffer(configuration, options, Left(update))
@@ -43,8 +43,8 @@ object WebRTC extends WebRTCUpdate {
     }
 
   def answer(
-      configuration: RTCConfiguration =
-        RTCConfiguration(iceServers = Array[RTCIceServer]())): ConnectorFactory =
+      configuration: dom.RTCConfiguration =
+        new dom.RTCConfiguration { iceServers = Array[dom.RTCIceServer]() }): ConnectorFactory =
     new ConnectorFactory {
       def incremental(update: IncrementalUpdate => Unit) =
         new WebRTCAnswer(configuration, Left(update))

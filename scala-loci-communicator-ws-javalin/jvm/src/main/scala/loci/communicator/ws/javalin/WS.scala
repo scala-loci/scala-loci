@@ -5,7 +5,7 @@ package ws.javalin
 import java.util.function.Consumer
 
 import io.javalin.Javalin
-import io.javalin.websocket.{WsContext, WsHandler}
+import io.javalin.websocket.{WsContext, WsConfig}
 
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
@@ -36,8 +36,8 @@ object WS extends WSSetupFactory {
   def apply(javalin: Javalin, path: String, properties: Properties): Listener[WS] =
     new Listener[WS] { self =>
       protected def startListening(connectionEstablished: Connected[WS]): Try[Listening] = {
-        javalin.ws(path, new Consumer[WsHandler] {
-          override def accept(ws: WsHandler): Unit =
+        javalin.ws(path, new Consumer[WsConfig] {
+          override def accept(ws: WsConfig): Unit =
             WSHandler.handleConnection(ws, path, properties, self, connectionEstablished.fire)
         })
 

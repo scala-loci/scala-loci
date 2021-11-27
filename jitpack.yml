@@ -1,0 +1,6 @@
+jdk:
+  - openjdk11
+install:
+  - sbt -Dsbt.log.noformat=true clean +publishM2
+env:
+  SBT_OPTS: -Xmx2048M

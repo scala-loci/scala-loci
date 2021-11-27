@@ -2,26 +2,22 @@ package loci
 package transmitter
 package transmittable
 
-import _root_.rescala.core.{Pulse, ReSerializable, Scheduler, Struct}
 import _root_.rescala.interface.RescalaInterface
-import _root_.rescala.reactives.{Signal, Var}
+import _root_.rescala.operator.Pulse
 
 protected[transmitter] trait SignalTransmittable {
-  implicit def rescalaSignalTransmittable[T, I, U, S <: Struct](implicit
-      scheduler: Scheduler[S],
+  val interface: RescalaInterface
+  import interface._
+
+  implicit def rescalaSignalTransmittable[T, I, U](implicit
       transmittable: Transmittable[(Option[T], Option[String]), I, (Option[U], Option[String])])
-  : ConnectedTransmittable.Proxy[Signal[T, S], I, Signal[U, S]] {
-      type Proxy = Signal[U, S]
-      type Internal = Var[U, S]
+  : ConnectedTransmittable.Proxy[Signal[T], I, Signal[U]] {
+      type Proxy = Signal[U]
+      type Internal = Var[U]
       type Message = transmittable.Type
   } = {
-    val interface = RescalaInterface.interfaceFor(scheduler)
-
     ConnectedTransmittable.Proxy(
-      internal = {
-        implicit val serializer = ReSerializable.noSerializer[U]
-        interface.transaction() { _ => interface.Var.empty[U] }
-      },
+      internal = Var.empty[U],
 
       provide = (value, context) => {
         val signal =
@@ -38,13 +34,13 @@ protected[transmitter] trait SignalTransmittable {
       },
 
       receive = (signal, value, context) => {
-        def update(signal: interface.Var[U], value: (Option[U], Option[String])) =
+        def update(signal: Var[U], value: (Option[U], Option[String])) =
           value match {
             case (Some(value), _) =>
               signal.set(value)
 
             case (_, Some(value)) =>
-              interface.transaction(signal) { implicit turn =>
+              transaction(signal) { implicit ticket =>
                 signal.admitPulse(Pulse.Exceptional(RemoteAccessException.deserialize(value)))
               }
 
@@ -66,7 +62,7 @@ protected[transmitter] trait SignalTransmittable {
       proxy = (signal, completion, context) => {
         completion foreach {
           _.failed foreach { exception =>
-            interface.transaction(signal) { implicit turn =>
+            transaction(signal) { implicit ticket =>
               signal.admitPulse(Pulse.Exceptional(exception))
             }
           }

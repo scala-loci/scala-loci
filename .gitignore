@@ -8,6 +8,7 @@ target/
 .project
 .classpath
 .bloop
+.bsp
 *.iml
 *.ipr
 *.iws
@@ -22,4 +23,3 @@ target/
 *.out
 *.synctex.gz
 *.toc
-.bsp/

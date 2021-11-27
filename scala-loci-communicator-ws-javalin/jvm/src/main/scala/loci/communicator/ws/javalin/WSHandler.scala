@@ -32,12 +32,12 @@ private object WSHandler {
     ctx.attribute[(Connection[WS], Notice.Stream.Source[MessageBuffer], () => Unit)](connectionAttributeKey)
 
   def handleConnection(
-      wsHandler: WsHandler,
+      wsConfig: WsConfig,
       wsPath: String,
       properties: WS.Properties,
       connectionSetup: ConnectionSetup[WS],
       connectionEstablished: Try[Connection[WS]] => Unit): Unit = {
-    wsHandler.onConnect(new WsConnectHandler {
+    wsConfig.onConnect(new WsConnectHandler {
       override def handleConnect(ctx: WsConnectContext): Unit = {
         val connection = synchronized {
 
@@ -128,14 +128,14 @@ private object WSHandler {
 
     // frame parsing
 
-    wsHandler.onMessage(new WsMessageHandler {
+    wsConfig.onMessage(new WsMessageHandler {
       override def handleMessage(ctx: WsMessageContext): Unit = synchronized {
         val (_, _, resetTimeout) = connectionAttribute(ctx)
         resetTimeout()
       }
     })
 
-    wsHandler.onBinaryMessage(new WsBinaryMessageHandler {
+    wsConfig.onBinaryMessage(new WsBinaryMessageHandler {
       override def handleBinaryMessage(ctx: WsBinaryMessageContext): Unit = {
         val (doReceive, data) = synchronized {
           val (_, doReceive, resetTimeout) = connectionAttribute(ctx)
@@ -151,7 +151,7 @@ private object WSHandler {
       }
     })
 
-    wsHandler.onClose(new WsCloseHandler {
+    wsConfig.onClose(new WsCloseHandler {
       override def handleClose(ctx: WsCloseContext): Unit = {
         val connection = synchronized {
           val (connection, _, _) = connectionAttribute(ctx)

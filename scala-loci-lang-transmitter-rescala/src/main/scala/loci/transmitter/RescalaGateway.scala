@@ -4,21 +4,19 @@ package transmitter
 import communicator.Connector
 import messaging.ConnectionsBase
 
-import _root_.rescala.core.{ReSerializable, Scheduler, Struct}
 import _root_.rescala.interface.RescalaInterface
-import _root_.rescala.macros.cutOutOfUserComputation
+import _root_.rescala.operator.cutOutOfUserComputation
 
 protected[transmitter] trait RescalaGateway {
+  val interface: RescalaInterface
+  import interface._
+
   private final val joinedId = 0
   private final val leftId = 1
   private final val connectedId = 2
 
-  protected class RescalaGateway[R, S <: Struct](gateway: Gateway[R])(implicit
-      ev: Connection[R, _],
-      protected val scheduler: Scheduler[S]) extends RemoteGateway {
-    protected val interface = RescalaInterface.interfaceFor(scheduler)
-
-    import interface.{Event, Evt}
+  protected class RescalaGateway[R](gateway: Gateway[R])(implicit
+      ev: Connection[R, _]) extends RemoteGateway {
 
     @cutOutOfUserComputation lazy val joined: Event[Remote[R]] =
       gateway.cache(joinedId) {
@@ -40,15 +38,11 @@ protected[transmitter] trait RescalaGateway {
     }
   }
 
-  implicit class RescalaMultipleGateway[R, S <: Struct](gateway: Gateway[R])(implicit
-      ev: Connection[R, Multiple],
-      override protected val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
-    import interface.{Signal, Var}
+  implicit class RescalaMultipleGateway[R](gateway: Gateway[R])(implicit
+      ev: Connection[R, Multiple]) extends RescalaGateway[R](gateway) {
 
     @cutOutOfUserComputation lazy val connected: Signal[Seq[Remote[R]]] =
       gateway.cache(connectedId) {
-        implicit val serializer = ReSerializable.noSerializer[Seq[Remote[R]]]
-
         val signal = Var(gateway.remotes)
         update { signal.set(gateway.remotes) }
         signal
@@ -58,15 +52,11 @@ protected[transmitter] trait RescalaGateway {
       gateway.connectRemote(connector)
   }
 
-  implicit class RescalaOptionalGateway[R, S <: Struct](gateway: Gateway[R])(implicit
-      ev: Connection[R, Optional],
-      override protected val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
-    import interface.{Signal, Var}
+  implicit class RescalaOptionalGateway[R](gateway: Gateway[R])(implicit
+      ev: Connection[R, Optional]) extends RescalaGateway[R](gateway) {
 
     @cutOutOfUserComputation lazy val connected: Signal[Option[Remote[R]]] =
       gateway.cache(connectedId) {
-        implicit val serializer = ReSerializable.noSerializer[Option[Remote[R]]]
-
         val signal = Var(gateway.remote)
         update { signal.set(gateway.remote) }
         signal
@@ -76,9 +66,8 @@ protected[transmitter] trait RescalaGateway {
       gateway.connectRemote(connector)
   }
 
-  implicit class RescalaSingleGateway[R, S <: Struct](gateway: Gateway[R])(implicit
-      ev: Connection[R, Single],
-      override protected val scheduler: Scheduler[S]) extends RescalaGateway[R, S](gateway) {
+  implicit class RescalaSingleGateway[R](gateway: Gateway[R])(implicit
+      ev: Connection[R, Single]) extends RescalaGateway[R](gateway) {
 
     @cutOutOfUserComputation lazy val connected: Remote[R] =
       gateway.remote

@@ -1,8 +1,8 @@
 package loci
 package communicator
-package experimental.webrtc
+package webrtc
 
-import org.scalajs.dom.experimental.webrtc._
+import org.scalajs.dom
 
 import scala.annotation.compileTimeOnly
 
@@ -31,14 +31,14 @@ object WebRTC extends WebRTCUpdate {
   }
 
   @compileTimeOnly("WebRTC communicator only available in JS")
-  def apply(channel: RTCDataChannel): communicator.Connector[WebRTC] = ???
+  def apply(channel: dom.RTCDataChannel): communicator.Connector[WebRTC] = ???
 
   @compileTimeOnly("WebRTC communicator only available in JS")
   def offer(
-    configuration: RTCConfiguration = RTCConfiguration(),
-    options: RTCOfferOptions = RTCOfferOptions()): ConnectorFactory = ???
+    configuration: dom.RTCConfiguration = new dom.RTCConfiguration { },
+    options: dom.RTCOfferOptions = new dom.RTCOfferOptions { }): ConnectorFactory = ???
 
   @compileTimeOnly("WebRTC communicator only available in JS")
   def answer(
-    configuration: RTCConfiguration = RTCConfiguration()): ConnectorFactory = ???
+    configuration: dom.RTCConfiguration = new dom.RTCConfiguration { }): ConnectorFactory = ???
 }

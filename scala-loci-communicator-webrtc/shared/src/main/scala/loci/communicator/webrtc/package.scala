@@ -1,6 +1,5 @@
 package loci
 package communicator
-package experimental
 
 import webrtc.WebRTC._
 
