@@ -3,6 +3,7 @@ package loci
 import scala.annotation.{StaticAnnotation, compileTimeOnly}
 import scala.language.experimental.macros
 import scala.language.implicitConversions
+import scala.util.Properties
 
 @compileTimeOnly("enable macro paradise to use platform-specific code")
 final class platform(cond: Boolean) extends StaticAnnotation {
@@ -12,6 +13,9 @@ final class platform(cond: Boolean) extends StaticAnnotation {
 object platform {
   final val jvm = false
   final val js = true
+
+  final val mac = Properties.isMac
+  final val win = Properties.isWin
 
   def apply[T](cond: Boolean)(body: T): Unit = macro utility.platform.apply[T]
 

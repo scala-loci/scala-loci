@@ -110,6 +110,8 @@ object platform {
   private def evaluateBooleanExpr(c: blackbox.Context)(expr: c.Tree): Boolean = {
     import c.universe._
 
+    val platform = symbolOf[loci.platform.type]
+
     def isStable(tree: Tree): Boolean = tree match {
       case Select(qualifier, _) if tree.symbol.isTerm && tree.symbol.asTerm.isStable =>
         isStable(qualifier)
@@ -149,6 +151,20 @@ object platform {
           c.abort(expr.pos, s"unknown operator: $operator")
 
         !value
+
+      case _
+        if expr.symbol != null &&
+           expr.symbol.isMethod &&
+           expr.symbol.owner == platform &&
+           expr.tpe != null &&
+           expr.tpe <:< typeOf[Boolean] &&
+           isStable(expr) =>
+        try
+          loci.platform.getClass.getMethod(expr.symbol.name.toString).invoke(loci.platform).asInstanceOf[Boolean]
+        catch {
+          case _: NoSuchMethodException | _: IllegalArgumentException | _: ClassCastException =>
+            c.abort(expr.pos, s"failed to read value: $expr")
+        }
 
       case _ if isStable(expr) =>
         if (!(expr.tpe <:< typeOf[Boolean]))
