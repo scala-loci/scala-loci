@@ -3,10 +3,10 @@ package language
 package impl
 
 import transmitter.Serializables._
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
+import java.util.UUID
 import scala.collection.mutable
 
 
@@ -207,6 +207,7 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
   def emptySystem(peer: runtime.PlacedValues) = new runtime.System(
     peer,
     runtime.Peer.Signature("", List.empty, runtime.Module.Signature("", List.empty)),
+    UUID.randomUUID(),
     None,
     false,
     Map.empty,
