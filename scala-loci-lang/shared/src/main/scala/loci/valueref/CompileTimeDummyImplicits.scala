@@ -27,15 +27,8 @@ trait CompileTimeDummyImplicits {
   @compileTimeOnly("dummySignature can only be invoked in multitier code and should be replaced at compile time")
   implicit def dummySignature: Peer.Signature = erased
 
-  @compileTimeOnly("dummyGateway can only be invoked in multitier code and should be replaced at compile time")
-  implicit def dummyGateway[R]: loci.language.Gateway.DefaultMultipleGateway[R] = erased
-
-  @compileTimeOnly("dummyRemotePeerIdAccess can only be invoked in multitier code and should be replaced at compile time")
-  implicit def dummyRemotePeerIdAccess[R, P](
-    implicit transmission: Transmission[Selected.Single[UUID], R, Future[UUID], P, Single],
-    placedClean: PlacedClean[UUID on R, R, UUID, UUID, UUID],
-    canonicalPlacedTypeAlias: CanonicalPlacedTypeAlias[UUID fromSingle R, UUID fromSingle R]
-  ): Remote[R] => PlacedValue.BasicSingleAccessor[Selected.Single[UUID], R, Future[UUID], P] = erased
+  @compileTimeOnly("dummyRemotePeerIds can only be invoked in multitier code and should be replaced at compile time")
+  implicit def dummyRemotePeerIds[R]: Map[UUID, Remote[R]] = erased
 
   @compileTimeOnly("dummyCacheValueAccess can only be invoked in multitier code and should be replaced at compile time")
   implicit def dummyCacheValueAccess[V, R, P](

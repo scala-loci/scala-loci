@@ -8,7 +8,7 @@ import scala.collection.mutable
 import scala.reflect.macros.blackbox
 
 object RemoteValueReference extends Component.Factory[RemoteValueReference](
-  requires = Seq(Commons, Initialization, ModuleInfo, GatewayAccess)
+  requires = Seq(Commons, Initialization, ModuleInfo)
 ) {
   override def asInstance[C <: blackbox.Context]: PartialFunction[Component[C], RemoteValueReference[C]] = {
     case c: RemoteValueReference[C] => c
@@ -37,12 +37,10 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
   private val commons = engine.require(Commons)
   private val initialization = engine.require(Initialization)
   private val moduleInfo = engine.require(ModuleInfo)
-  private val gatewayAccess = engine.require(GatewayAccess)
 
   import commons._
   import initialization._
   import moduleInfo._
-  import gatewayAccess._
   import engine.c.universe._
 
   /**
@@ -97,8 +95,8 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
    * This phase is executed before "remote:block".
    * It processes occurrences of the `ValueRefAccessor` implicit class and transforms its implicit parameters, which
    * are filled with compile-time dummies. The context parameter is set to null, the executionContext is not changed.
-   * For the gateway we create a `DefaultMultipleGateway` that will be further processed in "gateway:access".
-   * For the remotePeerIdAccess and cacheValueAccess we create a `BasicSingleAccessor` each, using the parameters from
+   * The `remotePeerIds` are replaced with `$loci$sys.getRemotePeerIds`.
+   * For the  cacheValueAccess we create a `BasicSingleAccessor`, using the parameters from
    * the dummy implicit. The `BasicSingleAccessor` contains a remote block as value, which is further processed in
    * "remote:block".
    */
@@ -109,63 +107,17 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
       val q"$accessor[..$tpts](...$exprss)" = valueRefAccessor: @unchecked
       val List(
         List(value),
-        List(gateway, remotePeerIdAccess, cacheValueAccess, _, executionContext)
+        List(remotePeerIds, cacheValueAccess, _, executionContext)
       ) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
 
       val nullContext = q"null" // nulling the context ensures that it does not fail due to unexpected multitier construct in "values:validate"
-      val actualGateway = createMultipleGateway(gateway.tpe.typeArgs.head, gateway.pos)
-      val actualRemotePeerIdAccess = generatePeerIdAccess(remotePeerIdAccess)
+      val actualRemotePeerIds = internal.setType(q"$$loci$$sys.getRemotePeerIds", remotePeerIds.tpe)
       val actualCacheValueAccess = generateCacheValueAccess(cacheValueAccess)
 
       internal.setType(
-        q"$accessor[..$tpts]($value)($actualGateway, $actualRemotePeerIdAccess, $actualCacheValueAccess, $nullContext, $executionContext)",
+        q"$accessor[..$tpts]($value)($actualRemotePeerIds, $actualCacheValueAccess, $nullContext, $executionContext)",
         valueRefAccessor.tpe
       )
-    }
-
-    /**
-     * Uses transmission, placedClean, and canonicalPlacedTypeAlias that are given as implicit parameters in the
-     * dummy access ([[loci.valueref.CompileTimeDummyImplicits.dummyRemotePeerIdAccess]]. Returns a function that maps
-     * a remote to an access of the unique peer id on that particular remote.
-     */
-    def generatePeerIdAccess(dummyAccess: Tree): Tree = {
-      val q"$_[..$_]($transmission, $placedClean, $canonicalPlacedTypeAlias)" = dummyAccess: @unchecked
-      val List(remoteType, basicSingleAccessorType) = dummyAccess.tpe.typeArgs: @unchecked
-
-      val peerId = internal.setType(q"$$loci$$sys.peerId", types.uniquePeerId)
-
-      val remote: Tree = createTypeTree(remoteType, dummyAccess.pos)
-      val uuidPlacedRemote: Tree = createTypeTree(canonicalPlacedTypeAlias.tpe.typeArgs.last, dummyAccess.pos)
-
-      val remoteParam = ValDef(Modifiers(Flag.PARAM), TermName("$remote"), remote, EmptyTree)
-      val remoteIdent = internal.setType(Ident(remoteParam.name), remoteType)
-
-      val placedContextTypeTree: Tree = createTypeTree(types.context.mapArgs(_ => List(remoteType.typeArgs.head)), dummyAccess.pos)
-      val placedContextParam = internal.setPos(
-        ValDef(Modifiers(Flag.IMPLICIT | Flag.PARAM), TermName("$bang"), placedContextTypeTree, EmptyTree),
-        dummyAccess.pos
-      )
-
-      val remoteBlockBody = internal.setType(
-        q"(..$placedContextParam) => $peerId",
-        types.function.mapArgs(_ => List(placedContextTypeTree.tpe, peerId.tpe))
-      )
-
-      // symbols required for "remote:block" to lift the remote block and the position is required for "remote:block"
-      // to create the lifted definition at this position, which is then further required by "remote:marshalling"
-      val selectApply = internal.setSymbol(q"${names.root}.loci.`package`.on.apply", symbols.SelectApply)
-      val run = atPos(dummyAccess.pos)(q"$selectApply[${remoteType.typeArgs.head}]($remoteIdent).run")
-      val blockApply = internal.setSymbol(q"$run.apply", symbols.BlockApply)
-
-      val accessedPeerId = internal.setType(
-        q"$blockApply[${peerId.tpe}, ${peerId.tpe}, $uuidPlacedRemote]($remoteBlockBody)($placedClean, $canonicalPlacedTypeAlias)",
-        uuidPlacedRemote.tpe
-      )
-      val appliedAccessor = internal.setType(
-        q"${trees.basicSingleAccessor}[..${basicSingleAccessorType.typeArgs}]($accessedPeerId)($transmission)",
-        basicSingleAccessorType
-      )
-      internal.setType(q"(..$remoteParam) => $appliedAccessor", dummyAccess.tpe)
     }
 
     /**

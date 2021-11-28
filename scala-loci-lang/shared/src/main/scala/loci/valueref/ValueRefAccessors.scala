@@ -14,19 +14,13 @@ import scala.concurrent.Future
 trait ValueRefAccessors {
 
   implicit class ValueRefAccessor[V, R, P](ref: ValueRef[V, R])(
-    implicit val gateway: loci.language.Gateway.DefaultMultipleGateway[R],
-    implicit val remotePeerIdAccess: Remote[R] => PlacedValue.BasicSingleAccessor[Selected.Single[UUID], R, Future[UUID], P],
+    implicit val remotePeerIds: Map[UUID, Remote[R]],
     implicit val cacheValueAccess: (UUID, Remote[R]) => PlacedValue.BasicSingleAccessor[Selected.Single[Option[V]], R, Future[Option[V]], P],
     implicit val context: Context[P],
     implicit val executionContext: ExecutionContext,
   ) {
     def getValue: Future[V] = {
-      val remoteIds = Future.sequence(
-        gateway.connected.map(
-          remote => remotePeerIdAccess(remote).asLocal.map(_ -> remote)
-        )
-      ).map(_.toMap)
-      remoteIds.map(_.get(ref.peerId)).flatMap {
+      remotePeerIds.get(ref.peerId) match {
         case Some(remote) => cacheValueAccess(ref.valueId, remote).asLocal.flatMap {
           case Some(value) => Future.successful(value)
           case None => Future.failed(PeerValueCacheMiss(ref.valueId))
