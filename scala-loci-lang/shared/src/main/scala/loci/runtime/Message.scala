@@ -3,6 +3,8 @@ package runtime
 
 import messaging.Message
 
+import java.util.UUID
+
 sealed abstract class Method
 case object Connect extends Method
 case object Content extends Method
@@ -114,4 +116,24 @@ object ChannelMessage {
       case _ =>
         None
     }
+}
+
+object PeerIdExchangeMessage {
+
+  def apply(peerId: UUID, init: Boolean): Message[Method] = {
+    val exchangeType = if (init) "PeerIdExchangeInit" else "PeerIdExchangeResponse"
+    Message(
+      Content,
+      Map("Type" -> Seq(exchangeType)),
+      MessageBuffer.encodeString(peerId.toString)
+    )
+  }
+
+  def unapply(message: Message[Method]): Option[(UUID, Boolean)] = {
+    (message.method, message.properties get "Type") match {
+      case (Content, Some(Seq("PeerIdExchangeInit"))) => Some((UUID.fromString(message.payload.decodeString), true))
+      case (Content, Some(Seq("PeerIdExchangeResponse"))) => Some((UUID.fromString(message.payload.decodeString), false))
+      case _ => None
+    }
+  }
 }
