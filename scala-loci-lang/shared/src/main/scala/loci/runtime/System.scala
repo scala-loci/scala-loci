@@ -5,7 +5,6 @@ import communicator.Connector
 import compatibility.jdkCollectionConverters._
 import loci.valueref.PeerValueCache
 import loci.valueref.PeerValueCacheProvider
-import loci.valueref.UniquePeerId
 import messaging.Message
 import transmitter.{RemoteAccessException, RemoteRef}
 
@@ -27,6 +26,7 @@ object System {
 class System(
   values: PlacedValues,
   val instanceSignature: Peer.Signature,
+  val peerId: UUID,
   main: Option[() => Unit],
   separateMainThread: Boolean,
   ties: Map[Peer.Signature, Peer.Tie],
@@ -36,8 +36,9 @@ class System(
   connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]]
 ) {
 
-  val peerId: UUID = UniquePeerId.generate()
   val peerValueCache: PeerValueCache = PeerValueCacheProvider.create()
+
+  val remotePeerIds: ConcurrentHashMap[UUID, Remote.Reference] = new ConcurrentHashMap[UUID, Remote.Reference]
 
   private implicit val context: ExecutionContext = executionContext
 
@@ -173,12 +174,15 @@ class System(
 
   private[runtime] def connect(
       peer: Peer.Signature,
-      connector: Connector[messaging.ConnectionsBase.Protocol]): Unit =
+      connector: Connector[messaging.ConnectionsBase.Protocol]): Unit = {
     remoteConnections.connect(connector, peer) foreach {
-      case Success(_) =>
+      case Success(ref) =>
+        logging.info(s"sending own peer id to $ref: $peerId")
+        remoteConnections.send(ref, PeerIdExchangeMessage(peerId, init = true))
       case Failure(exception) =>
         logging.warn("could not connect to remote instance", exception)
     }
+  }
 
 
 
@@ -508,6 +512,14 @@ class System(
       case CloseMessage(channelName) =>
         logging.trace(s"received update from $remote: $message")
         getChannel(channelName, remote) foreach { closeChannel(_, notifyRemote = false) }
+
+      case PeerIdExchangeMessage(remoteId, init) =>
+        logging.info(s"storing peer id from $remote: $remoteId")
+        remotePeerIds.put(remoteId, remote)
+        if (init) {
+          logging.info(s"sending own peer id to $remote: $peerId")
+          remoteConnections.send(remote, PeerIdExchangeMessage(peerId, init = false))
+        }
 
       case _ =>
         logging.warn(s"unprocessed message: $message")

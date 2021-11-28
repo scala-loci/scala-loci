@@ -2,8 +2,10 @@ package loci
 package runtime
 
 import communicator._
+import loci.valueref.UniquePeerId
 import messaging._
 
+import java.util.UUID
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{CanAwait, ExecutionContext, TimeoutException}
@@ -17,6 +19,8 @@ class Runtime[P](
     connect: Runtime.Connections,
     system: Runtime.SystemFactory)
   extends loci.Runtime[P] {
+
+  private val peerId = UniquePeerId.generate()
 
   private val doStarted = Notice.Stream[Instance[P]]
 
@@ -158,7 +162,9 @@ class Runtime[P](
         val reference = remoteConnections.connect(connector, peer)
 
         reference foreach {
-          case Success(_) =>
+          case Success(ref) =>
+            logging.info(s"sending own peer id to $ref: $peerId")
+            remoteConnections.send(ref, PeerIdExchangeMessage(peerId, init = true))
           case Failure(exception) =>
             logging.error("could not connect to remote instance", exception)
         }
@@ -202,7 +208,9 @@ class Runtime[P](
           val reference = remoteConnections.connect(connector, peer)
 
           reference foreach {
-            case Success(_) =>
+            case Success(ref) =>
+              logging.info(s"sending own peer id to $ref: $peerId")
+              remoteConnections.send(ref, PeerIdExchangeMessage(peerId, init = true))
             case Failure(exception) =>
               logging.warn("could not connect to remote instance", exception)
           }
@@ -223,7 +231,7 @@ class Runtime[P](
             val instance = state.synchronized {
               if (!state.isTerminated && remoteConnections.constraintViolations.isEmpty) {
                 val values = system(
-                  peer, ties, context, remoteConnections,
+                  peer, peerId, ties, context, remoteConnections,
                   requiredListenedRemotes ++ requiredConnectedRemotes, remotes)
 
                 val instance = new Instance[P](values, remoteConnections)
@@ -293,6 +301,7 @@ object Runtime {
 
   type SystemFactory = (
     Peer.Signature,
+    UUID,
     Ties,
     ExecutionContext,
     RemoteConnections,
