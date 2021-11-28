@@ -30,8 +30,13 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       val listener = new NetworkListener(deferred = seed != 0, seed)
 
+      val serverId = UUID.randomUUID()
+      val client0Id = UUID.randomUUID()
+      val client1Id = UUID.randomUUID()
+
       val serverRuntime = Runtime.start(
         ServerClientApp.$loci$peer$sig$Server,
+        serverId,
         ServerClientApp.$loci$peer$ties$Server,
         contexts.Immediate.global,
         (listen[ServerClientApp.Client] { listener }).setup(
@@ -63,6 +68,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       val client0Runtime = Runtime.start(
         ServerClientApp.$loci$peer$sig$Client,
+        client0Id,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
@@ -91,6 +97,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       val client1Runtime = Runtime.start(
         ServerClientApp.$loci$peer$sig$Client,
+        client1Id,
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
@@ -123,43 +130,47 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
       client0Runtime.terminate()
       client1Runtime.terminate()
 
+      events should have size 17
 
-      events should have size 13
+      val Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16) = events: @unchecked
 
-
-      val Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12) = events: @unchecked
-
-
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Server(New), Server(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from client0")))
 
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Server(New), Server(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from client1")))
 
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Server(New), Server(Receive(Seq("Started"), "")))
 
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) shouldNot contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) shouldNot contain inOrder (
         Server(Receive(Seq("Started"), "")), Server(New))
 
       exactly (2, events) should be (Server(Receive(Seq("Started"), "")))
 
-
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Client0(New), Client0(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from server")))
 
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Client0(New), Server(Receive(Seq("Started"), "")))
 
-
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Client1(New), Client1(Receive(Seq(ChannelMessage.Type.Update.toString), "hello from server")))
 
-      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10) should contain inOrder (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
         Client1(New), Server(Receive(Seq("Started"), "")))
 
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
+        Server(Receive(Seq("PeerIdExchangeInit"), client0Id.toString)),
+        Client0(Receive(Seq("PeerIdExchangeResponse"), serverId.toString))
+      )
 
-      Seq(_11, _12) should contain allOf (
+      Seq(_0, _1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14) should contain inOrder (
+        Server(Receive(Seq("PeerIdExchangeInit"), client1Id.toString)),
+        Client1(Receive(Seq("PeerIdExchangeResponse"), serverId.toString))
+      )
+
+      Seq(_15, _16) should contain allOf (
         Client0(ConstraintsViolated), Client1(ConstraintsViolated))
     }
   }

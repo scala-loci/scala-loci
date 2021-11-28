@@ -21,6 +21,7 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       Runtime.start(
         ServerClientApp.$loci$peer$sig$Server,
+        UUID.randomUUID(),
         ServerClientApp.$loci$peer$ties$Server,
         contexts.Immediate.global,
         (listen[ServerClientApp.Client] { listener }).setup(
@@ -37,6 +38,7 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       Runtime.start(
         ServerClientApp.$loci$peer$sig$Client,
+        UUID.randomUUID(),
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
@@ -53,6 +55,7 @@ class SystemSpec extends AnyFlatSpec with Matchers with NoLogging {
 
       Runtime.start(
         ServerClientApp.$loci$peer$sig$Client,
+        UUID.randomUUID(),
         ServerClientApp.$loci$peer$ties$Client,
         contexts.Immediate.global,
         (connect[ServerClientApp.Server] { listener.createConnector() }).setup(
