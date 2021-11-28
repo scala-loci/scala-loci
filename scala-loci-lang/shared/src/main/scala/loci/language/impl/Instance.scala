@@ -444,10 +444,13 @@ class Instance(val c: blackbox.Context) {
              this, $$loci$$instance$$sig, $$loci$$instance$$peer$$id, $main, $separateMainThread,
              $$loci$$ties, $$loci$$context, $$loci$$connections, $$loci$$connected, $$loci$$connecting)"""
 
+        val peerId = q"${termNames.ROOTPKG}.loci.valueref.UniquePeerId.generate()"
+
         val tree = transformer transform q"""
           ..$namedArgs
           ${termNames.ROOTPKG}.loci.runtime.Runtime.start(
             $prefix.$signature,
+            $peerId,
             $prefix.$ties,
             $context,
             $connect.setup($prefix.$signature, $prefix.$ties.keys.flatMap(_.bases).toList),

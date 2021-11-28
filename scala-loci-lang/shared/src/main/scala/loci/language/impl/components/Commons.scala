@@ -183,7 +183,6 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val basicSingleAccessor = q"${names.root}.loci.language.PlacedValue.BasicSingleAccessor"
     val remote = q"${names.root}.loci.`package`.remote.apply"
     val futureSuccessful = q"${names.root}.scala.concurrent.Future.successful"
-    val generateUniquePeerId = q"${names.root}.loci.valueref.UniquePeerId.generate()"
   }
 
   def createTypeTree(tpe: Type, pos: Position): Tree = {

@@ -2,7 +2,6 @@ package loci
 package runtime
 
 import communicator._
-import loci.valueref.UniquePeerId
 import messaging._
 
 import java.util.UUID
@@ -14,13 +13,12 @@ import scala.util.{Failure, Success, Try}
 
 class Runtime[P](
     peer: Peer.Signature,
+    peerId: UUID,
     ties: Runtime.Ties,
     context: ExecutionContext,
     connect: Runtime.Connections,
     system: Runtime.SystemFactory)
   extends loci.Runtime[P] {
-
-  private val peerId = UniquePeerId.generate()
 
   private val doStarted = Notice.Stream[Instance[P]]
 
@@ -313,11 +311,12 @@ object Runtime {
     "if the connection setup does not respect the tie specification")
   def start[P](
       peer: Peer.Signature,
+      peerId: UUID,
       ties: Ties,
       context: ExecutionContext,
       connect: Connections,
       system: SystemFactory): Runtime[P] = {
-    val runtime = new Runtime[P](peer, ties, context, connect, system)
+    val runtime = new Runtime[P](peer, peerId, ties, context, connect, system)
     runtime.run()
     runtime
   }
