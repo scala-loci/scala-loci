@@ -4,6 +4,7 @@ import language._
 import loci.valueref.PeerValueCache
 
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import scala.annotation.compileTimeOnly
 import scala.concurrent.ExecutionContext
 import scala.language.experimental.macros
@@ -45,6 +46,9 @@ object Instance {
 
     def retrievePeerValueCache(): PeerValueCache =
       macro language.impl.Instance.retrievePeerValueCache
+
+    def retrieveRemotePeerIds(): ConcurrentHashMap[UUID, runtime.Remote.Reference] =
+      macro language.impl.Instance.retrieveRemotePeerIds
 
     def terminate(): Unit = instance match {
       case instance: runtime.Instance[P] => instance.terminate()

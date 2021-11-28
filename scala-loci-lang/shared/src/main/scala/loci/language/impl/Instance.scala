@@ -248,6 +248,16 @@ class Instance(val c: blackbox.Context) {
     }
   }
 
+  def retrieveRemotePeerIds(): Tree = {
+    c.macroApplication match {
+      case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
+      case q"$_[..$_]($instance).$_()" =>
+        val remotePeerIdsName = TermName("remotePeerIds")
+        retrieveFromSystem(remotePeerIdsName, instance)
+      case _ => c.abort(c.enclosingPosition, s"Access to remtoe peer ids failed")
+    }
+  }
+
   private def retrieveFromSystem(valueName: TermName, instance: Tree): Tree = {
     val instanceModule = instance.tpe.widen.typeArgs.head match {
       case tpe @ TypeRef(pre, _, _) => pre.termSymbol
