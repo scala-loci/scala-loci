@@ -38,7 +38,9 @@ class System(
 
   val peerValueCache: PeerValueCache = PeerValueCacheProvider.create()
 
-  val remotePeerIds: ConcurrentHashMap[UUID, Remote.Reference] = new ConcurrentHashMap[UUID, Remote.Reference]
+  private val remotePeerIds: ConcurrentHashMap[UUID, Remote.Reference] = new ConcurrentHashMap[UUID, Remote.Reference]
+
+  def getRemotePeerIds: Map[UUID, Remote.Reference] = remotePeerIds.asScala.toMap
 
   private implicit val context: ExecutionContext = executionContext
 

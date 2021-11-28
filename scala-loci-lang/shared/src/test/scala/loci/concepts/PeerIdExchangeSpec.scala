@@ -51,8 +51,8 @@ class PeerIdExchangeSpec extends AnyFlatSpec with Matchers with NoLogging {
     val remotePeerIdsA = a.instance.current.map(_.retrieveRemotePeerIds()).get
     val remotePeerIdsB = b.instance.current.map(_.retrieveRemotePeerIds()).get
 
-    remotePeerIdsA.keySet().toArray().toSet should contain theSameElementsAs Set(idB)
-    remotePeerIdsB.keySet().toArray().toSet should contain theSameElementsAs Set(idA)
+    remotePeerIdsA.keySet should contain theSameElementsAs Set(idB)
+    remotePeerIdsB.keySet should contain theSameElementsAs Set(idA)
   }
 
   it should "exchange peer ids between optional-tied peers" in {
@@ -71,8 +71,8 @@ class PeerIdExchangeSpec extends AnyFlatSpec with Matchers with NoLogging {
     val remotePeerIdsA = a.instance.current.map(_.retrieveRemotePeerIds()).get
     val remotePeerIdsB = b.instance.current.map(_.retrieveRemotePeerIds()).get
 
-    remotePeerIdsA.keySet().toArray().toSet should contain theSameElementsAs Set(idB)
-    remotePeerIdsB.keySet().toArray().toSet should contain theSameElementsAs Set(idA)
+    remotePeerIdsA.keySet should contain theSameElementsAs Set(idB)
+    remotePeerIdsB.keySet should contain theSameElementsAs Set(idA)
   }
 
   it should "exchange peer ids between multiple clients and single server" in {
@@ -98,9 +98,9 @@ class PeerIdExchangeSpec extends AnyFlatSpec with Matchers with NoLogging {
     val remotePeerIdsClientA = clientA.instance.current.map(_.retrieveRemotePeerIds()).get
     val remotePeerIdsClientB = clientB.instance.current.map(_.retrieveRemotePeerIds()).get
 
-    remotePeerIdsServer.keySet().toArray().toSet should contain theSameElementsAs Set(idClientA, idClientB)
-    remotePeerIdsClientA.keySet().toArray().toSet should contain theSameElementsAs Set(idServer)
-    remotePeerIdsClientB.keySet().toArray().toSet should contain theSameElementsAs Set(idServer)
+    remotePeerIdsServer.keySet should contain theSameElementsAs Set(idClientA, idClientB)
+    remotePeerIdsClientA.keySet should contain theSameElementsAs Set(idServer)
+    remotePeerIdsClientB.keySet should contain theSameElementsAs Set(idServer)
   }
 
   it should "exchange peer ids in a P2P setting" in {
@@ -137,10 +137,10 @@ class PeerIdExchangeSpec extends AnyFlatSpec with Matchers with NoLogging {
     val remotePeerIdsC = c.instance.current.map(_.retrieveRemotePeerIds()).get
     val remotePeerIdsD = d.instance.current.map(_.retrieveRemotePeerIds()).get
 
-    remotePeerIdsA.keySet().toArray().toSet should contain theSameElementsAs Set(idB, idC, idD)
-    remotePeerIdsB.keySet().toArray().toSet should contain theSameElementsAs Set(idA, idD)
-    remotePeerIdsC.keySet().toArray().toSet should contain theSameElementsAs Set(idA, idD)
-    remotePeerIdsD.keySet().toArray().toSet should contain theSameElementsAs Set(idA, idB, idC)
+    remotePeerIdsA.keySet should contain theSameElementsAs Set(idB, idC, idD)
+    remotePeerIdsB.keySet should contain theSameElementsAs Set(idA, idD)
+    remotePeerIdsC.keySet should contain theSameElementsAs Set(idA, idD)
+    remotePeerIdsD.keySet should contain theSameElementsAs Set(idA, idB, idC)
   }
 
   it should "exchange peer ids on a dynamically setup connection" in {
@@ -158,16 +158,16 @@ class PeerIdExchangeSpec extends AnyFlatSpec with Matchers with NoLogging {
     val remotePeerIdsA = a.instance.current.map(_.retrieveRemotePeerIds()).get
     val remotePeerIdsB = b.instance.current.map(_.retrieveRemotePeerIds()).get
 
-    remotePeerIdsA.keySet().toArray().toSet should contain theSameElementsAs Set()
-    remotePeerIdsB.keySet().toArray().toSet should contain theSameElementsAs Set()
+    remotePeerIdsA.keySet should contain theSameElementsAs Set()
+    remotePeerIdsB.keySet should contain theSameElementsAs Set()
 
     b.instance.current.foreach { _ retrieve PeerIdExchangeDynamicConnectionModule.connect(listener.createConnector()) }
 
     val newRemotePeerIdsA = a.instance.current.map(_.retrieveRemotePeerIds()).get
     val newRemotePeerIdsB = b.instance.current.map(_.retrieveRemotePeerIds()).get
 
-    newRemotePeerIdsA.keySet().toArray().toSet should contain theSameElementsAs Set(idB)
-    newRemotePeerIdsB.keySet().toArray().toSet should contain theSameElementsAs Set(idA)
+    newRemotePeerIdsA.keySet should contain theSameElementsAs Set(idB)
+    newRemotePeerIdsB.keySet should contain theSameElementsAs Set(idA)
   }
 
 }

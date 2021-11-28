@@ -252,7 +252,7 @@ class Instance(val c: blackbox.Context) {
     c.macroApplication match {
       case _ if documentationCompiler || c.hasErrors => q"${termNames.ROOTPKG}.scala.Predef.???"
       case q"$_[..$_]($instance).$_()" =>
-        val remotePeerIdsName = TermName("remotePeerIds")
+        val remotePeerIdsName = TermName("getRemotePeerIds")
         retrieveFromSystem(remotePeerIdsName, instance)
       case _ => c.abort(c.enclosingPosition, s"Access to remtoe peer ids failed")
     }
