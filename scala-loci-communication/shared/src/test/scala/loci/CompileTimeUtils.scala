@@ -41,9 +41,21 @@ object CompileTimeUtils {
   def assertExactTypeImpl[T: c.WeakTypeTag](c: whitebox.Context)(value: c.Tree): c.Tree = {
     import c.universe._
 
+    def normalize(tpe: Type) = tpe map {
+      case SingleType(ThisType(preSym), sym) if sym.owner == preSym =>
+        if (sym.isType)
+          internal.thisType(sym)
+        else if (sym.isModule)
+          internal.thisType(sym.asModule.moduleClass)
+        else
+          tpe
+      case tpe =>
+        tpe
+    }
+
     val tpe = weakTypeOf[T]
 
-    if (tpe == value.tpe)
+    if (normalize(tpe) == normalize(value.tpe))
       q"()"
     else
       failTest(c)(s"$value has type of form `${value.tpe}`; exact type `$tpe` expected")
