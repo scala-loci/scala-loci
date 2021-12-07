@@ -15,8 +15,6 @@ ThisBuild / licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LIC
 
 ThisBuild / scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 
-ThisBuild / resolvers += "jitpack" at "https://jitpack.io"
-
 ThisBuild / scalaVersion := "2.13.7"
 
 ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.7")
@@ -43,13 +41,13 @@ val macroparadise = Seq(
   })
 
 val macrodeclaration = libraryDependencies +=
-  scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided
+  scalaOrganization.value % "scala-reflect" % scalaVersion.value % "compile-internal"
 
 val jsweakreferences = libraryDependencies += 
   "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0"
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.10" % Test
+  "org.scalatest" %%% "scalatest" % "3.2.10" % "test-internal"
 
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
@@ -61,8 +59,9 @@ val scribe = libraryDependencies += {
 val retypecheck = libraryDependencies +=
   "io.github.scala-loci" %% "retypecheck" % "0.9.0"
 
-val rescala = libraryDependencies +=
-  "com.github.rescala-lang.rescala" %%% "rescala" % "cbb7980"
+val rescala = Seq(
+  resolvers += "jitpack" at "https://jitpack.io",
+  libraryDependencies += "com.github.rescala-lang.rescala" %%% "rescala" % "cbb7980")
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "1.4.2"
@@ -107,7 +106,7 @@ val jetty = libraryDependencies ++= Seq(
   "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.44.v20210927",
   "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.44.v20210927",
   "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.44.v20210927",
-  "org.slf4j" % "slf4j-nop" % "1.7.30" % Test)
+  "org.slf4j" % "slf4j-nop" % "1.7.30" % "test-internal")
 
 
 lazy val loci = (project
@@ -118,54 +117,72 @@ lazy val loci = (project
 lazy val lociJVM = (project
   in file(".jvm")
   settings ((publish / skip) := true)
-  aggregate (lociLangJVM, lociCommunicationJVM, lociArchitecturesBasicJVM,
+  aggregate (lociLanguageJVM, lociLanguageRuntimeJVM, lociCommunicationJVM,
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
              lociSerializerJsoniterScalaJVM,
-             lociTransmitterRescalaJVM, lociLangTransmitterRescalaJVM,
+             lociTransmitterRescalaJVM, lociLanguageTransmitterRescalaJVM,
              lociCommunicatorTcpJVM,
              lociCommunicatorWsWebNativeJVM,
-             lociCommunicatorWsAkkaJVM, lociCommunicatorWsAkkaPlayJVM,
-             lociCommunicatorWsJavalinJVM, lociCommunicatorWsJettyJVM,
+             lociCommunicatorWsAkkaJVM,
+             lociCommunicatorWsAkkaPlayJVM,
+             lociCommunicatorWsJavalinJVM,
+             lociCommunicatorWsJettyJVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = (project
   in file(".js")
   settings ((publish / skip) := true)
-  aggregate (lociLangJS, lociCommunicationJS, lociArchitecturesBasicJS,
+  aggregate (lociLanguageJS, lociLanguageRuntimeJS, lociCommunicationJS,
              lociSerializerUpickleJS,
              lociSerializerCirceJS,
              lociSerializerJsoniterScalaJS,
-             lociTransmitterRescalaJS, lociLangTransmitterRescalaJS,
+             lociTransmitterRescalaJS, lociLanguageTransmitterRescalaJS,
              lociCommunicatorTcpJS,
              lociCommunicatorWsWebNativeJS,
-             lociCommunicatorWsAkkaJS, lociCommunicatorWsAkkaPlayJS,
-             lociCommunicatorWsJavalinJS, lociCommunicatorWsJettyJS,
+             lociCommunicatorWsAkkaJS,
+             lociCommunicatorWsAkkaPlayJS,
+             lociCommunicatorWsJavalinJS,
+             lociCommunicatorWsJettyJS,
              lociCommunicatorWebRtcJS))
 
 
-lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
+lazy val lociLanguage = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
-  in file("scala-loci-lang")
-  settings (normalizedName := "scala-loci-lang",
+  in file("language")
+  settings (name := "ScalaLoci language",
+            normalizedName := "scala-loci-language",
+            retypecheck, macroparadise, macrodeclaration, scalatest)
+  dependsOn lociLanguageRuntime % "compile->compile;test->test")
+
+lazy val lociLanguageJVM = lociLanguage.jvm
+lazy val lociLanguageJS = lociLanguage.js
+
+
+lazy val lociLanguageRuntime = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Pure
+  in file("language-runtime")
+  settings (name := "ScalaLoci language runtime",
+            normalizedName := "scala-loci-language-runtime",
             SourceGenerator.remoteSelection,
-            retypecheck, macroparadise, macrodeclaration, scribe, scalatest)
+            retypecheck, macrodeclaration, scalatest)
   jsSettings jsweakreferences
   dependsOn lociCommunication % "compile->compile;test->test")
 
-lazy val lociLangJVM = lociLang.jvm
-lazy val lociLangJS = lociLang.js
+lazy val lociLanguageRuntimeJVM = lociLanguageRuntime.jvm
+lazy val lociLanguageRuntimeJS = lociLanguageRuntime.js
 
 
 lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
-  in file("scala-loci-communication")
-  settings (normalizedName := "scala-loci-communication",
+  in file("communication")
+  settings (name := "ScalaLoci communication",
+            normalizedName := "scala-loci-communication",
             Compile / unmanagedSourceDirectories +=
-                (ThisBuild / baseDirectory).value / "scala-loci-communication" / "shared" / "src" / "test" / "scala",
+                (ThisBuild / baseDirectory).value / "communication" / "shared" / "src" / "test" / "scala",
             Compile / unmanagedSources / excludeFilter := {
               val testDirectory =
-                (ThisBuild / baseDirectory).value / "scala-loci-communication" / "shared" / "src" / "test" / "scala"
+                (ThisBuild / baseDirectory).value / "communication" / "shared" / "src" / "test" / "scala"
               new SimpleFileFilter(file =>
                 (file.getCanonicalPath startsWith testDirectory.getCanonicalPath) && !(file.getName startsWith "CompileTimeUtils"))
             },
@@ -180,21 +197,11 @@ lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js
 
 
-lazy val lociArchitecturesBasic = (crossProject(JSPlatform, JVMPlatform)
-  crossType CrossType.Pure
-  in file("scala-loci-architectures-basic")
-  settings (normalizedName := "scala-loci-architectures-basic",
-            macroparadise)
-  dependsOn lociLang)
-
-lazy val lociArchitecturesBasicJVM = lociArchitecturesBasic.jvm
-lazy val lociArchitecturesBasicJS = lociArchitecturesBasic.js
-
-
 lazy val lociSerializerUpickle = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
-  in file("scala-loci-serializer-upickle")
-  settings (normalizedName := "scala-loci-serializer-upickle",
+  in file("serializer-upickle")
+  settings (name := "ScalaLoci µPickle serializer",
+            normalizedName := "scala-loci-serializer-upickle",
             upickle)
   dependsOn lociCommunication)
 
@@ -204,8 +211,9 @@ lazy val lociSerializerUpickleJS = lociSerializerUpickle.js
 
 lazy val lociSerializerCirce = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
-  in file("scala-loci-serializer-circe")
-  settings (normalizedName := "scala-loci-serializer-circe",
+  in file("serializer-circe")
+  settings (name := "ScalaLoci Circe serializer",
+            normalizedName := "scala-loci-serializer-circe",
             circe)
   dependsOn lociCommunication)
 
@@ -215,8 +223,9 @@ lazy val lociSerializerCirceJS = lociSerializerCirce.js
 
 lazy val lociSerializerJsoniterScala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
-  in file("scala-loci-serializer-jsoniter-scala")
-  settings (normalizedName := "scala-loci-serializer-jsoniter-scala",
+  in file("serializer-jsoniter-scala")
+  settings (name := "ScalaLoci Jsoniter Scala serializer",
+            normalizedName := "scala-loci-serializer-jsoniter-scala",
             jsoniter)
   dependsOn lociCommunication)
 
@@ -226,8 +235,9 @@ lazy val lociSerializerJsoniterScalaJS = lociSerializerJsoniterScala.js
 
 lazy val lociTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
-  in file("scala-loci-transmitter-rescala")
-  settings (normalizedName := "scala-loci-transmitter-rescala",
+  in file("transmitter-rescala")
+  settings (name := "ScalaLoci REScala transmitter",
+            normalizedName := "scala-loci-transmitter-rescala",
             rescala, scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")
 
@@ -235,22 +245,25 @@ lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 
 
-lazy val lociLangTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
+lazy val lociLanguageTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
-  in file("scala-loci-lang-transmitter-rescala")
-  settings (normalizedName := "scala-loci-lang-transmitter-rescala",
+  in file("language-transmitter-rescala")
+  settings (name := "ScalaLoci language REScala transmitter",
+            normalizedName := "scala-loci-language-transmitter-rescala",
             macroparadise, macrodeclaration, scalatest)
-  dependsOn (lociLang % "compile->compile;test->test",
+  dependsOn (lociLanguage % "test-internal",
+             lociLanguageRuntime % "compile->compile;test->test",
              lociTransmitterRescala % "compile->compile;test->test"))
 
-lazy val lociLangTransmitterRescalaJVM = lociLangTransmitterRescala.jvm
-lazy val lociLangTransmitterRescalaJS = lociLangTransmitterRescala.js
+lazy val lociLanguageTransmitterRescalaJVM = lociLanguageTransmitterRescala.jvm
+lazy val lociLanguageTransmitterRescalaJS = lociLanguageTransmitterRescala.js
 
 
 lazy val lociCommunicatorTcp = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
-  in file("scala-loci-communicator-tcp")
-  settings (normalizedName := "scala-loci-communicator-tcp",
+  in file("communicator-tcp")
+  settings (name := "ScalaLoci TCP communicator",
+            normalizedName := "scala-loci-communicator-tcp",
             scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")
 
@@ -260,8 +273,9 @@ lazy val lociCommunicatorTcpJS = lociCommunicatorTcp.js
 
 lazy val lociCommunicatorWsWebNative = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-webnative")
-  settings (normalizedName := "scala-loci-communicator-ws-webnative",
+  in file("communicator-ws-webnative")
+  settings (name := "ScalaLoci Web-native WebSocket communicator",
+            normalizedName := "scala-loci-communicator-ws-webnative",
             akkaHttp, scalajsDom, scalatest)
   dependsOn lociCommunication)
 
@@ -271,8 +285,9 @@ lazy val lociCommunicatorWsWebNativeJS = lociCommunicatorWsWebNative.js
 
 lazy val lociCommunicatorWsAkka = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-akka")
-  settings (normalizedName := "scala-loci-communicator-ws-akka",
+  in file("communicator-ws-akka")
+  settings (name := "ScalaLoci Akka WebSocket communicator",
+            normalizedName := "scala-loci-communicator-ws-akka",
             akkaHttp, scalajsDom, scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")
 
@@ -282,8 +297,9 @@ lazy val lociCommunicatorWsAkkaJS = lociCommunicatorWsAkka.js
 
 lazy val lociCommunicatorWsAkkaPlay = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-akka-play")
-  settings (normalizedName := "scala-loci-communicator-ws-akka-play",
+  in file("communicator-ws-akka-play")
+  settings (name := "ScalaLoci Play Framework Akka WebSocket communicator",
+            normalizedName := "scala-loci-communicator-ws-akka-play",
             play)
   dependsOn lociCommunicatorWsAkka)
 
@@ -293,8 +309,9 @@ lazy val lociCommunicatorWsAkkaPlayJS = lociCommunicatorWsAkkaPlay.js
 
 lazy val lociCommunicatorWsJetty = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-jetty")
-  settings (normalizedName := "scala-loci-communicator-ws-jetty",
+  in file("communicator-ws-jetty")
+  settings (name := "ScalaLoci Jetty WebSocket communicator",
+            normalizedName := "scala-loci-communicator-ws-jetty",
             jetty, scalatest)
   dependsOn lociCommunication % "compile->compile;test->test")
 
@@ -304,8 +321,9 @@ lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
 
 lazy val lociCommunicatorWsJavalin = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Dummy
-  in file("scala-loci-communicator-ws-javalin")
-  settings (normalizedName := "scala-loci-communicator-ws-javalin",
+  in file("communicator-ws-javalin")
+  settings (name := "ScalaLoci Javalin WebSocket communicator",
+            normalizedName := "scala-loci-communicator-ws-javalin",
             scalajsDom)
   jvmSettings javalin
   dependsOn lociCommunication)
@@ -316,8 +334,9 @@ lazy val lociCommunicatorWsJavalinJS = lociCommunicatorWsJavalin.js
 
 lazy val lociCommunicatorWebRtc = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
-  in file("scala-loci-communicator-webrtc")
-  settings (normalizedName := "scala-loci-communicator-webrtc",
+  in file("communicator-webrtc")
+  settings (name := "ScalaLoci WebRTC communicator",
+            normalizedName := "scala-loci-communicator-webrtc",
             scalajsDom)
   dependsOn lociCommunication)
 

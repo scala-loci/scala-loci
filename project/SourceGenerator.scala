@@ -53,10 +53,9 @@ object SourceGenerator {
       val (tupleMembers, identicalTupleMembers) = members.unzip
 
       val files = Map(
-        dir / "loci" / "transmitter" / "transmittable" / "TransmittableTuples.scala" ->
+        dir / "loci" / "transmitter" / "TransmittableTuples.scala" ->
         s"""package loci
            |package transmitter
-           |package transmittable
            |
            |trait TransmittableGeneralTuples extends TransmittableDummy {
            |  this: TransmittableBase.type =>
@@ -83,9 +82,11 @@ object SourceGenerator {
       }
 
       val files = Map(
-        dir / "loci" / "language" / "RemoteSelection.scala" ->
+        dir / "loci" / "embedding" / "RemoteSelection.scala" ->
         s"""package loci
-           |package language
+           |package embedding
+           |
+           |import language.Remote
            |
            |import scala.language.implicitConversions
            |
