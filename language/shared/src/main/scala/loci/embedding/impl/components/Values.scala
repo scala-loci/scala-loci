@@ -17,7 +17,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     Phase("values:collect", collectPlacedValues, after = Set("init:inst"), before = Set("*", "values:validate")),
     Phase("values:lift", processLiftedPlacedValues, after = Set("values:collect"), before = Set("*", "values:validate")),
     Phase("values:validate", validatePlacedValues, after = Set("*")),
-    Phase("values:fixrefs", fixEnclosingReferences, after = Set("*", "values:validate")))
+    Phase("values:clear", clearPlacementTypes, after = Set("*", "values:validate")),
+    Phase("values:fixrefs", fixEnclosingReferences, after = Set("*", "values:clear")))
 
   val commons = engine.require(Commons)
   val moduleInfo = engine.require(ModuleInfo)
@@ -721,6 +722,32 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
     records
   }
 
+  // clear placement information from inferred types of local value or method definitions
+  def clearPlacementTypes(records: List[Any]) = {
+    records foreach {
+      case Value(_, tree) =>
+        tree foreach {
+          case tree: ValOrDefDef =>
+            tree.tpt match {
+              case tree: TypeTree if tree.tpe != null =>
+                val clearedType = clearPlacementType(tree.tpe, tree.pos)
+                internal.setType(tree, clearedType)
+
+                if (clearedType != tree.tpe &&
+                    tree.original != null &&
+                    !internal.attachments(tree.original).contains[preprocessors.StatedTyping.type])
+                  internal.setOriginal(tree, null)
+
+              case _ =>
+            }
+          case _ =>
+        }
+      case _ =>
+    }
+
+    records
+  }
+
   // fix self and super references to the enclosing module
   def fixEnclosingReferences(records: List[Any]): List[Any] = {
     logging.debug(" Processing references to definitions of the multitier module after expansion")
@@ -1003,6 +1030,18 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
         validatePlacedType(tpe, pos)
         NonPlaced
     }
+
+  def clearPlacementType(tpe: Type, pos: Position) = tpe map { tpe =>
+    if (tpe real_<:< types.placedValue) {
+      val Seq(value, _) = extractTag(tpe, types.placedValue, pos).typeArgs: @unchecked
+      value match {
+        case TypeRef(_, symbols.local, List(localValueType)) => localValueType
+        case _ => value
+      }
+    }
+    else
+      tpe
+  }
 
   private def validatePlacedType(tpe: Type, pos: Position) = {
     val invalidType = tpe find {
