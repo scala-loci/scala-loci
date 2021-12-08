@@ -661,6 +661,10 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
     // validate access to placed values
     def validate(tree: Tree, peerType: Option[Type]) = {
+      val localSymbols = (tree collect {
+        case tree: DefTree if tree.symbol != NoSymbol => tree.symbol
+      }).toSet
+
       tree foreach {
         case tree: RefTree if tree.tpe != null =>
           val treeType =
@@ -675,7 +679,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               tpe <:< peer
             }
 
-            if (!localPeer)
+            if (!localPeer && !(localSymbols contains tree.symbol))
               c.abort(tree.pos, accessMessage)
           }
           else if ((tree.tpe.finalResultType.baseClasses exists { _.owner == symbols.placement }) ||
