@@ -19,12 +19,14 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
   val commons = engine.require(Commons)
   val moduleInfo = engine.require(ModuleInfo)
   val initialization = engine.require(Initialization)
+  val values = engine.require(Values)
 
   import engine._
   import engine.c.universe._
   import commons._
   import moduleInfo._
   import initialization._
+  import values._
 
   private val syntheticName = TermName("$loci$synthetic")
   private val placedName = TermName("placed")
@@ -79,9 +81,12 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
                   if (!tree.symbol.asTerm.isStable)
                     c.abort(tree.pos, "Stable identifier expected")
 
-                  tree -> internal.setInfo(
-                    internal.newTermSymbol(symbol, name, tree.pos, Flag.PARAM),
-                    tree.tpe)
+                  val underlyingType = clearPlacementType(tree.tpe, tree.pos)
+
+                  internal.setType(tree, underlyingType) ->
+                    internal.setInfo(
+                      internal.newTermSymbol(symbol, name, tree.pos, Flag.PARAM),
+                      underlyingType)
 
                 case tree =>
                   c.abort(tree.pos, "Local identifier expected")
@@ -89,6 +94,14 @@ class RemoteBlock[C <: blackbox.Context](val engine: Engine[C]) extends Componen
 
             case _ =>
               expr -> List.empty
+          }
+
+          // set usages of captured identifiers to their underlying type
+          val underlyingTypes = (captures map { case (tree, _) => tree.symbol -> tree.tpe }).toMap
+          exprss.head.head foreach {
+            case tree: RefTree =>
+              underlyingTypes get tree.symbol foreach { internal.setType(tree, _) }
+            case _ =>
           }
 
           // extract list of selected remote references
