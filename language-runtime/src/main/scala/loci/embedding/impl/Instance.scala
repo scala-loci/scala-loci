@@ -439,8 +439,8 @@ class Instance(val c: blackbox.Context) {
 
       tpe match {
         case MethodType(List(), MethodType(_, _)) => methodShapeType(tpe)
-        case MethodType(List(), resultType) => definitions.UnitTpe
-        case NullaryMethodType(tpe) => definitions.UnitTpe
+        case MethodType(List(), _) => definitions.UnitTpe
+        case NullaryMethodType(_) => definitions.UnitTpe
         case _ => methodShapeType(tpe)
       }
     }

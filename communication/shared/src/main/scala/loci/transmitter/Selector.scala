@@ -6,7 +6,7 @@ import Transmittables.{Delegates, Message}
 
 import scala.annotation.implicitNotFound
 
-@implicitNotFound("Transmittable[${B}, ${I}, ${R}] not specified in: ${S}")
+@implicitNotFound("Transmittable.Any[${B}, ${I}, ${R}] not specified in: ${S}")
 sealed trait Selector[B, I, R, P, T <: Transmittables, S <: Transmittables] {
   def transmittable(transmittables: S): Transmittable.Aux[B, I, R, P, T]
   def context(contexts: Contexts[S]): ContextBuilder.Context[T]

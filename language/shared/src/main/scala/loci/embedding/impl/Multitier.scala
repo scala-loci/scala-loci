@@ -243,7 +243,7 @@ class Multitier(val c: blackbox.Context) {
       logging.code(s"Expanded code for multitier module $name:${Properties.lineSeparator}$code")
     }
 
-    companion.headOption.fold(recoveredAnnottee) { companion => q"$recoveredAnnottee; $companion"}
+    companion.headOption.fold(recoveredAnnottee) { companion => q"$recoveredAnnottee; $companion" }
   }
 
   private def singleOptionalArgument(exprss: List[List[Tree]], pos: Position): Option[Tree] =

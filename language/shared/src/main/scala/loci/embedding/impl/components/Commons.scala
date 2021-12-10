@@ -66,7 +66,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val serializable = symbolOf[loci.serializer.Serializable.type]
     val transmittableDummy = symbolOf[loci.transmitter.TransmittableDummy]
     val remoteSelection = symbolOf[RemoteSelection.type]
-    val placedValues = engine.c.mirror.staticModule("_root_.loci.runtime.PlacedValues")
+    val placedValues = engine.c.mirror.staticModule(s"${names.root}.loci.runtime.PlacedValues")
     val cast = typeOf[runtime.Remote.type] member TermName("cast")
     val and = typeOf[Placed[_, _]] member TermName("and")
     val to = typeOf[Placed[_, _]] member TermName("to")

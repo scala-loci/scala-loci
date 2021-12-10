@@ -16,7 +16,7 @@ abstract class Transmission[V, R, +T, L, M] private[loci] {
 }
 
 sealed trait TransmissionNothing {
-  implicit def transmissionNothing[L, R, V, W, B, T, M](implicit
+  implicit def transmissionNothing[L, R, V, W, T, M](implicit
     ev0: Placement.Context[L],
     ev1: Multiplicity[L, R, V, W, M],
     ev2: W <:< (Nothing per _),

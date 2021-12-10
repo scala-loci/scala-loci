@@ -24,7 +24,7 @@ private class WSListener[P <: WS: WSProtocolFactory](
           wsContainer.addMapping(
             pathspec,
             new WebSocketCreator {
-              def createWebSocket(request: ServletUpgradeRequest, repsonse: ServletUpgradeResponse): AnyRef = {
+              def createWebSocket(request: ServletUpgradeRequest, response: ServletUpgradeResponse): AnyRef = {
                 val uri = request.getRequestURI
                 val tls = uri.getScheme == "wss"
 

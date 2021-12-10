@@ -13,8 +13,8 @@ private[loci] trait RescalaEventAccessor {
   private final val asLocalSeqId = 1
 
   implicit class RescalaEventMultipleAccessor[V, R, T, L](
-     value: V from R)(implicit
-     ev: Transmission[V, R, Event[T], L, Multiple])
+    value: V from R)(implicit
+    ev: Transmission[V, R, Event[T], L, Multiple])
       extends RemoteAccessor {
 
     @cutOutOfUserComputation lazy val asLocalFromAll: Signal[Seq[(Remote[R], Event[T])]] =
@@ -42,8 +42,8 @@ private[loci] trait RescalaEventAccessor {
   }
 
   implicit class RescalaEventOptionalAccessor[V, R, T, L](
-     value: V from R)(implicit
-     ev: Transmission[V, R, Event[T], L, Optional])
+    value: V from R)(implicit
+    ev: Transmission[V, R, Event[T], L, Optional])
       extends RemoteAccessor {
 
     @cutOutOfUserComputation lazy val asLocal: Signal[Option[Event[T]]] =
@@ -64,8 +64,8 @@ private[loci] trait RescalaEventAccessor {
   }
 
   implicit class RescalaEventSingleAccessor[V, R, T, L](
-     value: V from R)(implicit
-     ev: Transmission[V, R, Event[T], L, Single])
+    value: V from R)(implicit
+    ev: Transmission[V, R, Event[T], L, Single])
       extends RemoteAccessor {
 
     @cutOutOfUserComputation lazy val asLocal: Event[T] =

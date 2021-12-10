@@ -31,7 +31,7 @@ object noReporting {
       try body
       finally {
         try setRepoter.invoke(universe, reporter)
-        catch {  case  _: IllegalArgumentException => }
+        catch { case  _: IllegalArgumentException => }
       }
     }
   }
