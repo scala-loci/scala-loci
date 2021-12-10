@@ -2,7 +2,7 @@ package loci
 package utility
 
 import scala.reflect.NameTransformer
-import scala.reflect.macros.blackbox
+import scala.reflect.macros.{TypecheckException, blackbox}
 
 object platform {
   def annotation(c: blackbox.Context)(annottees: c.Tree*): c.Tree = {
@@ -13,32 +13,51 @@ object platform {
     if (exprss.size != 1 || exprss.head.size != 1)
       c.abort(expr.pos, "wrong number of arguments")
 
-    val untypedArg = exprss.head.head
-
-    val q"..$_; $_($typedArg)" =
-      c typecheck atPos(untypedArg.pos) {
-        q"""def $$loci$$argument(cond: ${typeOf[Boolean]}): Unit =
-          ${termNames.ROOTPKG}.scala.Predef.locally(cond)
-        $$loci$$argument($untypedArg)"""
-      }: @unchecked
-
-    val arg = typedArg match {
-      case q"$_ = $arg" => arg
-      case _ => typedArg
-    }
+    val arg =
+      try
+        exprss.head.head match {
+          case q"cond = $arg" => c typecheck arg
+          case arg @ q"$name = $_" => c.abort(arg.pos, s"unknown parameter name: $name")
+          case arg => c typecheck arg
+        }
+      catch {
+        case TypecheckException(pos: Position @unchecked, msg) =>
+          c.abort(pos, msg)
+      }
 
     val keep = evaluateBooleanExpr(c)(arg)
 
+    def compileTimeOnly(mods: Modifiers) = mods mapAnnotations {
+      q"""new ${termNames.ROOTPKG}.scala.annotation.compileTimeOnly("Not available on current platform")""" :: _
+    }
+
+    def clearStatements(impl: Template): Template = {
+      val body = impl.body flatMap {
+        case tree @ ClassDef(mods, name, tparams, impl) =>
+          Some(treeCopy.ClassDef(tree, mods, name, tparams, clearStatements(impl)))
+        case tree @ ModuleDef(mods, name, impl) =>
+          Some(treeCopy.ModuleDef(tree, mods, name, clearStatements(impl)))
+        case tree: MemberDef =>
+          Some(tree)
+        case _ =>
+          None
+      }
+      treeCopy.Template(impl, impl.parents, impl.self, body)
+    }
+
     annottees match {
-      case ClassDef(_, tpname, _, _) :: companion =>
-        val tree = if (keep) annottees.head else q"class $tpname"
-        companion.headOption.fold(tree) { companion => q"$tree; $companion" }
+      case (annottee @ ClassDef(mods, name, tparams, impl)) :: companion =>
+        val tree = if (keep) annottee else treeCopy.ClassDef(annottee, compileTimeOnly(mods), name, tparams, clearStatements(impl))
+        companion.headOption.fold[Tree](tree) { companion => q"$tree; $companion" }
 
-      case ModuleDef(_, name, _) :: Nil =>
-        if (keep) annottees.head else q"object $name"
+      case (annottee @ ModuleDef(mods, name, impl)) :: Nil =>
+        if (keep) annottee else treeCopy.ModuleDef(annottee, compileTimeOnly(mods), name, clearStatements(impl))
 
-      case (_: MemberDef) :: Nil =>
-        if (keep) annottees.head else q"()"
+      case (annottee @ DefDef(mods, name, tparams, vparamss, tpt, rhs)) :: Nil =>
+        if (keep) annottee else treeCopy.DefDef(annottee, compileTimeOnly(mods), name, tparams, vparamss, tpt, rhs)
+
+      case (annottee @ ValDef(mods, name, tpt, rhs)) :: Nil =>
+        if (keep) annottee else treeCopy.ValDef(annottee, compileTimeOnly(mods), name, tpt, rhs)
 
       case _ =>
         c.abort(c.enclosingPosition,
@@ -92,6 +111,12 @@ object platform {
           if unconditional.symbol.owner == unconditionalSelection &&
              unconditional.symbol.name.toString == "unconditional" =>
         Right(true -> expr)
+
+      case selection
+        if selection.tpe != null &&
+           (selection.tpe <:< definitions.NothingTpe ||
+            selection.tpe <:< definitions.NullTpe) =>
+        Right(true -> selection)
 
       case selection =>
         Left(selection.pos)

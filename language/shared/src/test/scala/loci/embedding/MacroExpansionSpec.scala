@@ -399,7 +399,7 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
       cancel("Skipping test: Does not compile on Windows due to scalac and sbt issues")
     }
 
-    skip
+    platform(platform.win) { skip }
 
     @platform(!platform.win) object test {
     """@multitier trait mod extends TopModule {
@@ -425,7 +425,7 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     }""" should compile
     }
 
-    test
+    platform(!platform.win) { test }
   }
 
   it should "typecheck nested types" in {
