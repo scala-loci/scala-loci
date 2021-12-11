@@ -14,31 +14,31 @@ import scala.concurrent.{Await, Future, Promise}
 import scala.util.{Success, Try}
 
 object RegistryTests extends Matchers {
-  type Test = (Listener[Connections.Protocol], Connector[Connections.Protocol], => Unit, => Unit, => Unit) => Unit
+  type Test = (Listener[Connections.Protocol], Connector[Connections.Protocol], => Boolean, => Boolean, => Unit) => Unit
 
   private implicit class RegistryRetryingOps(registry: Registry) {
-    private def retrying[T](operation: => Try[T], count: Int = 0): T = {
+    private def retrying[T](setup: => Boolean, count: Int = 0)(operation: => Try[T]): T = {
       val result = operation
-      if (result.isFailure && count < 600) {
+      if ((result.isFailure || !setup) && count < 600) {
         Thread.sleep(100)
-        retrying(operation, count + 1)
+        retrying(setup, count + 1)(operation)
       }
       else
         result.get
     }
 
-    def listenRetrying(listener: Listener[Connections.Protocol]): Unit =
-      retrying { registry.listen(listener) }
+    def listenRetrying(listener: Listener[Connections.Protocol], setup: => Boolean): Unit =
+      retrying(setup) { registry.listen(listener) }
 
-    def connectRetrying(connector: Connector[Connections.Protocol]): RemoteRef =
-      retrying { Await.ready(registry.connect(connector), 1.minute).value.get }
+    def connectRetrying(connector: Connector[Connections.Protocol], setup: => Boolean): RemoteRef =
+      retrying(setup) { Await.ready(registry.connect(connector), 1.minute).value.get }
   }
 
   def `handle binding and lookup correctly`(
       listener: Listener[Connections.Protocol],
       connector: Connector[Connections.Protocol],
-      setupListener: => Unit = (),
-      setupConnector: => Unit = (),
+      setupListener: => Boolean = true,
+      setupConnector: => Boolean = true,
       cleanup: => Unit = ()): Unit = {
     var registry0: Registry = null
     var registry1: Registry = null
@@ -49,14 +49,10 @@ object RegistryTests extends Matchers {
       registry0 = new Registry
       registry0.bind("future")(promise.future)
       registry0.bind("intfun")(() => (???): Int)
-      registry0.listenRetrying(listener)
-
-      setupListener
+      registry0.listenRetrying(listener, setupListener)
 
       registry1 = new Registry
-      val remote = registry1.connectRetrying(connector)
-
-      setupConnector
+      val remote = registry1.connectRetrying(connector, setupConnector)
 
       val result0 = registry1.lookup[concurrent.Future[(Int, String)]]("future", remote)
       val result1 = registry1.lookup[() => Int]("intfun", remote)
@@ -90,8 +86,8 @@ object RegistryTests extends Matchers {
   def `handle subjective binding and lookup correctly`(
       listener: Listener[Connections.Protocol],
       connector: Connector[Connections.Protocol],
-      setupListener: => Unit = (),
-      setupConnector: => Unit = (),
+      setupListener: => Boolean = true,
+      setupConnector: => Boolean = true,
       cleanup: => Unit = ()): Unit = {
     var registry0: Registry = null
     var registry1: Registry = null
@@ -115,14 +111,10 @@ object RegistryTests extends Matchers {
       registry0 = new Registry
       registry0.bindSbj(valueBinding)(value _)
       registry0.bindSbj(methodBinding)(method _)
-      registry0.listenRetrying(listener)
-
-      setupListener
+      registry0.listenRetrying(listener, setupListener)
 
       registry1 = new Registry
-      val remote = registry1.connectRetrying(connector)
-
-      setupConnector
+      val remote = registry1.connectRetrying(connector, setupConnector)
 
       val result0 = registry1.lookup(valueBinding, remote)
       val result1 = registry1.lookup(methodBinding, remote)

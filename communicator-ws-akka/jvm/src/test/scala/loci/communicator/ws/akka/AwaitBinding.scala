@@ -6,14 +6,14 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 object awaitBinding {
-  def apply(listener: Listener[WS], atMost: Duration): Unit = {
+  def apply(listener: Listener[WS], atMost: Duration): Boolean = {
     val binding = listener match {
       case listener: WSListener.BoundRoute[WS] => listener.binding
       case _ => None
     }
 
     binding.fold(throw new NoSuchElementException("listener has no binding")) {
-      Await.ready(_, atMost)
+      Await.ready(_, atMost).value.get.isSuccess
     }
   }
 }

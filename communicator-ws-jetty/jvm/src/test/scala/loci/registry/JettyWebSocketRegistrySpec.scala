@@ -24,8 +24,8 @@ class JettyWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLoggin
     server.addConnector(connector)
 
     test(WS(context, "/registry/*"), WS(s"ws://localhost:$port/registry/"),
-      server.start(),
-      (),
+      { server.start(); true },
+      true,
       server.stop())
   }
 
