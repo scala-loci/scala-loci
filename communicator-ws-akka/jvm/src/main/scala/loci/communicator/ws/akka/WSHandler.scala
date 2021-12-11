@@ -2,6 +2,8 @@ package loci
 package communicator
 package ws.akka
 
+import contexts.Immediate.Implicits.global
+
 import java.util.concurrent.atomic.AtomicBoolean
 
 import akka.http.scaladsl.model.ws.{BinaryMessage, Message, TextMessage}
@@ -10,7 +12,6 @@ import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.util.ByteString
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Future, Promise}
 import scala.util.{Failure, Success, Try}
 
