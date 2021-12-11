@@ -15,15 +15,28 @@ ThisBuild / licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LIC
 
 ThisBuild / scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 
-ThisBuild / scalaVersion := "2.13.7"
-
 ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.7")
+
+ThisBuild / scalaVersion := {
+  val version = Option(System.getenv("SCALA_VERSION")) getOrElse ""
+  val versions = (ThisBuild / crossScalaVersions).value
+  versions.reverse find { _ startsWith version } getOrElse versions.last
+}
+
 
 def `is 2.12+`(scalaVersion: String): Boolean =
   CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 12 } getOrElse false
 
 def `is 2.13+`(scalaVersion: String): Boolean =
   CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 13 } getOrElse false
+
+
+val build = taskKey[Unit]("Builds the system")
+
+val aggregatedProjects = ScopeFilter(inAggregates(ThisProject, includeRoot = false))
+
+def taskSequence(tasks: TaskKey[_]*) =
+  Def.sequential(tasks map { task => Def.task { Def.unit(task.value) } all aggregatedProjects })
 
 
 val macroparadise = Seq(
@@ -57,11 +70,10 @@ val scribe = libraryDependencies += {
 }
 
 val retypecheck = libraryDependencies +=
-  "io.github.scala-loci" %% "retypecheck" % "0.9.0"
+  "io.github.scala-loci" %% "retypecheck" % "0.10.0"
 
-val rescala = Seq(
-  resolvers += "jitpack" at "https://jitpack.io",
-  libraryDependencies += "com.github.rescala-lang.rescala" %%% "rescala" % "cbb7980")
+val rescala = libraryDependencies +=
+  "de.tu-darmstadt.stg" %%% "rescala" % "0.31.0"
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "1.4.2"
@@ -75,8 +87,8 @@ val circe = Seq(
     else
       Seq.empty
   },
-  (compile / skip) := !`is 2.12+`(scalaVersion.value),
-  (publish / skip) := !`is 2.12+`(scalaVersion.value))
+  compile / skip := !`is 2.12+`(scalaVersion.value),
+  publish / skip := !`is 2.12+`(scalaVersion.value))
 
 val jsoniter = Seq(
   libraryDependencies ++= {
@@ -85,8 +97,8 @@ val jsoniter = Seq(
     else
       Seq.empty
   },
-  (compile / skip) := !`is 2.12+`(scalaVersion.value),
-  (publish / skip) := !`is 2.12+`(scalaVersion.value))
+  compile / skip := !`is 2.12+`(scalaVersion.value),
+  publish / skip := !`is 2.12+`(scalaVersion.value))
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
@@ -111,12 +123,24 @@ val jetty = libraryDependencies ++= Seq(
 
 lazy val loci = (project
   in file(".")
-  settings ((publish / skip) := true)
+  settings (publish / skip := true,
+            Global / onLoad := {
+              val project = System.getenv("SCALA_PLATFORM") match {
+                case "jvm" => Some("lociJVM")
+                case "js" => Some("lociJS")
+                case _ => None
+              }
+              val transformation = { state: State =>
+                project map { project => s"project $project" :: state } getOrElse state
+              }
+              transformation compose (Global / onLoad).value
+            })
   aggregate (lociJVM, lociJS))
 
 lazy val lociJVM = (project
   in file(".jvm")
-  settings ((publish / skip) := true)
+  settings (publish / skip := true,
+            build := taskSequence(Compile / compile, Test /compile).value)
   aggregate (lociLanguageJVM, lociLanguageRuntimeJVM, lociCommunicationJVM,
              lociSerializerUpickleJVM,
              lociSerializerCirceJVM,
@@ -132,7 +156,9 @@ lazy val lociJVM = (project
 
 lazy val lociJS = (project
   in file(".js")
-  settings ((publish / skip) := true)
+  settings (publish / skip := true,
+            build := taskSequence(Compile / compile, Test /compile,
+                                  Compile / fastLinkJS, Test /fastLinkJS).value)
   aggregate (lociLanguageJS, lociLanguageRuntimeJS, lociCommunicationJS,
              lociSerializerUpickleJS,
              lociSerializerCirceJS,

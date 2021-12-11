@@ -1,4 +1,10 @@
-# [ScalaLoci](http://scala-loci.github.io)
+# [ScalaLoci](https://scala-loci.github.io)
+
+
+[![Build](https://img.shields.io/github/workflow/status/scala-loci/scala-loci/build?label=build&logo=GitHub&logoColor=lightgray&style=for-the-badge)](https://github.com/scala-loci/scala-loci/actions/workflows/build.yml)
+[![License](https://img.shields.io/github/license/scala-loci/scala-loci?label=license&logo=Open%20Source%20Initiative&logoColor=silver&style=for-the-badge)](https://github.com/scala-loci/scala-loci/blob/master/LICENSE)
+[![Release](https://img.shields.io/maven-central/v/io.github.scala-loci/scala-loci-language_2.13?label=release&logo=Apache%20Maven&logoColor=lightgray&color=blue&style=for-the-badge)](https://search.maven.org/search?q=g:io.github.scala-loci%20a:scala-loci*)
+
 
 ScalaLoci is a distributed programming language embedded into Scala.
 The language provides a coherent model based on placement types that enables
@@ -11,7 +17,7 @@ detection of bugs.
 
 ## Getting ScalaLoci
 
-1. Enable support for macro annotations in your `build.sbt`
+1. Enable support for macro annotations in your `build.sbt`:
 
    * for Scala 2.13
 
@@ -19,33 +25,30 @@ detection of bugs.
      scalacOptions += "-Ymacro-annotations"
      ```
 
-   * for Scala 2.11 or 2.12 ([Macro Paradise Plugin](http://docs.scala-lang.org/overviews/macros/paradise.html))
+   * for Scala 2.11 or 2.12 ([Macro Paradise Plugin](https://docs.scala-lang.org/overviews/macros/paradise.html))
 
      ```scala
      addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
      ```
 
-2. Add the resolver for the ScalaLoci dependencies to your `build.sbt`
-
-   ```scala
-   resolvers += Resolver.bintrayRepo("stg-tud", "maven")
-   ```
-
-3. Add the ScalaLoci dependencies that you need for your system to your `build.sbt`
+2. Add the ScalaLoci dependencies that you need for your system to your `build.sbt`:
 
    1. ScalaLoci language (always required)
 
       ```scala
-      libraryDependencies += "de.tuda.stg" %% "scala-loci-lang" % "0.4.0"
+      libraryDependencies ++= Seq(
+        "io.github.scala-loci" %% "scala-loci-language" % "0.5.0" % "compile-internal",
+        "io.github.scala-loci" %% "scala-loci-language-runtime" % "0.5.0")
       ```
 
    2. Transmitter for the types of values to be accessed remotely
       (built-in Scala types and standard collections are directly supported without additional dependencies)
 
-      * [REScala](http://www.rescala-lang.com/) reactive events and signals
+      * [REScala](https://www.rescala-lang.com/) reactive events and signals
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-lang-transmitter-rescala" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-language-transmitter-rescala" % "0.5.0"
         ```
 
    3. Network communicators to connect the different components of the distributed system
@@ -53,45 +56,73 @@ detection of bugs.
       * TCP [*JVM only*]
   
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-tcp" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-tcp" % "0.5.0"
         ```
 
-      * WebSocket (using [Akka HTTP](http://doc.akka.io/docs/akka-http/) on the JVM) [*server: JVM only, client: JVM and JS web browser APIs*]
+      * WebSocket (using web browser APIs) [*JS only, client only*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-ws-akka" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-ws-webnative" % "0.5.0"
         ```
 
-      * WebSocket ([Play](http://www.playframework.com) integration) [*server: JVM only, client: JVM and JS web browser APIs*]
+      * WebSocket (using [Akka HTTP](https://doc.akka.io/docs/akka-http/)) [*JVM only*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-ws-akka-play" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-ws-akka" % "0.5.0"
         ```
 
-      * WebSocket (using [Javalin](http://javalin.io) on the JVM) [*server: JVM only, client: JS web browser APIs*]
+      * WebSocket ([Play](https://www.playframework.com) integration using [Akka HTTP](https://doc.akka.io/docs/akka-http/)) [*JVM only*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-ws-javalin" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-ws-akka-play" % "0.5.0"
         ```
 
-      * WebRTC [*JS web browser APIs only*]
+      * WebSocket (using [Javalin](https://javalin.io)) [*JVM only, server only*]
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-communicator-webrtc" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-ws-javalin" % "0.5.0"
+        ```
+
+      * WebSocket (using [Jetty](https://www.eclipse.org/jetty/)) [*JVM only*]
+
+        ```scala
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-ws-jetty" % "0.5.0"
+        ```
+
+      * WebRTC (using web browser APIs) [*JS only*]
+
+        ```scala
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-communicator-webrtc" % "0.5.0"
         ```
 
    4. Serializer for network communication
 
-      * [µPickle](http://www.lihaoyi.com/upickle/) serialization
+      * [µPickle](https://com-lihaoyi.github.io/upickle/) serialization
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-serializer-upickle" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-serializer-upickle" % "0.5.0"
         ```
 
-      * [Circe](http://circe.github.io/circe/) serialization
+      * [Circe](https://circe.github.io/circe/) serialization
 
         ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-serializer-circe" % "0.4.0"
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-serializer-circe" % "0.5.0"
+        ```
+
+      * [Jsoniter Scala](https://github.com/plokhotnyuk/jsoniter-scala/) serialization
+
+        ```scala
+        libraryDependencies +=
+          "io.github.scala-loci" %% "scala-loci-serializer-jsoniter-scala" % "0.5.0"
         ```
 
 
@@ -103,42 +134,42 @@ abstractions. The library provides pluggable *communicators* for different
 network protocols and *transmitters* implementing the remote transmission
 semantics for values of different types.
 
-1. Add the resolver for the ScalaLoci dependencies to your `build.sbt` (same as [above](#getting-scalaloci))
+Add the ScalaLoci dependencies that you need for your system to your `build.sbt`:
 
-2. Add the ScalaLoci dependencies that you need for your system to your `build.sbt`
+1. ScalaLoci communication library (always required)
 
-   1. ScalaLoci communication library (always required)
+   ```scala
+   libraryDependencies +=
+     "io.github.scala-loci" %% "scala-loci-communication" % "0.5.0"
+   ```
 
-      ```scala
-      libraryDependencies += "de.tuda.stg" %% "scala-loci-communication" % "0.4.0"
-      ```
+2. Transmitter for the types of values to be accessed remotely
+   (built-in Scala types and standard collections are directly supported without additional dependencies)
 
-   2. Transmitter for the types of values to be accessed remotely
-      (built-in Scala types and standard collections are directly supported without additional dependencies)
+   * [REScala](https://www.rescala-lang.com/) reactive events and signals
 
-      * [REScala](http://www.rescala-lang.com/) reactive events and signals
+     ```scala
+     libraryDependencies +=
+       "io.github.scala-loci" %% "scala-loci-transmitter-rescala" % "0.5.0"
+     ```
 
-        ```scala
-        libraryDependencies += "de.tuda.stg" %% "scala-loci-transmitter-rescala" % "0.4.0"
-        ```
+3. Network communicators to connect the different components of the distributed system (same as [above](#getting-scalaloci))
 
-   3. Network communicators to connect the different components of the distributed system (same as [above](#getting-scalaloci))
-
-   4. Serializer for network communication (same as [above](#getting-scalaloci))
+4. Serializer for network communication (same as [above](#getting-scalaloci))
 
 
 ## Examples and Case Studies
 
 * Examples
 
-  [Simple](http://github.com/scala-loci/examples-simple): Simple showcases of ScalaLoci using small examples
+  [Simple](https://github.com/scala-loci/examples-simple): Simple showcases of ScalaLoci using small examples
 
-  [Variants](http://github.com/scala-loci/examples-variants): More complete examples implemented in different variants
+  [Variants](https://github.com/scala-loci/examples-variants): More complete examples implemented in different variants
 
 * Case Studies
 
-  [Flink](http://github.com/scala-loci/case-study-flink): Reimplementation of the task distribution system of [Apache Flink](http://flink.apache.org) in ScalaLoci
+  [Flink](https://github.com/scala-loci/case-study-flink): Reimplementation of the task distribution system of [Apache Flink](https://flink.apache.org) in ScalaLoci
 
-  [Gearpump](http://github.com/scala-loci/case-study-gearpump): Reimplementation of the worker assignment logic of [Apache Gearpump](http://gearpump.apache.org/) in ScalaLoci
+  [Gearpump](https://github.com/scala-loci/case-study-gearpump): Reimplementation of the worker assignment logic of [Apache Gearpump](https://gearpump.github.io/) in ScalaLoci
 
-  [Play Scala.js](http://github.com/scala-loci/case-study-play-scalajs): Reimplementation of the [Play Framework with Scala.js Showcase](http://github.com/hussachai/play-scalajs-showcase) in ScalaLoci
+  [Play Scala.js](https://github.com/scala-loci/case-study-play-scalajs): Reimplementation of the [Play Framework with Scala.js Showcase](https://github.com/hussachai/play-scalajs-showcase) in ScalaLoci
