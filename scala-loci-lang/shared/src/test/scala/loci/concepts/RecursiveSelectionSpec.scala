@@ -78,6 +78,24 @@ import scala.concurrent.Future
   }
 }
 
+@multitier object RecursiveSelectionWithAlwaysLocalExecutionModule {
+  @peer type Node <: { type Tie <: Multiple[Node] }
+
+  var selectCalls: Int on Node = on[Node] { implicit! => 0 }
+
+  def select(
+    connected: Seq[Remote[Node]],
+    self: SelfReference[Node]
+  ): Local[Remote[Node]] on Node = on[Node] { implicit! =>
+    selectCalls += 1
+    self
+  }
+
+  def run(): Future[String] on Node = on[Node] { implicit! =>
+    onAny.recursive[Node](select _).run { implicit! => "test" }.asLocal
+  }
+}
+
 class RecursiveSelectionSpec extends AsyncFlatSpec with Matchers with NoLogging {
   behavior of "Recursive selection of executing peer of a remote call"
 
@@ -188,6 +206,22 @@ class RecursiveSelectionSpec extends AsyncFlatSpec with Matchers with NoLogging 
     Future.sequence(Seq(aa, bb, cc, ab, ac)).map(_.unzip).map {
       case (actual, expected) => actual shouldEqual expected
     }
+  }
+
+  it should "execute the selection only once when it returns the SelfReference immediately" in {
+    val node = multitier start new Instance[RecursiveSelectionWithAlwaysLocalExecutionModule.Node](
+      contexts.Immediate.global
+    )
+
+    val result = node.instance.current.map {
+      _ retrieve[Future[String]] RecursiveSelectionWithAlwaysLocalExecutionModule.run() map { _ shouldEqual "test" }
+    }.get
+
+    node.instance.current.map {
+      _ retrieve[Int] RecursiveSelectionWithAlwaysLocalExecutionModule.selectCalls shouldEqual 1
+    }
+
+    result
   }
 
 }

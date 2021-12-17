@@ -248,14 +248,15 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
         }
 
         /**
-         * Lift the recursively placed remote call to a remote call of a new recursive function. Add this recursive
-         * function to the module.
+         * Lift the recursively placed remote call to a call of a new recursive function remotely calling itself when a
+         * remote reference is selected. Add this recursive function to the module.
+         *
          * @param tree the original remote call to be lifted
          * @param recursiveCallAccessor a remote accessor to be wrapped around the recursive remote call in the created function;
          *                              only defined if the original remote call is accessed via remote accessor (i.e.
          *                              in [[liftDynamicallyPlacedRemoteCallInsideRemoteAccessor]]
          * @param recursiveCallAccessorIsBlocking Is recursiveCallAccessor blocking? If not the recursive function will return a Future
-         * @return the lifted remote call
+         * @return the lifted call to the new recursive function
          */
         def liftDynamicallyPlacedRemoteCall(
           tree: Tree,
@@ -400,56 +401,39 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
 
           liftedRecursiveDefinitions += atPos(callExpr.pos)(liftedDefinition)
 
-          val selectAnyApply = internal.setSymbol(q"$selectAny.apply[$peerType]($ruleArg)", expr.symbol)
-
-          atPos(tree.pos) {
-            internal.setSymbol(
-              internal.setType(
-                q"$selectAnyApply.$call[..$callTpts]($liftedCall)",
-                tree.tpe
-              ), tree.symbol
-            )
-          }
+          liftedCall
         }
 
         /**
-         * Lift the recursively placed remote call to a remote call of a new recursive function. Add this recursive
-         * function to the module. The original remote call must be in a remote accessor
+         * Lift the recursively placed remote call to a call of a new recursive function that remotely calls itself if
+         * a remote reference is selected. Add this recursive function to the module. The original remote call must be
+         * in a remote accessor.
+         *
          * @param tree the original remote call inside a remote accessor
-         * @return the lifted remote call inside the original remote accessor
+         * @return the lifted call to the new recursive function
          */
         def liftDynamicallyPlacedRemoteCallInsideRemoteAccessor(tree: Tree): Tree = {
-          val q"$accessor(...$exprss)" = tree: @unchecked
+          val q"$accessorExpr.$asLocal" = tree: @unchecked
+          val q"$accessor(...$exprss)" = accessorExpr: @unchecked
           val transmission: Tree = exprss(1).head
 
-          val isBlocking: Boolean = tree.tpe real_<:< types.blockingRemoteAccessor
+          val isBlocking: Boolean = accessorExpr.tpe real_<:< types.blockingRemoteAccessor
 
           val recursiveCallAccessor = (recursiveCall: Tree) => {
             val newAccessor = internal.setType(
               q"$accessor($recursiveCall)($transmission)",
-              tree.tpe
+              accessorExpr.tpe
             )
-            val access = tree.tpe match {
-              case tpe if tpe real_<:< types.basicSingleAccessor => q"$newAccessor.asLocal"
-              case tpe if tpe real_<:< types.basicBlockingSingleAccessor => q"$newAccessor.asLocal_!"
-              case tpe => c.abort(tree.pos, s"Unexpected remote accessor of type $tpe in remote call with recursive selection")
-            }
-            internal.setType(access, tree.tpe.typeArgs(2))
+            internal.setType(q"$newAccessor.$asLocal", tree.tpe)
           }
 
-          val liftedRemoteCall = liftDynamicallyPlacedRemoteCall(
+          val liftedCall = liftDynamicallyPlacedRemoteCall(
             exprss.head.head,
             Option(recursiveCallAccessor),
             Option(isBlocking)
           )
-          atPos(tree.pos) {
-            internal.setSymbol(
-              internal.setType(
-                q"$accessor($liftedRemoteCall)($transmission)",
-                tree.tpe
-              ),
-              tree.symbol
-            )
+          atPos(accessorExpr.pos) {
+            liftedCall
           }
         }
 
@@ -564,8 +548,11 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
 
   private def isDynamicallyPlacedRemoteCallWithRecursiveSelectionInsideRemoteAccessor(tree: Tree): Boolean = {
     tree match {
-      case tree @ q"$accessor(...$exprss)" if tree.nonEmpty && (tree.tpe real_<:< types.remoteAccessor) && exprss.nonEmpty && exprss.head.nonEmpty =>
-        isDynamicallyPlacedRemoteCallWithRecursiveSelection(exprss.head.head)
+      case q"$expr.$anyAsLocal(...$_)" => expr match {
+        case tree @ q"$accessor(...$exprss)" if tree.nonEmpty && (tree.tpe real_<:< types.remoteAccessor) && exprss.nonEmpty && exprss.head.nonEmpty =>
+          isDynamicallyPlacedRemoteCallWithRecursiveSelection(exprss.head.head)
+        case _ => false
+      }
       case _ => false
     }
   }
