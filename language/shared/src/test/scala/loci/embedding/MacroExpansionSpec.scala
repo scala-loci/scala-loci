@@ -197,6 +197,11 @@ class TopClass
 }
 
 
+@multitier class ByNameDefaultAndImplicitArguments(v: => Int = 1)(implicit ev: String) {
+  def res = ev * v
+}
+
+
 class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Macro Expansion"
 
@@ -426,6 +431,31 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     }
 
     platform(!platform.win) { test }
+  }
+
+  it should "correctly compile by-name arguments with default values and implicit arguments" in {
+    var count = 0
+    implicit val implicitString = "test"
+
+    val fixedInstance = new ByNameDefaultAndImplicitArguments
+    val fixedValues = new fixedInstance.`<placed values of loci.embedding.ByNameDefaultAndImplicitArguments>` {
+      lazy val $loci$sig = ""
+      def $loci$sys$create = emptySystem(this)
+    }
+
+    fixedValues.res should be ("test")
+    fixedValues.res should be ("test")
+    fixedValues.res should be ("test")
+
+    val countingInstance = new ByNameDefaultAndImplicitArguments({ count += 1; count })
+    val countingValues = new countingInstance.`<placed values of loci.embedding.ByNameDefaultAndImplicitArguments>` {
+      lazy val $loci$sig = ""
+      def $loci$sys$create = emptySystem(this)
+    }
+
+    countingValues.res should be ("test")
+    countingValues.res should be ("testtest")
+    countingValues.res should be ("testtesttest")
   }
 
   it should "typecheck nested types" in {

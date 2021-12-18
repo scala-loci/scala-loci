@@ -98,7 +98,9 @@ class Multitier(val c: blackbox.Context) {
               _ map { tree =>
                 val ValDef(mods, name, tpt, rhs) = tree: @unchecked
                 if ((mods hasFlag Flag.DEFAULTPARAM) && rhs.nonEmpty)
-                  treeCopy.ValDef(tree, retyper.cleanModifiers(mods), name, tpt, EmptyTree)
+                  treeCopy.ValDef(tree,
+                    retyper.cleanModifiers(mods, removeFlags = Flag.DEFAULTINIT | Flag.DEFAULTPARAM),
+                    name, tpt, EmptyTree)
                 else
                   tree
               }
