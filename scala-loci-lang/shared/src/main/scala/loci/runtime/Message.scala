@@ -137,3 +137,19 @@ object PeerIdExchangeMessage {
     }
   }
 }
+
+object NetworkMonitoringMessage {
+
+  def apply(time: Long, isResponse: Boolean): Message[Method] = {
+    val messageType = if (isResponse) "PingResponse" else "PingRequest"
+    Message(Content, Map("Type" -> Seq(messageType)), MessageBuffer.encodeString(time.toString))
+  }
+
+  def unapply(message: Message[Method]): Option[(Long, Boolean)] = {
+    (message.method, message.properties get "Type") match {
+      case (Content, Some(Seq("PingRequest"))) => Some((message.payload.decodeString.toLong, false))
+      case (Content, Some(Seq("PingResponse"))) => Some((message.payload.decodeString.toLong, true))
+      case _ => None
+    }
+  }
+}
