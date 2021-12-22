@@ -8,6 +8,7 @@ import loci.valueref.PeerValueCacheProvider
 import messaging.Message
 import transmitter.{RemoteAccessException, RemoteRef}
 
+import java.util.Timer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
@@ -33,7 +34,8 @@ class System(
   executionContext: ExecutionContext,
   remoteConnections: RemoteConnections,
   singleConnectedRemotes: Seq[Remote.Reference],
-  connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]]
+  connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]],
+  networkMonitorConfig: Option[NetworkMonitorConfig] = None
 ) {
 
   val peerValueCache: PeerValueCache = PeerValueCacheProvider.create()
@@ -523,6 +525,9 @@ class System(
           remoteConnections.send(remote, PeerIdExchangeMessage(peerId, init = false))
         }
 
+      case NetworkMonitoringMessage(_, _) =>
+        // handled by NetworkMonitor instead
+
       case _ =>
         logging.warn(s"unprocessed message: $message")
     }
@@ -620,4 +625,12 @@ class System(
   // start up system
 
   remoteConnections.run()
+
+  new NetworkMonitorResponder(remoteConnections)
+
+  networkMonitorConfig.foreach { config =>
+    val timer = new Timer()
+    val networkMonitor = new NetworkMonitor(config, remoteConnections)
+    timer.schedule(networkMonitor, 0L, config.pingPeriod.toMillis)
+  }
 }

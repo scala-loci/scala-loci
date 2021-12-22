@@ -33,6 +33,18 @@ class Instance[P] private[loci] (dummy: Int) {
 
   @compileTimeOnly("Multitier peer instantiation must be of the form: multitier start new Instance[P]")
   def this(context: ExecutionContext, separateMainThread: Boolean, connect: Connections) = this(0)
+
+  @compileTimeOnly("Multitier peer instantiation must be of the form: multitier start new Instance[P]")
+  def this(connect: Connections, networkMonitorConfig: NetworkMonitorConfig) = this(0)
+
+  @compileTimeOnly("Multitier peer instantiation must be of the form: multitier start new Instance[P]")
+  def this(context: ExecutionContext, connect: Connections, networkMonitorConfig: NetworkMonitorConfig) = this(0)
+
+  @compileTimeOnly("Multitier peer instantiation must be of the form: multitier start new Instance[P]")
+  def this(separateMainThread: Boolean, connect: Connections, networkMonitorConfig: NetworkMonitorConfig) = this(0)
+
+  @compileTimeOnly("Multitier peer instantiation must be of the form: multitier start new Instance[P]")
+  def this(context: ExecutionContext, separateMainThread: Boolean, connect: Connections, networkMonitorConfig: NetworkMonitorConfig) = this(0)
 }
 
 object Instance {

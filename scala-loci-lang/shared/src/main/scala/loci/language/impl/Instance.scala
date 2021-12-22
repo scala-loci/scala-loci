@@ -23,6 +23,7 @@ class Instance(val c: blackbox.Context) {
     val executionContext = typeOf[ExecutionContext]
     val placedValues = c.mirror.staticClass("_root_.loci.runtime.PlacedValues").asType.toType
     val nonInstantiable = typeOf[NonInstantiable]
+    val networkMonitorConfig = typeOf[NetworkMonitorConfig]
   }
 
   object symbols {
@@ -393,6 +394,11 @@ class Instance(val c: blackbox.Context) {
           collectFirst { case arg if arg.tpe <:< types.connections => arg }
           getOrElse q"${termNames.ROOTPKG}.loci.language.Connections.empty")
 
+        val networkMonitorConfig = (exprs
+          collectFirst { case arg if arg.tpe <:< types.networkMonitorConfig => arg }
+          map { config => q"${termNames.ROOTPKG}.scala.Some($config)"}
+          getOrElse q"${termNames.ROOTPKG}.scala.None")
+
         // construct peer instance
         val (earlyDefinitions, lateDefinitions) =
           collectDefinitions(
@@ -442,7 +448,8 @@ class Instance(val c: blackbox.Context) {
         val system =
           q"""${Flag.SYNTHETIC} protected def $$loci$$sys$$create = new ${types.system}(
              this, $$loci$$instance$$sig, $$loci$$instance$$peer$$id, $main, $separateMainThread,
-             $$loci$$ties, $$loci$$context, $$loci$$connections, $$loci$$connected, $$loci$$connecting)"""
+             $$loci$$ties, $$loci$$context, $$loci$$connections, $$loci$$connected, $$loci$$connecting,
+             $networkMonitorConfig)"""
 
         val peerId = q"${termNames.ROOTPKG}.loci.valueref.UniquePeerId.generate()"
 
