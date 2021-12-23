@@ -1,5 +1,6 @@
 package loci.utils
 
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.annotation.tailrec
 
@@ -19,6 +20,13 @@ object CollectionOps {
         queue.remove()
         ConcurrentLinkedQueueOps(queue).limit(n)
       }
+    }
+  }
+
+  implicit class ConcurrentHashMapOps[K, V](map: ConcurrentHashMap[K, V]) {
+    def getOrDefaultWithPut(key: K, default: V): V = {
+      map.putIfAbsent(key, default)
+      map.get(key)
     }
   }
 
