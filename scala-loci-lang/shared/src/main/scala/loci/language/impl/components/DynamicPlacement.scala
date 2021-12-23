@@ -37,6 +37,11 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
       "dynamic:selfreference:validate",
       validateSelfReferences,
       after = Set("values:collect")
+    ),
+    Phase(
+      "dynamic:network:monitor",
+      replaceNetworkMonitor,
+      after = Set("values:collect")
     )
   )
 
@@ -507,6 +512,29 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
     }
 
     records
+  }
+
+  def replaceNetworkMonitor(records: List[Any]): List[Any] = {
+    logging.debug(s" Replacing calls to erased network monitor with runtime network monitor")
+    var count = 0
+
+    object transformer extends Transformer {
+      override def transform(tree: Tree): Tree = tree match {
+        case tree @ q"_root_.loci.`package`.networkMonitor" if tree.tpe real_<:< types.networkMonitor =>
+          count += 1
+          val systemNetworkMonitorTree = q"$$loci$$sys.getNetworkMonitor"
+          internal.setType(systemNetworkMonitorTree, types.networkMonitor)
+          super.transform(systemNetworkMonitorTree)
+        case tree => super.transform(tree)
+      }
+    }
+
+    val result = records process {
+      case v: Value => v.copy(tree = transformer.transform(v.tree))
+    }
+
+    logging.debug(s" Replaced $count calls to erased network monitor with runtime network monitor")
+    result
   }
 
   /**

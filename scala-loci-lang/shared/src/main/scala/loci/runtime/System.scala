@@ -628,9 +628,14 @@ class System(
 
   new NetworkMonitorResponder(remoteConnections)
 
-  networkMonitorConfig.foreach { config =>
+  private val networkMonitor = networkMonitorConfig.map { config =>
     val timer = new Timer()
     val networkMonitor = new NetworkMonitor(config, remoteConnections)
     timer.schedule(networkMonitor, 0L, config.pingPeriod.toMillis)
+    networkMonitor
   }
+
+  def getNetworkMonitor: NetworkMonitor = networkMonitor.getOrElse(
+    throw new RuntimeException("Illegal access to network monitor without config setup for this instance")
+  )
 }

@@ -153,6 +153,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val valueRefAccessor = typeOf[valueref.ValueRefAccessor[_, _, _]]
     val peerValueCache = typeOf[PeerValueCache]
     val peerValueMapCache = typeOf[PeerValueMapCache]
+    val networkMonitor = typeOf[loci.NetworkMonitor]
   }
 
   object trees {
