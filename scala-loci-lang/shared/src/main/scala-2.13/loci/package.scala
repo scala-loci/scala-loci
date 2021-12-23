@@ -64,4 +64,6 @@ package object loci {
 
   def onAny: Placement.SelectAny[Placement.Run] = erased
   def remoteAny: Placement.SelectAny[Placement.Call] = erased
+
+  def networkMonitor: NetworkMonitor = erased
 }
