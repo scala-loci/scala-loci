@@ -32,11 +32,6 @@ class NetworkMonitor(config: NetworkMonitorConfig, remoteConnections: RemoteConn
     case (remote, NetworkMonitoringMessage(time, true)) =>
       val roundTripTime = sys.currentTimeMillis() - time
       pingStore.getOrDefaultWithPut(remote, new ConcurrentLinkedQueue[Long]).addAndLimit(roundTripTime, config.pingStorageCount)
-      logging.info(
-        pingStore.asScala.map {
-          case (r, p) => r -> p.asScala.toSeq
-        }.toString
-      )
       logging.info(s"Round-trip time for $remote: $roundTripTime")
     case _ =>
   }
