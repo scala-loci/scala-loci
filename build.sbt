@@ -124,6 +124,8 @@ val json4sNative = libraryDependencies +=
 
 val scalacacheCaffeine = libraryDependencies += "com.github.cb372" %% "scalacache-caffeine" % "0.28.0"
 
+val scalaJavaTime = libraryDependencies += "io.github.cquiroz" %%% "scala-java-time" % "2.2.2"
+
 lazy val loci = (project
   in file(".")
   settings ((publish / skip) := true)
@@ -163,7 +165,7 @@ lazy val lociLang = (crossProject(JSPlatform, JVMPlatform)
             SourceGenerator.remoteSelection,
             retypecheckRepo, retypecheck,
             macroparadise, macrodeclaration, scribe, scalatest,
-            json4sNative, scalacacheCaffeine)
+            json4sNative, scalacacheCaffeine, scalaJavaTime)
   jsSettings jsweakreferences
   dependsOn lociCommunication % "compile->compile;test->test")
 
