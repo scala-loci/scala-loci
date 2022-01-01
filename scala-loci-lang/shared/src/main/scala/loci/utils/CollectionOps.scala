@@ -1,16 +1,24 @@
 package loci.utils
 
+import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import scala.annotation.tailrec
 
 object CollectionOps {
 
-  implicit class ConcurrentLinkedQueueOps[T](queue: ConcurrentLinkedQueue[T]) {
+  implicit class ConcurrentLinkedQueueOps[T <: { val timestamp: LocalDateTime }](queue: ConcurrentLinkedQueue[T]) {
 
     def addAndLimit(element: T, capacity: Int): Boolean = {
       require(capacity > 0)
       ConcurrentLinkedQueueOps(queue).limit(capacity - 1)
+      queue.offer(element)
+    }
+
+    def addAndLimit(element: T, oldestTimestamp: LocalDateTime): Boolean = {
+      while (Option(queue.peek()).exists(_.timestamp.isBefore(oldestTimestamp))) {
+        queue.remove()
+      }
       queue.offer(element)
     }
 
