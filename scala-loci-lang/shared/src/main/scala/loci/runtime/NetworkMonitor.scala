@@ -7,15 +7,14 @@ import loci.TransmittedBytesInfo
 import loci.logging
 import loci.utils.CollectionOps.ConcurrentHashMapOps
 import loci.utils.CollectionOps.ConcurrentLinkedQueueOps
-
-import java.lang.{System => sys}
-import java.util.TimerTask
-import java.util.concurrent.ConcurrentLinkedQueue
 import loci.{NetworkMonitor => NetworkMonitorAPI}
 
+import java.lang.{System => sys}
 import java.time.LocalDateTime
 import java.time.temporal.ChronoUnit
+import java.util.TimerTask
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import scala.jdk.CollectionConverters.CollectionHasAsScala
 
 class NetworkMonitor(config: NetworkMonitorConfig, remoteConnections: RemoteConnections) extends TimerTask
@@ -49,12 +48,7 @@ class NetworkMonitor(config: NetworkMonitorConfig, remoteConnections: RemoteConn
       logging.info(s"Round-trip time for $remote: $roundTripTime")
     case (remote, ChannelMessage(_, _, _, messageBuffer)) =>
       val bytes = messageBuffer.length
-      receivedBytes
-        .getOrDefaultWithPut(remote, new ConcurrentLinkedQueue[TransmittedBytesInfo])
-        .addAndLimit(
-            TransmittedBytesInfo(bytes, LocalDateTime.now()),
-            LocalDateTime.now().minus(config.transmittedBytesStorageDuration.toMillis, ChronoUnit.MILLIS)
-        )
+      storeBytes(bytes, receivedBytes, remote)
       logging.info(s"Received $bytes bytes from $remote")
     case _ =>
   }
@@ -62,11 +56,22 @@ class NetworkMonitor(config: NetworkMonitorConfig, remoteConnections: RemoteConn
   remoteConnections.sendNotice.foreach {
     case (remote, ChannelMessage(_, _, _, messageBuffer)) =>
       val bytes = messageBuffer.length
-      sentBytes
-        .getOrDefaultWithPut(remote, new ConcurrentLinkedQueue[TransmittedBytesInfo])
-        .offer(TransmittedBytesInfo(bytes, LocalDateTime.now()))
+      storeBytes(bytes, sentBytes, remote)
       logging.info(s"Sent $bytes bytes to $remote")
     case _ =>
+  }
+
+  private def storeBytes(
+    bytes: Int,
+    storage: ConcurrentHashMap[Remote[Nothing], ConcurrentLinkedQueue[TransmittedBytesInfo]],
+    remote: Remote[Nothing]
+  ): Unit = {
+    storage
+      .getOrDefaultWithPut(remote, new ConcurrentLinkedQueue[TransmittedBytesInfo])
+      .addAndLimit(
+        TransmittedBytesInfo(bytes, LocalDateTime.now()),
+        LocalDateTime.now().minus(config.transmittedBytesStorageDuration.toMillis, ChronoUnit.MILLIS)
+      )
   }
 
   override def getStoredPings[P](remote: Remote[P]): Seq[PingInfo] =
