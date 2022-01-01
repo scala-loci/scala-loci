@@ -45,6 +45,8 @@ trait ConnectionsBase[R, M] {
 
   private val doReceive = Notice.Stream[(R, M)]
 
+  private val doSend = Notice.Stream[(R, M)]
+
   val remoteJoined: Notice.Stream[R] = doRemoteJoined.notice
 
   val remoteLeft: Notice.Stream[R] = doRemoteLeft.notice
@@ -52,6 +54,8 @@ trait ConnectionsBase[R, M] {
   val terminated: Notice.Steady[List[R]] = doTerminated.notice
 
   val receive: Notice.Stream[(R, M)] = doReceive.notice
+
+  val sendNotice: Notice.Stream[(R, M)] = doSend.notice
 
   def remotes: List[R] = state.remotes.asScala.toList
 
@@ -107,6 +111,7 @@ trait ConnectionsBase[R, M] {
           logging.warn(s"message not sent to unconnected remote $remote: $message")
         case connection =>
           connection.send(serializeMessage(message))
+          doSend.fire(remote -> message)
       }
     else
       logging.warn(s"message not sent after connection system shutdown to remote $remote: $message")
