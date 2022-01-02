@@ -38,7 +38,7 @@ object Remote {
     if (!enclosingMultitierMacro && !documentationCompiler) {
       val remote = weakTypeOf[Remote[P]]
       val reference = typeOf[runtime.Remote.Reference]
-      val selfReference = typeOf[runtime.Remote.SelfReference]
+      val selfReference = weakTypeOf[runtime.Remote.SelfReference[P]]
       val name = TermName(s"$$loci$$peer$$sig$$${tpt.symbol.name}")
 
       val prefix = tpt match {

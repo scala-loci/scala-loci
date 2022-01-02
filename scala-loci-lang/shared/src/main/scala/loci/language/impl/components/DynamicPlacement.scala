@@ -134,7 +134,7 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
 
           val selfReferenceType = ruleType.typeArgs(1)
           val selfReference = internal.setType(
-            q"new ${names.root}.loci.runtime.Remote.SelfReference(${peerSignature(ruleOutputPeerType, ruleFunction.pos)})",
+            q"new ${names.root}.loci.runtime.Remote.SelfReference[${selfReferenceType.typeArgs.head}](${peerSignature(ruleOutputPeerType, ruleFunction.pos)})",
             selfReferenceType
           )
 
