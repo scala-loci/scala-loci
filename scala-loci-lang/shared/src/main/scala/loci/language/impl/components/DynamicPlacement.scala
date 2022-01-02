@@ -36,6 +36,11 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
     Phase(
       "dynamic:selfreference:validate",
       validateSelfReferences,
+      after = Set("values:collect", "dynamic:self:reference")
+    ),
+    Phase(
+      "dynamic:self:reference",
+      replaceSelfReference,
       after = Set("values:collect")
     ),
     Phase(
@@ -474,6 +479,31 @@ class DynamicPlacement[C <: blackbox.Context](val engine: Engine[C]) extends Com
         logging.debug(s" Expanded ${liftedRecursiveDefinitions.size} dynamically placed remote calls recursively")
         result
     }
+  }
+
+  def replaceSelfReference(records: List[Any]): List[Any] = {
+    logging.debug(s" Replacing calls to erased self reference with runtime SelfReference")
+    var count = 0
+
+    object transformer extends Transformer {
+      override def transform(tree: Tree): Tree = tree match {
+        case tree @ q"_root_.loci.`package`.self[$peer]($_)" if tree.tpe real_<:< types.selfReference =>
+          count += 1
+          val selfReference = internal.setType(
+            q"new ${names.root}.loci.runtime.Remote.SelfReference[$peer](${peerSignature(peer.tpe, peer.pos)})",
+            tree.tpe
+          )
+          super.transform(selfReference)
+        case tree => super.transform(tree)
+      }
+    }
+
+    val result = records process {
+      case v: Value => v.copy(tree = transformer.transform(v.tree))
+    }
+
+    logging.debug(s" Replaced $count calls to erased self reference with runtime SelfReference")
+    result
   }
 
   /**
