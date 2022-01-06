@@ -62,6 +62,15 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
     }
   }
 
+  it should "generate a value reference on a node and access them on the same node" in {
+    val node = multitier start new Instance[ValueRefModule.Node](
+      contexts.Immediate.global
+    )
+
+    val ref: String via ValueRefModule.Node = node.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
+    node.instance.current.map { _.retrieve(ValueRefModule.accessRef(ref)).map { _ shouldEqual "value 42" } }.get
+  }
+
   it should "fail when accessing a value reference on an instance that has no connection to the referenced peer" in {
     val nodeA = multitier start new Instance[ValueRefModule.Node](contexts.Immediate.global)
     val nodeB = multitier start new Instance[ValueRefModule.Node](contexts.Immediate.global)
