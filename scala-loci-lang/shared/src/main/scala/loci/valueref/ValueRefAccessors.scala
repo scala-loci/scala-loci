@@ -14,22 +14,27 @@ import scala.concurrent.Future
 trait ValueRefAccessors {
 
   implicit class ValueRefAccessor[V, R, P](ref: ValueRef[V, R])(
+    implicit val peerId: UUID,
+    implicit val cache: PeerValueCache,
     implicit val remotePeerIds: Map[UUID, Remote[R]],
     implicit val cacheValueAccess: (UUID, Remote[R]) => PlacedValue.BasicSingleAccessor[Selected.Single[Option[V]], R, Future[Option[V]], P],
     implicit val context: Context[P],
     implicit val executionContext: ExecutionContext,
   ) {
     def getValue: Future[V] = {
-      remotePeerIds.get(ref.peerId) match {
-        case Some(remote) => cacheValueAccess(ref.valueId, remote).asLocal.flatMap {
-          case Some(value) => Future.successful(value)
-          case None => Future.failed(PeerValueCacheMiss(ref.valueId))
+      ref.peerId match {
+        case id if id == peerId =>
+          Future.successful(cache.getAs[V](ref.valueId).getOrElse(throw PeerValueCacheMiss(ref.valueId)))
+        case id => remotePeerIds.get(id) match {
+          case Some(remote) => cacheValueAccess(ref.valueId, remote).asLocal.flatMap {
+            case Some(value) => Future.successful(value)
+            case None => Future.failed(PeerValueCacheMiss(ref.valueId))
+          }
+          case None => Future.failed(NotConnectedToPeerWithId(ref.peerId))
         }
-        case None => Future.failed(NotConnectedToPeerWithId(ref.peerId))
       }
     }
   }
-
 }
 
 object ValueRefAccessors {

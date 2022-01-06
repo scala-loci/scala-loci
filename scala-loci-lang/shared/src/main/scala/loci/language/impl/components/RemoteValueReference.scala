@@ -55,7 +55,6 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
     def replaceValueRefCreatorArgs(valueRefCreator: Tree): Tree = {
       val q"$creator[..$tpts](...$exprss)" = valueRefCreator: @unchecked
       val List(List(value), List(_, _, _, _)) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
-      val peerType = tpts.last.tpe
 
       val peerId = q"$$loci$$sys.peerId"
       val peerValueCache = q"$$loci$$sys.peerValueCache"
@@ -107,15 +106,17 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
       val q"$accessor[..$tpts](...$exprss)" = valueRefAccessor: @unchecked
       val List(
         List(value),
-        List(remotePeerIds, cacheValueAccess, _, executionContext)
+        List(_, _, remotePeerIds, cacheValueAccess, _, executionContext)
       ) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
 
+      val peerId = q"$$loci$$sys.peerId"
+      val peerValueCache = q"$$loci$$sys.peerValueCache"
       val nullContext = q"null" // nulling the context ensures that it does not fail due to unexpected multitier construct in "values:validate"
       val actualRemotePeerIds = internal.setType(q"$$loci$$sys.getRemotePeerIds", remotePeerIds.tpe)
       val actualCacheValueAccess = generateCacheValueAccess(cacheValueAccess)
 
       internal.setType(
-        q"$accessor[..$tpts]($value)($actualRemotePeerIds, $actualCacheValueAccess, $nullContext, $executionContext)",
+        q"$accessor[..$tpts]($value)($peerId, $peerValueCache, $actualRemotePeerIds, $actualCacheValueAccess, $nullContext, $executionContext)",
         valueRefAccessor.tpe
       )
     }
