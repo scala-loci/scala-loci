@@ -6,6 +6,7 @@ import loci.language.PlacedValue
 import loci.language.Placement.Context
 import loci.runtime.Peer
 import loci.runtime.Remote.SelfReference
+import loci.valueref.ValueRefAccessors.IllegalLocalAccess
 import loci.valueref.ValueRefAccessors.NotConnectedToPeerWithId
 import loci.valueref.ValueRefAccessors.PeerValueCacheMiss
 
@@ -51,6 +52,19 @@ trait ValueRefAccessors {
       }
     }
   }
+
+  implicit class ValueRefLocalAccessor[V, P](ref: ValueRef[V, P])(
+    implicit val peerId: UUID,
+    implicit val cache: PeerValueCache,
+    implicit val context: Context[P]
+  ) {
+    def getValueLocally: V = {
+      ref.peerId match {
+        case id if id == peerId => cache.getAs[V](ref.valueId).getOrElse(throw PeerValueCacheMiss(ref.valueId))
+        case id => throw IllegalLocalAccess(peerId, id)
+      }
+    }
+  }
 }
 
 object ValueRefAccessors {
@@ -61,5 +75,9 @@ object ValueRefAccessors {
 
   case class PeerValueCacheMiss(valueId: UUID) extends RuntimeException(
     s"Did not find value with id $valueId in cache"
+  )
+
+  case class IllegalLocalAccess(localPeerId: UUID, valuePeerId: UUID) extends RuntimeException(
+    s"Can't access value with peer id $valuePeerId locally on peer with id $localPeerId"
   )
 }
