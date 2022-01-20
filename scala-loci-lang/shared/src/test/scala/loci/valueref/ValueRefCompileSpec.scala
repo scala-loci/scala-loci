@@ -44,4 +44,14 @@ class ValueRefCompileSpec extends AnyFlatSpec with Matchers with NoLogging {
     }"""
   }
 
+  it should "compile local access of a ValueRef" in {
+    """@multitier object Module {
+      @peer type Node
+
+      def f(x: Int via Node): Unit on Node = on[Node] { implicit! =>
+        val y: Int = x.getValueLocally
+      }
+    }"""
+  }
+
 }

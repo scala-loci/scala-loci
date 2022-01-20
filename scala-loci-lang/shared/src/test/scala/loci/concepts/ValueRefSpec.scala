@@ -2,6 +2,7 @@ package loci
 package concepts
 
 import loci.communicator.NetworkListener
+import loci.valueref.ValueRefAccessors.IllegalLocalAccess
 import loci.valueref.ValueRefAccessors.NotConnectedToPeerWithId
 import loci.valueref.ValueRefAccessors.PeerValueCacheMiss
 import loci.valueref._
@@ -25,6 +26,10 @@ import scala.concurrent.Future
 
   def accessRef(ref: String via Node): Future[String] on Node = on[Node] { implicit! =>
     ref.getValue
+  }
+
+  def accessRefLocally(ref: String via Node): String on Node = on[Node] { implicit! =>
+    ref.getValueLocally
   }
 }
 
@@ -105,6 +110,34 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
         _ shouldBe a[PeerValueCacheMiss]
       }
     }.get
+  }
+
+  it should "access a value reference locally when it lives on the accessing peer" in {
+    val node = multitier start new Instance[ValueRefModule.Node](contexts.Immediate.global)
+
+    val ref: String via ValueRefModule.Node =
+      node.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
+
+    node.instance.current.map { _.retrieve[String](ValueRefModule.accessRefLocally(ref)) }.get shouldEqual "value 42"
+  }
+
+  it should "fail accessing a value reference locally when it does not live on the accessing peer" in {
+    val listener = new NetworkListener
+    val nodeA = multitier start new Instance[ValueRefModule.Node](
+      contexts.Immediate.global,
+      listen[ValueRefModule.Node](listener)
+    )
+    val nodeB = multitier start new Instance[ValueRefModule.Node](
+      contexts.Immediate.global,
+      connect[ValueRefModule.Node](listener.createConnector())
+    )
+
+    val ref: String via ValueRefModule.Node =
+      nodeA.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
+
+    an[IllegalLocalAccess] shouldBe thrownBy {
+      nodeB.instance.current.map { _.retrieve[String](ValueRefModule.accessRefLocally(ref)) }.get
+    }
   }
 
 }
