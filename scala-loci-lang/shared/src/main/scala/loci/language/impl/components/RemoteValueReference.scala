@@ -121,6 +121,25 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
       )
     }
 
+    def replaceValueRefPeerAccessorArgs(valueRefPeerAccessor: Tree): Tree = {
+      val q"$accessor[..$tpts](...$exprss)" = valueRefPeerAccessor: @unchecked
+      val List(
+        List(value),
+        List(_, _, remotePeerIds, _)
+      ) = exprss.asInstanceOf[List[List[Tree]]]: @unchecked
+
+      val peerId = q"$$loci$$sys.peerId"
+      val signature = q"$$loci$$sys.instanceSignature"
+      val actualRemotePeerIds = internal.setType(q"$$loci$$sys.getRemotePeerIds", remotePeerIds.tpe)
+      val nullContext = q"null" // nulling the context ensures that it does not fail due to unexpected multitier construct in "values:validate"
+
+      internal.setType(
+        q"$accessor[..$tpts]($value)($peerId, $signature, $actualRemotePeerIds, $nullContext)",
+        valueRefPeerAccessor.tpe
+      )
+    }
+
+
     /**
      * Uses transmission, placedClean, and canonicalPlacedTypeAlias that are given as implicit parameters in the
      * dummy access ([[loci.valueref.CompileTimeDummyImplicits.dummyCacheValueAccess]]. Returns a function that maps
@@ -202,6 +221,9 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
         case tree if tree.tpe real_<:< types.valueRefAccessor =>
           count += 1
           super.transform(replaceValueRefAccessorArgs(tree))
+        case tree if tree.tpe real_<:< types.valueRefPeerAccessor =>
+          count += 1
+          super.transform(replaceValueRefPeerAccessorArgs(tree))
         case tree => super.transform(tree)
       }
     }

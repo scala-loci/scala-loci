@@ -4,6 +4,8 @@ import loci.Remote
 import loci.language.Placed.Selected
 import loci.language.PlacedValue
 import loci.language.Placement.Context
+import loci.runtime.Peer
+import loci.runtime.Remote.SelfReference
 import loci.valueref.ValueRefAccessors.NotConnectedToPeerWithId
 import loci.valueref.ValueRefAccessors.PeerValueCacheMiss
 
@@ -32,6 +34,20 @@ trait ValueRefAccessors {
           }
           case None => Future.failed(NotConnectedToPeerWithId(ref.peerId))
         }
+      }
+    }
+  }
+
+  implicit class ValueRefPeerAccessor[V, R, P](ref: ValueRef[V, R])(
+    implicit val peerId: UUID,
+    implicit val signature: Peer.Signature,
+    implicit val remotePeerIds: Map[UUID, Remote[R]],
+    implicit val context: Context[P]
+  ) {
+    def getRemote: Remote[R] = {
+      ref.peerId match {
+        case id if id == peerId => new SelfReference[R](signature)
+        case id => remotePeerIds.getOrElse(id, throw NotConnectedToPeerWithId(id))
       }
     }
   }
