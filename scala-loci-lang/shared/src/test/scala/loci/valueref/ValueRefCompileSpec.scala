@@ -34,4 +34,14 @@ class ValueRefCompileSpec extends AnyFlatSpec with Matchers with NoLogging {
     }""" shouldNot compile
   }
 
+  it should "compile access to the remote of a ValueRef" in {
+    """@multitier object Module {
+      @peer type Node <: { type Tie <: Multiple[Node] }
+
+      def f(x: Int via Node): Unit on Node = on[Node] { implicit! =>
+        val y: Remote[Node] = x.getRemote
+      }
+    }"""
+  }
+
 }
