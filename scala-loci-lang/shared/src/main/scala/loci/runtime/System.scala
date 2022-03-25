@@ -1,6 +1,7 @@
 package loci
 package runtime
 
+import com.github.benmanes.caffeine.cache.CaffeineSpec
 import communicator.Connector
 import compatibility.jdkCollectionConverters._
 import loci.valueref.PeerValueCache
@@ -35,10 +36,11 @@ class System(
   remoteConnections: RemoteConnections,
   singleConnectedRemotes: Seq[Remote.Reference],
   connectingRemotes: Seq[Notice.Steady[Try[Remote.Reference]]],
-  networkMonitorConfig: Option[NetworkMonitorConfig] = None
+  networkMonitorConfig: Option[NetworkMonitorConfig] = None,
+  peerValueCacheSpec: Option[CaffeineSpec] = None
 ) {
 
-  val peerValueCache: PeerValueCache = PeerValueCacheProvider.create()
+  val peerValueCache: PeerValueCache = PeerValueCacheProvider.create(peerValueCacheSpec)
 
   private val remotePeerIds: ConcurrentHashMap[UUID, Remote.Reference] = new ConcurrentHashMap[UUID, Remote.Reference]
 

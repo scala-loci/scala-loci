@@ -2,6 +2,7 @@ package loci
 package language
 package impl
 
+import com.github.benmanes.caffeine.cache.CaffeineSpec
 import retypecheck._
 
 import scala.collection.mutable
@@ -24,6 +25,7 @@ class Instance(val c: blackbox.Context) {
     val placedValues = c.mirror.staticClass("_root_.loci.runtime.PlacedValues").asType.toType
     val nonInstantiable = typeOf[NonInstantiable]
     val networkMonitorConfig = typeOf[NetworkMonitorConfig]
+    val caffeineSpec = typeOf[CaffeineSpec]
   }
 
   object symbols {
@@ -399,6 +401,11 @@ class Instance(val c: blackbox.Context) {
           map { config => q"${termNames.ROOTPKG}.scala.Some($config)"}
           getOrElse q"${termNames.ROOTPKG}.scala.None")
 
+        val peerValueCacheSpec = (exprs
+          collectFirst { case arg if arg.tpe <:< types.caffeineSpec => arg }
+          map { spec => q"${termNames.ROOTPKG}.scala.Some($spec)"}
+          getOrElse q"${termNames.ROOTPKG}.scala.None")
+
         // construct peer instance
         val (earlyDefinitions, lateDefinitions) =
           collectDefinitions(
@@ -449,7 +456,7 @@ class Instance(val c: blackbox.Context) {
           q"""${Flag.SYNTHETIC} protected def $$loci$$sys$$create = new ${types.system}(
              this, $$loci$$instance$$sig, $$loci$$instance$$peer$$id, $main, $separateMainThread,
              $$loci$$ties, $$loci$$context, $$loci$$connections, $$loci$$connected, $$loci$$connecting,
-             $networkMonitorConfig)"""
+             $networkMonitorConfig, $peerValueCacheSpec)"""
 
         val peerId = q"${termNames.ROOTPKG}.loci.valueref.UniquePeerId.generate()"
 

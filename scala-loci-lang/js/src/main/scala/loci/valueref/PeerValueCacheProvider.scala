@@ -1,5 +1,7 @@
 package loci.valueref
 
+import com.github.benmanes.caffeine.cache.CaffeineSpec
+
 object PeerValueCacheProvider {
-  def create(): PeerValueCache = new PeerValueMapCache
+  def create(caffeineSpec: Option[CaffeineSpec]): PeerValueCache = new PeerValueMapCache
 }
