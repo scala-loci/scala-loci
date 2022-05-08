@@ -153,7 +153,7 @@ object AccessorResolutionFailure {
         s"No remote accessor method $method for peer $peerType " +
         s"(with ${tieType.typeSymbol.name.toString.toLowerCase} ${if (isSelection) "selection" else "tie"} " +
         s"from local peer $localPeerType)" +
-        utility.implicitHints.conversions(c)(placedValueType))
+        utility.implicitHints.extensions(c)(placedValueType))
     }
   }
 }

@@ -82,9 +82,9 @@ object TransmittableResolutionFailure {
     def instantiatedTypeOrElse(tpe: Type, alternative: Type, alternativeSymbol: Symbol) = {
       val symbol = tpe.typeSymbol
       if (symbol.owner.owner == transmittableDummy)
-        alternative -> List(alternativeSymbol)
+        alternative -> Some(alternativeSymbol)
       else
-        tpe -> List.empty
+        tpe -> None
     }
 
     def instantiatedOriginalTypeOrElse(tpe: Type, alternative: Type, alternativeSymbol: Symbol) =
@@ -100,16 +100,19 @@ object TransmittableResolutionFailure {
     val symbolB = originalB.typeSymbol
 
     val (args, quantified) =
-      (List(B, I, R, P, T) zip existentialQuantified zip existentialArgs).foldRight(List.empty[(Type, List[Symbol])]) {
-        case (((tpe, symbol), arg), args) =>
-          instantiatedOriginalTypeOrElse(tpe, arg, symbol) :: args
-      }.unzip
+      (List(B, I, R) zip existentialQuantified zip existentialArgs).foldRight(List.empty[Type] -> List.empty[Symbol]) {
+        case (((tpe, symbol), arg), (args, quantified)) =>
+          val (instantiatedType, instantiatedSymbol) = instantiatedOriginalTypeOrElse(tpe, arg, symbol)
+          (instantiatedSymbol
+            map { instantiatedSymbol => (instantiatedType :: args) -> (instantiatedSymbol :: quantified) }
+            getOrElse { (instantiatedType :: args) -> quantified })
+      }
 
     val transmittableTypeRef = internal.typeRef(pre, sym, args)
 
     val transmittableType =
       if (quantified.nonEmpty)
-        internal.existentialType(quantified.flatten, transmittableTypeRef)
+        internal.existentialType(quantified, transmittableTypeRef)
       else
         transmittableTypeRef
 
@@ -123,7 +126,11 @@ object TransmittableResolutionFailure {
       else
         baseMessage
 
-    val message = s"$hintMessage${utility.implicitHints.values(c)(transmittableType)}"
+    val message =
+      if (quantified.size < existentialQuantified.size)
+        s"$hintMessage${utility.implicitHints.values(c)(transmittableType)}"
+      else
+        hintMessage
 
     q"""{
       @${termNames.ROOTPKG}.scala.annotation.compileTimeOnly($message) def resolutionFailure() = ()

@@ -57,6 +57,6 @@ object GatewayResolutionFailure {
     c.abort(c.enclosingPosition,
       s"No peer gateway method $method for peer ${peerTree.tpe} " +
       s"(with ${tieType.typeSymbol.name.toString.toLowerCase} tie from local peer $localPeerType)" +
-      utility.implicitHints.conversions(c)(gatewayType))
+      utility.implicitHints.extensions(c)(gatewayType))
   }
 }

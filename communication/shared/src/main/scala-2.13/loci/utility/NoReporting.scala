@@ -21,7 +21,7 @@ object noReporting {
 
       setRepoter.invoke(universe, noReporter)
 
-      Option(setRepoter -> reporter)
+      Some(setRepoter -> reporter)
     }
     catch {
       case _: ClassNotFoundException  | _: NoSuchMethodException |  _: IllegalArgumentException =>

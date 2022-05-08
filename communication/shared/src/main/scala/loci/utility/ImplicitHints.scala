@@ -65,10 +65,10 @@ object implicitHints {
     }
     while (i > 1 && path(i) != '_')
 
-    i > 1 && path(i + 1) == '2' && path(i + 2) == '.'
+    i > 1 && (path(i + 1) == '2' || path(i + 1) == '3') && (path(i + 2) == '.' || path(i + 2) == '-')
   }
 
-  private val importNamesCache = new util.WeakHashMap[SourceFile, Any]
+  private val importNamesCache = new util.WeakHashMap[SourceFile, Set[String]]
 
   private def importNames(c: blackbox.Context)(file: SourceFile) = {
     import c.universe._
@@ -105,7 +105,7 @@ object implicitHints {
     }
 
     importNamesCache.get(file) match {
-      case names: Set[String] @unchecked =>
+      case names if names != null =>
         names
 
       case _ =>
@@ -137,7 +137,7 @@ object implicitHints {
 
     (symbols flatMap { symbol =>
       (ancestors(c)(symbol)
-        filter { symbol => !symbol.isParameter }
+        filter { !_.isParameter }
         map { _.name.toString }
         filter { name =>
           name.nonEmpty &&
@@ -286,12 +286,16 @@ object implicitHints {
     symbol.isPublic &&
     !symbol.isConstructor &&
     !symbol.isImplicit &&
-    !(Seq(
-      definitions.AnyClass,
-      definitions.AnyValClass,
-      definitions.AnyRefClass,
-      definitions.ProductClass,
-      definitions.ObjectClass) contains symbol.owner)
+    !(symbol.name.toString contains '$') &&
+    !(symbol.name.decodedName.toString endsWith "_=") &&
+    (symbol :: symbol.overrides forall { symbol =>
+      !(Seq(
+        definitions.AnyClass,
+        definitions.AnyValClass,
+        definitions.AnyRefClass,
+        definitions.ProductClass,
+        definitions.ObjectClass) contains symbol.owner)
+    })
   }
 
   private def ancestors(c: blackbox.Context)(symbol: c.Symbol): List[c.Symbol] =
@@ -300,7 +304,7 @@ object implicitHints {
     else
       List.empty
 
-  private def associatedImplicitScope(c: blackbox.Context)(tpe: c.Type) = {
+  private def associatedImplicitScope(c: blackbox.Context)(tpe: c.Type): Set[c.Symbol] = {
     import c.universe._
 
     def owner(tpe: Type): Symbol = tpe match {
@@ -321,7 +325,10 @@ object implicitHints {
       else
         List(symbol.companion)
 
-    (baseCompanions ++ prefixes).toSet - NoSymbol
+    val implicitScope =
+      (baseCompanions ++ prefixes).toSet - NoSymbol
+
+    implicitScope ++ (tpe.typeArgs flatMap { associatedImplicitScope(c)(_) })
   }
 
   private object Variance extends Enumeration {
@@ -354,20 +361,34 @@ object implicitHints {
       val scrutineeBase = if (contravariant) scrutinee.baseType(pattern.typeSymbol) else scrutinee
 
       val patternArgs = patternBase.typeArgs
-      val scrutineeArgs = scrutineeBase.typeArgs
+
+      val scrutineeArgs = scrutineeBase match {
+        case ExistentialType(quantified, underlying) =>
+          underlying.substituteSymbols(quantified, List.fill(quantified.size)(NoSymbol)).typeArgs
+        case _ =>
+          scrutineeBase.typeArgs
+      }
 
       if (parameter && patternArgs.isEmpty)
         Some(Map(pattern.typeSymbol -> scrutinee))
       else if (patternArgs.size == scrutineeArgs.size)
-        ((patternArgs zip scrutineeArgs zip patternBase.typeConstructor.typeParams
-          map { case ((pattern, scrutinee), parameter) =>
-            typeInstantiations(c)(pattern, scrutinee, Variance(c)(parameter.asType))
-          })
-          .fold(Some(Map.empty[Symbol, Type])) { case (pattern, scrutinee) =>
-            pattern flatMap { pattern => scrutinee map { scrutinee => pattern ++ scrutinee } }
+        ((patternArgs zip scrutineeArgs zip patternBase.typeConstructor.typeParams)
+          .foldLeft[Option[Map[Symbol, Type]]](Some(Map.empty)) {
+            case (instantiations, ((pattern, scrutinee), parameter)) =>
+              if (scrutinee.typeSymbol != NoSymbol)
+                instantiations flatMap { instantiations =>
+                  typeInstantiations(c)(pattern, scrutinee, Variance(c)(parameter.asType)) map {
+                    _ ++ instantiations
+                  }
+                }
+              else
+                instantiations
           }
           map { instantiations =>
-            if (parameter) instantiations + (pattern.typeSymbol -> scrutinee) else instantiations
+            if (parameter)
+              instantiations + (pattern.typeSymbol -> scrutinee.typeConstructor)
+            else
+              instantiations
           })
       else
         None
@@ -376,11 +397,18 @@ object implicitHints {
       None
   }
 
-  private def importStatement(c: blackbox.Context)(path: List[(c.Symbol, c.Symbol)]) =
-    path.size ->
-      (path.reverseIterator map { case (stable, _) =>
+  private def importStatement(c: blackbox.Context)(path: List[(c.Symbol, c.Symbol)]) = {
+    import c.universe._
+
+    val meaningfulPath = path filter { case (stable, _) =>
+      !stable.owner.isPackageClass || stable.name != typeNames.PACKAGE
+    }
+
+    meaningfulPath.size ->
+      (meaningfulPath.reverseIterator map { case (stable, _) =>
         stable.name.decodedName.toString
       }).mkString("import ", ".", "._")
+  }
 
   private def finalResultType(c: blackbox.Context)(symbol: c.Symbol, path: List[(c.Symbol, c.Symbol)]) =
     path.foldLeft(symbol.info.finalResultType) { case (tpe, (stable, owner)) =>
@@ -415,11 +443,12 @@ object implicitHints {
               val tpe = finalResultType(c)(arg, path).substituteTypes(from, to)
 
               if (isMeaningfulType(c)(tpe, tpe.typeSymbol))
-                implicitValues collect { case (symbol, path @ (stable, _) :: _) =>
+                implicitValues foreach { case (symbol, path) =>
+                  val (stable, _) = path.head
                   val resultType = symbol.info.finalResultType
 
                   if (isMeaningfulType(c)(resultType, resultType.typeSymbol))
-                    typeInstantiations(c)(resultType, tpe, Variance.Covariant).toList foreach { _ =>
+                    typeInstantiations(c)(resultType, tpe, Variance.Covariant) foreach { _ =>
                       queue.enqueue((symbol, tpe, path, level + 1))
 
                       if (!(associatedImplicitScope(c)(tpe) contains stable))
@@ -471,7 +500,8 @@ object implicitHints {
           }
 
       val sortedEntries = ((implicits
-        collect { case (symbol, tpe, path @ (stable, _) :: _) =>
+        map { case (symbol, tpe, path) =>
+          val (stable, _) = path.head
           (symbol,
            tpe,
            path,
@@ -513,7 +543,7 @@ object implicitHints {
     }
   }
 
-  def conversions(c: blackbox.Context)(tpe: c.Type): String =
+  def extensions(c: blackbox.Context)(tpe: c.Type): String =
     if (!(c.settings contains "loci.macro.no-implicit-hints")) {
       val hint =
         (hints(c)(tpe, tpeIsBaseOfConversion = true)
