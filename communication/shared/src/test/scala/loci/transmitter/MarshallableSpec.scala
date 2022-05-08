@@ -105,9 +105,9 @@ class MarshallableSpec extends AnyFlatSpec with Matchers with NoLogging {
     roundTrip(optionString)(None) should be (Success(None))
     roundTrip(optionString)(Some("foo")) should be (Success(Some("foo")))
 
-    CompileTimeUtils.containsCompileTimeOnly("Marshallable[Option[Nothing]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Marshallable[Option[Nothing]]) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly("Marshallable[Option[Any]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Marshallable[Option[Any]]) should be (true)
 
 
     val eitherIntString = Marshallable[Either[Int, String]]
@@ -117,13 +117,13 @@ class MarshallableSpec extends AnyFlatSpec with Matchers with NoLogging {
     roundTrip(eitherIntString)(Left(12)) should be (Success(Left(12)))
     roundTrip(eitherIntString)(Right("foo")) should be (Success(Right("foo")))
 
-    CompileTimeUtils.containsCompileTimeOnly("Marshallable[Either[String, Nothing]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Marshallable[Either[String, Nothing]]) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly("Marshallable[Either[Nothing, Int]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Marshallable[Either[Nothing, Int]]) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly("Marshallable[Either[String, Any]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Marshallable[Either[String, Any]]) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly("Marshallable[Either[Any, Int]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Marshallable[Either[Any, Int]]) should be (true)
   }
 
   it should "derive future marshallable correctly" in {

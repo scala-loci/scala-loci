@@ -540,8 +540,8 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     new ClassLifting.o.D(2).v should be (8)
     new ClassLifting.p.D(2).v should be (8)
 
-    CompileTimeUtils.containsCompileTimeOnly("new ClassLifting.D(2)") should be (true)
-    CompileTimeUtils.containsCompileTimeOnly("new ClassLifting.p.E(2)") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(new ClassLifting.D(2)) should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(new ClassLifting.p.E(2)) should be (true)
 
 
     val placedValuesTraits = new TraitLifting.`<placed values of loci.embedding.TraitLifting>` {
@@ -558,10 +558,10 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     new TraitLifting.C(4).v should be (8)
 
     CompileTimeUtils.abstractValuesInInstantiation(
-      "new TraitLifting.U { }") should contain theSameElementsAs Seq("<placed values>")
+      new TraitLifting.U { }) should contain theSameElementsAs Seq("<placed values>")
 
     CompileTimeUtils.abstractValuesInInstantiation(
-      "new TraitLifting.V { }") should contain theSameElementsAs Seq("<placed values>")
+      new TraitLifting.V { }) should contain theSameElementsAs Seq("<placed values>")
   }
 
   it should "typecheck nested multitier modules" in {

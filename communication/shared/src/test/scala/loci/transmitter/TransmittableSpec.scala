@@ -52,7 +52,7 @@ class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
       optionNothing)
     roundTrip(optionNothing)(None) should be (None)
 
-    CompileTimeUtils.containsCompileTimeOnly("Transmittable[Option[Any]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Transmittable[Option[Any]]) should be (true)
 
 
     val eitherIntString = Transmittable[Either[Int, String]]
@@ -89,9 +89,9 @@ class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
       eitherNothingInt)
     roundTrip(eitherNothingInt)(Right(12)) should be (Right(12))
 
-    CompileTimeUtils.containsCompileTimeOnly("Transmittable[Either[String, Any]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Transmittable[Either[String, Any]]) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly("Transmittable[Either[Any, Int]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Transmittable[Either[Any, Int]]) should be (true)
 
 
     val seqString = Transmittable[Seq[String]]
@@ -105,7 +105,7 @@ class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
       Transmittable.Aux[Seq[Nothing], Seq[Nothing], Seq[Nothing], Future[Seq[Nothing]], Transmittables.None]](
       seqNothing)
 
-    CompileTimeUtils.containsCompileTimeOnly("Transmittable[Seq[Any]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Transmittable[Seq[Any]]) should be (true)
 
 
     val mapIntString = Transmittable[Map[Int, String]]
@@ -141,9 +141,9 @@ class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
       mapNothingInt)
     roundTrip(mapNothingInt)(Map.empty) should be (Map.empty)
 
-    CompileTimeUtils.containsCompileTimeOnly("Transmittable[Map[String, Any]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Transmittable[Map[String, Any]]) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly("Transmittable[Map[Any, Int]]") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly(Transmittable[Map[Any, Int]]) should be (true)
   }
 
   it should "derive future transmittable correctly" in {

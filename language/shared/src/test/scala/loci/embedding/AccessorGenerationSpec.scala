@@ -196,77 +196,87 @@ class AccessorGenerationSpec extends AnyFlatSpec with Matchers {
   }
 
   it should "fail for accessor for unused non-marshallable concrete value" in {
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Required) trait Mod {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableData on Node = new NonMarshallableData
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Required) trait Mod {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableData on Node = new NonMarshallableData
+      }
+    }) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Forced) trait Mod {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableData on Node = new NonMarshallableData
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Forced) trait Mod {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableData on Node = new NonMarshallableData
+      }
+    }) should be (true)
   }
 
   it should "fail for accessor for unused non-marshallable parametric value" in {
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Required) trait Mod[T] {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableParametricData[T] on Node = new NonMarshallableParametricData[T]
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Required) trait Mod[T] {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableParametricData[T] on Node = new NonMarshallableParametricData[T]
+      }
+    }) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Forced) trait Mod[T] {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableParametricData[T] on Node = new NonMarshallableParametricData[T]
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Forced) trait Mod[T] {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableParametricData[T] on Node = new NonMarshallableParametricData[T]
+      }
+    }) should be (true)
   }
 
   it should "fail for accessor for used non-marshallable concrete value" in {
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Deferred) trait Mod {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableData on Node = new NonMarshallableData
-           on[Node] { data.asLocal }
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Deferred) trait Mod {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableData on Node = new NonMarshallableData
+        on[Node] { data.asLocal }
+      }
+    }) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Preferred) trait Mod {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableData on Node = new NonMarshallableData
-           on[Node] { data.asLocal }
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Preferred) trait Mod {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableData on Node = new NonMarshallableData
+        on[Node] { data.asLocal }
+      }
+    }) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Required) trait Mod {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableData on Node = new NonMarshallableData
-           on[Node] { data.asLocal }
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Required) trait Mod {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableData on Node = new NonMarshallableData
+        on[Node] { data.asLocal }
+      }
+    }) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Forced) trait Mod {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: NonMarshallableData on Node = new NonMarshallableData
-           on[Node] { data.asLocal }
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Forced) trait Mod {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: NonMarshallableData on Node = new NonMarshallableData
+        on[Node] { data.asLocal }
+      }
+    }) should be (true)
   }
 
   it should "fail for accessor for used non-marshallable parametric value" in {
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Required) trait Mod2[T] {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: T on Node
-           on[Node] { data.asLocal }
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Required) trait Mod2[T] {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: T on Node
+        on[Node] { data.asLocal }
+      }
+    }) should be (true)
 
-    CompileTimeUtils.containsCompileTimeOnly(
-      """@multitier(AccessorGeneration.Forced) trait Mod3[T] {
-           @peer type Node <: { type Tie <: Single[Node] }
-           val data: T on Node
-           on[Node] { data.asLocal }
-         }""") should be (true)
+    CompileTimeUtils.containsCompileTimeOnly({
+      @multitier(AccessorGeneration.Forced) trait Mod3[T] {
+        @peer type Node <: { type Tie <: Single[Node] }
+        val data: T on Node
+        on[Node] { data.asLocal }
+      }
+    }) should be (true)
   }
 }
 

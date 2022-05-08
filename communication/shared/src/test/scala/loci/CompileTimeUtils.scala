@@ -61,7 +61,7 @@ object CompileTimeUtils {
       failTest(c)(s"$value has type of form `${value.tpe}`; exact type `$tpe` expected")
   }
 
-  def assertNoFailedAssertion(expr: String): Unit =
+  def assertNoFailedAssertion(expr: Any): Unit =
     macro assertNoFailedAssertionImpl
 
   def assertNoFailedAssertionImpl(c: whitebox.Context)(expr: c.Tree): c.Tree = {
@@ -70,7 +70,7 @@ object CompileTimeUtils {
     val testFailedException =
       c.mirror.staticClass(s"${termNames.ROOTPKG}.org.scalatest.exceptions.TestFailedException").asType.toType
 
-    val messages = compileLiteralString(c)(expr) collect {
+    val messages = expr collect {
       case tree @ Apply(Select(New(_), _), args) if tree.tpe <:< testFailedException =>
         args match {
           case Function(_, Apply(_, List(Literal(Constant(message: String))))) :: _ => message
@@ -81,7 +81,7 @@ object CompileTimeUtils {
     messages.headOption map { failTest(c)(_) } getOrElse q"()"
   }
 
-  def abstractValuesInInstantiation(expr: String): List[String] =
+  def abstractValuesInInstantiation(expr: Any): List[String] =
     macro abstractValuesInInstantiationImpl
 
   def abstractValuesInInstantiationImpl(c: whitebox.Context)(expr: c.Tree): c.Tree = {
@@ -89,7 +89,7 @@ object CompileTimeUtils {
 
     val abstractValues = mutable.ListBuffer.empty[String]
 
-    compileLiteralString(c)(expr) foreach {
+    expr foreach {
       case New(tpt) =>
         val values = tpt.tpe.members collect {
           case symbol if symbol.isTerm && symbol.isAbstract =>
@@ -103,7 +103,7 @@ object CompileTimeUtils {
     q"${abstractValues.result()}"
   }
 
-  def containsCompileTimeOnly(expr: String): Boolean =
+  def containsCompileTimeOnly(expr: Any): Boolean =
     macro containsCompileTimeOnlyImpl
 
   def containsCompileTimeOnlyImpl(c: whitebox.Context)(expr: c.Tree): c.Tree = {
@@ -111,13 +111,12 @@ object CompileTimeUtils {
 
     val compileTimeOnlyAnnotation = typeOf[compileTimeOnly]
 
-    val compileTimeOnlyFound =
-      compileLiteralString(c)(expr) exists {
-        case tree: RefTree =>
-          tree.symbol.annotations exists { _.tree.tpe <:< compileTimeOnlyAnnotation }
-        case _ =>
-          false
-      }
+    val compileTimeOnlyFound = expr exists {
+      case tree: RefTree =>
+        tree.symbol.annotations exists { _.tree.tpe <:< compileTimeOnlyAnnotation }
+      case _ =>
+        false
+    }
 
     q"$compileTimeOnlyFound"
   }
@@ -134,7 +133,10 @@ object CompileTimeUtils {
     q"${T.decls exists { _.info.finalResultType <:< U } }"
   }
 
-  private def compileLiteralString(c: whitebox.Context)(tree: c.Tree) = {
+  def compile(expr: String): Any =
+    macro compileImpl
+
+  def compileImpl(c: whitebox.Context)(expr: c.Tree) = {
     def reportException(pos: Position, msg: String) = pos match {
       case pos: c.universe.Position @unchecked => c.abort(pos, msg)
       case _ => c.abort(c.enclosingPosition, msg)
@@ -142,9 +144,14 @@ object CompileTimeUtils {
 
     import c.universe._
 
-    tree match {
+    expr match {
       case Literal(Constant(expr: String)) =>
-        try c.typecheck(c.parse(expr))
+        try {
+          val tree = c.typecheck(c.parse(expr))
+          if (tree.tpe == NoType)
+            internal.setType(tree, definitions.UnitTpe)
+          tree
+        }
         catch {
           case e: ParseException => reportException(e.pos, e.msg)
           case e: TypecheckException => reportException(e.pos, e.msg)
