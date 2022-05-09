@@ -168,14 +168,11 @@ object platform {
           case _ => c.abort(expr.pos, s"unknown operator: $operator")
         }
 
-      case Select(qualifier, name) if expr.symbol.isTerm && !expr.symbol.asTerm.isStable =>
-        val operator = NameTransformer.decode(name.toString)
-        val value = evaluateBooleanExpr(c)(qualifier)
-
-        if (operator != "unary_!")
-          c.abort(expr.pos, s"unknown operator: $operator")
-
-        !value
+      case Select(qualifier, name)
+        if expr.symbol.isTerm &&
+           !expr.symbol.asTerm.isStable &&
+           NameTransformer.decode(name.toString) == "unary_!" =>
+        !evaluateBooleanExpr(c)(qualifier)
 
       case _
         if expr.symbol != null &&
