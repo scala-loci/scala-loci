@@ -127,7 +127,7 @@ trait ConnectionsBase[R, M] {
   private val syncLock = new ReentrantLock
 
   private val syncHandlers = new ThreadLocal[mutable.ListBuffer[() => Unit]] {
-    override def initialValue = mutable.ListBuffer.empty
+    override def initialValue() = mutable.ListBuffer.empty
   }
 
   protected def sync[T](body: => T): T = {

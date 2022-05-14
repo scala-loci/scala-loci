@@ -67,10 +67,10 @@ object Message {
 
     if (message.payload.nonEmpty) {
       builder ++= "\r\n"
-      (MessageBuffer encodeString builder.toString) concat message.payload
+      MessageBuffer.encodeString(builder.toString).concat(message.payload)
     }
     else
-      MessageBuffer encodeString builder.toString
+      MessageBuffer.encodeString(builder.toString)
   }
 
   def deserialize[M: Method](buffer: MessageBuffer): Try[Message[M]] = Try {

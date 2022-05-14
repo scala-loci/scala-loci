@@ -122,7 +122,7 @@ private abstract class WSAbstractHandler[M] {
 
     // sink for receiving messages
 
-    val sink = Sink foreach[M] { message =>
+    val sink = Sink.foreach[M] { message =>
       processMessage(message) foreach {
         _ onComplete {
           case Success(data) =>

@@ -32,14 +32,14 @@ object ContextBuilder {
 
     def provide[B, I, R, P, T <: Transmittables](
         value: B)(implicit selector: Selector[B, I, R, P, T, S]) = {
-      implicit val context = selector context contexts
-      (selector transmittable transmittables) buildIntermediate value
+      implicit val context = selector.context(contexts)
+      selector.transmittable(transmittables).buildIntermediate(value)
     }
 
     def receive[B, I, R, P, T <: Transmittables](
         value: I)(implicit selector: Selector[B, I, R, P, T, S]) = {
-      implicit val context = selector context contexts
-      (selector transmittable transmittables) buildResult value
+      implicit val context = selector.context(contexts)
+      selector.transmittable(transmittables).buildResult(value)
     }
   }
 
@@ -53,11 +53,11 @@ object ContextBuilder {
       def apply(
           transmittables: M, abstraction: AbstractionRef,
           direction: Direction, index: Long) = {
-        val messagingAbstraction = abstraction derive index.toString
+        val messagingAbstraction = abstraction.derive(index.toString)
         val transmittable = transmittables.message
         val context = contextBuilder(
           transmittable.transmittables,
-          messagingAbstraction derive "~0",
+          messagingAbstraction.derive("~0"),
           direction)
 
         new Context[M](
@@ -73,9 +73,9 @@ object ContextBuilder {
             val directedTurn = if (direction == sending) s"+$turn" else s"-$turn"
             implicit val context = contextBuilder(
               transmittable.transmittables,
-              messagingAbstraction derive directedTurn,
+              messagingAbstraction.derive(directedTurn),
               direction)
-            serializer serialize (transmittable buildIntermediate value)
+            serializer.serialize(transmittable.buildIntermediate(value))
           }
 
           def deserialize(value: MessageBuffer) = {
@@ -83,9 +83,9 @@ object ContextBuilder {
             val directedTurn = if (direction == sending) s"-$turn" else s"+$turn"
             implicit val context = contextBuilder(
               transmittable.transmittables,
-              messagingAbstraction derive directedTurn,
+              messagingAbstraction.derive(directedTurn),
               direction)
-            (serializer deserialize value) map transmittable.buildResult
+            serializer.deserialize(value) map transmittable.buildResult
           }
 
           val endpoint = new Endpoint[B, R] {

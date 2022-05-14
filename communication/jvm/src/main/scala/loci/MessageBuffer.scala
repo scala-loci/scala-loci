@@ -60,7 +60,7 @@ final class MessageBuffer private (val backingArray: Array[Byte])
     decodeString(0, length)
 
   @inline def asByteBuffer: ByteBuffer =
-    ByteBuffer wrap backingArray
+    ByteBuffer.wrap(backingArray)
 
   override def toString: String =
     utility.MessageBufferEncoding.byteBufferToString(asByteBuffer, 0, length, fatal = true) getOrElse
@@ -73,7 +73,7 @@ object MessageBuffer {
   def allocate(length: Int): MessageBuffer = new MessageBuffer(new Array(length))
 
   def encodeString(string: String): MessageBuffer =
-    new MessageBuffer(string getBytes StandardCharsets.UTF_8)
+    new MessageBuffer(string.getBytes(StandardCharsets.UTF_8))
 
   def wrapByteBuffer(buffer: ByteBuffer): MessageBuffer =
     if (!buffer.hasArray) {

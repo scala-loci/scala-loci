@@ -5,7 +5,7 @@ import java.security.cert.{Certificate, X509Certificate}
 
 trait Protocol {
   final def get[T: ProtocolInfo]: Option[T] =
-    implicitly[ProtocolInfo[T]] apply this
+    implicitly[ProtocolInfo[T]].apply(this)
 }
 
 trait ProtocolInfo[T] {

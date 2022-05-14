@@ -24,7 +24,7 @@ object noReporting {
       Some(setRepoter -> reporter)
     }
     catch {
-      case _: ClassNotFoundException  | _: NoSuchMethodException |  _: IllegalArgumentException =>
+      case _: ClassNotFoundException | _: NoSuchMethodException |  _: IllegalArgumentException =>
         None
     }
 

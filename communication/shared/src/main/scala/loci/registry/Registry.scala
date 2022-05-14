@@ -13,7 +13,7 @@ import scala.util.{Failure, Success, Try}
 
 object Registry {
   case object Message {
-    implicit val message =
+    implicit val message: messaging.Message.Method[Message.type] =
       messaging.Message.Method(Message -> "Loci/Registry")
 
     final val Request = "Request"
