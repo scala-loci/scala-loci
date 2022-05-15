@@ -1,13 +1,14 @@
 package loci
 package contexts
 
+import org.scalajs.macrotaskexecutor.MacrotaskExecutor
+
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor}
-import scala.scalajs.concurrent.JSExecutionContext
 import scala.util.control.NonFatal
 
 object Pooled {
   lazy val global: ExecutionContextExecutor =
-    new logging.ReportingExecutionContext(JSExecutionContext.queue)
+    new logging.ReportingExecutionContext(MacrotaskExecutor)
 
   object Implicits {
     implicit lazy val global: ExecutionContext = Pooled.global
@@ -29,10 +30,10 @@ object Immediate {
 }
 
 object Queued {
-  lazy val global = create()
+  lazy val global: ExecutionContextExecutor =
+    new logging.ReportingExecutionContext(MacrotaskExecutor)
 
-  def create(): ExecutionContextExecutor =
-    new logging.ReportingExecutionContext(JSExecutionContext.queue)
+  def create() = global
 
   object Implicits {
     implicit lazy val global: ExecutionContext = Queued.global

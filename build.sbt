@@ -59,6 +59,12 @@ val macrodeclaration = libraryDependencies +=
 val jsweakreferences = libraryDependencies += 
   "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0"
 
+val jsmacrotaskexecutor = libraryDependencies +=
+  "org.scala-js" %%% "scala-js-macrotask-executor" % "1.0.0"
+
+val jsjavasecurerandom = libraryDependencies +=
+  "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0"
+
 val scalatest = libraryDependencies +=
   "org.scalatest" %%% "scalatest" % "3.2.10" % "test-internal"
 
@@ -217,7 +223,8 @@ lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
             SourceGenerator.functionSubjectiveBinding,
-            macroparadise, macrodeclaration, scribe, scalatest))
+            macroparadise, macrodeclaration, scribe, scalatest)
+  jsSettings (jsmacrotaskexecutor, jsjavasecurerandom))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js

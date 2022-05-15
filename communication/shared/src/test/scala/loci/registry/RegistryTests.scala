@@ -2,13 +2,13 @@ package loci
 package registry
 
 import communicator.{Connector, Listener}
+import contexts.Pooled.Implicits.global
 import transmitter.{RemoteAccessException, RemoteRef}
 import serializer.Serializables._
 
 import org.scalatest.matchers.should.Matchers
 
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future, Promise}
 import scala.util.{Success, Try}
