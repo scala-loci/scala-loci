@@ -4,11 +4,10 @@ package ws.akka
 
 import scala.concurrent.duration.FiniteDuration
 
-private object WSSetupParser extends
-    ConnectionSetupParser with
-    SimpleConnectionSetupProperties {
-
-  type Properties = WS.Properties
+private object WSSetupParser
+    extends ConnectionSetupParser
+    with SimpleConnectionSetupProperties {
+  val self: WS.type = WS
 
   def properties(implicit props: ConnectionSetupFactory.Properties) =
     WS.Properties()
@@ -37,16 +36,16 @@ private object WSSetupParser extends
 }
 
 trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
-    this: WS.type =>
+  val self: WS.type = WS
 
   val schemes = Seq("ws", "wss")
 
   protected def properties(
-      implicit props: ConnectionSetupFactory.Properties): Properties =
+      implicit props: ConnectionSetupFactory.Properties): WS.Properties =
     WSSetupParser.properties
 
   protected def listener(
-      url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: WS.Properties) =
     WSSetupParser parse location match {
       case (Some(interface), Some(port)) => Some(WS(port, interface, properties))
       case (None, Some(port)) => Some(WS(port, properties))
@@ -54,23 +53,21 @@ trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
     }
 
   protected def connector(
-      url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: WS.Properties) =
     Some(WS(url, properties))
 }
 
 trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secure] {
-    this: WS.Secure.type =>
-
-  type Properties = WS.Properties
+  val self: WS.type = WS
 
   val schemes = Seq("wss")
 
   protected def properties(
-      implicit props: ConnectionSetupFactory.Properties): Properties =
+      implicit props: ConnectionSetupFactory.Properties): WS.Properties =
     WSSetupParser.properties
 
   protected def listener(
-      url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: WS.Properties) =
     WSSetupParser parse location match {
       case (Some(interface), Some(port)) => Some(WS.Secure(port, interface, properties))
       case (None, Some(port)) => Some(WS.Secure(port, properties))
@@ -78,6 +75,6 @@ trait WSSecureSetupFactory extends ConnectionSetupFactory.Implementation[WS.Secu
     }
 
   protected def connector(
-      url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: WS.Properties) =
     Some(WS.Secure(url, properties))
 }

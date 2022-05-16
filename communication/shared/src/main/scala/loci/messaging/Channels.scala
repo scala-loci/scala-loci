@@ -12,11 +12,11 @@ object Channels {
   }
 }
 
-class Channels[C <: Channels.Channel, R <: RemoteRef](
+class Channels[C <: Channels.Channel, -R <: RemoteRef](
     createChannel: (String, String, R) => C,
     closeChannel: (C, Boolean) => Unit) {
 
-  private val channels = new ConcurrentHashMap[(String, R), C]
+  private val channels = new ConcurrentHashMap[(String, RemoteRef), C]
 
   def obtain(name: String, anchorDefault: String, remote: R): C = {
     val channelId = name -> remote

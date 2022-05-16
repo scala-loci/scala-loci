@@ -8,41 +8,23 @@ import scala.annotation.compileTimeOnly
 
 @compileTimeOnly("Jetty WebSocket communicator only available on the JVM")
 trait WSSetupFactory extends ConnectionSetupFactory.Implementation[WS] {
-    this: WS.type =>
+  val self: WS.type = unavailable
 
-  val schemes = Seq.empty[String]
+  val schemes = unavailable
 
-  protected def properties(
-      implicit props: ConnectionSetupFactory.Properties): Properties =
-    WS.Properties()
-
-  protected def listener(
-      url: String, scheme: String, location: String, properties: Properties) =
-    None
-
-  protected def connector(
-      url: String, scheme: String, location: String, properties: Properties) =
-    None
+  protected def properties(implicit props: ConnectionSetupFactory.Properties): WS.Properties = unavailable
+  protected def listener(url: String, scheme: String, location: String, properties: WS.Properties) = unavailable
+  protected def connector(url: String, scheme: String, location: String, properties: WS.Properties) = unavailable
 }
 
 @compileTimeOnly("Jetty WebSocket communicator only available on the JVM")
 trait WSSecureSetupFactory extends Implementation[WS.Secure] {
-  this: WS.Secure.type =>
+  val self: WS.type = unavailable
 
-  type Properties = WS.Properties
+  val schemes = unavailable
 
-  val schemes = Seq.empty[String]
-
-  protected def properties(
-      implicit props: ConnectionSetupFactory.Properties): Properties =
-    WS.Properties()
-
-  protected def listener(
-      url: String, scheme: String, location: String, properties: Properties) =
-    None
-
-  protected def connector(
-      url: String, scheme: String, location: String, properties: Properties) =
-    None
+  protected def properties(implicit props: ConnectionSetupFactory.Properties): WS.Properties = unavailable
+  protected def listener(url: String, scheme: String, location: String, properties: WS.Properties) = unavailable
+  protected def connector(url: String, scheme: String, location: String, properties: WS.Properties) = unavailable
 }
 

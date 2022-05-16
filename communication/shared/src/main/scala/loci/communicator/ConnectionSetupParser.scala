@@ -1,10 +1,12 @@
 package loci
 package communicator
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, FiniteDuration}
 import scala.util.Try
 
 trait ConnectionSetupParser {
+  val self: ConnectionSetupFactory.Implementation[_]
+
   type Properties
 
   protected abstract class PropertyParser[T](
@@ -13,9 +15,9 @@ trait ConnectionSetupParser {
   protected abstract class PropertyParserTry[T](parse: List[String] => T)
     extends PropertyParser[T](value => Try { parse(value) }.toOption)
 
-  protected implicit class PropertiesParsingOp(properties: Properties) {
+  protected implicit class PropertiesParsingOp(properties: self.Properties) {
     def set[T: PropertyParser]
-        (key: String)(transform: T => Properties => Properties)
+        (key: String)(transform: T => self.Properties => self.Properties)
         (implicit props: ConnectionSetupFactory.Properties) =
       (props get key
         flatMap { implicitly[PropertyParser[T]] parse _ }
@@ -26,42 +28,41 @@ trait ConnectionSetupParser {
 
 trait SimpleConnectionSetupProperties { this: ConnectionSetupParser =>
   protected implicit object booleanParser
-    extends PropertyParserTry(_.head.toBoolean)
+    extends PropertyParserTry[Boolean](_.head.toBoolean)
   protected implicit object byteParser
-    extends PropertyParserTry(_.head.toByte)
+    extends PropertyParserTry[Byte](_.head.toByte)
   protected implicit object shortParser
-    extends PropertyParserTry(_.head.toShort)
+    extends PropertyParserTry[Short](_.head.toShort)
   protected implicit object intParser
-    extends PropertyParserTry(_.head.toInt)
+    extends PropertyParserTry[Int](_.head.toInt)
   protected implicit object longParser
-    extends PropertyParserTry(_.head.toLong)
+    extends PropertyParserTry[Long](_.head.toLong)
   protected implicit object floatParser
-    extends PropertyParserTry(_.head.toFloat)
+    extends PropertyParserTry[Float](_.head.toFloat)
   protected implicit object doubleParser
-    extends PropertyParserTry(_.head.toDouble)
+    extends PropertyParserTry[Double](_.head.toDouble)
   protected implicit object stringParser
-    extends PropertyParserTry(_.head)
+    extends PropertyParserTry[String](_.head)
   protected implicit object durationParser
-    extends PropertyParserTry(value => Duration(value.head))
+    extends PropertyParserTry[Duration](value => Duration(value.head))
   protected implicit object finiteDurationParser
-    extends PropertyParserTry(value =>
-      Duration fromNanos Duration(value.head).toNanos)
+    extends PropertyParserTry[FiniteDuration](value => Duration fromNanos Duration(value.head).toNanos)
   protected implicit object byteListParser
-    extends PropertyParserTry(_ map { _.toByte })
+    extends PropertyParserTry[List[Byte]](_ map { _.toByte })
   protected implicit object shortListParser
-    extends PropertyParserTry(_ map { _.toShort })
+    extends PropertyParserTry[List[Short]](_ map { _.toShort })
   protected implicit object intListParser
-    extends PropertyParserTry(_ map { _.toInt })
+    extends PropertyParserTry[List[Int]](_ map { _.toInt })
   protected implicit object longListParser
-    extends PropertyParserTry(_ map { _.toLong })
+    extends PropertyParserTry[List[Long]](_ map { _.toLong })
   protected implicit object floatListParser
-    extends PropertyParserTry(_ map { _.toFloat })
+    extends PropertyParserTry[List[Float]](_ map { _.toFloat })
   protected implicit object doubleListParser
-    extends PropertyParserTry(_ map { _.toDouble })
+    extends PropertyParserTry[List[Double]](_ map { _.toDouble })
   protected implicit object stringListParser
-    extends PropertyParserTry(identity)
+    extends PropertyParserTry[List[String]](identity)
   protected implicit object durationListParser
-    extends PropertyParserTry(_ map { Duration(_) })
+    extends PropertyParserTry[List[Duration]](_ map { Duration(_) })
   protected implicit object finiteDurationListParser
-    extends PropertyParserTry(_ map { Duration fromNanos Duration(_).toNanos })
+    extends PropertyParserTry[List[FiniteDuration]](_ map { Duration fromNanos Duration(_).toNanos })
 }

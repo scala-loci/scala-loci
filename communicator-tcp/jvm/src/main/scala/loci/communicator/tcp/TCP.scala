@@ -4,11 +4,11 @@ package tcp
 
 import scala.concurrent.duration._
 
-trait TCP extends
-    Protocol with
-    SetupInfo with
-    SecurityInfo with
-    SymmetryInfo with Bidirectional {
+trait TCP
+    extends Protocol
+    with SetupInfo
+    with SecurityInfo
+    with SymmetryInfo with Bidirectional {
   val host: String
   val port: Int
 

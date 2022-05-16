@@ -10,7 +10,7 @@ import scala.util.control.NonFatal
 
 object implicitHints {
   private implicit object stringOrdering extends Ordering[String] {
-    override def compare(x: String, y: String): Int = {
+    def compare(x: String, y: String): Int = {
       val length = math.min(x.length, y.length)
       var i = 0
 
@@ -325,8 +325,7 @@ object implicitHints {
       else
         List(symbol.companion)
 
-    val implicitScope =
-      (baseCompanions ++ prefixes).toSet - NoSymbol
+    val implicitScope = (baseCompanions ++ prefixes).toSet - NoSymbol
 
     implicitScope ++ (tpe.typeArgs flatMap { associatedImplicitScope(c)(_) })
   }

@@ -6,11 +6,11 @@ import org.scalajs.dom
 
 import scala.scalajs.js.Array
 
-trait WebRTC extends
-    Protocol with
-    SetupInfo with
-    SecurityInfo with Secure with
-    SymmetryInfo with Bidirectional {
+trait WebRTC
+    extends Protocol
+    with SetupInfo
+    with SecurityInfo with Secure
+    with SymmetryInfo with Bidirectional {
   override def toString = "WebRTC()"
 }
 

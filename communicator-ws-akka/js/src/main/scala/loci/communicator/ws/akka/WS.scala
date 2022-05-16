@@ -12,11 +12,11 @@ import akka.stream.Materializer
 import scala.annotation.compileTimeOnly
 import scala.concurrent.duration._
 
-trait WS extends
-    Protocol with
-    SetupInfo with
-    SecurityInfo with
-    SymmetryInfo with Bidirectional {
+trait WS
+    extends Protocol
+    with SetupInfo
+    with SecurityInfo
+    with SymmetryInfo with Bidirectional {
   val url: String
   val host: Option[String]
   val port: Option[Int]
@@ -32,63 +32,60 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
-  private[akka] def ??? =
-    sys.error("Akka WebSocket communicator only available on the JVM")
-
   def apply(
     http: HttpExt, port: Int)(implicit
     actorRefFactory: ActorSystem,
     materializer: Materializer): Listener[WS] =
-      { locally(actorRefFactory); locally(materializer); ??? }
+      { locally(actorRefFactory); locally(materializer); unavailable }
   def apply(
     http: HttpExt, port: Int, interface: String)(implicit
     actorRefFactory: ActorSystem,
     materializer: Materializer): Listener[WS] =
-      { locally(actorRefFactory); locally(materializer); ??? }
+      { locally(actorRefFactory); locally(materializer); unavailable }
   def apply(
     http: HttpExt, port: Int, properties: Properties)(implicit
     actorRefFactory: ActorSystem,
     materializer: Materializer): Listener[WS] =
-      { locally(actorRefFactory); locally(materializer); ??? }
+      { locally(actorRefFactory); locally(materializer); unavailable }
   def apply(
     http: HttpExt, port: Int, interface: String,
     properties: Properties)(implicit
     actorRefFactory: ActorSystem,
     materializer: Materializer): Listener[WS] =
-      { locally(actorRefFactory); locally(materializer); ??? }
-  def apply(port: Int): Listener[WS] = ???
-  def apply(port: Int, interface: String): Listener[WS] = ???
-  def apply(port: Int, properties: Properties): Listener[WS] = ???
+      { locally(actorRefFactory); locally(materializer); unavailable }
+  def apply(port: Int): Listener[WS] = unavailable
+  def apply(port: Int, interface: String): Listener[WS] = unavailable
+  def apply(port: Int, properties: Properties): Listener[WS] = unavailable
   def apply(port: Int, interface: String,
-    properties: Properties): Listener[WS] = ???
+    properties: Properties): Listener[WS] = unavailable
 
   def apply(http: HttpExt, webSocketRequest: WebSocketRequest)(
     implicit materializer: Materializer): Connector[WS] =
-      { locally(materializer); ??? }
+      { locally(materializer); unavailable }
   def apply(http: HttpExt, url: Uri)(
     implicit materializer: Materializer): Connector[WS] =
-      { locally(materializer); ??? }
+      { locally(materializer); unavailable }
   def apply(http: HttpExt, url: String)(
     implicit materializer: Materializer): Connector[WS] =
-      { locally(materializer); ??? }
-  def apply(webSocketRequest: WebSocketRequest): Connector[WS] = ???
-  def apply(url: Uri): Connector[WS] = ???
+      { locally(materializer); unavailable }
+  def apply(webSocketRequest: WebSocketRequest): Connector[WS] = unavailable
+  def apply(url: Uri): Connector[WS] = unavailable
   def apply(http: HttpExt, webSocketRequest: WebSocketRequest,
       properties: Properties)(
     implicit materializer: Materializer): Connector[WS] =
-      { locally(materializer); ??? }
+      { locally(materializer); unavailable }
   def apply(http: HttpExt, url: Uri, properties: Properties)(
     implicit materializer: Materializer): Connector[WS] =
-      { locally(materializer); ??? }
+      { locally(materializer); unavailable }
   def apply(http: HttpExt, url: String, properties: Properties)(
     implicit materializer: Materializer): Connector[WS] =
-      { locally(materializer); ??? }
+      { locally(materializer); unavailable }
   def apply(webSocketRequest: WebSocketRequest,
-    properties: Properties): Connector[WS] = ???
-  def apply(url: Uri, properties: Properties): Connector[WS] = ???
+    properties: Properties): Connector[WS] = unavailable
+  def apply(url: Uri, properties: Properties): Connector[WS] = unavailable
 
-  def apply(url: String): Connector[WS] = ???
-  def apply(url: String, properties: Properties): Connector[WS] = ???
+  def apply(url: String): Connector[WS] = unavailable
+  def apply(url: String, properties: Properties): Connector[WS] = unavailable
 
   trait Secure extends WS with communicator.Secure {
     override def toString = s"WS.Secure($url, $host, $port)"
@@ -101,67 +98,67 @@ object WS extends WSSetupFactory {
       http: HttpExt, port: Int)(implicit
       actorRefFactory: ActorSystem,
       materializer: Materializer): Listener[WS.Secure] =
-        { locally(actorRefFactory); locally(materializer); ??? }
+        { locally(actorRefFactory); locally(materializer); unavailable }
     def apply(
       http: HttpExt, port: Int, interface: String)(implicit
       actorRefFactory: ActorSystem,
       materializer: Materializer): Listener[WS.Secure] =
-        { locally(actorRefFactory); locally(materializer); ??? }
+        { locally(actorRefFactory); locally(materializer); unavailable }
     def apply(
       http: HttpExt, port: Int, properties: Properties)(implicit
       actorRefFactory: ActorSystem,
       materializer: Materializer): Listener[WS.Secure] =
-        { locally(actorRefFactory); locally(materializer); ??? }
+        { locally(actorRefFactory); locally(materializer); unavailable }
     def apply(
       http: HttpExt, port: Int, interface: String,
       properties: Properties)(implicit
       actorRefFactory: ActorSystem,
       materializer: Materializer): Listener[WS.Secure] =
-        { locally(actorRefFactory); locally(materializer); ??? }
-    def apply(port: Int): Listener[WS.Secure] = ???
-    def apply(port: Int, interface: String): Listener[WS.Secure] = ???
-    def apply(port: Int, properties: Properties): Listener[WS.Secure] = ???
+        { locally(actorRefFactory); locally(materializer); unavailable }
+    def apply(port: Int): Listener[WS.Secure] = unavailable
+    def apply(port: Int, interface: String): Listener[WS.Secure] = unavailable
+    def apply(port: Int, properties: Properties): Listener[WS.Secure] = unavailable
     def apply(port: Int, interface: String,
-      properties: Properties): Listener[WS.Secure] = ???
+      properties: Properties): Listener[WS.Secure] = unavailable
 
     def apply(http: HttpExt, webSocketRequest: WebSocketRequest)(
       implicit materializer: Materializer): Connector[WS.Secure] =
-        { locally(materializer); ??? }
+        { locally(materializer); unavailable }
     def apply(http: HttpExt, url: Uri)(
       implicit materializer: Materializer): Connector[WS.Secure] =
-        { locally(materializer); ??? }
+        { locally(materializer); unavailable }
     def apply(http: HttpExt, url: String)(
       implicit materializer: Materializer): Connector[WS.Secure] =
-        { locally(materializer); ??? }
-    def apply(webSocketRequest: WebSocketRequest): Connector[WS.Secure] = ???
-    def apply(url: Uri): Connector[WS.Secure] = ???
+        { locally(materializer); unavailable }
+    def apply(webSocketRequest: WebSocketRequest): Connector[WS.Secure] = unavailable
+    def apply(url: Uri): Connector[WS.Secure] = unavailable
     def apply(http: HttpExt, webSocketRequest: WebSocketRequest,
         properties: Properties)(
       implicit materializer: Materializer): Connector[WS.Secure] =
-        { locally(materializer); ??? }
+        { locally(materializer); unavailable }
     def apply(http: HttpExt, url: Uri, properties: Properties)(
       implicit materializer: Materializer): Connector[WS.Secure] =
-        { locally(materializer); ??? }
+        { locally(materializer); unavailable }
     def apply(http: HttpExt, url: String, properties: Properties)(
       implicit materializer: Materializer): Connector[WS.Secure] =
-        { locally(materializer); ??? }
+        { locally(materializer); unavailable }
     def apply(webSocketRequest: WebSocketRequest,
-      properties: Properties): Connector[WS.Secure] = ???
-    def apply(url: Uri, properties: Properties): Connector[WS.Secure] = ???
+      properties: Properties): Connector[WS.Secure] = unavailable
+    def apply(url: Uri, properties: Properties): Connector[WS.Secure] = unavailable
 
-    def apply(url: String): Connector[WS.Secure] = ???
-    def apply(url: String, properties: Properties): Connector[WS.Secure] = ???
+    def apply(url: String): Connector[WS.Secure] = unavailable
+    def apply(url: String, properties: Properties): Connector[WS.Secure] = unavailable
   }
 }
 
 @compileTimeOnly("Akka WebSocket communicator only available on the JVM")
 object WebSocketListener {
-  def apply(): Listener[WS] with WebSocketRoute = WS.???
-  def apply(properties: WS.Properties): Listener[WS] with WebSocketRoute = WS.???
+  def apply(): Listener[WS] with WebSocketRoute = unavailable
+  def apply(properties: WS.Properties): Listener[WS] with WebSocketRoute = unavailable
 
   object Secure {
-    def apply(): Listener[WS.Secure] with WebSocketRoute = WS.???
-    def apply(properties: WS.Properties): Listener[WS.Secure] with WebSocketRoute = WS.???
+    def apply(): Listener[WS.Secure] with WebSocketRoute = unavailable
+    def apply(properties: WS.Properties): Listener[WS.Secure] with WebSocketRoute = unavailable
   }
 }
 

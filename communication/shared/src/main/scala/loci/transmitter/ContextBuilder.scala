@@ -31,13 +31,13 @@ object ContextBuilder {
     extends Context.Providing[S] with Context.Receiving[S] {
 
     def provide[B, I, R, P, T <: Transmittables](
-        value: B)(implicit selector: Selector[B, I, R, P, T, S]) = {
+        value: B)(implicit selector: Selector.Base[B, I, R, P, T, S]) = {
       implicit val context = selector.context(contexts)
       selector.transmittable(transmittables).buildIntermediate(value)
     }
 
     def receive[B, I, R, P, T <: Transmittables](
-        value: I)(implicit selector: Selector[B, I, R, P, T, S]) = {
+        value: I)(implicit selector: Selector.Intermediate[B, I, R, P, T, S]) = {
       implicit val context = selector.context(contexts)
       selector.transmittable(transmittables).buildResult(value)
     }
@@ -62,8 +62,8 @@ object ContextBuilder {
 
         new Context[M](
             abstraction.remote, transmittables, index + 1L,
-            new Contexts.SingleMessage(context, index)) with
-          Context.Endpoint.MessageImpl[B, I, R, P, T] {
+            new Contexts.SingleMessage(context, index))
+          with Context.Endpoint.MessageImpl[B, I, R, P, T] {
 
           val sendingTurn = new AtomicLong(1)
           val receivingTurn = new AtomicLong(1)
@@ -122,8 +122,8 @@ object ContextBuilder {
           transmittables: Delegates[D], abstraction: AbstractionRef,
           direction: Direction, index: Long) = {
         val context = contextBuilders(transmittables, abstraction, direction, index)
-        new Context[Delegates[D]](abstraction.remote, transmittables, context.index, context) with
-          Context.Endpoint.DelegatesImpl[D]
+        new Context[Delegates[D]](abstraction.remote, transmittables, context.index, context)
+          with Context.Endpoint.DelegatesImpl[D]
       }
     }
 
@@ -132,7 +132,7 @@ object ContextBuilder {
       def apply(
           transmittables: None, abstraction: AbstractionRef,
           direction: Direction, index: Long) =
-        new Context[None](abstraction.remote, transmittables, index, Contexts.None) with
-          Context.Endpoint.NoneImpl
+        new Context[None](abstraction.remote, transmittables, index, Contexts.None)
+          with Context.Endpoint.NoneImpl
     }
 }

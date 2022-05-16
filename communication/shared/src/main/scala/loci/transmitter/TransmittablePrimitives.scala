@@ -4,7 +4,7 @@ package transmitter
 import scala.concurrent.duration.{Duration, FiniteDuration}
 
 trait TransmittablePrimitives extends TransmittableDummy {
-  this: TransmittableBase.type =>
+  this: Transmittable.Base =>
 
   final implicit def unit: IdenticallyTransmittable[Unit] =
     IdenticallyTransmittable()

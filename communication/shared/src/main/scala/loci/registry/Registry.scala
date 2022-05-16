@@ -43,7 +43,8 @@ object Registry {
     def derive(name: String) =
       AbstractionRef(this.name, remote, s"$channelName:$name", channelAnchor, registry)
 
-    lazy val channel = registry.channels.obtain(channelName, channelAnchor, remote)
+    lazy val channel: Registry.Channel =
+      registry.channels.obtain(channelName, channelAnchor, remote)
 
     override def toString: String = s"$name#[channel:$channelName]$remote"
   }

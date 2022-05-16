@@ -19,13 +19,13 @@ private object WSConnector {
       webSocketRequest: WebSocketRequest,
       properties: WS.Properties)(implicit
       materializer: Materializer) =
-    new WSConnector[P](
+    new Socket[P](
       properties, webSocketRequest, { () => http -> materializer }, Function const { })
 
   def apply[P <: WS: WSProtocolFactory](
       webSocketRequest: WebSocketRequest,
       properties: WS.Properties) = {
-    new WSConnector[P](
+    new Socket[P](
       properties, webSocketRequest, { () =>
         implicit val (system, materializer) = WSActorSystem.retrieve()
         Http() -> materializer
@@ -37,7 +37,7 @@ private object WSConnector {
       })
   }
 
-  class WSConnector[P <: WS: WSProtocolFactory](
+  class Socket[P <: WS: WSProtocolFactory](
     properties: WS.Properties,
     webSocketRequest: WebSocketRequest,
     retrieveHttpSystem: () => (HttpExt, Materializer),
@@ -72,7 +72,7 @@ private object WSConnector {
           implicitly[WSProtocolFactory[P]].make(
               uri.toString,
               Some(uri.authority.host.address), Some(uri.effectivePort),
-              WSConnector.this, isAuthenticated, isEncrypted, isProtected,
+              Socket.this, isAuthenticated, isEncrypted, isProtected,
               Some(Right(response)), Left(certificates)) match {
             case Failure(exception) =>
               connected(Failure(exception))

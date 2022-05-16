@@ -81,13 +81,13 @@ object SecurityInfo {
   }
 }
 
-trait Secure { this: SecurityInfo =>
+trait Secure { this: Protocol with SecurityInfo =>
   final val encrypted = true
   final val integrityProtected = true
 }
 
 
-trait AuthenticationInfo { this: SecurityInfo => }
+trait AuthenticationInfo { this: Protocol with SecurityInfo => }
 
 object AuthenticationInfo {
   def unapply(info: AuthenticationInfo) = true
@@ -100,8 +100,7 @@ object AuthenticationInfo {
   }
 }
 
-trait NameAuthentication extends AuthenticationInfo {
-    this: SecurityInfo =>
+trait NameAuthentication extends AuthenticationInfo { this: Protocol with SecurityInfo =>
   val name: String
 }
 
@@ -117,8 +116,7 @@ object NameAuthentication {
   }
 }
 
-trait CertificateAuthentication extends AuthenticationInfo {
-    this: SecurityInfo =>
+trait CertificateAuthentication extends AuthenticationInfo { this: Protocol with SecurityInfo =>
   val certificates: Seq[Certificate]
 }
 
@@ -134,8 +132,7 @@ object CertificateAuthentication {
   }
 }
 
-trait X509CertificateAuthentication extends CertificateAuthentication {
-    this: SecurityInfo =>
+trait X509CertificateAuthentication extends CertificateAuthentication { this: Protocol with SecurityInfo =>
   val certificates: Seq[X509Certificate]
 }
 
@@ -177,22 +174,22 @@ object Symmetry {
   case object Response extends Symmetry
 }
 
-trait Inbound { this: SymmetryInfo =>
+trait Inbound { this: Protocol with SymmetryInfo =>
   final val symmetry = Symmetry.Inbound
 }
 
-trait Outbound { this: SymmetryInfo =>
+trait Outbound { this: Protocol with SymmetryInfo =>
   final val symmetry = Symmetry.Outbound
 }
 
-trait Bidirectional { this: SymmetryInfo =>
+trait Bidirectional { this: Protocol with SymmetryInfo =>
   final val symmetry = Symmetry.Bidirectional
 }
 
-trait Request { this: SymmetryInfo =>
+trait Request { this: Protocol with SymmetryInfo =>
   final val symmetry = Symmetry.Request
 }
 
-trait Response { this: SymmetryInfo =>
+trait Response { this: Protocol with SymmetryInfo =>
   final val symmetry = Symmetry.Response
 }

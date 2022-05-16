@@ -17,22 +17,22 @@ object Notice {
   type FailureReporter = Throwable => Unit
 
   sealed trait Consumer[+C[+U] <: Consumer[C, U], +T] {
-    protected val notices: ConcurrentLinkedQueue[T => _] @uncheckedVariance =
+    private[Notice] val notices: ConcurrentLinkedQueue[T => _] @uncheckedVariance =
       new ConcurrentLinkedQueue[T => _]
 
-    protected def apply(v: T @uncheckedVariance): Boolean
+    private[Notice] def apply(v: T @uncheckedVariance): Boolean
 
-    protected def create[U](failureReporter: FailureReporter): C[U]
+    private[Notice] def create[U](failureReporter: FailureReporter): C[U]
 
     def failureReporter: FailureReporter
 
     def monitor[U, R](notice: T => R)(implicit ev: notice.type <:< (U => R)): Notice[U] =
-      foreach(notice)
+      foreach(notice)(ev)
 
     def foreach[U, R](notice: T => R)(implicit ev: notice.type <:< (U => R)): Notice[U] = {
       notices.add(notice)
       new Notice[U] {
-        def apply(v: U) = notice(v)
+        def apply(v: U) = ev(notice)(v)
         def remove() = notices.remove(notice)
       }
     }
@@ -63,7 +63,7 @@ object Notice {
     }
 
     sealed trait SingleNotice[+C[+U] <: Consumer[C, U], +T] { this: Consumer[C, T] =>
-      protected def apply(v: T @uncheckedVariance): Boolean = {
+      private[Notice] def apply(v: T @uncheckedVariance): Boolean = {
         while (!notices.isEmpty)
           try {
             val notice = notices.poll()
@@ -76,7 +76,7 @@ object Notice {
     }
 
     sealed trait MultiNotice[+C[+U] <: Consumer[C, U], +T] { this: Consumer[C, T] =>
-      protected def apply(v: T @uncheckedVariance): Boolean = {
+      private[Notice] def apply(v: T @uncheckedVariance): Boolean = {
         val iterator = notices.iterator
         while (iterator.hasNext)
           try iterator.next()(v)
@@ -88,11 +88,11 @@ object Notice {
 
 
   final class Stream[+T] private (val failureReporter: FailureReporter)
-    extends Consumer[Stream, T] with
-      Consumer.TotalOperations[Stream, T] with
-      Consumer.PartialOperations[Stream, T] with
-      Consumer.MultiNotice[Stream, T] {
-    protected def create[U](failureReporter: FailureReporter) =
+      extends Consumer[Stream, T]
+      with Consumer.TotalOperations[Stream, T]
+      with Consumer.PartialOperations[Stream, T]
+      with Consumer.MultiNotice[Stream, T] {
+    private[Notice] def create[U](failureReporter: FailureReporter) =
       new Stream[U](failureReporter)
   }
 
@@ -114,12 +114,12 @@ object Notice {
 
 
   final class Steady[+T] private (val failureReporter: FailureReporter)
-    extends Consumer[Steady, T] with
-      Consumer.TotalOperations[Steady, T] with
-      Consumer.PartialOperations[Steady, T] with
-      Consumer.SingleNotice[Steady, T] with
-      Awaitable[T] {
-    protected def create[U](failureReporter: FailureReporter) =
+      extends Consumer[Steady, T]
+      with Consumer.TotalOperations[Steady, T]
+      with Consumer.PartialOperations[Steady, T]
+      with Consumer.SingleNotice[Steady, T]
+      with Awaitable[T] {
+    private[Notice] def create[U](failureReporter: FailureReporter) =
       new Steady[U](failureReporter)
 
     private val value: AtomicReference[Option[T]] @uncheckedVariance =
@@ -127,7 +127,7 @@ object Notice {
 
     def current: Option[T] = value.get
 
-    override protected def apply(v: T @uncheckedVariance): Boolean =
+    override private[Notice] def apply(v: T @uncheckedVariance): Boolean =
       value.compareAndSet(None, Some(v)) && super.apply(v)
 
     override def foreach[U, R](notice: T => R)(implicit ev: notice.type <:< (U => R)): Notice[U] = {
@@ -215,17 +215,17 @@ object Notice {
 
 
   final class Varying[+T] private (val failureReporter: FailureReporter)
-    extends Consumer[Varying, T] with
-      Consumer.TotalOperations[Varying, T] with
-      Consumer.MultiNotice[Varying, T] {
-    protected def create[U](failureReporter: FailureReporter) =
+      extends Consumer[Varying, T]
+      with Consumer.TotalOperations[Varying, T]
+      with Consumer.MultiNotice[Varying, T] {
+    private[Notice] def create[U](failureReporter: FailureReporter) =
       new Varying[U](failureReporter)
 
     @volatile private var value: T @uncheckedVariance = _
 
     def current: T = value
 
-    override protected def apply(v: T @uncheckedVariance): Boolean =
+    override private[Notice] def apply(v: T @uncheckedVariance): Boolean =
       if (value != v) {
         value = v
         super.apply(v)

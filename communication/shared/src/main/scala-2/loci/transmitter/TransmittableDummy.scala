@@ -8,7 +8,7 @@ import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
 
 trait TransmittableDummy {
-  this: TransmittableBase.type =>
+  this: Transmittable.Base =>
 
   @compileTimeOnly("Value is not transmittable")
   final implicit def resolutionFailure[

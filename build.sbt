@@ -1,5 +1,6 @@
 import org.scalajs.sbtplugin.ScalaJSCrossVersion
 import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
+import sbtcrossproject.CrossProject
 
 enablePlugins(GitVersioning)
 
@@ -13,25 +14,39 @@ ThisBuild / homepage := Some(url("https://scala-loci.github.io/"))
 
 ThisBuild / licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")
 
-ThisBuild / scalacOptions ++= Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
+ThisBuild / scalacOptions ++= {
+  if (`is 3+`(scalaVersion.value))
+    Seq("-feature", "-deprecation", "-unchecked")
+  else
+    Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
+}
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.7")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.7", "3.1.2")
 
 ThisBuild / scalaVersion := {
-  val version = Option(System.getenv("SCALA_VERSION")) getOrElse ""
   val versions = (ThisBuild / crossScalaVersions).value
+  val version = Option(System.getenv("SCALA_VERSION")) getOrElse versions(versions.size - 2)
   versions.reverse find { _ startsWith version } getOrElse versions.last
 }
 
 
 def `is 2.12+`(scalaVersion: String): Boolean =
-  CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 12 } getOrElse false
+  CrossVersion.partialVersion(scalaVersion) exists { case (m, n) => m >= 3 || m == 2 && n >= 12 }
 
 def `is 2.13+`(scalaVersion: String): Boolean =
-  CrossVersion.partialVersion(scalaVersion) collect { case (2, n) => n >= 13 } getOrElse false
+  CrossVersion.partialVersion(scalaVersion) exists { case (m, n) => m >= 3 || m == 2 && n >= 13 }
+
+def `is 3+`(scalaVersion: String): Boolean =
+  CrossVersion.partialVersion(scalaVersion) exists { case (m, _) => m >= 3 }
+
+
+def scala2only(project: CrossProject) = project settings (
+  compile / skip := (compile / skip).value || `is 3+`(scalaVersion.value),
+  publish / skip := (publish / skip).value || `is 3+`(scalaVersion.value))
 
 
 val build = taskKey[Unit]("Builds the system")
+
 
 val aggregatedProjects = ScopeFilter(inAggregates(ThisProject, includeRoot = false))
 
@@ -39,9 +54,30 @@ def taskSequence(tasks: TaskKey[_]*) =
   Def.sequential(tasks map { task => Def.task { Def.unit(task.value) } all aggregatedProjects })
 
 
+def rebaseFile(file: File, oldBase: File, newBase: File) =
+  IO.relativize(oldBase, file) map { newBase / _ }
+
+
+val copyCompiledFiles = taskKey[Unit]("Copies the compiled files from one project to another.")
+
+def copyCompiledFilesFrom(project: Project) = {
+  def copyCompiledFilesFrom(project: Project, config: Configuration) = Seq(
+    config / copyCompiledFiles := IO.copyDirectory(
+      (project / config / classDirectory).value,
+      (config / classDirectory).value,
+      overwrite = false, preserveLastModified = true, preserveExecutable = true),
+    config / copyCompiledFiles :=
+      ((config / copyCompiledFiles) dependsOn (project / config / compile)).value,
+    config / compile :=
+      ((config / compile) dependsOn (config / copyCompiledFiles)).value)
+
+  copyCompiledFilesFrom(project, Compile) ++ copyCompiledFilesFrom(project, Test)
+}
+
+
 val macroparadise = Seq(
   scalacOptions ++= {
-    if (`is 2.13+`(scalaVersion.value))
+    if (`is 2.13+`(scalaVersion.value) && !`is 3+`(scalaVersion.value))
       Seq("-Ymacro-annotations")
     else
       Seq.empty
@@ -53,20 +89,24 @@ val macroparadise = Seq(
       Seq(compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch))
   })
 
-val macrodeclaration = libraryDependencies +=
-  scalaOrganization.value % "scala-reflect" % scalaVersion.value % "compile-internal"
+val macrodeclaration = libraryDependencies ++= {
+  if (`is 3+`(scalaVersion.value))
+    Seq.empty
+  else
+    Seq(scalaOrganization.value % "scala-reflect" % scalaVersion.value % "compile-internal;test-internal")
+}
 
 val jsweakreferences = libraryDependencies += 
-  "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0"
+  "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val jsmacrotaskexecutor = libraryDependencies +=
   "org.scala-js" %%% "scala-js-macrotask-executor" % "1.0.0"
 
 val jsjavasecurerandom = libraryDependencies +=
-  "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0"
+  "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.10" % "test-internal"
+  "org.scalatest" %%% "scalatest" % "3.2.12" % "test-internal"
 
 val scribe = libraryDependencies += {
   if (`is 2.12+`(scalaVersion.value))
@@ -75,8 +115,12 @@ val scribe = libraryDependencies += {
     "com.outr" %%% "scribe" % "3.6.2"
 }
 
-val retypecheck = libraryDependencies +=
-  "io.github.scala-loci" %% "retypecheck" % "0.10.0"
+val retypecheck = libraryDependencies ++= {
+  if (`is 3+`(scalaVersion.value))
+    Seq.empty
+  else
+    Seq("io.github.scala-loci" %% "retypecheck" % "0.10.0")
+}
 
 val rescala = libraryDependencies +=
   "de.tu-darmstadt.stg" %%% "rescala" % "0.31.0"
@@ -93,8 +137,8 @@ val circe = Seq(
     else
       Seq.empty
   },
-  compile / skip := !`is 2.12+`(scalaVersion.value),
-  publish / skip := !`is 2.12+`(scalaVersion.value))
+  compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
+  publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value))
 
 val jsoniter = Seq(
   libraryDependencies ++= {
@@ -103,16 +147,16 @@ val jsoniter = Seq(
     else
       Seq.empty
   },
-  compile / skip := !`is 2.12+`(scalaVersion.value),
-  publish / skip := !`is 2.12+`(scalaVersion.value))
+  compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
+  publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value))
 
 val akkaHttp = libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
-  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided)
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided cross CrossVersion.for3Use2_13)
 
 val play = libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided,
-  "com.typesafe.play" %% "play" % "[2.5,2.8)" % Provided)
+  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided cross CrossVersion.for3Use2_13,
+  "com.typesafe.play" %% "play" % "[2.5,2.8)" % Provided cross CrossVersion.for3Use2_13)
 
 val scalajsDom = libraryDependencies +=
   "org.scala-js" % "scalajs-dom" % "2.0.0" cross ScalaJSCrossVersion.binary
@@ -179,7 +223,7 @@ lazy val lociJS = (project
              lociCommunicatorWebRtcJS))
 
 
-lazy val lociLanguage = (crossProject(JSPlatform, JVMPlatform)
+lazy val lociLanguage = scala2only(crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("language")
   settings (name := "ScalaLoci language",
@@ -191,7 +235,7 @@ lazy val lociLanguageJVM = lociLanguage.jvm
 lazy val lociLanguageJS = lociLanguage.js
 
 
-lazy val lociLanguageRuntime = (crossProject(JSPlatform, JVMPlatform)
+lazy val lociLanguageRuntime = scala2only(crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("language-runtime")
   settings (name := "ScalaLoci language runtime",
@@ -205,26 +249,43 @@ lazy val lociLanguageRuntimeJVM = lociLanguageRuntime.jvm
 lazy val lociLanguageRuntimeJS = lociLanguageRuntime.js
 
 
+lazy val lociCommunicationPrelude = (crossProject(JSPlatform, JVMPlatform)
+  crossType CrossType.Full
+  in file("communication") / ".prelude"
+  settings (normalizedName := "scala-loci-communication-prelude",
+            publish / skip := true,
+            Compile / unmanagedSourceDirectories := (Compile / unmanagedSourceDirectories).value flatMap {
+              rebaseFile(_,
+                (ThisBuild / baseDirectory).value / "communication" / ".prelude",
+                (ThisBuild / baseDirectory).value / "communication")
+            },
+            Test / unmanagedSourceDirectories := (Test / unmanagedSourceDirectories).value flatMap {
+              rebaseFile(_,
+                (ThisBuild / baseDirectory).value / "communication" / ".prelude",
+                (ThisBuild / baseDirectory).value / "communication")
+            },
+            Compile / unmanagedSources / includeFilter :=
+              "ReflectionExtensions.scala" || "CompileTimeUtils.scala" || "SelectorResolution.scala",
+            macrodeclaration, scalatest))
+
+lazy val lociCommunicationPreludeJVM = lociCommunicationPrelude.jvm
+lazy val lociCommunicationPreludeJS = lociCommunicationPrelude.js
+
+
 lazy val lociCommunication = (crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Full
   in file("communication")
   settings (name := "ScalaLoci communication",
             normalizedName := "scala-loci-communication",
-            Compile / unmanagedSourceDirectories +=
-                (ThisBuild / baseDirectory).value / "communication" / "shared" / "src" / "test" / "scala",
-            Compile / unmanagedSources / excludeFilter := {
-              val testDirectory =
-                (ThisBuild / baseDirectory).value / "communication" / "shared" / "src" / "test" / "scala"
-              new SimpleFileFilter(file =>
-                (file.getCanonicalPath startsWith testDirectory.getCanonicalPath) && !(file.getName startsWith "CompileTimeUtils"))
-            },
-            Compile / packageBin / mappings ~= { _ filter { case (file, _) => !(file.getName startsWith "CompileTimeUtils") } },
-            Test / unmanagedSources / excludeFilter := NothingFilter,
+            Compile / unmanagedSources / excludeFilter :=
+              "ReflectionExtensions.scala" || "CompileTimeUtils.scala" || "SelectorResolution.scala",
             SourceGenerator.transmittableTuples,
             SourceGenerator.functionsBindingBuilder,
             SourceGenerator.functionSubjectiveBinding,
             macroparadise, macrodeclaration, scribe, scalatest)
-  jsSettings (jsmacrotaskexecutor, jsjavasecurerandom))
+  jvmSettings copyCompiledFilesFrom(lociCommunicationPreludeJVM)
+  jsSettings (copyCompiledFilesFrom(lociCommunicationPreludeJS),
+              jsmacrotaskexecutor, jsjavasecurerandom))
 
 lazy val lociCommunicationJVM = lociCommunication.jvm
 lazy val lociCommunicationJS = lociCommunication.js
@@ -278,7 +339,7 @@ lazy val lociTransmitterRescalaJVM = lociTransmitterRescala.jvm
 lazy val lociTransmitterRescalaJS = lociTransmitterRescala.js
 
 
-lazy val lociLanguageTransmitterRescala = (crossProject(JSPlatform, JVMPlatform)
+lazy val lociLanguageTransmitterRescala = scala2only(crossProject(JSPlatform, JVMPlatform)
   crossType CrossType.Pure
   in file("language-transmitter-rescala")
   settings (name := "ScalaLoci language REScala transmitter",

@@ -1,5 +1,7 @@
 package loci
 
+import org.scalatest.exceptions.TestFailedException
+
 import scala.annotation.compileTimeOnly
 import scala.collection.mutable
 import scala.language.experimental.macros
@@ -67,8 +69,7 @@ object CompileTimeUtils {
   def assertNoFailedAssertionImpl(c: whitebox.Context)(expr: c.Tree): c.Tree = {
     import c.universe._
 
-    val testFailedException =
-      c.mirror.staticClass(s"${termNames.ROOTPKG}.org.scalatest.exceptions.TestFailedException").asType.toType
+    val testFailedException = typeOf[TestFailedException]
 
     val messages = expr collect {
       case tree @ Apply(Select(New(_), _), args) if tree.tpe <:< testFailedException =>
@@ -130,7 +131,7 @@ object CompileTimeUtils {
     val T = weakTypeOf[T]
     val U = weakTypeOf[U]
 
-    q"${T.decls exists { _.info.finalResultType <:< U } }"
+    q"${T.decls exists { decl => decl.isTerm && decl.info.finalResultType <:< U } }"
   }
 
   def compile(expr: String): Any =

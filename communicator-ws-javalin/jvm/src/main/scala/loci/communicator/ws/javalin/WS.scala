@@ -10,11 +10,11 @@ import io.javalin.websocket.{WsContext, WsConfig}
 import scala.concurrent.duration._
 import scala.util.{Success, Try}
 
-trait WS extends
-    Protocol with
-    SetupInfo with
-    SecurityInfo with
-    SymmetryInfo with Bidirectional {
+trait WS
+    extends Protocol
+    with SetupInfo
+    with SecurityInfo
+    with SymmetryInfo with Bidirectional {
   val path: String
   val host: Option[String]
   val port: Option[Int]

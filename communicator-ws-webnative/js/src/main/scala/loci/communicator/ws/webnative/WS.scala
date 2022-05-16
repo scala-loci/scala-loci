@@ -4,11 +4,11 @@ package ws.webnative
 
 import scala.concurrent.duration._
 
-trait WS extends
-    Protocol with
-    SetupInfo with
-    SecurityInfo with
-    SymmetryInfo with Bidirectional {
+trait WS
+    extends Protocol
+    with SetupInfo
+    with SecurityInfo
+    with SymmetryInfo with Bidirectional {
   val url: String
   val host: Option[String]
   val port: Option[Int]

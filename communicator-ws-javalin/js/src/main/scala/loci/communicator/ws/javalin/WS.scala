@@ -5,11 +5,11 @@ package ws.javalin
 import scala.annotation.compileTimeOnly
 import scala.concurrent.duration._
 
-trait WS extends
-    Protocol with
-    SetupInfo with
-    SecurityInfo with
-    SymmetryInfo with Bidirectional {
+trait WS
+    extends Protocol
+    with SetupInfo
+    with SecurityInfo
+    with SymmetryInfo with Bidirectional {
   val path: String
   val host: Option[String]
   val port: Option[Int]
@@ -26,9 +26,6 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
-  private def ??? =
-    sys.error("Javalin WebSocket communicator only available on the JVM")
-
-  def apply(javalin: AnyRef, path: String): Listener[WS] = ???
-  def apply(javalin: AnyRef, path: String, properties: Properties): Listener[WS] = ???
+  def apply(javalin: AnyRef, path: String): Listener[WS] = unavailable
+  def apply(javalin: AnyRef, path: String, properties: Properties): Listener[WS] = unavailable
 }

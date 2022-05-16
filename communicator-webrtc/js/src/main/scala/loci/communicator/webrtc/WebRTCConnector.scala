@@ -23,7 +23,7 @@ private abstract class WebRTCConnector(
 
   val peerConnection = new dom.RTCPeerConnection(configuration)
 
-  peerConnection.onicecandidate = { event: dom.RTCPeerConnectionIceEvent =>
+  peerConnection.onicecandidate = { (event: dom.RTCPeerConnectionIceEvent) =>
     if (event.candidate != null)
       update.left foreach {
         _(SessionUpdate(event.candidate))
@@ -67,7 +67,7 @@ private abstract class WebRTCConnector(
       }
   }
 
-  protected val unit = (): js.|[Unit, js.Thenable[Unit]]
+  protected val unit = js.|.from[Unit, Unit, js.Thenable[Unit]](())
 
   protected def setRemoteDescription(description: dom.RTCSessionDescription): Unit
 }
@@ -84,8 +84,8 @@ private class WebRTCOffer(
         WebRTCConnector.channelLabel,
         new dom.RTCDataChannelInit { })
 
-      peerConnection.createOffer(options) `then` { description: dom.RTCSessionDescription =>
-        peerConnection.setLocalDescription(description) `then` { _: Unit =>
+      peerConnection.createOffer(options) `then` { (description: dom.RTCSessionDescription) =>
+        peerConnection.setLocalDescription(description) `then` { (_: Unit) =>
           update.left foreach { _(InitialSession(description)) }
           unit
         }
@@ -129,7 +129,7 @@ private class WebRTCAnswer(
     connect()
   }
 
-  peerConnection.ondatachannel = { event: dom.RTCDataChannelEvent =>
+  peerConnection.ondatachannel = { (event: dom.RTCDataChannelEvent) =>
     if (event.channel.label == WebRTCConnector.channelLabel) {
       connectorQueue.push(new WebRTCChannelConnector(event.channel, Some(this)))
       connect()
@@ -137,9 +137,9 @@ private class WebRTCAnswer(
   }
 
   protected def setRemoteDescription(description: dom.RTCSessionDescription) =
-    peerConnection.setRemoteDescription(description) `then` { _: Unit =>
-      peerConnection.createAnswer() `then` { description: dom.RTCSessionDescription =>
-        peerConnection.setLocalDescription(description) `then` { _: Unit =>
+    peerConnection.setRemoteDescription(description) `then` { (_: Unit) =>
+      peerConnection.createAnswer() `then` { (description: dom.RTCSessionDescription) =>
+        peerConnection.setLocalDescription(description) `then` { (_: Unit) =>
           update.left foreach { _(InitialSession(description)) }
           unit
         }
@@ -184,24 +184,24 @@ private class WebRTCChannelConnector(
           }
         }
 
-        channel.onclose = { event: dom.Event =>
+        channel.onclose = { (_: dom.Event) =>
           connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
           connection.close()
         }
 
-        channel.onerror = { event: dom.Event =>
+        channel.onerror = { (_: dom.Event) =>
           connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
           connection.close()
         }
 
-        channel.onmessage = { event: dom.MessageEvent =>
+        channel.onmessage = { (event: dom.MessageEvent) =>
           event.data match {
             case data: ArrayBuffer =>
               doReceive.fire(MessageBuffer wrapArrayBuffer data)
 
             case data: dom.Blob =>
               val reader = new dom.FileReader
-              reader.onload = { event: dom.Event =>
+              reader.onload = { (event: dom.Event) =>
                 doReceive.fire(MessageBuffer wrapArrayBuffer
                   event.target.asInstanceOf[js.Dynamic].result.asInstanceOf[ArrayBuffer])
               }
@@ -219,7 +219,7 @@ private class WebRTCChannelConnector(
           // strange fix for strange issue with Chromium
           val handle = js.timers.setTimeout(1.day) { channel.readyState }
   
-          channel.onopen = { _: dom.Event =>
+          channel.onopen = { (_: dom.Event) =>
             js.timers.clearTimeout(handle)
             connectionEstablished.trySet(Success(connection))
           }

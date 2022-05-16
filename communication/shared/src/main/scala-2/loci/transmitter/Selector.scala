@@ -14,6 +14,9 @@ sealed trait Selector[B, I, R, P, T <: Transmittables, S <: Transmittables] {
 }
 
 object Selector {
+  type Base[B, I, R, P, T <: Transmittables, S <: Transmittables] = Selector[B, I, R, P, T, S]
+  type Intermediate[B, I, R, P, T <: Transmittables, S <: Transmittables] = Selector[B, I, R, P, T, S]
+
   implicit def message[B, I, R, P, T <: Transmittables]
   : Selector[B, I, R, P, T, Message[Transmittable.Aux[B, I, R, P, T]]] = {
     type S = Message[Transmittable.Aux[B, I, R, P, T]]

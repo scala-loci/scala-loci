@@ -20,14 +20,14 @@ object Context {
     this: ContextBuilder.Context[S] =>
 
     def provide[B, I, R, P, T <: Transmittables](
-      value: B)(implicit selector: Selector[B, I, R, P, T, S]): I
+      value: B)(implicit selector: Selector.Base[B, I, R, P, T, S]): I
   }
 
   trait Receiving[S <: Transmittables] extends Context[S] {
     this: ContextBuilder.Context[S] =>
 
     def receive[B, I, R, P, T <: Transmittables](
-      value: I)(implicit selector: Selector[B, I, R, P, T, S]): R
+      value: I)(implicit selector: Selector.Intermediate[B, I, R, P, T, S]): R
   }
 
   object Endpoint {

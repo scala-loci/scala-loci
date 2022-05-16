@@ -2,75 +2,112 @@ import sbt.Keys._
 import sbt._
 
 object SourceGenerator {
-  val transmittableTuples =
-    Compile / sourceGenerators += Compile / sourceManaged map { dir =>
-      val members = (1 to 22) map { i =>
-        val tuple = s"Tuple$i"
-        val tupleArgsT = (0 until i) map { i => s"T$i" } mkString ", "
-        val tupleArgsB = (0 until i) map { i => s"B$i" } mkString ", "
-        val tupleArgsI = (0 until i) map { i => s"I$i" } mkString ", "
-        val tupleArgsR = (0 until i) map { i => s"R$i" } mkString ", "
+  val transmittableTuples = Compile / sourceGenerators += Def.taskDyn {
+      val scala3 = scalaVersion.value startsWith "3."
 
-        val tupleArgs = s"$tuple[$tupleArgsB], $tuple[$tupleArgsI], $tuple[$tupleArgsR]"
+      def baseSelector(index: Int) =
+        if (scala3) s"using Selector.Base(using null, ValueOf($index))" else s"Selector.unchecked($index)"
 
-        val typeArgs = (0 until i) map { i => s"B$i, I$i, R$i" } mkString ", "
+      def intermediateSelector(index: Int) =
+        if (scala3) s"using Selector.Intermediate(using null, ValueOf($index))" else s"Selector.unchecked($index)"
 
-        val typeArgsIdentically = (0 until i) map { i => s"""
+      def condition(cond: String, thenCase: String, elseCase: String) =
+        if (scala3) s"if $cond then $thenCase else $elseCase" else s"if ($cond) $thenCase else $elseCase"
+
+      def refinementType(refinementType: String) =
+        if (scala3) s"($refinementType)" else refinementType
+
+      val implicitDefinition =
+        if (scala3) s"given" else s"final implicit def"
+
+      val implicitArgument =
+        if (scala3) s"using" else s"implicit"
+
+      val imports =
+        if (scala3) """
+          |  import scala.language.unsafeNulls"""
+        else
+          ""
+
+      Compile / sourceManaged map { dir =>
+        val members = (1 to 22) map { i =>
+          val tuple = s"Tuple$i"
+          val tupleArgsT = (0 until i) map { i => s"T$i" } mkString ", "
+          val tupleArgsB = (0 until i) map { i => s"B$i" } mkString ", "
+          val tupleArgsI = (0 until i) map { i => s"I$i" } mkString ", "
+          val tupleArgsR = (0 until i) map { i => s"R$i" } mkString ", "
+
+          val tupleArgs = s"$tuple[$tupleArgsB], $tuple[$tupleArgsI], $tuple[$tupleArgsR]"
+
+          val typeArgs = (0 until i) map { i => s"B$i, I$i, R$i" } mkString ", "
+
+          val typeArgsIdentically = (0 until i) map { i => s"""
           |      T$i: IdenticallyTransmittable""" } mkString ","
 
-        val implicitArgs = (0 until i) map { i => s"""
+          val implicitArgs = (0 until i) map { i => s"""
           |      transmittable$i: Transmittable[B$i, I$i, R$i]""" } mkString ","
 
-        val delegatesType = (0 until i) map { i =>
-          s"transmittable$i.Type"
-        } mkString " / "
+          val delegatesType = (0 until i) map { i =>
+            s"transmittable$i.Type"
+          } mkString " / "
 
-        val delegates = (0 until i) map { k => s"""
-          |        context.delegate(value._${k+1})(Selector.unchecked(${i-k-1}))"""
-        } mkString ","
+          val baseDelegates = (0 until i) map { k => s"""
+          |        context.delegate(value._${k+1})(${baseSelector(i-k-1)})"""
+          } mkString ","
 
-        val delegation = s"if (value == null) null else $tuple($delegates)"
+          val intermediateDelegates = (0 until i) map { k => s"""
+          |        context.delegate(value._${k+1})(${intermediateSelector(i-k-1)})"""
+          } mkString ","
 
-        val tupleMember = s"""
-          |  final implicit def tuple$i[$typeArgs](implicit $implicitArgs)
-          |  : DelegatingTransmittable[$tupleArgs] {
-          |      type Delegates = $delegatesType
-          |    } =
-          |    DelegatingTransmittable(
-          |      provide = (value, context) => $delegation,
-          |      receive = (value, context) => $delegation)
-          |"""
+          val baseDelegation = condition("value == null", "null", s"$tuple($baseDelegates)")
 
-        val identicalTupleMember = s"""
-          |  final implicit def identicalTuple$i[$typeArgsIdentically]
-          |  : IdenticallyTransmittable[$tuple[$tupleArgsT]] =
-          |    IdenticallyTransmittable()
-          |"""
+          val intermediateDelegation = condition("value == null", "null", s"$tuple($intermediateDelegates)")
 
-        (tupleMember, identicalTupleMember)
+          val tupleMemberType = refinementType(
+            s"""DelegatingTransmittable[$tupleArgs] {
+              |      type Delegates = $delegatesType
+              |    }""")
+
+          val tupleMember = s"""
+            |  $implicitDefinition tuple$i[$typeArgs]($implicitArgument $implicitArgs)
+            |  : $tupleMemberType =
+            |    DelegatingTransmittable(
+            |      provide = (value, context) => $baseDelegation,
+            |      receive = (value, context) => $intermediateDelegation)
+            |"""
+
+          val identicalTupleMember = s"""
+            |  $implicitDefinition identicalTuple$i[$typeArgsIdentically]
+            |  : IdenticallyTransmittable[$tuple[$tupleArgsT]] =
+            |    IdenticallyTransmittable()
+            |"""
+
+          (tupleMember, identicalTupleMember)
+        }
+
+        val (tupleMembers, identicalTupleMembers) = members.unzip
+
+        val files = Map(
+          dir / "loci" / "transmitter" / "TransmittableTuples.scala" ->
+            s"""package loci
+               |package transmitter
+               |
+               |trait TransmittableGeneralTuples extends TransmittableDummy {
+               |  this: Transmittable.Base =>
+               |$imports
+               |${tupleMembers.mkString}
+               |}
+               |
+               |trait TransmittableTuples extends TransmittableGeneralTuples {
+               |  this: Transmittable.Base =>
+               |${identicalTupleMembers.mkString}
+               |}
+               |""".stripMargin
+        )
+
+        files foreach { case (file, content) => IO.write(file, content) }
+        files.keys.toSeq
       }
-
-      val (tupleMembers, identicalTupleMembers) = members.unzip
-
-      val files = Map(
-        dir / "loci" / "transmitter" / "TransmittableTuples.scala" ->
-        s"""package loci
-           |package transmitter
-           |
-           |trait TransmittableGeneralTuples extends TransmittableDummy {
-           |  this: TransmittableBase.type =>
-           |${tupleMembers.mkString}
-           |}
-           |
-           |trait TransmittableTuples extends TransmittableGeneralTuples {
-           |  this: TransmittableBase.type =>
-           |${identicalTupleMembers.mkString}
-           |}
-           |""".stripMargin
-      )
-
-      files foreach { case (file, content) => IO.write(file, content) }
-      files.keys.toSeq
     }
 
   val remoteSelection =

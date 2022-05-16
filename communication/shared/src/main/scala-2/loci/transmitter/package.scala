@@ -6,6 +6,8 @@ package object transmitter {
   type Transmittable[B, I, R] = TransmittableBase.Wrapper[B, I, R, _, _ <: Transmittables]
 
   object Transmittable {
+    type Base = TransmittableBase.type
+
     type Aux[-B, I, +R, P, T <: Transmittables] = TransmittableBase.Any[B, I, R] {
       type Proxy = P
       type Transmittables = T

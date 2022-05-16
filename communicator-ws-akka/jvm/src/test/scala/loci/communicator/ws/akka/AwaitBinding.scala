@@ -6,9 +6,9 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 object awaitBinding {
-  def apply(listener: Listener[WS], atMost: Duration): Boolean = {
+  def apply(listener: Listener[_], atMost: Duration): Boolean = {
     val binding = listener match {
-      case listener: WSListener.BoundRoute[WS] => listener.binding
+      case listener: WSListener.BoundRoute[_] => listener.binding
       case _ => None
     }
 

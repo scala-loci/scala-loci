@@ -7,10 +7,10 @@ import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
-trait TransmittableGeneralCollections extends
-    TransmittableGeneralIterableCollections with
-    TransmittableDummy {
-  this: TransmittableBase.type =>
+trait TransmittableGeneralCollections
+    extends TransmittableGeneralIterableCollections
+    with TransmittableDummy {
+  this: Transmittable.Base =>
 
   final implicit def array[B: ClassTag, I: ClassTag, R: ClassTag]
     (implicit transmittable: Transmittable[B, I, R])
@@ -167,10 +167,10 @@ trait TransmittableGeneralCollections extends
       })
 }
 
-trait TransmittableCollections extends
-    TransmittableIterableCollections with
-    TransmittableGeneralCollections {
-  this: TransmittableBase.type =>
+trait TransmittableCollections
+    extends TransmittableIterableCollections
+    with TransmittableGeneralCollections {
+  this: Transmittable.Base =>
 
   final implicit def identicalArray[T: IdenticallyTransmittable]
   : IdenticallyTransmittable[Array[T]] = IdenticallyTransmittable()

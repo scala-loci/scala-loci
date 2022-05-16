@@ -17,7 +17,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
 
     val socket = new dom.WebSocket(url)
 
-    socket.onopen = { _: dom.Event =>
+    socket.onopen = { (_: dom.Event) =>
 
       // protocol properties
 
@@ -94,14 +94,14 @@ private class WSConnector[P <: WS: WSProtocolFactory](
 
           // socket listeners
 
-          socket.onmessage = { event: dom.MessageEvent =>
+          socket.onmessage = { (event: dom.MessageEvent) =>
             event.data match {
               case data: ArrayBuffer =>
                 doReceive.fire(MessageBuffer wrapArrayBuffer data)
 
               case data: dom.Blob =>
                 val reader = new dom.FileReader
-                reader.onload = { event: dom.Event =>
+                reader.onload = { (event: dom.Event) =>
                   doReceive.fire(MessageBuffer wrapArrayBuffer
                     event.target.asInstanceOf[js.Dynamic].result.asInstanceOf[ArrayBuffer])
                 }
@@ -112,7 +112,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
             resetTimeout.fire()
           }
 
-          socket.onclose = { event: dom.CloseEvent =>
+          socket.onclose = { (event: dom.CloseEvent) =>
             clearInterval(intervalHandle)
             clearTimeout(timeoutHandle)
             doClosed.set()
@@ -120,7 +120,7 @@ private class WSConnector[P <: WS: WSProtocolFactory](
       }
     }
 
-    socket.onerror = { event: dom.Event =>
+    socket.onerror = { (event: dom.Event) =>
       connectionEstablished.trySet(Failure(new ConnectionException("Websocket failed to connect")))
       socket.close()
     }

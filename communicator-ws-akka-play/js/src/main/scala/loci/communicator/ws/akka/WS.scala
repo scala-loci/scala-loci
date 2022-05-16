@@ -8,15 +8,14 @@ import scala.annotation.compileTimeOnly
 
 @compileTimeOnly("Akka Play WebSocket communicator only available on the JVM")
 object WebSocketHandler {
-  private def ??? =
-    sys.error("Akka Play WebSocket communicator only available on the JVM")
+  private def unavailable = sys.error("Akka Play WebSocket communicator only available on the JVM")
 
-  def apply(): Listener[WS] with WebSocketHandler = ???
-  def apply(properties: WS.Properties): Listener[WS] with WebSocketHandler = ???
+  def apply(): Listener[WS] with WebSocketHandler = unavailable
+  def apply(properties: WS.Properties): Listener[WS] with WebSocketHandler = unavailable
 
   object Secure {
-    def apply(): Listener[WS.Secure] with WebSocketHandler = ???
-    def apply(properties: WS.Properties): Listener[WS.Secure] with WebSocketHandler = ???
+    def apply(): Listener[WS.Secure] with WebSocketHandler = unavailable
+    def apply(properties: WS.Properties): Listener[WS.Secure] with WebSocketHandler = unavailable
   }
 }
 

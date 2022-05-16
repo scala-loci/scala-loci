@@ -4,20 +4,22 @@ package tcp
 
 import scala.concurrent.duration.FiniteDuration
 
-trait TCPSetupFactory extends
-    ConnectionSetupFactory.Implementation[TCP] with
-    ConnectionSetupParser with
-    SimpleConnectionSetupProperties { this: TCP.type =>
+trait TCPSetupFactory
+    extends ConnectionSetupFactory.Implementation[TCP]
+    with ConnectionSetupParser
+    with SimpleConnectionSetupProperties {
+  val self: TCP.type = TCP
+
   val schemes = Seq("tcp")
 
   protected def properties(implicit props: ConnectionSetupFactory.Properties) =
-    Properties()
+    TCP.Properties()
       .set[FiniteDuration]("heartbeat-delay") { v => _.copy(heartbeatDelay = v) }
       .set[FiniteDuration]("heartbeat-timeout") { v => _.copy(heartbeatTimeout = v) }
       .set[Boolean]("no-delay") { v => _.copy(noDelay = v) }
 
   protected def listener(
-      url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: TCP.Properties) =
     parse(location) match {
       case (Some(interface), Some(port)) => Some(TCP(port, interface, properties))
       case (None, Some(port)) => Some(TCP(port, properties))
@@ -25,7 +27,7 @@ trait TCPSetupFactory extends
     }
 
   protected def connector(
-      url: String, scheme: String, location: String, properties: Properties) =
+      url: String, scheme: String, location: String, properties: TCP.Properties) =
     parse(location) match {
       case (Some(host), Some(port)) => Some(TCP(host, port, properties))
       case _ => None
