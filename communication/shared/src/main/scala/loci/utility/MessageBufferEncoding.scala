@@ -79,7 +79,7 @@ object MessageBufferEncoding {
       i += 1
     }
 
-    if (result.isEmpty)
+    if (result.length == 0)
       ""
     else
       new String(result, 0, result.length - 1)
