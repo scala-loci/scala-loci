@@ -21,7 +21,7 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.7", "3.1.2")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.8", "3.1.2")
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value
@@ -108,12 +108,8 @@ val jsjavasecurerandom = libraryDependencies +=
 val scalatest = libraryDependencies +=
   "org.scalatest" %%% "scalatest" % "3.2.12" % "test-internal"
 
-val scribe = libraryDependencies += {
-  if (`is 2.12+`(scalaVersion.value))
-    "com.outr" %%% "scribe" % "3.6.3"
-  else
-    "com.outr" %%% "scribe" % "3.6.2"
-}
+val scribe = libraryDependencies +=
+  "com.outr" %%% "scribe" % "3.8.2"
 
 val retypecheck = libraryDependencies ++= {
   if (`is 3+`(scalaVersion.value))
@@ -126,7 +122,7 @@ val rescala = libraryDependencies +=
   "de.tu-darmstadt.stg" %%% "rescala" % "0.31.0"
 
 val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "1.4.2"
+  "com.lihaoyi" %%% "upickle" % "2.0.0"
 
 val circe = Seq(
   libraryDependencies ++= {
@@ -143,7 +139,7 @@ val circe = Seq(
 val jsoniter = Seq(
   libraryDependencies ++= {
     if (`is 2.12+`(scalaVersion.value))
-      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.12.0")
+      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.13.22")
     else
       Seq.empty
   },
@@ -159,16 +155,16 @@ val play = libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play" % "[2.5,2.8)" % Provided cross CrossVersion.for3Use2_13)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "2.0.0" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "2.2.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "4.1.1"
+  "io.javalin" % "javalin" % "4.6.0"
 
 val jetty = libraryDependencies ++= Seq(
-  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.44.v20210927",
-  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.44.v20210927",
-  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.44.v20210927",
-  "org.slf4j" % "slf4j-nop" % "1.7.30" % "test-internal")
+  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.46.v20220331",
+  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.46.v20220331",
+  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.46.v20220331",
+  "org.slf4j" % "slf4j-nop" % "1.7.36" % "test-internal")
 
 
 lazy val loci = (project

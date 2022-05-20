@@ -398,15 +398,6 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
   }
 
   it should "typecheck early initializers" in {
-    // breaks Windows build due to http://github.com/scala/bug/issues/12498 and http://github.com/sbt/sbt/issues/6720
-
-    @platform(platform.win) object skip {
-      cancel("Skipping test: Does not compile on Windows due to scalac and sbt issues")
-    }
-
-    platform(platform.win) { skip }
-
-    @platform(!platform.win) object test {
     """@multitier trait mod extends TopModule {
       class C[T](v: T) { def z = top; type X = Int }
 
@@ -428,9 +419,6 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
       a.staticAssertType[C[Int] { val x: Int; type Y = Int; type T <: { type U }; def u(x: Int)(y: Int): Int}]
       b.staticAssertType[U { val x: Int; type Y = Int; type T <: { type U }; def u(x: Int)(y: Int): Int}]
     }""" should compile
-    }
-
-    platform(!platform.win) { test }
   }
 
   it should "correctly compile by-name arguments with default values and implicit arguments" in {

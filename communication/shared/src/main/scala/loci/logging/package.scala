@@ -2,7 +2,7 @@ package loci
 
 import scribe.{Level, LogRecord, Logger, LoggerSupport}
 
-package object logging extends LoggerSupport {
+package object logging extends LoggerSupport[Unit] {
   root.orphan().withHandler(minimumLevel = Some(Level.Info)).replace()
 
   def root = Logger("scala-loci")
