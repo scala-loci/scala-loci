@@ -1,8 +1,9 @@
-import sbt.Keys._
 import sbt._
+import sbt.Keys._
 
 object SourceGenerator {
-  val transmittableTuples = Compile / sourceGenerators += Def.taskDyn {
+  val transmittableTuples =
+    Compile / sourceGenerators += Def.taskDyn {
       val scala3 = scalaVersion.value startsWith "3."
 
       def baseSelector(index: Int) =
