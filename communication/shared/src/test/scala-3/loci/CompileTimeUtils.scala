@@ -21,9 +21,14 @@ object CompileTimeUtils:
   def assertTypeImpl[T: Type](value: Expr[Any])(using Quotes): Expr[Unit] =
     import quotes.reflect.*
 
+    object normalizer extends SimpleTypeMap(quotes):
+      override def transform(tpe: TypeRepr) = tpe.dealias match
+        case tpe: TypeRef => TypeIdent(tpe.typeSymbol).tpe
+        case tpe => super.transform(tpe)
+
     val tpe = value.asTerm.tpe.widenTermRefByName
 
-    if TypeRepr.of[T] =:= tpe then
+    if normalizer.transform(TypeRepr.of[T]).show == normalizer.transform(tpe).show then
       '{ () }
     else
       failTest(s"${value.show} has type `${tpe.show}`; type `${TypeRepr.of[T].show}` expected")
@@ -41,7 +46,7 @@ object CompileTimeUtils:
 
     val tpe = value.asTerm.tpe.widenTermRefByName
 
-    if normalizer.transform(TypeRepr.of[T]) == normalizer.transform(tpe) then
+    if normalizer.transform(TypeRepr.of[T]).show == normalizer.transform(tpe).show then
       '{ () }
     else
       failTest(s"${value.show} has type of form `${tpe.show}`; exact type `${TypeRepr.of[T].show}` expected")

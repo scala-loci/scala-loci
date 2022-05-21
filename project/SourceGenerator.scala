@@ -24,6 +24,12 @@ object SourceGenerator {
       val implicitArgument =
         if (scala3) s"using" else s"implicit"
 
+      val generalGenericTuples =
+        if (scala3) " TransmittableGeneralGenericTuples with" else ""
+
+      val genericTuples =
+        if (scala3) " TransmittableGenericTuples with" else ""
+
       val imports =
         if (scala3) """
           |  import scala.language.unsafeNulls"""
@@ -93,13 +99,13 @@ object SourceGenerator {
             s"""package loci
                |package transmitter
                |
-               |trait TransmittableGeneralTuples extends TransmittableDummy {
+               |trait TransmittableGeneralTuples extends$generalGenericTuples TransmittableDummy {
                |  this: Transmittable.Base =>
                |$imports
                |${tupleMembers.mkString}
                |}
                |
-               |trait TransmittableTuples extends TransmittableGeneralTuples {
+               |trait TransmittableTuples extends$genericTuples TransmittableGeneralTuples {
                |  this: Transmittable.Base =>
                |${identicalTupleMembers.mkString}
                |}

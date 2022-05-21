@@ -10,9 +10,7 @@ import scala.collection.mutable
 import scala.concurrent.{Future, Promise}
 import scala.util.Success
 
-class MarshallableSpec extends AnyFlatSpec with Matchers with NoLogging {
-  behavior of "Marshallable"
-
+object MarshallableSpec {
   def roundTrip[B, I, P](marshallable: Marshallable[B, I, P])(value: B) = {
     import communicator._
 
@@ -69,6 +67,12 @@ class MarshallableSpec extends AnyFlatSpec with Matchers with NoLogging {
 
     marshallable.unmarshal(buffer, retrieveAbstractions("abstraction", remote1))
   }
+}
+
+class MarshallableSpec extends AnyFlatSpec with Matchers with NoLogging {
+  import MarshallableSpec._
+
+  behavior of "Marshallable"
 
   def removeModuleInformation(stackTrace: Array[StackTraceElement]): Unit =
     for (i <- stackTrace.indices)

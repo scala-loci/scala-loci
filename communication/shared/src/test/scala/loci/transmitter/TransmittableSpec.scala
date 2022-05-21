@@ -6,16 +6,20 @@ import org.scalatest.matchers.should.Matchers
 
 import scala.concurrent.Future
 
-class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
-  behavior of "Transmittable"
-
+object TransmittableSpec {
   def roundTrip[B, I, R, P, T <: Transmittables](
       transmittable: Transmittable.Aux[B, I, R, P, T])(value: B)(implicit
       contextBuilder: ContextBuilder[T]) = {
-    val abstraction = new AbstractionRef {
+    object abstraction extends AbstractionRef {
       val remote = null
-      val channel = null
-      def derive(name: String) = null
+      val channel =  new Channel {
+        val receive = Notice.Stream[MessageBuffer].notice
+        val closed = Notice.Steady[Unit].notice
+        def send(message: MessageBuffer) = ()
+        def close() = ()
+        def open = false
+      }
+      def derive(name: String) = abstraction
     }
 
     val intermediate = transmittable.buildIntermediate(value)(
@@ -24,6 +28,12 @@ class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
     transmittable.buildResult(intermediate)(
       contextBuilder(transmittable.transmittables, abstraction, ContextBuilder.receiving))
   }
+}
+
+class TransmittableSpec extends AnyFlatSpec with Matchers with NoLogging {
+  import TransmittableSpec._
+
+  behavior of "Transmittable"
 
   it should "derive standard transmittables correctly" in {
     val int = Transmittable[Int]
