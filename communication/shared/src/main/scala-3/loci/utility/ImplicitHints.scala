@@ -537,7 +537,8 @@ object implicitHints:
       case _ if term.symbol == defn.RootPackage =>
         List.empty
       case _ =>
-        List(term.show)
+        val path = term.safeShow("")
+        if path.nonEmpty then List(path) else List.empty
 
     val path = makePath(base)
     path.size -> path.mkString("import ", ".", if base.symbol.isExtensionMethod then ".*" else ".given")

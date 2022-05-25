@@ -1,7 +1,9 @@
 package loci
 package utility
 
+import scala.annotation.targetName
 import scala.quoted.*
+import scala.util.control.NonFatal
 
 object reflectionExtensions:
   extension (using Quotes)(symbol: quotes.reflect.Symbol)
@@ -43,7 +45,27 @@ object reflectionExtensions:
       symbol.flags is quotes.reflect.Flags.Module
   end extension
 
+  extension (using Quotes)(tree: quotes.reflect.Tree)
+    @targetName("safeShowTree") def safeShow: String = tree.safeShow("<?>", quotes.reflect.Printer.TreeCode)
+    @targetName("safeShowTree") def safeShow(fallback: String): String = tree.safeShow(fallback, quotes.reflect.Printer.TreeCode)
+    @targetName("safeShowTree") def safeShow(fallback: String, printer: quotes.reflect.Printer[quotes.reflect.Tree]): String =
+      try
+        val result = tree.show(using printer).trim
+        if result.nonEmpty then result else fallback
+      catch
+        case NonFatal(_) => fallback
+  end extension
+
   extension (using Quotes)(tpe: quotes.reflect.TypeRepr)
+    @targetName("safeShowType") def safeShow: String = tpe.safeShow("<?>", quotes.reflect.Printer.SafeTypeReprCode)
+    @targetName("safeShowType") def safeShow(fallback: String): String = tpe.safeShow(fallback, quotes.reflect.Printer.SafeTypeReprCode)
+    @targetName("safeShowType") def safeShow(fallback: String, printer: quotes.reflect.Printer[quotes.reflect.TypeRepr]): String =
+      try
+        val result = tpe.show(using printer).trim
+        if result.nonEmpty then result else fallback
+      catch
+        case NonFatal(_) => fallback
+
     def typeConstructor: quotes.reflect.TypeRepr =
       tpe match
         case quotes.reflect.AppliedType(tycon, _) => tycon
@@ -113,6 +135,102 @@ object reflectionExtensions:
       case _ =>
         tpe
   end SimpleTypeMap
+
+  extension (using Quotes)(printerModule: quotes.reflect.PrinterModule)
+    def SafeTypeReprCode = new quotes.reflect.Printer[quotes.reflect.TypeRepr]:
+      import quotes.reflect.*
+
+      def show(tpe: TypeRepr) = showType(tpe)
+
+      private def showType(tpe: TypeRepr): String =
+        try tpe.show
+        catch case NonFatal(_) =>
+          try tpe match
+            case AppliedType(tycon, args) =>
+              val tyconName = showType(tycon)
+              val argsNames = args map showType
+              if tyconName.isEmpty then ""
+              else if argsNames contains "" then tyconName
+              else s"$tyconName[${argsNames.mkString(", ")}]"
+            case tpe: NamedType if tpe.typeSymbol != defn.RootClass =>
+              val owner = tpe.typeSymbol.owner
+              val qualifierName = showType(tpe.qualifier)
+              if qualifierName.nonEmpty then s"$qualifierName.${tpe.name}"
+              else if owner != defn.RootClass then s"${owner.fullName}.${tpe.name}"
+              else tpe.name
+            case AnnotatedType(underlying, annotation) =>
+              val underlyingName = showType(underlying)
+              val annotationName =
+                try annotation.show.stripPrefix("new ")
+                catch case NonFatal(_) => ""
+              if annotationName.nonEmpty then s"$underlyingName @$annotationName"
+              else underlyingName
+            case MatchType(_, scrutinee, cases) =>
+              val casesNames = cases map showType
+              s"${showType(scrutinee)} match { ${casesNames.mkString(" ")} }"
+            case MatchCase(pattern, rhs) =>
+              s"case ${showType(pattern)} => ${showType(rhs)}"
+            case ThisType(ref) if ref.typeSymbol.isPackageDef || ref.typeSymbol.isModuleDef =>
+              showType(ref)
+            case ThisType(ref) =>
+              s"${showType(ref)}.this"
+            case SuperType(ThisType(ref), _) =>
+              s"${showType(ref)}.super"
+            case SuperType(ref, _) =>
+              s"${showType(ref)}.super"
+            case Refinement(parent: Refinement, name, info) =>
+              s"${showType(parent).stripSuffix(" }")}; ${showRefinement(name, info)} }"
+            case Refinement(parent, name, info) =>
+              s"${showType(parent)} { ${showRefinement(name, info)} }"
+            case ByNameType(underlying) =>
+              s"=> ${showType(underlying)}"
+            case tpe @ MethodType(_, _, _: MethodOrPoly) =>
+              showLambdaType(tpe, "(", ":", ")")
+            case tpe: MethodType =>
+              showLambdaType(tpe, "(", ":", "): ")
+            case tpe @ PolyType(_, _, _: MethodOrPoly) =>
+              showLambdaType(tpe, "[", "", "]")
+            case tpe: PolyType =>
+              showLambdaType(tpe, "[", "", "]: ")
+            case tpe: TypeLambda =>
+              showLambdaType(tpe, "[", "", "] =>> ")
+            case ParamRef(binder: LambdaType, paramNum) =>
+              binder.paramNames(paramNum)
+            case tpe: AndType =>
+              showAndOrType(tpe, "&")
+            case tpe: OrType =>
+              showAndOrType(tpe, "|")
+            case TypeBounds(low, hi) =>
+              s">: ${showType(low)} <: ${showType(hi)}"
+            case ConstantType(constant) =>
+              constant.value.toString
+            case _ =>
+              ""
+          catch case NonFatal(_) => ""
+
+      private def showLambdaType(tpe: LambdaType, open: String, mid: String, close: String) =
+        val args = tpe.paramNames zip tpe.paramTypes map { (name, tpe) => s"$name$mid ${showType(tpe)}" }
+        s"${args.mkString(open, ", ", close)}${showType(tpe.resType)}"
+
+      private def showAndOrType(tpe: AndOrType, operator: String) =
+        val leftName = showType(tpe.left)
+        val rightName = showType(tpe.right)
+        if leftName.nonEmpty && rightName.nonEmpty then s"($leftName $operator $rightName)"
+        else if leftName.nonEmpty then leftName
+        else if rightName.nonEmpty then rightName
+        else ""
+
+      private def showRefinement(name: String, info: TypeRepr) = info match
+        case _: TypeBounds =>
+          s"type $name ${showType(info)}"
+        case ByNameType(underlying) =>
+          s"def $name: ${showType(underlying)}"
+        case _: MethodOrPoly =>
+          s"def $name${showType(info)}"
+        case _ =>
+          s"val $name: ${showType(info)}"
+    end SafeTypeReprCode
+  end extension
 
   private object TypeParamSubstition:
     private val substituteTypeParam =

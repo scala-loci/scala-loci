@@ -1,6 +1,8 @@
 package loci
 package serializer
 
+import utility.reflectionExtensions.*
+
 import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.util.Try
 import scala.quoted.*
@@ -25,7 +27,7 @@ object Serializable:
   def resolutionFailureImpl[T: Type, SerializableFallback: Type](using Quotes) =
     import quotes.reflect.*
 
-    val baseMessage = s"${TypeRepr.of[T].show} is not serializable"
+    val baseMessage = s"${TypeRepr.of[T].safeShow("Value")} is not serializable"
     val message = s"$baseMessage${utility.implicitHints.values(TypeRepr.of[Serializable[T]])}"
 
     '{

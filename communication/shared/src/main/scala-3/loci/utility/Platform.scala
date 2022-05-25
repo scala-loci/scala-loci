@@ -103,19 +103,19 @@ object platform:
           loci.platform.getClass.getMethod(expr.symbol.name).invoke(loci.platform).asInstanceOf[Boolean]
         catch
           case _: NoSuchMethodException | _: IllegalArgumentException | _: ClassCastException =>
-            report.errorAndAbort(s"failed to read value: ${expr.show}", expr.pos)
+            report.errorAndAbort(s"failed to read value: ${expr.safeShow("")}", expr.pos)
 
       case _ if isStable(expr) =>
         if !(expr.tpe <:< TypeRepr.of[Boolean]) then
-          report.errorAndAbort(s"not a boolean expression: ${expr.show}", expr.pos)
+          report.errorAndAbort(s"not a boolean expression: ${expr.safeShow("")}", expr.pos)
 
         expr.tpe.widenTermRefByName match
           case ConstantType(BooleanConstant(value)) =>
             value
           case _ =>
-            report.errorAndAbort(s"constant value not known at compile time: ${expr.show}", expr.pos)
+            report.errorAndAbort(s"constant value not known at compile time: ${expr.safeShow("")}", expr.pos)
 
       case _ =>
-        report.errorAndAbort(s"not a constant expression: ${expr.show}", expr.pos)
+        report.errorAndAbort(s"not a constant expression: ${expr.safeShow("")}", expr.pos)
   end evaluateBooleanExpr
 end platform

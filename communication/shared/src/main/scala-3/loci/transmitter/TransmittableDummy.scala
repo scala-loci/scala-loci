@@ -1,6 +1,8 @@
 package loci
 package transmitter
 
+import utility.reflectionExtensions.*
+
 import scala.annotation.compileTimeOnly
 import scala.concurrent.Future
 import scala.util.control.NonFatal
@@ -25,7 +27,7 @@ trait TransmittableDummy:
     val tpe = TypeRepr.of[B]
     val symbol = tpe.typeSymbol
 
-    val baseMessage = s"${tpe.show} is not transmittable"
+    val baseMessage = s"${tpe.safeShow("Value")} is not transmittable"
 
     val hintMessage =
       val (impl, suffix) =

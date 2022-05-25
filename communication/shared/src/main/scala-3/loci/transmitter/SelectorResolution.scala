@@ -1,6 +1,8 @@
 package loci
 package transmitter
 
+import utility.reflectionExtensions.*
+
 import scala.quoted.*
 
 object SelectorResolution:
@@ -61,7 +63,7 @@ object SelectorResolution:
 
       report.errorAndAbort(
         s"${transmittableCompanion.name}.${transmittableClass.name} " +
-        s"with $transmittableMember = ${V.show} not specified in: ${S.dealias.show}")
+        s"with $transmittableMember = ${V.safeShow} not specified in: ${S.dealias.safeShow}")
 
     def result(n: Int) =
       ConstantType(IntConstant(n)).asType match
