@@ -51,7 +51,7 @@ object Selector:
       : Base[B, I, R, P, T, S] = Impl(valueOf[N])
 
     transparent inline given [B, I, R, P, T <: Transmittables, S <: Transmittables, N <: Int](using
-        inline index: SelectorResolution.Index[Message, Delegates, /, Transmittable.Any[?, ?, ?]#Base, B, S, N],
+        inline index: SelectorResolution.Index[Message, Delegates, /, SelectorResolution.TypeMember[Transmittable.Any[?, ?, ?]#Base], B, S, N],
         inline selected: Selected[S, N] =:= Transmittable.Aux[B, I, R, P, T],
         inline value: ValueOf[N])
       : Base[B, I, R, P, T, S] = apply[B, I, R, P, T, S, N]
@@ -72,7 +72,7 @@ object Selector:
       : Intermediate[B, I, R, P, T, S] = Impl(valueOf[N])
 
     transparent inline given [B, I, R, P, T <: Transmittables, S <: Transmittables, N <: Int](using
-        inline index: SelectorResolution.Index[Message, Delegates, /, Transmittable.Any[?, ?, ?]#Intermediate, I, S, N],
+        inline index: SelectorResolution.Index[Message, Delegates, /, SelectorResolution.TypeMember[Transmittable.Any[?, ?, ?]#Intermediate], I, S, N],
         inline selected: Selected[S, N] =:= Transmittable.Aux[B, I, R, P, T],
         inline value: ValueOf[N])
       : Intermediate[B, I, R, P, T, S] = apply[B, I, R, P, T, S, N]
