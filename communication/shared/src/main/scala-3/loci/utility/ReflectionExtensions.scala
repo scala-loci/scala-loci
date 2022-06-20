@@ -113,7 +113,7 @@ object reflectionExtensions:
           val overriding = symbol.overridingSymbol(base)
           Option.when(overriding.exists)(overriding)
         }
-        getOrElse Symbol.noSymbol)
+        getOrElse symbol)
   end extension
 
   trait SimpleTypeMap[Q <: Quotes & Singleton](val quotes: Q):
