@@ -46,13 +46,13 @@ object Selector:
 
   object Base extends BaseFallback:
     def apply[B, I, R, P, T <: Transmittables, S <: Transmittables, N <: Int](using
-        Selected[S, N] =:= Transmittable.Aux[B, I, R, P, T],
+        Selected[S, N] <:< Transmittable.Aux[B, I, R, P, T],
         ValueOf[N])
       : Base[B, I, R, P, T, S] = Impl(valueOf[N])
 
     transparent inline given [B, I, R, P, T <: Transmittables, S <: Transmittables, N <: Int](using
         inline index: SelectorResolution.Index[Message, Delegates, /, SelectorResolution.TypeMember[Transmittable.Any[?, ?, ?]#Base], B, S, N],
-        inline selected: Selected[S, N] =:= Transmittable.Aux[B, I, R, P, T],
+        inline selected: Selected[S, N] <:< Transmittable.Aux[B, I, R, P, T],
         inline value: ValueOf[N])
       : Base[B, I, R, P, T, S] = apply[B, I, R, P, T, S, N]
 

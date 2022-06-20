@@ -51,7 +51,8 @@ object SelectorResolution:
       if transmittable.derivesFrom(transmittableClass) then
         transmittable.memberType(transmittableMember) match
           case TypeBounds(low, hi) =>
-            (!checkLow || low =:= V) && (!checkHigh || hi =:= V)
+            (checkLow && checkHigh && low == hi && low =:= V) ||
+            ((!checkLow || V <:< low) && (!checkHigh || hi <:< V))
           case tpe =>
             tpe =:= V
       else
