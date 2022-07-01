@@ -20,6 +20,7 @@ object TransmittableResolution:
       val resolutionAlternation = TypeRepr.of[Transmittable.ResolutionAlternation].typeSymbol
       val transmittable = TypeRepr.of[Transmittable.Any[?, ?, ?]].typeSymbol
       val identicallyTransmittable = TypeRepr.of[IdenticallyTransmittable[?]]
+      val surrogateNothing = TypeRepr.of[Transmittable.SurrogateNothing].typeSymbol
 
       val transmittableParameters = (List("Base", "Intermediate", "Result", "Proxy", "Transmittables")
         map transmittable.typeMember)
@@ -54,9 +55,19 @@ object TransmittableResolution:
             super.transform(tpe)
       end approximator
 
+      object surrogator extends SimpleTypeMap(quotes):
+        override def transform(tpe: TypeRepr) = tpe match
+          case TypeBounds(low, hi) if low.typeSymbol == defn.NothingClass =>
+            TypeBounds(low, super.transform(hi))
+          case _ if tpe.typeSymbol == defn.NothingClass =>
+            TypeRepr.of[Transmittable.SurrogateNothing]
+          case _ =>
+            super.transform(tpe)
+      end surrogator
+
       val resolutionType =
-        val AppliedType(tycon, List(_, i, r, p, t)) = approximator.transform(TypeRepr.of[Transmittable.Resolution[B, I, R, P, T]])
-        tycon.appliedTo(List(TypeRepr.of[B], inferredOrWildcard(i), inferredOrWildcard(r), p, t))
+        val AppliedType(tycon, List(b, i, r, p, t)) = approximator.transform(TypeRepr.of[Transmittable.Resolution[B, I, R, P, T]])
+        surrogator.transform(tycon.appliedTo(List(TypeRepr.of[B], inferredOrWildcard(i), inferredOrWildcard(r), p, t)))
 
       Implicits.search(resolutionType) match
         case result: ImplicitSearchSuccess =>
@@ -71,6 +82,8 @@ object TransmittableResolution:
               case TypeRef(qualifier, _) if qualifier.getClass.getSimpleName contains "Skolem" =>
                 val dealiased = tpe.dealias
                 if dealiased != tpe then transform(dealiased) else tpe
+              case _ if tpe.typeSymbol == surrogateNothing =>
+                TypeRepr.of[Nothing]
               case _ =>
                 super.transform(tpe)
           end deskolemizerAndTransmittablesAliaser

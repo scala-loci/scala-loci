@@ -1,7 +1,7 @@
 package loci
 package transmitter
 
-import scala.annotation.implicitNotFound
+import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.quoted.*
 import scala.util.Try
 
@@ -61,6 +61,15 @@ object Transmittable
 
 
   given nothing: IdenticallyTransmittable[Nothing] = IdenticallyTransmittable()
+
+
+  sealed trait SurrogateNothing
+
+  object SurrogateNothing {
+    @compileTimeOnly("loci.transmitter.transmittable.TransmittableBase.SurrogateNothing is not transmittable")
+    implicit def surrogateType[T]: IdenticallyTransmittable[SurrogateNothing] =
+      IdenticallyTransmittable()
+  }
 
 
   @implicitNotFound("${B} is not transmittable")
