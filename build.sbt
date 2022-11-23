@@ -129,6 +129,12 @@ val jetty = libraryDependencies ++= Seq(
   "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.49.v20220914",
   "org.slf4j" % "slf4j-nop" % "2.0.4" % TestInternal)
 
+val jetty11 = libraryDependencies ++= Seq(
+  "org.eclipse.jetty.websocket" % "websocket-jetty-server" % "11.0.12",
+  "org.eclipse.jetty.websocket" % "websocket-jetty-client" % "11.0.12",
+  "org.eclipse.jetty.websocket" % "websocket-jetty-api" % "11.0.12",
+  "org.slf4j" % "slf4j-nop" % "2.0.4" % TestInternal)
+
 
 lazy val loci = lociProject(
   project in file(".")
@@ -161,6 +167,7 @@ lazy val lociJVM = lociProject(
              lociCommunicatorWsAkkaPlayJVM,
              lociCommunicatorWsJavalinJVM,
              lociCommunicatorWsJettyJVM,
+             lociCommunicatorWsJetty11JVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = lociProject(
@@ -179,6 +186,7 @@ lazy val lociJS = lociProject(
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
              lociCommunicatorWsJettyJS,
+             lociCommunicatorWsJetty11JS,
              lociCommunicatorWebRtcJS))
 
 
@@ -366,6 +374,18 @@ lazy val lociCommunicatorWsJetty = lociProject(
 
 lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
 lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
+
+
+lazy val lociCommunicatorWsJetty11 = lociProject(
+  name = "Jetty 11 WebSocket communicator",
+  file = "communicator-ws-jetty11",
+  project = crossProject(JSPlatform, JVMPlatform)
+            crossType CrossType.Dummy
+            settings (jetty11, scalatest),
+  dependsOn = lociCommunication)
+
+lazy val lociCommunicatorWsJetty11JVM = lociCommunicatorWsJetty11.jvm
+lazy val lociCommunicatorWsJetty11JS = lociCommunicatorWsJetty11.js
 
 
 lazy val lociCommunicatorWsJavalin = lociProject(
