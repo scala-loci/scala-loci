@@ -18,7 +18,7 @@ trait ContextBuilder[T <: Transmittables] {
 }
 
 object ContextBuilder {
-  sealed class Direction private[ContextBuilder]
+  sealed class Direction private[ContextBuilder]()
 
   val sending = new Direction
   val receiving = new Direction
