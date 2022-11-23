@@ -1,7 +1,7 @@
 import sbt._
 import sbt.Keys._
 import sbtcrossproject.{CrossClasspathDependency => Dependency, CrossProject => Project}
-import Util.autoImport._
+import LociUtil.autoImport._
 
 object lociProject extends LociProjectBuilder(scala2only = false) {
   def apply(project: Project) = project

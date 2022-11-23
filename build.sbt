@@ -17,7 +17,7 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.8", "3.1.2")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.1.2")
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value
@@ -59,16 +59,16 @@ val jsweakreferences = libraryDependencies +=
   "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val jsmacrotaskexecutor = libraryDependencies +=
-  "org.scala-js" %%% "scala-js-macrotask-executor" % "1.0.0"
+  "org.scala-js" %%% "scala-js-macrotask-executor" % "1.1.0"
 
 val jsjavasecurerandom = libraryDependencies +=
   "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.12" % TestInternal
+  "org.scalatest" %%% "scalatest" % "3.2.14" % TestInternal
 
 val scribe = libraryDependencies +=
-  "com.outr" %%% "scribe" % "3.8.2"
+  "com.outr" %%% "scribe" % "3.10.5"
 
 val retypecheck = libraryDependencies ++= {
   if (`is 3+`(scalaVersion.value))
@@ -107,27 +107,27 @@ val jsoniter = Seq(
 
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "2.5.31" % CompileInternal cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided cross CrossVersion.for3Use2_13,
   "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided cross CrossVersion.for3Use2_13)
 
 val play = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "2.5.31" % CompileInternal cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
   "com.typesafe.play" %% "play" % "2.7.9" % CompileInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
   "com.typesafe.play" %% "play" % "[2.5,2.9)" % Provided cross CrossVersion.for3Use2_13 withIsTransitive false)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "2.2.0" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "2.3.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "4.6.0"
+  "io.javalin" % "javalin" % "4.6.7"
 
 val jetty = libraryDependencies ++= Seq(
-  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.46.v20220331",
-  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.46.v20220331",
-  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.46.v20220331",
-  "org.slf4j" % "slf4j-nop" % "1.7.36" % TestInternal)
+  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.49.v20220914",
+  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.49.v20220914",
+  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.49.v20220914",
+  "org.slf4j" % "slf4j-nop" % "2.0.4" % TestInternal)
 
 
 lazy val loci = lociProject(

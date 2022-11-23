@@ -1,7 +1,7 @@
 import sbt._
 import sbt.Keys._
 
-object Util extends AutoPlugin {
+object LociUtil extends AutoPlugin {
   object autoImport {
     val ScalaJSCrossVersion = org.scalajs.sbtplugin.ScalaJSCrossVersion
 

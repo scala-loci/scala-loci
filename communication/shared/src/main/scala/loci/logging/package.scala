@@ -10,7 +10,7 @@ package object logging extends LoggerSupport[Unit] {
   val reportException: Throwable => Unit = exception =>
     error("unhandled exception", exception)
 
-  def log[M](record: LogRecord[M]): Unit = {
+  def log(record: LogRecord): Unit = {
     val logRecord =
       if (record.className startsWith "loci.logging")
         record.copy(className = "scala-loci", methodName = None, line = None, column = None)
