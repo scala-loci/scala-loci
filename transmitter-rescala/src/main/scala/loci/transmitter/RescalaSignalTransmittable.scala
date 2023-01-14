@@ -27,7 +27,7 @@ private[loci] trait RescalaSignalTransmittable {
 
         val observer = signal observe context.endpoint.send
 
-        context.endpoint.closed foreach { _ => observer.remove() }
+        context.endpoint.closed foreach { _ => observer.disconnect() }
 
         signal.readValueOnce
       },

@@ -17,7 +17,7 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.2.1")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.2.2")
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value
@@ -59,16 +59,16 @@ val jsweakreferences = libraryDependencies +=
   "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val jsmacrotaskexecutor = libraryDependencies +=
-  "org.scala-js" %%% "scala-js-macrotask-executor" % "1.1.0"
+  "org.scala-js" %%% "scala-js-macrotask-executor" % "1.1.1"
 
 val jsjavasecurerandom = libraryDependencies +=
   "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.14" % TestInternal
+  "org.scalatest" %%% "scalatest" % "3.2.15" % TestInternal
 
 val scribe = libraryDependencies +=
-  "com.outr" %%% "scribe" % "3.10.5"
+  "com.outr" %%% "scribe" % "3.10.6"
 
 val retypecheck = libraryDependencies ++= {
   if (`is 3+`(scalaVersion.value))
@@ -78,7 +78,7 @@ val retypecheck = libraryDependencies ++= {
 }
 
 val rescala = libraryDependencies +=
-  "de.tu-darmstadt.stg" %%% "rescala" % "0.31.0"
+  "de.tu-darmstadt.stg" %%% "rescala" % "0.32.0"
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "2.0.0"
@@ -123,17 +123,23 @@ val scalajsDom = libraryDependencies +=
 val javalin = libraryDependencies +=
   "io.javalin" % "javalin" % "4.6.7"
 
-val jetty = libraryDependencies ++= Seq(
-  "org.eclipse.jetty.websocket" % "websocket-server" % "9.4.49.v20220914",
-  "org.eclipse.jetty.websocket" % "websocket-client" % "9.4.49.v20220914",
-  "org.eclipse.jetty.websocket" % "websocket-api" % "9.4.49.v20220914",
-  "org.slf4j" % "slf4j-nop" % "2.0.4" % TestInternal)
+val jetty = libraryDependencies ++= {
+  val jettyVersion = "9.4.50.v20221201"
+  Seq(
+    "org.eclipse.jetty.websocket" % "websocket-server" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "websocket-client" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion,
+    "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
+}
 
-val jetty11 = libraryDependencies ++= Seq(
-  "org.eclipse.jetty.websocket" % "websocket-jetty-server" % "11.0.12",
-  "org.eclipse.jetty.websocket" % "websocket-jetty-client" % "11.0.12",
-  "org.eclipse.jetty.websocket" % "websocket-jetty-api" % "11.0.12",
-  "org.slf4j" % "slf4j-nop" % "2.0.4" % TestInternal)
+val jetty11 = libraryDependencies ++= {
+  val jettyVersion = "11.0.13"
+  Seq(
+    "org.eclipse.jetty.websocket" % "websocket-jetty-server" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "websocket-jetty-client" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "websocket-jetty-api" % jettyVersion,
+    "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
+}
 
 
 lazy val loci = lociProject(

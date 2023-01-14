@@ -25,7 +25,7 @@ private[loci] trait RescalaEventTransmittable {
             recover { case exception => Some(None -> Some(RemoteAccessException.serialize(exception))) }
             observe context.endpoint.send)
 
-        context.endpoint.closed foreach { _ => observer.remove() }
+        context.endpoint.closed foreach { _ => observer.disconnect() }
 
         None -> None
       },
