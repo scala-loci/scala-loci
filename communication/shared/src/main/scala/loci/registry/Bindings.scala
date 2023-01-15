@@ -18,7 +18,11 @@ class Bindings[A <: AbstractionRef](
     Channel, Notice.Steady.Source[Try[MessageBuffer]]]
 
   def bind[T, R](binding: Binding[T, R])(function: RemoteRef => T): Unit =
-    bindings.put(binding.name, binding.dispatch(function, _, _))
+    if (bindings.putIfAbsent(binding.name, binding.dispatch(function, _, _)) != null)
+      throw new RemoteAccessException(s"binding for the given name already exists: ${binding.name}")
+
+  def unbind(name: String): Unit =
+    bindings.remove(name)
 
   def lookup[T, R](binding: Binding[T, R], createAbstraction: () => A): R =
     binding.call(createAbstraction) { (message, abstraction) =>

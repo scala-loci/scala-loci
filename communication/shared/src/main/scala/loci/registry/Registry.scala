@@ -246,6 +246,13 @@ class Registry {
     bindings.bind(binding)(subjective(_, function))
 
 
+  def unbind(name: String): Unit =
+    bindings.unbind(name)
+
+  def unbind(binding: Binding[_, _]): Unit =
+    unbind(binding.name)
+
+
   def lookupValue[T](name: String, remote: RemoteRef)(
       implicit builder: BindingBuilder.Value[T, _]): builder.Result =
     lookup(builder(name), remote)
