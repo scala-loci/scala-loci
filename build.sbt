@@ -135,7 +135,7 @@ val jetty = libraryDependencies ++= {
 val jetty11 = libraryDependencies ++= {
   val jettyVersion = "11.0.13"
   Seq(
-    "org.eclipse.jetty.websocket" % "websocket-jetty-server" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "websocket-jetty-server" % jettyVersion exclude ("org.eclipse.jetty", "jetty-annotations"),
     "org.eclipse.jetty.websocket" % "websocket-jetty-client" % jettyVersion,
     "org.eclipse.jetty.websocket" % "websocket-jetty-api" % jettyVersion,
     "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
