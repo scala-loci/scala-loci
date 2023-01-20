@@ -67,7 +67,7 @@ object TransmittableResolution:
       end surrogator
 
       val resolutionType =
-        val AppliedType(tycon, List(b, i, r, p, t)) = approximator.transform(TypeRepr.of[Transmittable.Resolution[B, I, R, P, T]])
+        val AppliedType(tycon, List(b, i, r, p, t)) = approximator.transform(TypeRepr.of[Transmittable.Resolution[B, I, R, P, T]]): @unchecked
         surrogator.transform(tycon.appliedTo(List(TypeRepr.of[B], inferredOrWildcard(i), inferredOrWildcard(r), p, t)))
 
       Implicits.search(resolutionType) match
@@ -101,14 +101,14 @@ object TransmittableResolution:
                 val args = transmittableParameters map { param =>
                   deskolemizerAndTransmittablesAliaser.transform(boundsAsAlias(tpe.resolvedMemberType(param)))
                 }
-                val Apply(TypeApply(resolution, _), _) = '{ Transmittable.Resolution(???) }.asTerm.underlying
+                val Apply(TypeApply(resolution, _), _) = '{ Transmittable.Resolution(???) }.asTerm.underlying: @unchecked
 
                 resolution.appliedToTypes(args).appliedTo(transformTerm(arg)(owner))
 
               case _ if tree.tpe.derivesFrom(identicallyTransmittable) =>
-                val AppliedType(_, List(tpe)) = tree.tpe.widenTermRefByName.dealias
+                val AppliedType(_, List(tpe)) = tree.tpe.widenTermRefByName.dealias: @unchecked
                 val arg = deskolemizerAndTransmittablesAliaser.transform(tpe)
-                val Apply(TypeApply(transmittable, _), _) = '{ IdenticallyTransmittable[Any]() }.asTerm.underlying
+                val Apply(TypeApply(transmittable, _), _) = '{ IdenticallyTransmittable[Any]() }.asTerm.underlying: @unchecked
 
                 transmittable.appliedToType(arg).appliedToNone
 

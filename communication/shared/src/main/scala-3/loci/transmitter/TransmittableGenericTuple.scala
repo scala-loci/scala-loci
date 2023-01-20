@@ -46,8 +46,8 @@ object GenericTuple:
         case '{ Transmittable.Resolution.resolution[B, I, R](using $i, $b, $transmittable) } => transmittable
         case '{ Transmittable.Resolution.resolutionAlternation[B, I, R](using $i, $b, $transmittable) } => transmittable
 
-      val Block(_, expr) = delegation.asTerm.underlyingArgument
-      val '{ new Delegation[BT, IT, RT, D, false]($delegates, $provide, $receive) } = expr.asExpr
+      val Block(_, expr) = delegation.asTerm.underlyingArgument: @unchecked
+      val '{ new Delegation[BT, IT, RT, D, false]($delegates, $provide, $receive) } = expr.asExpr: @unchecked
 
       val (provideTransformation, receiveTransformation) =
         makeTransformations[B *: BT, I *: IT, R *: RT, Outer]
@@ -98,7 +98,7 @@ object GenericTuple:
     if Type.valueOfConstant[Outer] contains true then
       import scala.language.unsafeNulls
 
-      val ConstantType(IntConstant(size)) = TypeRepr.of[Tuple.Size[B]].simplified
+      val ConstantType(IntConstant(size)) = TypeRepr.of[Tuple.Size[B]].simplified: @unchecked
 
       val provideTransformation = '{
         (value: Product, context: DelegatingTransmittable.ProvidingContext[?]) => {

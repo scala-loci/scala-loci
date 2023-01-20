@@ -423,7 +423,7 @@ object implicitHints:
     tpe match
       case tpe: PolyType =>
         val params = tpe.paramTypes.indices.toList map { index =>
-          val param @ ParamRef(_, _) = tpe.param(index)
+          val param @ ParamRef(_, _) = tpe.param(index): @unchecked
           instantiations get param toRight (tpe.paramNames(index) -> tpe.paramBounds(index) -> param)
         }
 
@@ -468,7 +468,10 @@ object implicitHints:
     var inst = tpe
     var args = implicitArgumentTypes(inst)
 
-    for index <- 0 until args.size do
+    val size = args.size
+    var index = 0
+
+    while index < size do
       Implicits.search(implicitArgumentTypes(substituteTypeParams(inst))(index)) match
         case result: ImplicitSearchSuccess =>
           val instantiations = typeInstantiations(args(index), result.tree.tpe, Variance.Contravariant)
@@ -480,7 +483,9 @@ object implicitHints:
 
         case _ =>
           return false
-    end for
+
+      index += 1
+    end while
 
     return true
   end mightBeResolvable
