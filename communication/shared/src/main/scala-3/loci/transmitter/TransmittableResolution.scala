@@ -42,7 +42,7 @@ object TransmittableResolution:
           case _ if tpe.typeSymbol == defn.AnyClass || tpe.typeSymbol == defn.NothingClass =>
             TypeBounds.empty
           case tpe: AppliedType =>
-            val bounds = tpe.tycon.typeSymbol.typeMembers collect { case symbol if symbol.isTypeParam => tpe.tycon.memberType(symbol) }
+            val bounds = tpe.tycon.typeSymbol.declaredTypes collect { case symbol if symbol.isTypeParam => tpe.tycon.memberType(symbol) }
             if tpe.args.size == bounds.size then
               val tycon = transform(tpe.tycon)
               val args = tpe.args zip bounds map {

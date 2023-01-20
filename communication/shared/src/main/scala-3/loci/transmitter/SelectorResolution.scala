@@ -38,7 +38,7 @@ object SelectorResolution:
 
     val (checkLow, checkHigh) =
       val transmittableType = TypeIdent(transmittableClass).tpe.appliedTo(
-        transmittableClass.typeMembers collect { case symbol if symbol.isTypeParam => TypeIdent(symbol).tpe })
+        transmittableClass.declaredTypes collect { case symbol if symbol.isTypeParam => TypeIdent(symbol).tpe })
 
       transmittableType.memberType(transmittableMember) match
         case TypeBounds(low, hi) =>

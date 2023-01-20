@@ -273,7 +273,7 @@ object reflectionExtensions:
       else Flags.EmptyFlags
 
     private def variancesOfSymbol(using Quotes)(symbol: quotes.reflect.Symbol) =
-      Some(symbol.typeMembers collect { case symbol if symbol.isTypeParam => varianceFlags(symbol.flags) })
+      Some(symbol.declaredTypes collect { case symbol if symbol.isTypeParam => varianceFlags(symbol.flags) })
 
     private val variancesOfType =
       try
