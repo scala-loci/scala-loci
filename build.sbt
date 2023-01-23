@@ -17,7 +17,7 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.2.2")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.3.0-RC1-bin-20230118-9337bd6-NIGHTLY")
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value
@@ -196,7 +196,7 @@ lazy val lociJS = lociProject(
              lociCommunicatorWebRtcJS))
 
 
-lazy val lociLanguage = lociProject.scala2only(
+lazy val lociLanguage = lociProject(
   name = "language",
   project = crossProject(JSPlatform, JVMPlatform)
     crossType CrossType.Full
@@ -207,7 +207,7 @@ lazy val lociLanguageJVM = lociLanguage.jvm
 lazy val lociLanguageJS = lociLanguage.js
 
 
-lazy val lociLanguageRuntime = lociProject.scala2only(
+lazy val lociLanguageRuntime = lociProject(
   name = "language runtime",
   project = crossProject(JSPlatform, JVMPlatform)
     crossType CrossType.Pure
