@@ -1,11 +1,10 @@
 package loci
 package language
 
-import embedding._
+import embedding.*
 
 import scala.annotation.compileTimeOnly
 import scala.concurrent.ExecutionContext
-import scala.language.experimental.macros
 import scala.language.implicitConversions
 
 class Instance[P] private[loci] (dummy: Int) {

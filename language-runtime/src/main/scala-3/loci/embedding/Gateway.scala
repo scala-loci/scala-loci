@@ -2,7 +2,6 @@ package loci
 package embedding
 
 import scala.language.dynamics
-import scala.language.experimental.macros
 
 sealed trait Gateway[+R]
 //  extends Dynamic

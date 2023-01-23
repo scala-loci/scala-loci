@@ -23,13 +23,13 @@ sealed trait Placed[-P, +T] extends PlacedValue[P, T]
 //  def from[R, placed[_, _]](r: RemoteSelection[R, placed]): T @uncheckedVariance placed R
 
 object Placed:
-  given[T, P]: Conversion[T, Placed[P, T] & T] with
+  given[T, P]: Conversion[T, P on T] with
     transparent inline def apply(v: T) =
 
       //////// TODO: consider `PlacedClean`
 
       def body = v
-      erased: Placed[P, T] & T
+      erased: P on T
 
 //  implicit def lift[T, U, P](v: T): U on P = erased
 //  implicit def lift[T, U, P, R](v: Remote[R] => T): U per R on P = erased

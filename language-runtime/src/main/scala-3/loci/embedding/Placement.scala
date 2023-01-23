@@ -9,6 +9,7 @@ object Placement {
   sealed trait Context[P]
 
   sealed trait ContextFallback:
+    @compileTimeOnly("Expression must be placed on a peer")
     given fallback[P]: Context[P]()
 
   object Context extends ContextFallback:

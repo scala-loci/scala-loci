@@ -1,8 +1,6 @@
 package loci
 package language
 
-import scala.annotation.showAsInfix
-
 package object transmitter {
   infix type from[+T, -R] = embedding.PlacedValue[R, T]
 
