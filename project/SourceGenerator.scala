@@ -130,7 +130,7 @@ object SourceGenerator {
         s"""package loci
            |package embedding
            |
-           |import language.Remote
+           |import loci.language.Remote
            |
            |import scala.language.implicitConversions
            |
@@ -208,7 +208,7 @@ object SourceGenerator {
         s"""package loci
            |package registry
            |
-           |import transmitter.{AbstractionRef, Marshallable, RemoteRef}
+           |import loci.transmitter.{AbstractionRef, Marshallable, RemoteRef}
            |
            |import scala.util.Try
            |
@@ -258,7 +258,7 @@ object SourceGenerator {
         s"""package loci
            |package registry
            |
-           |import transmitter.RemoteRef
+           |import loci.transmitter.RemoteRef
            |
            |trait FunctionSubjectiveBinding extends ValueSubjectiveBinding {
            |${subjectiveBinding.mkString}

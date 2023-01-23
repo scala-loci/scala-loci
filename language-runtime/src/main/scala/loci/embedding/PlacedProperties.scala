@@ -1,7 +1,7 @@
 package loci
 package embedding
 
-import language._
+import loci.language._
 
 import scala.annotation.implicitNotFound
 

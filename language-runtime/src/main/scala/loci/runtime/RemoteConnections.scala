@@ -37,7 +37,7 @@ class RemoteConnections(peer: Peer.Signature, ties: Map[Peer.Signature, Peer.Tie
     val potentials = mutable.ListBuffer.empty[Peer.Signature]
   }
 
-  protected val state = new State
+  protected val state: State = new State
 
   private val doConstraintsSatisfied = Notice.Stream[Unit]
 
