@@ -16,8 +16,8 @@ object Remote extends transmitter.RemoteReference
 
 type Local[T] = T
 
-infix type on[T, P] = Placement.Context[P] ?=> Placed[T, P] & T
-infix type per[T, P] = Placed.Subjective[T, P]
+infix type on[T, P] = Placement.Context[P] ?=> Placed[P, T] & T
+infix type per[T, P] = Placed.Subjective[P, T]
 
 //def connect[P](setup: Connector[ConnectionsBase.Protocol]): Connections =
 //  macro impl.Connections.setup
