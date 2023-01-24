@@ -1,7 +1,10 @@
 package loci
 package embedding
 
-import loci.language.{on => _, _}
+import loci.language.{on => on0, _}
+import embedding.{on => on1}
+import Placed.{on => on2}
+import Placed.Subjective.{on => on3}
 
 
 sealed trait PeerType[Q, R, P]
@@ -28,8 +31,10 @@ object PlacedType extends PlacedTypeSubjective:
 sealed trait CanonicalPlacedTypeAlias[T, U]
 
 sealed trait CanonicalPlacedTypeAliasNonSelected:
-//  given onLanguage[T, P]: CanonicalPlacedTypeAlias[T _on_ P, T _on_ P] = erased
-  given on[T, P]: CanonicalPlacedTypeAlias[T on P, T on P] = erased
+  given on0[T, P]: CanonicalPlacedTypeAlias[T on0 P, T on P] = erased
+  given on1[T, P]: CanonicalPlacedTypeAlias[T on1 P, T on P] = erased
+  given on2[T, P]: CanonicalPlacedTypeAlias[T on2 P, T on P] = erased
+  given on3[T, P]: CanonicalPlacedTypeAlias[T on3 P, T on P] = erased
   given from[T, P]: CanonicalPlacedTypeAlias[T from P, T from P] = erased
 
 object CanonicalPlacedTypeAlias extends CanonicalPlacedTypeAliasNonSelected:
@@ -128,26 +133,40 @@ sealed trait PlacedCleanRemotePeerSelection extends PlacedCleanHigherKind8:
   given remotePeerSelectionMultiple[V, L, T, P]: PlacedClean[V, L, T fromMultiple P, T fromMultiple P, Unit] = erased
 
 sealed trait PlacedCleanRemotePeer extends PlacedCleanRemotePeerSelection:
-//  given remotePeerLanguage[V, L, T, P]: PlacedClean[V, L, T _on_ P, T _on_ P, Unit] = erased
-  given remotePeer[V, L, T, P]: PlacedClean[V, L, T on P, T on P, Unit] = erased
+  given remotePeer0[V, L, T, P]: PlacedClean[V, L, T on0 P, T on0 P, Unit] = erased
+  given remotePeer1[V, L, T, P]: PlacedClean[V, L, T on1 P, T on1 P, Unit] = erased
+  given remotePeer2[V, L, T, P]: PlacedClean[V, L, T on2 P, T on2 P, Unit] = erased
+  given remotePeer3[V, L, T, P]: PlacedClean[V, L, T on3 P, T on3 P, Unit] = erased
 
 sealed trait PlacedCleanLocalPeer extends PlacedCleanRemotePeer:
-//  given localPeerLanguage[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T _on_ P, T _on_ P, U] = erased
-  given localPeer[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on P, T on P, U] = erased
+  given localPeer0[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on0 P, T on0 P, U] = erased
+  given localPeer1[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on1 P, T on1 P, U] = erased
+  given localPeer2[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on2 P, T on2 P, U] = erased
+  given localPeer3[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on3 P, T on3 P, U] = erased
 
 sealed trait PlacedCleanLocalPeerLocal extends PlacedCleanLocalPeer:
-//  given localPeerLocalLanguage[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
-//    _Local_[T] =:= T,
-//    PlacedClean[V, L, T, T, U])
-//    : PlacedClean[V, L, _Local_[T] _on_ P, _Local_[T] _on_ P, U] = erased
-  given localPeerLocal[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
+  given localPeerLocal0[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
     _Local_[T] =:= T,
     PlacedClean[V, L, T, T, U])
-  : PlacedClean[V, L, _Local_[T] on P, _Local_[T] on P, U] = erased
+  : PlacedClean[V, L, _Local_[T] on0 P, _Local_[T] on0 P, U] = erased
+  given localPeerLocal1[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
+    _Local_[T] =:= T,
+    PlacedClean[V, L, T, T, U])
+  : PlacedClean[V, L, _Local_[T] on1 P, _Local_[T] on1 P, U] = erased
+  given localPeerLocal2[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
+    _Local_[T] =:= T,
+    PlacedClean[V, L, T, T, U])
+  : PlacedClean[V, L, _Local_[T] on2 P, _Local_[T] on2 P, U] = erased
+  given localPeerLocal3[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
+    _Local_[T] =:= T,
+    PlacedClean[V, L, T, T, U])
+  : PlacedClean[V, L, _Local_[T] on3 P, _Local_[T] on3 P, U] = erased
 
 sealed trait PlacedCleanSubjective extends PlacedCleanLocalPeerLocal:
-//  given subjectivePeerLanguage[V, L, T, P, R]: PlacedClean[V, L, T per R _on_ P, T per R _on_ P, Unit] = erased
-  given subjectivePeer[V, L, T, P, R]: PlacedClean[V, L, T per R on P, T per R on P, Unit] = erased
+  given subjectivePeer0[V, L, T, P, R]: PlacedClean[V, L, T per R on0 P, T per R on0 P, Unit] = erased
+  given subjectivePeer1[V, L, T, P, R]: PlacedClean[V, L, T per R on1 P, T per R on1 P, Unit] = erased
+  given subjectivePeer2[V, L, T, P, R]: PlacedClean[V, L, T per R on2 P, T per R on2 P, Unit] = erased
+  given subjectivePeer3[V, L, T, P, R]: PlacedClean[V, L, T per R on3 P, T per R on3 P, Unit] = erased
 
 sealed trait PlacedCleanAny extends PlacedCleanSubjective:
   given any[V, L]: PlacedClean[V, L, Any, Any, Any] = erased

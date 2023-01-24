@@ -96,6 +96,14 @@ object reflectionExtensions:
     def finalResultType: quotes.reflect.TypeRepr =
       tpe.resultType.contextFunctionResultType
 
+    def widenDealias: quotes.reflect.TypeRepr =
+      if tpe == tpe.dealias then
+        tpe.dealias.widenDealias
+      else if tpe == tpe.widen then
+        tpe.widen.widenDealias
+      else
+        tpe
+
     def substitute(from: quotes.reflect.ParamRef, to: quotes.reflect.TypeRepr) =
       TypeParamSubstition.substitute(tpe, from, to)
 

@@ -1,6 +1,8 @@
 package loci
 package embedding
 
+import loci.language.*
+
 abstract class PlacedValue[-P, +T] private[loci]()
 //  extends Dynamic:
 //  def selectDynamic(key: String): Unit = macro AccessorResolutionFailure.selectDynamic
@@ -10,7 +12,8 @@ abstract class PlacedValue[-P, +T] private[loci]()
 
 object PlacedValue // extends transmitter.RemoteAccessor.Default
 
-sealed trait Placed[-P, +T] extends PlacedValue[P, T]
+sealed trait Placed[-P, +T] extends PlacedValue[P, T]:
+  def test: Int = 0
 //  def and[T0, T1, P0, PT, P1, T0_on_P0](v: T0_on_P0)(implicit
 //    ev0: T0_on_P0 <:< (T0 on P0),
 //    ev1: CommonSuperType[T, T0, T1],
@@ -23,18 +26,27 @@ sealed trait Placed[-P, +T] extends PlacedValue[P, T]
 //  def from[R, placed[_, _]](r: RemoteSelection[R, placed]): T @uncheckedVariance placed R
 
 object Placed:
-  given[T, P]: Conversion[T, P onNEW T] with
+  type Value[T]
+
+  infix type on[T, P] = Placed[P, T] & T
+
+  given liftLocal[T, P, U](using (T on P) <:< U): Conversion[T, U] with
     transparent inline def apply(v: T) =
-
-      //////// TODO: consider `PlacedClean`
-
       def body: T = v
-      erased: P onNEW T
+      erased: U
 
-//  implicit def lift[T, U, P](v: T): U on P = erased
-//  implicit def lift[T, U, P, R](v: Remote[R] => T): U per R on P = erased
+  given liftSubjective[T, P, R, U] (using (T per R on P) <:< U): Conversion[Remote[R] => T on P, U] with
+    transparent inline def apply(v: Remote[R] => T on P) =
+      def body: Remote[R] => T on P = v
+      erased: U
+
 
   sealed trait Subjective[-P, +T]
+
+  object Subjective:
+    infix type on[T, P] = Remote[Subjective.R[T]] => Placed.on[Subjective.T[T], P]
+    type T[`T per R`] = `T per R` match { case t per ? => t }
+    type R[`T per R`] = `T per R` match { case ? per r => r }
 
   object Selected:
     type Single[T]
