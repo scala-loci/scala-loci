@@ -17,6 +17,9 @@ object Remote extends transmitter.RemoteReference
 type Local[T] = T
 
 infix type on[T, P] = Placement.Context[P] ?=> embedding.on[T, P]
+//infix type on[T, P] = T match
+//  case Placed.Subjective[p, u] => Placement.Context[P] ?=> Remote[p] => embedding.on[T, P]
+//  case _ => Placement.Context[P] ?=> embedding.on[T, P]
 infix type per[T, P] = Placed.Subjective[P, T]
 
 //def connect[P](setup: Connector[ConnectionsBase.Protocol]): Connections =

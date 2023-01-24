@@ -16,16 +16,23 @@ class SymbolMutator private ():
   private val denot = symbolClass.getMethod("denot", contextClass)
   private val span = symbolClass.getMethod("span")
   private val infoSet = symDenotationClass.getMethod("info_$eq", typeClass)
+//  private val annotationRemove = symDenotationClass.getMethod("removeAnnotation", symbolClass, contextClass)
   private val annotationUpdate = symDenotationClass.getMethod("updateAnnotation", annotationClass, contextClass)
   private val annotationApply = annotationClass.getMethod("apply", typeClass, classOf[List[_]], classOf[Long], contextClass)
 
   def setInfo(using Quotes)(symbol: quotes.reflect.Symbol, info: quotes.reflect.TypeRepr): Unit =
     infoSet.invoke(denot.invoke(symbol, ctx.invoke(quotes)), info)
 
-  def updateAnnotation(using Quotes)(symbol: quotes.reflect.Symbol, tpe: quotes.reflect.TypeRepr, args: List[quotes.reflect.Term]): Unit =
+  def updateAnnotation(using Quotes)(symbol: quotes.reflect.Symbol, annotation: quotes.reflect.Symbol, args: List[quotes.reflect.Term]): Unit =
     val context = ctx.invoke(quotes)
-    val annotation = annotationApply.invoke(null, tpe, args, span.invoke(symbol), context)
-    annotationUpdate.invoke(denot.invoke(symbol, context), annotation, context)
+    annotationUpdate.invoke(
+      denot.invoke(symbol, context),
+      annotationApply.invoke(null, annotation.typeRef, args, span.invoke(symbol), context),
+      context)
+
+//  def removeAnnotation(using Quotes)(symbol: quotes.reflect.Symbol, annotation: quotes.reflect.Symbol): Unit =
+//    val context = ctx.invoke(quotes)
+//    annotationRemove.invoke(denot.invoke(symbol, context), annotation, context)
 
 object SymbolMutator:
   def make =
