@@ -35,6 +35,8 @@ class SymbolMutator private ():
 //    annotationRemove.invoke(denot.invoke(symbol, context), annotation, context)
 
 object SymbolMutator:
-  def make =
+  private val instance =
     try Some(SymbolMutator())
     catch case _: ClassNotFoundException | _ : NoSuchMethodException => None
+
+  def get: Option[SymbolMutator] = instance

@@ -87,6 +87,18 @@ object reflectionExtensions:
         case tpe: quotes.reflect.ByNameType => tpe.underlying.resultType
         case _ => tpe
 
+    def withResultType(res: quotes.reflect.TypeRepr): quotes.reflect.TypeRepr =
+      import quotes.reflect.*
+      tpe match
+        case MethodType(paramNames, paramTypes, resType) =>
+          MethodType(paramNames)(_ => paramTypes, _ => resType.withResultType(res))
+        case PolyType(paramNames, paramBounds, resType) =>
+          MethodType(paramNames)(_ => paramBounds, _ => resType.withResultType(res))
+        case ByNameType(underlying) =>
+          ByNameType(underlying.withResultType(res))
+        case _ =>
+          res
+
     def contextFunctionResultType: quotes.reflect.TypeRepr =
       if tpe.isContextFunctionType then
         tpe.typeArgs.lastOption map { _.contextFunctionResultType } getOrElse tpe
@@ -124,6 +136,18 @@ object reflectionExtensions:
         }
         getOrElse symbol)
   end extension
+
+  def changeRefs(using Quotes)(from: quotes.reflect.Symbol, to: quotes.reflect.Symbol, owner: quotes.reflect.Symbol, term: quotes.reflect.Term) =
+    import quotes.reflect.*
+
+    class RefChanger(from: Symbol, to: Symbol) extends TreeMap:
+      private val toTerm = Ref(to)
+      override def transformTerm(term: Term)(owner: Symbol) = term match
+        case ref: Ref if ref.symbol == from => toTerm
+        case _ => super.transformTerm(term)(owner)
+
+    RefChanger(from, to).transformTerm(term)(owner)
+  end changeRefs
 
   trait SimpleTypeMap[Q <: Quotes & Singleton](val quotes: Q):
     import quotes.reflect.*
