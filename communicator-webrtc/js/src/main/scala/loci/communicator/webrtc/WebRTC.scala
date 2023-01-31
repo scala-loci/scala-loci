@@ -20,6 +20,7 @@ object WebRTC extends WebRTCUpdate {
   trait Connector extends communicator.Connector[WebRTC] {
     def use(update: IncrementalUpdate): Unit
     def set(update: CompleteUpdate): Unit
+    def connection : dom.RTCPeerConnection
   }
 
   trait ConnectorFactory {

@@ -49,6 +49,8 @@ private abstract class WebRTCConnector(
 
   private var remoteDescriptionSet = false
 
+  def connection = peerConnection
+
   def use(update: IncrementalUpdate) = update match {
     case session: InitialSession =>
       if (!remoteDescriptionSet) {
