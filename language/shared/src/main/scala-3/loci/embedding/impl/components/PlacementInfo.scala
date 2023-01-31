@@ -19,7 +19,7 @@ trait PlacementInfo:
       s"${valueType.show}${`subjective.show`} ${symbols.`language.on`.name} ${peerType.show}"
 
   object PlacementInfo:
-    def apply(tpe: TypeRepr, acceptUnliftedSubjectiveFunction: Boolean = false): Option[PlacementInfo] =
+    def apply(tpe: TypeRepr, acceptUnliftedSubjectiveFunction: Boolean): Option[PlacementInfo] =
       def modality(tpe: TypeRepr) = tpe match
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.per` =>
           Some(PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Some(args.last)))
