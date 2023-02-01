@@ -14,11 +14,12 @@ object Multitier:
         with Commons
         with Annotations
         with PlacementInfo
-        with PlacementContextTypesNormalization:
+        with PlacementContextTypesNormalization
+        with Splitting:
       val quotes: annotationQuotes.type = annotationQuotes
 
     tree match
       case tree: ClassDef =>
-        List(processor.normalizePlacementContextTypes(tree))
+        List(processor.split(processor.normalizePlacementContextTypes(tree)))
       case _ =>
         report.errorAndAbort("multitier annotation only applicable to classes, traits or objects")

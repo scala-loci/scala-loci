@@ -15,7 +15,6 @@ trait PlacementContextTypesNormalization:
     rhs map { rhs =>
       (placementInfo.peerType.asType, symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs).asType) match
         case ('[p], '[t]) =>
-          given Quotes = symbol.asQuotes
           '{ (_: Placement.Context[p]) ?=> ${rhs.asExpr}; erased: t }.asTerm.changeOwner(symbol)
     }
 

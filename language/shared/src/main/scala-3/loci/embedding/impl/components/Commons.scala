@@ -3,6 +3,8 @@ package embedding
 package impl
 package components
 
+import utility.reflectionExtensions.*
+
 import scala.reflect.TypeTest
 import scala.quoted.*
 
@@ -41,4 +43,32 @@ trait Commons:
 
   def isMultitierModule(symbol: Symbol): Boolean =
     symbol.getAnnotation(symbols.multitier).isDefined
+
+  def fullName(symbol: Symbol): String =
+    def fullName(symbol: Symbol, name: String): String =
+      val owner = symbol.owner
+
+      val symbolName = symbol.name
+//        if (symbol.name startsWith "$loci$multitier$")
+//          (owner.info member TermName(symbol.name.drop(16)) orElse symbol).name.toString
+//        else
+//          symbol.name
+
+      if owner.exists && ((symbol.flags is Flags.Synthetic) || (symbolName startsWith "<") && (symbolName endsWith ">")) then
+        fullName(owner, name)
+      else
+        val prefix = if owner.isNoSymbol || owner == defn.RootClass then symbolName else fullName(owner, symbolName)
+
+        if prefix.isEmpty then
+          name
+        else if name.isEmpty then
+          prefix
+        else
+          val separator = if symbol.isType && !symbol.isPackageDef && !symbol.isModuleDef then "#" else "."
+          val suffix = if symbol.isType && symbol.isModuleDef && (name endsWith "$") then name.dropRight(1) else name
+          s"$prefix$separator$suffix"
+    end fullName
+
+    fullName(symbol, "")
+  end fullName
 end Commons
