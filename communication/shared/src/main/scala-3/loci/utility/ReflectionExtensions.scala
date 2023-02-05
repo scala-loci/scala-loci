@@ -101,7 +101,7 @@ object reflectionExtensions:
 
     def contextFunctionResultType: quotes.reflect.TypeRepr =
       if tpe.isContextFunctionType then
-        tpe.typeArgs.lastOption map { _.contextFunctionResultType } getOrElse tpe
+        tpe.widenDealias.typeArgs.lastOption map { _.contextFunctionResultType } getOrElse tpe
       else
         tpe
 
@@ -109,12 +109,15 @@ object reflectionExtensions:
       tpe.resultType.contextFunctionResultType
 
     def widenDealias: quotes.reflect.TypeRepr =
-      if tpe == tpe.dealias then
-        tpe.dealias.widenDealias
-      else if tpe == tpe.widen then
-        tpe.widen.widenDealias
+      val dealiased = tpe.dealias
+      if tpe != dealiased then
+        dealiased.widenDealias
       else
-        tpe
+        val widened = tpe.widen
+        if tpe != widened then
+          widened.widenDealias
+        else
+          tpe
 
     def substitute(from: quotes.reflect.ParamRef, to: quotes.reflect.TypeRepr) =
       TypeParamSubstition.substitute(tpe, from, to)
