@@ -3,7 +3,10 @@ package runtime
 
 import scala.util.{Failure, Try}
 
-trait PlacedValues(final val $loci$sys: System):
+trait PlacedValues:
+  final val $loci$sys: System = $loci$sys$create
+  protected def $loci$sys$create: System
+
   def $loci$dispatch(
       request: MessageBuffer,
       signature: Value.Signature,

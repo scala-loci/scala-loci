@@ -6,9 +6,10 @@ package components
 import utility.reflectionExtensions.*
 
 import scala.quoted.*
+import scala.quoted.runtime.StopMacroExpansion
 
 trait PlacementContextTypesNormalization:
-  this: Component with Commons with Annotations with PlacementInfo =>
+  this: Component with Commons with ErrorReporter with Annotations with PlacementInfo =>
   import quotes.reflect.*
 
   private def normalBody(symbol: Symbol, placementInfo: PlacementInfo, rhs: Option[Term]) =
@@ -37,12 +38,12 @@ trait PlacementContextTypesNormalization:
   private def stripPlacementLiftingConversion(term: Term): Term =
     def stripPlacementLiftingConversion(term: Term) = term match
       case Inlined(Some(call), List(conversion: ValDef), Block(List(DefDef(names.body, List(), _, Some(rhs))), erased: Typed))
-        if call.symbol == symbols.placed &&
+        if call.symbol == symbols.placed.companionModule &&
            conversion.tpt.tpe <:< types.conversion &&
            erased.tpe <:< types.placed =>
         rhs.underlyingArgument
       case Inlined(Some(call), List(conversion: ValDef, ValDef(_, _, Some(rhs))), Block(List(DefDef(names.body, List(), _, _)), erased: Typed))
-        if call.symbol == symbols.placed &&
+        if call.symbol == symbols.placed.companionModule &&
            conversion.tpt.tpe <:< types.conversion &&
            erased.tpe <:< types.placed =>
         rhs.underlyingArgument
@@ -72,7 +73,12 @@ trait PlacementContextTypesNormalization:
   private def noTypeInferenceMessage =
     "Placement type inference not supported with current compiler version. Type needs to be ascribed explicitly."
 
-  private def normalizePlacementContextType(symbol: Symbol, tpt: TypeTree, rhs: Option[Term], pos: Position, normalizeBody: Boolean) : (Option[PlacementInfo], Option[Term], Boolean)=
+  private def normalizePlacementContextType(
+      symbol: Symbol,
+      tpt: TypeTree,
+      rhs: Option[Term],
+      pos: Position,
+      normalizeBody: Boolean): (Option[PlacementInfo], Option[Term], Boolean) =
     val info = symbol.info
     val typeInferred =
       try tpt.pos.start == tpt.pos.end
@@ -81,23 +87,25 @@ trait PlacementContextTypesNormalization:
     val placementInfo = PlacementInfo(info.resultType, acceptUnliftedSubjectiveFunction = sbjPlacedExpressionSyntax && typeInferred)
 
     if placementInfo.isEmpty && placedExpressionSyntax then
-      report.errorAndAbort("Placement expression for value with no placement type", pos)
+      errorAndCancel("Placement expression for value with no placement type", pos)
 
     placementInfo.fold(None, rhs, false) { placementInfo =>
       if !placementInfo.canonical then
         if !typeInferred then
-          report.errorAndAbort(noCanonicalTypeMessage(placementInfo), tpt.pos)
+          errorAndCancel(noCanonicalTypeMessage(placementInfo), tpt.pos)
         SymbolMutator.get.fold(
-          report.errorAndAbort(noTypeInferenceMessage, pos))(
+          errorAndCancel(noTypeInferenceMessage, pos))(
           _.setInfo(symbol, info.withResultType(placementInfo.canonicalType)))
 
-      if placedExpressionSyntax then
+      if !placementInfo.canonical && SymbolMutator.get.isEmpty then
+        (None, rhs, false)
+      else if placedExpressionSyntax then
         (Some(placementInfo),
          if normalizeBody then
            stripPlacedExpressionSyntax(symbol, placementInfo, rhs)
          else
            rhs,
-         expressionInContextFunction)
+          placementInfo.canonical || expressionInContextFunction)
       else
         (Some(placementInfo),
          if normalizeBody then
@@ -120,9 +128,11 @@ trait PlacementContextTypesNormalization:
 
    // TODO: BUG DefDef has not tpt
 
+   // TODO: disallow using clauses for non-local placed values
+
    case stat @ DefDef(name, paramss, tpt, _) =>
      val (placementInfo, rhs, expressionInContextFunction) = normalizePlacementContextType(stat.symbol, tpt, stat.rhs, stat.pos, normalizeBody)
-     if !expressionInContextFunction then
+     if placementInfo.isDefined && !expressionInContextFunction then
        tryIncrementContextResultCount(stat.symbol)
      if normalizeBody then
        placementInfo.fold(stat) { placementInfo =>
@@ -139,7 +149,7 @@ trait PlacementContextTypesNormalization:
         stat
     }
 
-    object myTreeMap extends TreeMap:
+    object contextArgumentSynthesizer extends TreeMap:
       override def transformTerm(term: Term)(owner: Symbol) = term match
         case Apply(apply @ Select(qualifier, names.apply), List(arg))
           if apply.symbol.owner == symbols.contextFunction1 &&
@@ -163,19 +173,84 @@ trait PlacementContextTypesNormalization:
 
             PlacementInfo(symbol.info.resultType, acceptUnliftedSubjectiveFunction = false).fold(transformedTerm) { placementInfo =>
               if !placementInfo.canonical then
-                report.errorAndAbort(s"${noCanonicalTypeMessage(placementInfo)}${if SymbolMutator.get.isEmpty then s"\n$noTypeInferenceMessage" else ""}", term.pos)
-
-              placementInfo.peerType.asType match
-              case '[t] =>
-                Select.unique(transformedTerm, names.apply).appliedTo('{ Placement.Context.fallback[t] }.asTerm)
+                errorAndCancel(s"${noCanonicalTypeMessage(placementInfo)}${if SymbolMutator.get.isEmpty then s"\n$noTypeInferenceMessage" else ""}", term.pos)
+                transformedTerm
+              else
+                placementInfo.peerType.asType match
+                  case '[t] =>
+                    Select.unique(transformedTerm, names.apply).appliedTo('{ Placement.Context.fallback[t] }.asTerm)
             }
           else
             transformedTerm
       end transformTerm
-    end myTreeMap
+    end contextArgumentSynthesizer
+
+
+    object surrogator extends SimpleTypeMap(quotes):
+      override def transform(tpe: TypeRepr) =
+        PlacementInfo(tpe, acceptUnliftedSubjectiveFunction = false).fold(super.transform(tpe)) { placementInfo =>
+          transform(placementInfo.valueType)
+        }
+    end surrogator
+
+    object contextArgumentSynthesizer2 extends TreeMap:
+      override def transformTerm(term: Term)(owner: Symbol) = term match
+        case Typed(expr, _) if expr.symbol.name == "erased" => term
+        case _ => super.transformTerm(term)(owner)
+
+      override def transformStatement(stat: Statement)(owner: Symbol) =
+        stat match
+          case ValOrDefDef(stat) => SymbolMutator.getOrErrorAndAbort.setInfo(stat.symbol, surrogator.transform(stat.symbol.info))
+          case _ =>
+        super.transformStatement(stat)(owner)
+
+      override def transformTypeTree(tree: TypeTree)(owner: Symbol) =
+        TypeTree.of(using surrogator.transform(tree.tpe).asType)
+    end contextArgumentSynthesizer2
+
+    object contextArgumentSynthesizer3 extends TreeMap:
+      override def transformTerm(term: Term)(owner: Symbol) = term match
+        case Select(qualifier @ Apply(Select(value, names.apply), _), name)
+          if term.symbol.owner == symbols.placed &&
+             isMultitierModule(value.symbol.owner) =>
+          Select.copy(term)(transformTerm(qualifier)(owner), name)
+        case _ =>
+          val wrong = try term.symbol.owner == symbols.placed catch case scala.util.control.NonFatal(_) => false
+          if wrong then
+//            val t = Ref(Symbol.requiredMethod("loci.embedding.impl.reportError")).appliedTo(
+//              Literal(StringConstant("Illegal multitier construct.")),
+//              Literal(IntConstant(term.pos.start)),
+//              Literal(IntConstant(term.pos.end)))
+//            Block(List(t), term)
+            errorAndCancel("Illegal multitier construct.", term.pos)
+            term
+          else
+            super.transformTerm(term)(owner)
+    end contextArgumentSynthesizer3
+
+//    object myTreeTraverser extends TreeTraverser:
+//      override def traverseTree(tree: Tree)(owner: Symbol): Unit = tree match
+//        case tree: Term =>
+//          val wrong = try tree.symbol.owner == symbols.placed catch case scala.util.control.NonFatal(_) => false
+//          if wrong then
+//            Block(List('{ "!!!!"; ${Expr(tree.pos.start)}; ${Expr(tree.pos.end)} }.asTerm), tree)
+//          else
+//            super.traverseTree(tree)(owner)
+//        case _ =>
+//          super.traverseTree(tree)(owner)
 
     ClassDef.copy(module)(module.name, module.constructor, module.parents, module.self, body map { stat =>
-      myTreeMap.transformStatement(stat)(stat.symbol.owner)
+      contextArgumentSynthesizer.transformStatement(stat)(stat.symbol.owner) match
+        case stat @ ValDef(name, tpt, Some(rhs)) =>
+//          myTreeTraverser.traverseTree(rhs)(stat.symbol)
+          val r = contextArgumentSynthesizer3.transformTerm(rhs)(stat.symbol)
+          ValDef.copy(stat)(name, tpt, Some(r))
+        case stat @ DefDef(name, paramss, tpt, Some(rhs)) =>
+//          myTreeTraverser.traverseTree(rhs)(stat.symbol)
+          val r = contextArgumentSynthesizer3.transformTerm(rhs)(stat.symbol)
+          DefDef.copy(stat)(name, paramss, tpt, Some(r))
+        case stat =>
+          stat
     })
   end normalizePlacementContextTypes
 end PlacementContextTypesNormalization

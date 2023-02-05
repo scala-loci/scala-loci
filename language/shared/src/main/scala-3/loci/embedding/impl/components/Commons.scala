@@ -19,7 +19,7 @@ trait Commons:
     val `Placed.on` = Symbol.requiredPackage("loci.embedding.Placed").typeMember("on")
     val `Placed.Subjective.on` = Symbol.requiredPackage("loci.embedding.Placed.Subjective").typeMember("on")
     val on = TypeRepr.of[Placement.On[?]].typeSymbol
-    val placed = TypeRepr.of[Placed.type].typeSymbol
+    val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
     val multitier = TypeRepr.of[language.multitier].typeSymbol
     val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol

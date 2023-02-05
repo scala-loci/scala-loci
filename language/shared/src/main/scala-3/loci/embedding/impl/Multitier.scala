@@ -12,6 +12,7 @@ object Multitier:
 
     object processor extends Component
         with Commons
+        with ErrorReporter
         with Annotations
         with PlacementInfo
         with PlacementContextTypesNormalization
