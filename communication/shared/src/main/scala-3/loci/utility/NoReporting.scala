@@ -11,34 +11,48 @@ object noReporting:
       val context = quotes.getClass.getMethod("ctx").invoke(quotes)
 
       val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
-      val contextsClass = Class.forName("dotty.tools.dotc.core.Contexts")
       val contextClass = Class.forName("dotty.tools.dotc.core.Contexts$Context")
       val freshContextClass = Class.forName("dotty.tools.dotc.core.Contexts$FreshContext")
       val reporterClass = Class.forName("dotty.tools.dotc.reporting.Reporter")
       val noReporterClass = Class.forName("dotty.tools.dotc.reporting.Reporter$NoReporter$")
 
       val quotesImpl = quotesImplClass.getMethod("apply", contextClass)
-      val exploreCtx = contextsClass.getMethod("inline$exploreCtx", contextClass)
-      val wrapUpExplore = contextsClass.getMethod("inline$wrapUpExplore", contextClass)
       val reporter = contextClass.getMethod("reporter")
       val setReporter = freshContextClass.getMethod("setReporter", reporterClass)
 
       val noReporter = noReporterClass.getField("MODULE$").get(noReporterClass)
 
-      val freshContext = exploreCtx.invoke(null, context)
-      val exploringReporter = reporter.invoke(freshContext)
+      val (freshContext, wrapUp) =
+        try
+          val contextsClass = Class.forName("dotty.tools.dotc.core.Contexts")
+          val exploreCtx = contextsClass.getMethod("inline$exploreCtx", contextClass)
+          val wrapUpExplore = contextsClass.getMethod("inline$wrapUpExplore", contextClass)
 
+          exploreCtx.invoke(null, context) -> { wrapUpExplore.invoke(null, _) }
+
+        catch case _: ClassNotFoundException | _: NoSuchMethodException |  _: IllegalArgumentException =>
+          val contextStateClass = Class.forName("dotty.tools.dotc.core.Contexts$ContextState")
+          val contextPoolClass = Class.forName("dotty.tools.dotc.core.Contexts$ContextPool")
+          val exploreContextPool = contextStateClass.getMethod("exploreContextPool")
+          val base = contextClass.getMethod("base")
+          val next = contextPoolClass.getMethod("next", contextClass)
+          val free = contextPoolClass.getMethod("free")
+
+          val pool = exploreContextPool.invoke(base.invoke(context))
+          next.invoke(pool, context) -> { (_: Any) => free.invoke(pool) }
+
+      val exploringReporter = reporter.invoke(freshContext)
       setReporter.invoke(freshContext, noReporter)
 
       quotesImpl.invoke(null, freshContext) match
-        case quotes: Quotes => Some((quotes, setReporter, exploringReporter, wrapUpExplore, freshContext))
+        case quotes: Quotes => Some((quotes, setReporter, exploringReporter, freshContext, wrapUp))
         case _ => None
 
     catch
       case _: ClassNotFoundException | _: NoSuchMethodException | _: NoSuchFieldException |  _: IllegalArgumentException =>
         None
 
-    reset.fold(default) { (quotes, setReporter, exploringReporter, wrapUpExplore, freshContext) =>
+    reset.fold(default) { (quotes, setReporter, exploringReporter, freshContext, wrapUp) =>
       try
         val filteredOut = new ProxyPrintStream(Console.out) {
           def filterOut(s: String) = s startsWith "exception"
@@ -58,7 +72,7 @@ object noReporting:
       finally
         try
           setReporter.invoke(freshContext, exploringReporter)
-          wrapUpExplore.invoke(null, freshContext)
+          wrapUp(Seq(freshContext))
         catch
           case _: IllegalArgumentException =>
     }
