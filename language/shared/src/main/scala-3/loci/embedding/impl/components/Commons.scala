@@ -27,7 +27,9 @@ trait Commons:
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
 
   object types:
+    val placedValue = TypeRepr.of[PlacedValue[?, ?]]
     val placed = TypeRepr.of[Placed[?, ?]]
+    val subjective = TypeRepr.of[Placed.Subjective[?, ?]]
     val remote = TypeRepr.of[language.Remote[?]]
     val context = TypeRepr.of[Placement.Context[?]]
     val conversion = TypeRepr.of[Conversion[?, ?]]

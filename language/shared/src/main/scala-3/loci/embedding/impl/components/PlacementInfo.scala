@@ -19,7 +19,7 @@ trait PlacementInfo:
       s"${valueType.show}${`subjective.show`} ${symbols.`language.on`.name} ${peerType.show}"
 
   object PlacementInfo:
-    def apply(tpe: TypeRepr, acceptUnliftedSubjectiveFunction: Boolean): Option[PlacementInfo] =
+    def apply(tpe: TypeRepr, acceptUnliftedSubjectiveFunction: Boolean = false): Option[PlacementInfo] =
       def modality(tpe: TypeRepr) = tpe match
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.per` =>
           Some(PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Some(args.last)))
@@ -58,4 +58,12 @@ trait PlacementInfo:
           placement(tpe)
     end apply
   end PlacementInfo
+
+  object PlacedValue:
+    def unapply(tree: Tree): Option[(Term, PlacementInfo)] = tree match
+      case Apply(Select(qualifier, names.apply), List(_)) if isMultitierModule(qualifier.symbol.owner) =>
+        PlacementInfo(qualifier.tpe.widenTermRefByName.resultType) map { qualifier -> _ }
+      case _ =>
+        None
+  end PlacedValue
 end PlacementInfo

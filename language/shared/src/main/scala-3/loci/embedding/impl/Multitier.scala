@@ -15,12 +15,25 @@ object Multitier:
         with ErrorReporter
         with Annotations
         with PlacementInfo
-        with PlacementContextTypesNormalization
+        with PlacementContextTypes
+        with PlacedExpressions
         with Splitting:
       val quotes: annotationQuotes.type = annotationQuotes
 
     tree match
       case tree: ClassDef =>
-        List(processor.split(processor.normalizePlacementContextTypes(tree)))
+        val phases = List(
+          processor.normalizePlacementContextTypes,
+          processor.erasePlacementTypesFromExpressions,
+          processor.split)
+
+        val processed = phases.foldLeft(tree) { (tree, process) =>
+          if processor.canceled then tree else process(tree)
+        }
+
+        List(processed)
+
       case _ =>
         report.errorAndAbort("multitier annotation only applicable to classes, traits or objects")
+  end annotation
+end Multitier
