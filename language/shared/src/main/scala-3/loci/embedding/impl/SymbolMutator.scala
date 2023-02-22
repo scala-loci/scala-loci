@@ -7,6 +7,7 @@ import scala.quoted.*
 class SymbolMutator private ():
   private val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
   private val contextClass = Class.forName("dotty.tools.dotc.core.Contexts$Context")
+  private val treeClass = Class.forName("dotty.tools.dotc.ast.Trees$Tree")
   private val typeClass = Class.forName("dotty.tools.dotc.core.Types$Type")
   private val symbolClass = Class.forName("dotty.tools.dotc.core.Symbols$Symbol")
   private val symDenotationClass = Class.forName("dotty.tools.dotc.core.SymDenotations$SymDenotation")
@@ -21,11 +22,13 @@ class SymbolMutator private ():
   private val infoSet = symDenotationClass.getMethod("info_$eq", typeClass)
   private val flagSet = symDenotationClass.getMethod("setFlag", classOf[Long])
   private val flagReset = symDenotationClass.getMethod("resetFlag", classOf[Long])
+  private val companionRegister = symDenotationClass.getMethod("registerCompanion", symbolClass, contextClass)
 //  private val annotationRemove = symDenotationClass.getMethod("removeAnnotation", symbolClass, contextClass)
   private val annotationUpdate = symDenotationClass.getMethod("updateAnnotation", annotationClass, contextClass)
   private val enterSymbol = classDenotationClass.getMethod("enter", symbolClass, scopeClass, contextClass)
   private val emptyScope = emptyScopeClass.getField("MODULE$")
   private val annotationApply = annotationClass.getMethod("apply", typeClass, classOf[List[_]], classOf[Long], contextClass)
+  private val annotationApplyWithTree = annotationClass.getMethod("apply", treeClass)
 
   def setInfo(using Quotes)(symbol: quotes.reflect.Symbol, info: quotes.reflect.TypeRepr): Unit =
     infoSet.invoke(denot.invoke(symbol, ctx.invoke(quotes)), info)
@@ -42,11 +45,22 @@ class SymbolMutator private ():
   def resetFlag(using Quotes)(symbol: quotes.reflect.Symbol, flags: quotes.reflect.Flags) =
     flagReset.invoke(denot.invoke(symbol, ctx.invoke(quotes)), flags)
 
+  def registerCompanion(using Quotes)(symbol: quotes.reflect.Symbol, companion: quotes.reflect.Symbol) =
+    val context = ctx.invoke(quotes)
+    companionRegister.invoke(denot.invoke(symbol, context), companion, context)
+
   def updateAnnotation(using Quotes)(symbol: quotes.reflect.Symbol, annotation: quotes.reflect.Symbol, args: List[quotes.reflect.Term]): Unit =
     val context = ctx.invoke(quotes)
     annotationUpdate.invoke(
       denot.invoke(symbol, context),
       annotationApply.invoke(null, annotation.typeRef, args, span.invoke(symbol), context),
+      context)
+
+  def updateAnnotationWithTree(using Quotes)(symbol: quotes.reflect.Symbol, tree: quotes.reflect.Tree): Unit =
+    val context = ctx.invoke(quotes)
+    annotationUpdate.invoke(
+      denot.invoke(symbol, context),
+      annotationApplyWithTree.invoke(null, tree),
       context)
 
 //  def removeAnnotation(using Quotes)(symbol: quotes.reflect.Symbol, annotation: quotes.reflect.Symbol): Unit =

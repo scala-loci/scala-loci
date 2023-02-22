@@ -13,6 +13,7 @@ trait Commons:
   import quotes.reflect.*
 
   object symbols:
+    val `language.Local` = Symbol.requiredPackage("loci.language.package$package").typeMember("Local")
     val `language.per` = Symbol.requiredPackage("loci.language.package$package").typeMember("per")
     val `language.on` = Symbol.requiredPackage("loci.language.package$package").typeMember("on")
     val `embedding.on` = Symbol.requiredPackage("loci.embedding.package$package").typeMember("on")
@@ -38,6 +39,20 @@ trait Commons:
     val sbj = "sbj"
     val body = "body"
     val apply = "apply"
+
+  final class PackedValueType[T](using t: Type[T]):
+    opaque type Type1 = T
+    opaque type Type2 = T
+    opaque type Type3 = T
+    opaque type Type4 = T
+    given Type[Type1] = t
+    given Type[Type2] = t
+    given Type[Type3] = t
+    given Type[Type4] = t
+
+  extension (tpe: TypeRepr) def asPackedValueType: PackedValueType[?] = tpe.asType match
+    case t: Type[Any] @unchecked if tpe <:< TypeRepr.of[Any] => PackedValueType(using t)
+    case _ => throw IllegalArgumentException(s"${tpe.safeShow} cannot be used as a value type")
 
   given ValOrDefDef: TypeTest[Tree, ValDef | DefDef] = tree =>
     summon[TypeTest[Tree, ValDef]].unapply(tree) orElse
