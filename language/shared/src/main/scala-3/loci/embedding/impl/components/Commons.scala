@@ -26,6 +26,7 @@ trait Commons:
     val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
     val contextFunction1 = TypeRepr.of[ContextFunction1[?, ?]].typeSymbol
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
+    val erased = '{ embedding.erased }.asTerm.underlyingArgument.symbol
 
   object types:
     val placedValue = TypeRepr.of[PlacedValue[?, ?]]
@@ -41,14 +42,18 @@ trait Commons:
     val apply = "apply"
 
   final class PackedValueType[T](using t: Type[T]):
-    opaque type Type1 = T
-    opaque type Type2 = T
-    opaque type Type3 = T
-    opaque type Type4 = T
-    given Type[Type1] = t
-    given Type[Type2] = t
-    given Type[Type3] = t
-    given Type[Type4] = t
+    opaque type Type = T
+    given quoted.Type[Type] = t
+
+//  final class PackedValueType[T](using t: Type[T]):
+//    opaque type Type1 = T
+//    opaque type Type2 = T
+//    opaque type Type3 = T
+//    opaque type Type4 = T
+//    given Type[Type1] = t
+//    given Type[Type2] = t
+//    given Type[Type3] = t
+//    given Type[Type4] = t
 
   extension (tpe: TypeRepr) def asPackedValueType: PackedValueType[?] = tpe.asType match
     case t: Type[Any] @unchecked if tpe <:< TypeRepr.of[Any] => PackedValueType(using t)

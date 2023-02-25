@@ -27,9 +27,12 @@ object Multitier:
           processor.erasePlacementTypesFromExpressions,
           processor.split)
 
-        val processed = phases.foldLeft(tree) { (tree, process) =>
+        val processed = phases.foldLeft(tree): (tree, process) =>
           if processor.canceled then tree else process(tree)
-        }
+
+        processor.reportErrors()
+
+        println(processed.show)
 
         List(processed)
 

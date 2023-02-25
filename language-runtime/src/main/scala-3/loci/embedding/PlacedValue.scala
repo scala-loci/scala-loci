@@ -31,14 +31,10 @@ object Placed:
   infix type on[T, P] = Placed[P, T] & T
 
   given liftLocal[T, P, U](using (T on P) <:< U): Conversion[T, U] with
-    transparent inline def apply(v: T) =
-      def body: T = v
-      erased: U
+    transparent inline def apply(v: T) = erased(v): U
 
-  given liftSubjective[T, P, R, U] (using (T per R on P) <:< U): Conversion[Remote[R] => T on P, U] with
-    transparent inline def apply(v: Remote[R] => T on P) =
-      def body: Remote[R] => T on P = v
-      erased: U
+  given liftSubjective[T, P, R, U](using (T per R on P) <:< U): Conversion[Remote[R] => T on P, U] with
+    transparent inline def apply(v: Remote[R] => T on P) = erased(v): U
 
 
   sealed trait Subjective[-P, +T]

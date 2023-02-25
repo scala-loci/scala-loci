@@ -21,11 +21,9 @@ def swapLambdaResult(using Quotes)(block: quotes.reflect.Block, resultType: quot
           symbolMutator.setInfo(symbol, tpe)
           Block.copy(block)(List(DefDef.copy(lambda)(lambda.name, lambda.paramss, TypeTree.of(using resultType.asType), Some(rhs))), closure)
         case _ =>
-          Lambda(symbol, tpe, { (symbol, args) =>
-            (lambdaArgs zip args).foldLeft(rhs.changeOwner(symbol)) { case (rhs, (lambdaArg, arg)) =>
-              changeRefs(lambdaArg.symbol, arg.symbol, symbol, rhs)
-            }
-          })
+          Lambda(symbol, tpe, (symbol, args) =>
+            (lambdaArgs zip args).foldLeft(rhs.changeOwner(symbol)):
+              case (rhs, (lambdaArg, arg)) => changeRefs(lambdaArg.symbol, arg.symbol, symbol, rhs))
 
     case _ =>
       block

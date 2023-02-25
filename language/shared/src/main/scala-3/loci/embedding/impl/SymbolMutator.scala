@@ -22,10 +22,12 @@ class SymbolMutator private ():
   private val infoSet = symDenotationClass.getMethod("info_$eq", typeClass)
   private val flagSet = symDenotationClass.getMethod("setFlag", classOf[Long])
   private val flagReset = symDenotationClass.getMethod("resetFlag", classOf[Long])
-  private val companionRegister = symDenotationClass.getMethod("registerCompanion", symbolClass, contextClass)
+//  private val companionRegister = symDenotationClass.getMethod("registerCompanion", symbolClass, contextClass)
 //  private val annotationRemove = symDenotationClass.getMethod("removeAnnotation", symbolClass, contextClass)
   private val annotationUpdate = symDenotationClass.getMethod("updateAnnotation", annotationClass, contextClass)
   private val enterSymbol = classDenotationClass.getMethod("enter", symbolClass, scopeClass, contextClass)
+  private val replaceSymbol = classDenotationClass.getMethod("replace", symbolClass, symbolClass, contextClass)
+//  private val deleteSymbol = classDenotationClass.getMethod("delete", symbolClass, contextClass)
   private val emptyScope = emptyScopeClass.getField("MODULE$")
   private val annotationApply = annotationClass.getMethod("apply", typeClass, classOf[List[_]], classOf[Long], contextClass)
   private val annotationApplyWithTree = annotationClass.getMethod("apply", treeClass)
@@ -39,15 +41,21 @@ class SymbolMutator private ():
     if classDenotationClass.isInstance(denotation) then
       enterSymbol.invoke(denotation, symbol, emptyScope.get(null), context)
 
+  def replace(using Quotes)(owner: quotes.reflect.Symbol, from: quotes.reflect.Symbol, to: quotes.reflect.Symbol): Unit =
+    val context = ctx.invoke(quotes)
+    val denotation = denot.invoke(owner, context)
+    if classDenotationClass.isInstance(denotation) then
+      replaceSymbol.invoke(denotation, from, to, context)
+
   def setFlag(using Quotes)(symbol: quotes.reflect.Symbol, flags: quotes.reflect.Flags) =
     flagSet.invoke(denot.invoke(symbol, ctx.invoke(quotes)), flags)
 
   def resetFlag(using Quotes)(symbol: quotes.reflect.Symbol, flags: quotes.reflect.Flags) =
     flagReset.invoke(denot.invoke(symbol, ctx.invoke(quotes)), flags)
 
-  def registerCompanion(using Quotes)(symbol: quotes.reflect.Symbol, companion: quotes.reflect.Symbol) =
-    val context = ctx.invoke(quotes)
-    companionRegister.invoke(denot.invoke(symbol, context), companion, context)
+//  def registerCompanion(using Quotes)(symbol: quotes.reflect.Symbol, companion: quotes.reflect.Symbol) =
+//    val context = ctx.invoke(quotes)
+//    companionRegister.invoke(denot.invoke(symbol, context), companion, context)
 
   def updateAnnotation(using Quotes)(symbol: quotes.reflect.Symbol, annotation: quotes.reflect.Symbol, args: List[quotes.reflect.Term]): Unit =
     val context = ctx.invoke(quotes)

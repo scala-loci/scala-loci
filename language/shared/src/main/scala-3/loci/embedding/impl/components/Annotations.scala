@@ -15,18 +15,16 @@ trait Annotations:
       case _ => 0
 
   def tryIncrementContextResultCount(symbol: Symbol) =
-    SymbolMutator.get foreach { symbolMutator =>
+    SymbolMutator.get foreach: symbolMutator =>
       symbolMutator.updateAnnotation(
         symbol,
         symbols.contextResultCount,
         List(Literal(IntConstant(contextResultCount(symbol) + 1))))
-    }
 
   def trySetContextResultCount(symbol: Symbol, count: Int) =
-    SymbolMutator.get foreach { symbolMutator =>
+    SymbolMutator.get foreach: symbolMutator =>
       symbolMutator.updateAnnotation(
         symbol,
         symbols.contextResultCount,
         List(Literal(IntConstant(count))))
-    }
 end Annotations
