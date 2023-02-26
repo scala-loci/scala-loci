@@ -26,23 +26,11 @@ sealed trait Placed[-P, +T] extends PlacedValue[P, T]:
 //  def from[R, placed[_, _]](r: RemoteSelection[R, placed]): T @uncheckedVariance placed R
 
 object Placed:
-  type Value[T]
+  inline given lift[P, T]: Conversion[T, Placed[P, T] & T] with
+    transparent inline def apply(v: T) = erased(v): Placed[P, T] & T
 
-  infix type on[T, P] = Placed[P, T] & T
-
-  given liftLocal[T, P, U](using (T on P) <:< U): Conversion[T, U] with
-    transparent inline def apply(v: T) = erased(v): U
-
-  given liftSubjective[T, P, R, U](using (T per R on P) <:< U): Conversion[Remote[R] => T on P, U] with
-    transparent inline def apply(v: Remote[R] => T on P) = erased(v): U
-
-
-  sealed trait Subjective[-P, +T]
-
-  object Subjective:
-    infix type on[T, P] = Remote[Subjective.R[T]] => Placed.on[Subjective.T[T], P]
-    type T[`T per R`] = `T per R` match { case t per ? => t }
-    type R[`T per R`] = `T per R` match { case ? per r => r }
+  trait Subjective[-P, +T]:
+    protected def apply(v: Remote[P]): T
 
   object Selected:
     type Single[T]

@@ -46,17 +46,14 @@ trait PlacementContextTypes:
     Lambda(symbol, contextMethodType[Placement.Context[peer.Type], placement.Type], (symbol, _) =>
       val erased = Typed(Ref(symbols.erased), TypeTree.of[placement.Type])
       rhs.changeOwner(symbol) match
-        case lambda @ Lambda(_, _) => Block(List(lambda), erased)
+        case expr @ Lambda(_, _) => Block(List(expr), erased)
         case Block(statements, expr) => Block(statements :+ expr, erased)
-        case _ => Block(List(rhs), erased))
+        case expr => Block(List(expr), erased))
 
   private def placedExpressionSyntaxInfo(rhs: Option[Term]) = rhs match
-    case Some(Lambda(List(arg), Apply(Apply(fun, List(Lambda(_, _))), _))) if arg.symbol.isImplicit && fun.symbol.owner == symbols.on =>
-      (true, fun.symbol.name == names.sbj, true)
-    case Some(Apply(Apply(fun, List(Lambda(_, _))), _)) if fun.symbol.owner == symbols.on =>
-      (true, fun.symbol.name == names.sbj, false)
-    case _ =>
-      (false, false, false)
+    case Some(Lambda(List(arg), Apply(Apply(fun, List(Lambda(_, _))), _))) if arg.symbol.isImplicit && fun.symbol.owner == symbols.on => (true, true)
+    case Some(Apply(Apply(fun, List(Lambda(_, _))), _)) if fun.symbol.owner == symbols.on => (true, false)
+    case _ => (false, false)
 
   private def stripPlacedExpressionSyntax(symbol: Symbol, placementInfo: PlacementInfo, rhs: Term) =
     val (rhsStripped, arg) = rhs match
@@ -73,18 +70,14 @@ trait PlacementContextTypes:
     case PlacementLiftingConversion(expr) => expr
     case _ => term
 
-  private def stripPlacementLiftingConversion(
-      symbol: Symbol, placementInfo: PlacementInfo, rhs: Option[Term],
-      unliftedSubjectiveFunction: Boolean): Option[Term] =
-    rhs map: rhs =>
-      val (rhsStripped, arg) = rhs match
-        case Lambda(List(arg), rhs) if !unliftedSubjectiveFunction =>
-          stripPlacementLiftingConversion(rhs) -> Some(arg)
-        case Lambda(List(arg), lambda @ Lambda(_, rhs)) if unliftedSubjectiveFunction =>
-          swapLambdaResult(lambda, placementInfo.valueType, stripPlacementLiftingConversion(rhs)) -> Some(arg)
-        case _ =>
-          rhs -> None
-      normalBody(arg.fold(symbol) { _.symbol.owner.owner }, placementInfo, rhsStripped)
+  private def stripPlacementLiftingConversion(symbol: Symbol, placementInfo: PlacementInfo, rhs: Term): Term =
+    val (rhsStripped, arg) = rhs match
+      case Lambda(List(arg), rhs) if arg.symbol.isImplicit => stripPlacementLiftingConversion(rhs) -> Some(arg)
+      case _ => rhs -> None
+    normalBody(arg.fold(symbol) { _.symbol.owner.owner }, placementInfo, rhsStripped)
+
+  private def stripPlacementLiftingConversion(symbol: Symbol, placementInfo: PlacementInfo, rhs: Option[Term]): Option[Term] =
+    rhs map { stripPlacementLiftingConversion(symbol, placementInfo, _) }
 
   private def noCanonicalTypeMessage(placementInfo: PlacementInfo) =
     s"Placement type should be given as: ${placementInfo.showCanonical}"
@@ -102,8 +95,8 @@ trait PlacementContextTypes:
     val typeInferred = tpt match
       case Inferred() => true
       case _ => false
-    val (placedExpressionSyntax, sbjPlacedExpressionSyntax, expressionInContextFunction) = placedExpressionSyntaxInfo(rhs)
-    val placementInfo = PlacementInfo(info.resultType, acceptUnliftedSubjectiveFunction = sbjPlacedExpressionSyntax && typeInferred)
+    val (placedExpressionSyntax, expressionInContextFunction) = placedExpressionSyntaxInfo(rhs)
+    val placementInfo = PlacementInfo(info.resultType)
 
     if placementInfo.isEmpty && placedExpressionSyntax then
       errorAndCancel("Placement expression for value with no placement type.", pos)
@@ -120,17 +113,11 @@ trait PlacementContextTypes:
         (None, rhs, false)
       else if placedExpressionSyntax then
         (Some(placementInfo),
-         if normalizeBody then
-           stripPlacedExpressionSyntax(symbol, placementInfo, rhs)
-         else
-           rhs,
-          placementInfo.canonical || expressionInContextFunction)
+         if normalizeBody then stripPlacedExpressionSyntax(symbol, placementInfo, rhs) else rhs,
+         placementInfo.canonical || expressionInContextFunction)
       else
         (Some(placementInfo),
-         if normalizeBody then
-           stripPlacementLiftingConversion(symbol, placementInfo, rhs, unliftedSubjectiveFunction = placementInfo.modality.subjective)
-         else
-           rhs,
+         if normalizeBody then stripPlacementLiftingConversion(symbol, placementInfo, rhs) else rhs,
          placementInfo.canonical)
     }
   end normalizePlacementContextType
@@ -169,7 +156,9 @@ trait PlacementContextTypes:
     }
 
   private object contextArgumentSynthesizer extends TreeMap:
+
     // TODO this is due to a compiler bug: https://github.com/lampepfl/dotty/issues/17003
+
     override def transformTypeTree(tree: TypeTree)(owner: Symbol) = tree match
       case tree: TypeBoundsTree =>
         TypeBoundsTree.copy(tree)(transformTypeTree(tree.low)(owner), transformTypeTree(tree.hi)(owner)).asInstanceOf[TypeTree]

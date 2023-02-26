@@ -19,12 +19,12 @@ trait PlacementInfo:
 
   case class PlacementInfo(tpe: TypeRepr, canonical: Boolean, canonicalType: TypeRepr, valueType: TypeRepr, peerType: TypeRepr, modality: Modality):
     def showCanonical =
-      given Printer[TypeRepr] = Printer.TypeReprShortCode
-      val `subjective.show` = modality.subjectivePeerType.fold("") { peerType => s" ${symbols.`language.per`.name} ${peerType.show}" }
-      s"${valueType.show}${`subjective.show`} ${symbols.`language.on`.name} ${peerType.show}"
+      val `subjective.safeShow` = modality.subjectivePeerType.fold(""): peerType =>
+        s" ${symbols.`language.per`.name} ${peerType.safeShow(Printer.SafeTypeReprShortCode)}"
+      s"${valueType.safeShow(Printer.SafeTypeReprShortCode)}${`subjective.safeShow`} ${symbols.`language.on`.name} ${peerType.safeShow(Printer.SafeTypeReprShortCode)}"
 
   object PlacementInfo:
-    def apply(tpe: TypeRepr, acceptUnliftedSubjectiveFunction: Boolean = false): Option[PlacementInfo] =
+    def apply(tpe: TypeRepr): Option[PlacementInfo] =
       def modality(tpe: TypeRepr) = tpe match
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.Local` =>
           Some(PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Modality.Local))
@@ -35,34 +35,19 @@ trait PlacementInfo:
         case _ =>
           None
 
-      def placement(tpe: TypeRepr) = tpe match
+      tpe match
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.on` =>
           Some:
             modality(args.head).fold(PlacementInfo(tpe, canonical = true, tpe, args.head, args.last, Modality.None)): info =>
               val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, args.last))
               info.copy(tpe = tpe, canonicalType = canonicalType, peerType = args.last)
-        case AppliedType(tycon, args)
-          if tycon.typeSymbol == symbols.`embedding.on` ||
-             tycon.typeSymbol == symbols.`Placed.on` ||
-             tycon.typeSymbol == symbols.`Placed.Subjective.on` =>
+        case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`embedding.on` =>
           Some:
             modality(args.head).fold(PlacementInfo(tpe, canonical = false, symbols.`language.on`.typeRef.appliedTo(args), args.head, args.last, Modality.None)): info =>
               val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, args.last))
               info.copy(tpe = tpe, canonical = false, canonicalType = canonicalType, peerType = args.last)
         case _ =>
           None
-
-      tpe match
-        case AppliedType(tycon, List(remote, _))
-            if acceptUnliftedSubjectiveFunction && tycon.typeSymbol == symbols.function1 && remote <:< types.remote =>
-          placement(tpe) collect:
-            case info if !info.modality.subjective =>
-              val subjective = remote.widenDealias.typeArgs.head
-              val valueType = symbols.`language.per`.typeRef.appliedTo(List(info.valueType, subjective))
-              val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(valueType, info.peerType))
-              info.copy(tpe = tpe, canonical = false, canonicalType = canonicalType, valueType = valueType, modality = Modality.Subjective(subjective))
-        case _ =>
-          placement(tpe)
     end apply
   end PlacementInfo
 
