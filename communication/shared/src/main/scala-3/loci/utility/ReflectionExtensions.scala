@@ -82,6 +82,7 @@ object reflectionExtensions:
 
     @targetName("safeShowTree") def safeShow: String = tree.safeShow("<?>", quotes.reflect.Printer.TreeCode)
     @targetName("safeShowTree") def safeShow(fallback: String): String = tree.safeShow(fallback, quotes.reflect.Printer.TreeCode)
+    @targetName("safeShowTree") def safeShow(printer: quotes.reflect.Printer[quotes.reflect.Tree]): String = tree.safeShow("<?>", printer)
     @targetName("safeShowTree") def safeShow(fallback: String, printer: quotes.reflect.Printer[quotes.reflect.Tree]): String =
       try
         val result = tree.show(using printer).trim
@@ -93,6 +94,7 @@ object reflectionExtensions:
   extension (using Quotes)(tpe: quotes.reflect.TypeRepr)
     @targetName("safeShowType") def safeShow: String = tpe.safeShow("<?>", quotes.reflect.Printer.SafeTypeReprCode)
     @targetName("safeShowType") def safeShow(fallback: String): String = tpe.safeShow(fallback, quotes.reflect.Printer.SafeTypeReprCode)
+    @targetName("safeShowType") def safeShow(printer: quotes.reflect.Printer[quotes.reflect.TypeRepr]): String = tpe.safeShow("<?>", printer)
     @targetName("safeShowType") def safeShow(fallback: String, printer: quotes.reflect.Printer[quotes.reflect.TypeRepr]): String =
       try
         val result = tpe.show(using printer).trim
@@ -207,13 +209,17 @@ object reflectionExtensions:
   end SimpleTypeMap
 
   extension (using Quotes)(printerModule: quotes.reflect.PrinterModule)
-    def SafeTypeReprCode = new quotes.reflect.Printer[quotes.reflect.TypeRepr]:
+    def SafeTypeReprCode = safeTypeReprPrinter(quotes.reflect.Printer.TypeReprCode)
+    def SafeTypeReprShortCode = safeTypeReprPrinter(quotes.reflect.Printer.TypeReprShortCode)
+
+  private def safeTypeReprPrinter(using Quotes)(printer: quotes.reflect.Printer[quotes.reflect.TypeRepr]) =
+    new quotes.reflect.Printer[quotes.reflect.TypeRepr]:
       import quotes.reflect.*
 
       def show(tpe: TypeRepr) = showType(tpe)
 
       private def showType(tpe: TypeRepr): String =
-        try tpe.show
+        try tpe.show(using printer)
         catch case NonFatal(_) =>
           try tpe match
             case AppliedType(tycon, args) =>
@@ -299,8 +305,7 @@ object reflectionExtensions:
           s"def $name${showType(info)}"
         case _ =>
           s"val $name: ${showType(info)}"
-    end SafeTypeReprCode
-  end extension
+  end safeTypeReprPrinter
 
   private object TypeParamSubstition:
     private val substituteTypeParam =
