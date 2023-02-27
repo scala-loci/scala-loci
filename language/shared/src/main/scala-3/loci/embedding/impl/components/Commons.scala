@@ -20,11 +20,13 @@ trait Commons:
     val on = TypeRepr.of[Placement.On[?]].typeSymbol
     val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
+    val remote = TypeRepr.of[language.Remote[?]].typeSymbol
     val multitier = TypeRepr.of[language.multitier].typeSymbol
-    val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
+//    val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
     val contextFunction1 = TypeRepr.of[ContextFunction1[?, ?]].typeSymbol
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
     val erased = '{ embedding.erased }.asTerm.underlyingArgument.symbol
+    val asInstanceOf = '{ null.asInstanceOf }.asTerm.underlyingArgument.symbol
 
   object types:
     val placedValue = TypeRepr.of[PlacedValue[?, ?]]
@@ -35,9 +37,11 @@ trait Commons:
     val conversion = TypeRepr.of[Conversion[?, ?]]
 
   object names:
-    val sbj = "sbj"
+//    val sbj = "sbj"
     val body = "body"
     val apply = "apply"
+    def module(module: Symbol) = f"loci$$${fullName(module).hashCode}%08x"
+    def peer(module: Symbol, peer: Symbol) = f"loci$$${fullName(module).hashCode}%08x$$${peer.name}"
 
   final class PackedValueType[T](using t: Type[T]):
     opaque type Type = T

@@ -11,12 +11,12 @@ trait PlacedExpressions:
   this: Component with Commons with ErrorReporter with PlacementInfo with PlacementContextTypes =>
   import quotes.reflect.*
 
-  private def checkPlacementTypes(tpe: TypeRepr, pos: Position) =
+  private def checkPlacementTypes(tpe: TypeRepr, pos: Position, message: String) =
     val symbol = tpe.typeSymbol
     if symbol == symbols.`language.per` ||  symbol == symbols.`language.on` ||  symbol == symbols.`embedding.on` ||
        symbol == symbols.subjective || symbol == symbols.`language.Local` ||
        !(tpe =:= TypeRepr.of[Nothing]) && (tpe <:< types.context || tpe <:< types.placedValue || tpe <:< types.subjective) then
-      errorAndCancel("Illegal multitier construct.", pos)
+      errorAndCancel(message, pos)
 
   private class TypePlacementTypesEraser(pos: Position, checkOnly: Boolean) extends SimpleTypeMap(quotes):
     override def transform(tpe: TypeRepr) =
@@ -37,7 +37,7 @@ trait PlacedExpressions:
         else
           super.transform(tpe)
 
-      checkPlacementTypes(erasedType, pos)
+      checkPlacementTypes(erasedType, pos, "Illegal use of value with placement type.")
 
       val termSymbol = erasedType.termSymbol
 
@@ -66,9 +66,9 @@ trait PlacedExpressions:
         val Block(List(lambda: DefDef), closure: Closure) = term: @unchecked
         val transformedLambda = transformDefDef(lambda)(owner)
         if transformedLambda.symbol != lambda.symbol then
-          Block.copy(term)(List(transformedLambda), Closure(Ref(transformedLambda.symbol), closure.tpeOpt))
+          Block.copy(term)(List(transformedLambda), transformTerm(Closure(Ref(transformedLambda.symbol), closure.tpeOpt))(owner))
         else
-          Block.copy(term)(List(transformedLambda), closure)
+          Block.copy(term)(List(transformedLambda), transformTerm(closure)(owner))
       case _ =>
         super.transformTerm(term)(owner)
 
@@ -126,7 +126,7 @@ trait PlacedExpressions:
       // check there are no remaining placement lifting conversions
       case PlacementLiftingConversion(expr) =>
         transformTerm(expr)(owner)
-        if !canceled then errorAndCancel("Illegal multitier construct.", term.posInUserCode)
+        if !canceled then errorAndCancel("Illegal use of value with placement type.", term.posInUserCode)
         term
 
       // check access to subjective placed values
@@ -168,7 +168,7 @@ trait PlacedExpressions:
       // check that there are no remaining multitier terms
       case _ =>
         if term.symbol.exists && term.symbol.owner == symbols.placed then
-          errorAndCancel("Illegal multitier construct.", term.posInUserCode)
+          errorAndCancel("Illegal use of multitier construct.", term.posInUserCode)
         super.transformTerm(term)(owner)
 
     override def transformTypeTree(tree: TypeTree)(owner: Symbol) = tree match
@@ -188,12 +188,33 @@ trait PlacedExpressions:
         def pos = tree match
           case Applied(tpt, _) => tpt.posInUserCode
           case _ => tree.posInUserCode
-        checkPlacementTypes(tree.tpe, pos)
+        checkPlacementTypes(tree.tpe, pos, "Illegal use of multitier construct.")
         val transformTree = super.transformTypeTree(tree)(owner)
         if !canceled then
           TypePlacementTypesEraser(transformTree.posInUserCode, checkOnly = true).transform(transformTree.tpe)
         transformTree
   end ExpressionPlacementTypesEraser
+
+  private object subjectiveTypesInClosuresChecker extends TreeTraverser:
+    override def traverseTree(tree: Tree)(owner: Symbol) = tree match
+      case Lambda(_, _) =>
+        val Block(_, Closure(_, tpe)) = tree: @unchecked
+        tpe foreach { TypePlacementTypesEraser(tree.posInUserCode, checkOnly = true).transform(_) }
+        super.traverseTree(tree)(owner)
+      case _ =>
+        super.traverseTree(tree)(owner)
+
+  private def eraseSubjectiveTypesInClosures(term: Term): Term = term match
+    case Lambda(_, _) =>
+      val Block(stats, closure @ Closure(meth, tpe)) = term: @unchecked
+      if tpe exists { _.widenDealias.typeSymbol == symbols.subjective } then
+        Block.copy(term)(stats, Closure.copy(closure)(meth, None))
+      else
+        term
+    case Block(stats, expr) =>
+      Block.copy(term)(stats, eraseSubjectiveTypesInClosures(expr))
+    case _ =>
+      term
 
   private class ReferenceSubstitutor(substitutions: List[(Symbol, Symbol)], substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit)
       extends AdapatingDefinitionTypeCopier(substitute, replace):
@@ -263,7 +284,10 @@ trait PlacedExpressions:
     var substitutions = List.empty[(Symbol, Symbol)]
     var replacements = List.empty[(Symbol, Symbol)]
     val eraser = ExpressionPlacementTypesEraser(checkOnly = false, substitutions ::= _ -> _, replacements ::= _ -> _)
-    val expr = transformNormalizedExpression(term, owner, eraserCheckOnly.transformValDef(_)(_), (term, _, symbol) => eraser.transformTerm(term)(symbol))
+    val expr = transformNormalizedExpression(term, owner,
+      eraserCheckOnly.transformValDef(_)(_),
+      (symbol, term, expr) => (if canceled then term else eraseSubjectiveTypesInClosures(eraser.transformTerm(term)(symbol))) -> Some(expr))
+    if !canceled then subjectiveTypesInClosuresChecker.traverseTree(expr)(owner)
     if canceled then term else substituteReferences(expr, owner, substitutions, replacements)
 
   private def checkPlacementTypesInArguments(paramss: List[ParamClause], owner: Symbol) =

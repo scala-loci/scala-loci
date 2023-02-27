@@ -147,23 +147,25 @@ trait PlacementContextTypes:
 
   private def normalizePlacementContextType(term: Term, symbol: Symbol): Term =
     PlacementInfo(term.tpe.resultType).fold(term) { placementInfo =>
+      val pos = term match
+        case Apply(Apply(TypeApply(fun, _), _), _) => fun.posInUserCode
+        case _ => term.posInUserCode
       if placementInfo.modality.subjective then
-        val pos = term match
-          case Apply(Apply(TypeApply(fun, _), _), _) => fun.posInUserCode
-          case _ => term.posInUserCode
         errorAndCancel("Placed statements cannot be subjective.", pos)
+      if placementInfo.modality.local then
+        errorAndCancel("Placed statements cannot be local.", pos)
       stripPlacedExpressionSyntax(symbol, placementInfo, term)
     }
 
   private object contextArgumentSynthesizer extends TreeMap:
 
-    // TODO this is due to a compiler bug: https://github.com/lampepfl/dotty/issues/17003
-
-    override def transformTypeTree(tree: TypeTree)(owner: Symbol) = tree match
-      case tree: TypeBoundsTree =>
-        TypeBoundsTree.copy(tree)(transformTypeTree(tree.low)(owner), transformTypeTree(tree.hi)(owner)).asInstanceOf[TypeTree]
-      case _ =>
-        super.transformTypeTree(tree)(owner)
+//    // TODO this is due to a compiler bug: https://github.com/lampepfl/dotty/issues/17003
+//
+//    override def transformTypeTree(tree: TypeTree)(owner: Symbol) = tree match
+//      case tree: TypeBoundsTree =>
+//        TypeBoundsTree.copy(tree)(transformTypeTree(tree.low)(owner), transformTypeTree(tree.hi)(owner)).asInstanceOf[TypeTree]
+//      case _ =>
+//        super.transformTypeTree(tree)(owner)
 
     override def transformTerm(term: Term)(owner: Symbol) = term match
       case Apply(apply @ Select(qualifier, names.apply), List(arg))
@@ -192,7 +194,7 @@ trait PlacementContextTypes:
     end transformTerm
   end contextArgumentSynthesizer
 
-  private class NormalizedDefBodyProcessor(transform: Option[((ValDef, Symbol) => ValDef, (Term, TypeRepr, Symbol) => Term)]) extends TreeMap:
+  private class NormalizedDefBodyProcessor(transform: Option[((ValDef, Symbol) => ValDef, (Symbol, Term, Term) => (Term, Option[Term]))]) extends TreeMap:
     def dropLastExpr(block: Block) = block.statements match
       case (term: Term) :: Nil => term
       case statements :+ (term: Term) => Block.copy(block)(statements, term)
@@ -212,8 +214,8 @@ trait PlacementContextTypes:
         val body = dropLastExpr(block)
         transform match
           case Some(_, transform) =>
-            val rhs = appendExpr(block)(transform(body, erased.tpe, lambda.symbol), erased)
-            Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(rhs))), closure)
+            val (rhs, expr) = transform(lambda.symbol, body, erased)
+            Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(expr.fold(rhs) { appendExpr(block)(rhs, _) }))), closure)
           case _ =>
             body
 
@@ -231,7 +233,7 @@ trait PlacementContextTypes:
         term
   end NormalizedDefBodyProcessor
 
-  def transformNormalizedExpression(term: Term, owner: Symbol, transformArg: (ValDef, Symbol) => ValDef, transform: (Term, TypeRepr, Symbol) => Term) =
+  def transformNormalizedExpression(term: Term, owner: Symbol, transformArg: (ValDef, Symbol) => ValDef, transform: (Symbol, Term, Term) => (Term, Option[Term])) =
     val processor = NormalizedDefBodyProcessor(transform = Some(transformArg, transform))
     processor.transformTerm(term)(owner)
 
