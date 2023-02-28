@@ -26,3 +26,5 @@ target/
 
 .vscode
 .metals
+project/metals.sbt
+project/project
