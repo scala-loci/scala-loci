@@ -188,6 +188,7 @@ lazy val lociJS = lociProject(
              lociTransmitterRescalaJS, lociLanguageTransmitterRescalaJS,
              lociCommunicatorTcpJS,
              lociCommunicatorWsWebNativeJS,
+             lociCommunicatorBroadcastChannelJS,
              lociCommunicatorWsAkkaJS,
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
@@ -345,6 +346,15 @@ lazy val lociCommunicatorWsWebNative = lociProject(
 lazy val lociCommunicatorWsWebNativeJVM = lociCommunicatorWsWebNative.jvm
 lazy val lociCommunicatorWsWebNativeJS = lociCommunicatorWsWebNative.js
 
+lazy val lociCommunicatorBroadcastChannel = lociProject(
+  name = "BroadcastChannel communicator",
+  file = "communicator-broadcastchannel",
+  project = crossProject(JSPlatform)
+    crossType CrossType.Dummy
+    settings scalajsDom,
+  dependsOn = lociCommunication)
+
+lazy val lociCommunicatorBroadcastChannelJS = lociCommunicatorBroadcastChannel.js
 
 lazy val lociCommunicatorWsAkka = lociProject(
   name = "Akka WebSocket communicator",
