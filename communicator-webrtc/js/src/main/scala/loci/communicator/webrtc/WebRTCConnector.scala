@@ -157,83 +157,73 @@ private class WebRTCChannelConnector(
     extends Connector[WebRTC] {
 
   protected def connect(connectionEstablished: Connected[WebRTC]) = {
-    val reliable =
-      (!(js isUndefined channel.asInstanceOf[js.Dynamic].reliable) &&
-       (channel.asInstanceOf[js.Dynamic].reliable.asInstanceOf[Boolean])) ||
-      ((js isUndefined channel.asInstanceOf[js.Dynamic].maxPacketLifeTime) &&
-       (js isUndefined channel.asInstanceOf[js.Dynamic].maxRetransmits))
+    val connection = {
+      val doClosed = Notice.Steady[Unit]
+      val doReceive = Notice.Stream[MessageBuffer]
 
-    if (reliable) {
-      val connection = {
-        val doClosed = Notice.Steady[Unit]
-        val doReceive = Notice.Stream[MessageBuffer]
-
-        val connection = new Connection[WebRTC] {
-          val protocol = new WebRTC {
-            val setup = optionalConnectionSetup getOrElse WebRTCChannelConnector.this
-            val authenticated = false
-          }
-
-          val closed = doClosed.notice
-          val receive = doReceive.notice
-
-          var open = true
-          def send(data: MessageBuffer) = channel.send(data.backingArrayBuffer)
-          def close() = if (open) {
-            open = false
-            channel.close()
-            doClosed.set()
-          }
+      val connection = new Connection[WebRTC] {
+        val protocol = new WebRTC {
+          val setup = optionalConnectionSetup getOrElse WebRTCChannelConnector.this
+          val authenticated = false
         }
 
-        channel.onclose = { (_: dom.Event) =>
-          connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
-          connection.close()
+        val closed = doClosed.notice
+        val receive = doReceive.notice
+
+        var open = true
+        def send(data: MessageBuffer) = channel.send(data.backingArrayBuffer)
+        def close() = if (open) {
+          open = false
+          channel.close()
+          doClosed.set()
         }
-
-        channel.onerror = { (_: dom.Event) =>
-          connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
-          connection.close()
-        }
-
-        channel.onmessage = { (event: dom.MessageEvent) =>
-          event.data match {
-            case data: ArrayBuffer =>
-              doReceive.fire(MessageBuffer wrapArrayBuffer data)
-
-            case data: dom.Blob =>
-              val reader = new dom.FileReader
-              reader.onload = { (event: dom.Event) =>
-                doReceive.fire(MessageBuffer wrapArrayBuffer
-                  event.target.asInstanceOf[js.Dynamic].result.asInstanceOf[ArrayBuffer])
-              }
-              reader.readAsArrayBuffer(data)
-
-            case _ =>
-          }
-        }
-
-        connection
       }
 
-      (channel.readyState: @unchecked) match {
-        case dom.RTCDataChannelState.connecting =>
-          // strange fix for strange issue with Chromium
-          val handle = js.timers.setTimeout(1.day) { channel.readyState }
-  
-          channel.onopen = { (_: dom.Event) =>
-            js.timers.clearTimeout(handle)
-            connectionEstablished.trySet(Success(connection))
-          }
-  
-        case dom.RTCDataChannelState.open =>
-          connectionEstablished.trySet(Success(connection))
-
-        case dom.RTCDataChannelState.closing | dom.RTCDataChannelState.closed =>
-          connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
+      channel.onclose = { (_: dom.Event) =>
+        connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
+        connection.close()
       }
+
+      channel.onerror = { (_: dom.Event) =>
+        connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
+        connection.close()
+      }
+
+      channel.onmessage = { (event: dom.MessageEvent) =>
+        event.data match {
+          case data: ArrayBuffer =>
+            doReceive.fire(MessageBuffer wrapArrayBuffer data)
+
+          case data: dom.Blob =>
+            val reader = new dom.FileReader
+            reader.onload = { (event: dom.Event) =>
+              doReceive.fire(MessageBuffer wrapArrayBuffer
+                event.target.asInstanceOf[js.Dynamic].result.asInstanceOf[ArrayBuffer])
+            }
+            reader.readAsArrayBuffer(data)
+
+          case _ =>
+        }
+      }
+
+      connection
     }
-    else
-      connectionEstablished.trySet(Failure(new ConnectionException("channel unreliable")))
+
+    (channel.readyState: @unchecked) match {
+      case dom.RTCDataChannelState.connecting =>
+        // strange fix for strange issue with Chromium
+        val handle = js.timers.setTimeout(1.day) { channel.readyState }
+
+        channel.onopen = { (_: dom.Event) =>
+          js.timers.clearTimeout(handle)
+          connectionEstablished.trySet(Success(connection))
+        }
+
+      case dom.RTCDataChannelState.open =>
+        connectionEstablished.trySet(Success(connection))
+
+      case dom.RTCDataChannelState.closing | dom.RTCDataChannelState.closed =>
+        connectionEstablished.trySet(Failure(new ConnectionException("channel closed")))
+    }
   }
 }
