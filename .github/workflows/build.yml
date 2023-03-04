@@ -15,7 +15,7 @@ jobs:
     env:
       SCALA_VERSION: ${{ matrix.scala }}
       SCALA_PLATFORM: ${{ matrix.platform }}
-      SBT_OPTS: -Xmx2048M
+      SBT_OPTS: -Xmx4g
 
     steps:
     - name: Checkout
