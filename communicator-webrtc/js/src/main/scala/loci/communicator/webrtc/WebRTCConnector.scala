@@ -157,7 +157,15 @@ private class WebRTCChannelConnector(
     extends Connector[WebRTC] {
 
   protected def connect(connectionEstablished: Connected[WebRTC]) = {
-    val reliable = channel.ordered && channel.asInstanceOf[js.Dynamic].maxPacketLifeTime == null && channel.asInstanceOf[js.Dynamic].maxRetransmits == null
+    val legacyReliable = {
+      val rel = channel.asInstanceOf[js.Dynamic].reliable
+      !js.isUndefined(rel) && rel.asInstanceOf[Boolean]
+    }
+    val reliable =
+      legacyReliable
+        || channel.ordered
+        || (js.isUndefined(channel.maxPacketLifeTime)
+          && js.isUndefined(channel.maxRetransmits))
 
     if (reliable) {
       val connection = {
