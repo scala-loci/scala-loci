@@ -161,11 +161,12 @@ private class WebRTCChannelConnector(
       val rel = channel.asInstanceOf[js.Dynamic].reliable
       !js.isUndefined(rel) && rel.asInstanceOf[Boolean]
     }
-    val reliable =
+    val reliable = (
       legacyReliable
         || channel.ordered
         || (js.isUndefined(channel.maxPacketLifeTime)
           && js.isUndefined(channel.maxRetransmits))
+      )
 
     if (reliable) {
       val connection = {
