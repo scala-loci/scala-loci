@@ -5,8 +5,6 @@ package components
 
 import utility.reflectionExtensions.*
 
-import scala.quoted.*
-
 trait PlacedExpressions:
   this: Component with Commons with ErrorReporter with PlacementInfo with PlacementContextTypes =>
   import quotes.reflect.*

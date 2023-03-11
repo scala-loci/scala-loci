@@ -155,6 +155,9 @@ object reflectionExtensions:
         else
           tpe
 
+    def stripLazyRef: quotes.reflect.TypeRepr =
+      LazyRefStripping.strip(tpe)
+
     def substitute(from: quotes.reflect.ParamRef, to: quotes.reflect.TypeRepr) =
       TypeParamSubstition.substitute(tpe, from, to)
 
@@ -306,6 +309,38 @@ object reflectionExtensions:
         case _ =>
           s"val $name: ${showType(info)}"
   end safeTypeReprPrinter
+
+  private object LazyRefStripping:
+    private val stripLazyRef =
+      try
+        val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
+        val contextClass = Class.forName("dotty.tools.dotc.core.Contexts$Context")
+        val typeClass = Class.forName("dotty.tools.dotc.core.Types$Type")
+
+        val ctx = quotesImplClass.getMethod("ctx")
+        val stripLazyRef = typeClass.getMethod("stripLazyRef", contextClass)
+
+        { (quotes: Quotes, tpe: Any) =>
+          import quotes.reflect.*
+
+          try
+            if typeClass.isInstance(tpe) then
+              stripLazyRef.invoke(tpe, ctx.invoke(quotes)) match
+                case tpe: TypeRepr @unchecked if typeClass.isInstance(tpe) =>
+                  Some(tpe)
+                case _ =>
+                  None
+            else
+              None
+          catch { case _: IllegalArgumentException | _: ClassCastException => None }
+        }
+      catch
+        case _: ClassNotFoundException | _: NoSuchMethodException =>
+          (quotes: Quotes, tpe: Any) => None
+
+    def strip(using Quotes)(tpe: quotes.reflect.TypeRepr) =
+      stripLazyRef(quotes, tpe) getOrElse tpe
+  end LazyRefStripping
 
   private object TypeParamSubstition:
     private val substituteTypeParam =

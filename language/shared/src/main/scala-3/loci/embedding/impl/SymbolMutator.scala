@@ -25,21 +25,21 @@ class SymbolMutator private ():
 //  private val companionRegister = symDenotationClass.getMethod("registerCompanion", symbolClass, contextClass)
 //  private val annotationRemove = symDenotationClass.getMethod("removeAnnotation", symbolClass, contextClass)
   private val annotationUpdate = symDenotationClass.getMethod("updateAnnotation", annotationClass, contextClass)
-//  private val enterSymbol = classDenotationClass.getMethod("enter", symbolClass, scopeClass, contextClass)
+  private val enterSymbol = classDenotationClass.getMethod("enter", symbolClass, scopeClass, contextClass)
   private val replaceSymbol = classDenotationClass.getMethod("replace", symbolClass, symbolClass, contextClass)
 //  private val deleteSymbol = classDenotationClass.getMethod("delete", symbolClass, contextClass)
-//  private val emptyScope = emptyScopeClass.getField("MODULE$")
+  private val emptyScope = emptyScopeClass.getField("MODULE$")
   private val annotationApply = annotationClass.getMethod("apply", typeClass, classOf[List[_]], classOf[Long], contextClass)
   private val annotationApplyWithTree = annotationClass.getMethod("apply", treeClass)
 
   def setInfo(using Quotes)(symbol: quotes.reflect.Symbol, info: quotes.reflect.TypeRepr): Unit =
     infoSet.invoke(denot.invoke(symbol, ctx.invoke(quotes)), info)
 
-//  def enter(using Quotes)(owner: quotes.reflect.Symbol, symbol: quotes.reflect.Symbol): Unit =
-//    val context = ctx.invoke(quotes)
-//    val denotation = denot.invoke(owner, context)
-//    if classDenotationClass.isInstance(denotation) then
-//      enterSymbol.invoke(denotation, symbol, emptyScope.get(null), context)
+  def enter(using Quotes)(owner: quotes.reflect.Symbol, symbol: quotes.reflect.Symbol): Unit =
+    val context = ctx.invoke(quotes)
+    val denotation = denot.invoke(owner, context)
+    if classDenotationClass.isInstance(denotation) then
+      enterSymbol.invoke(denotation, symbol, emptyScope.get(null), context)
 
   def replace(using Quotes)(owner: quotes.reflect.Symbol, from: quotes.reflect.Symbol, to: quotes.reflect.Symbol): Unit =
     val context = ctx.invoke(quotes)

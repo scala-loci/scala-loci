@@ -15,6 +15,8 @@ object Multitier:
         with ErrorReporter
         with Annotations
         with PlacementInfo
+        with PeerInfo
+        with Synthesis
         with PlacementContextTypes
         with PlacedExpressions
         with Splitting:

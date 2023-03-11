@@ -3,10 +3,7 @@ package embedding
 package impl
 package components
 
-import embedding.*
 import utility.reflectionExtensions.*
-
-import scala.quoted.*
 
 trait PlacementInfo:
   this: Component with Commons =>

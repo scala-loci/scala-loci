@@ -1,8 +1,7 @@
 package loci
 package embedding
 package impl
-
-import scala.quoted.*
+package components
 
 trait ErrorReporter:
   this: Component =>
