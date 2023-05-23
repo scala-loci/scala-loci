@@ -16,7 +16,7 @@ trait PlacedExpressions:
        !(tpe =:= TypeRepr.of[Nothing]) && (tpe <:< types.context || tpe <:< types.placedValue || tpe <:< types.subjective) then
       errorAndCancel(message, pos)
 
-  private class TypePlacementTypesEraser(pos: Position, checkOnly: Boolean) extends SimpleTypeMap(quotes):
+  private class TypePlacementTypesEraser(pos: Position, checkOnly: Boolean) extends TypeMap(quotes):
     override def transform(tpe: TypeRepr) =
       val erasedType =
         if !checkOnly then
