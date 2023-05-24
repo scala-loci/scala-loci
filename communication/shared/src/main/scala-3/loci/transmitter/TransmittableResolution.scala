@@ -37,7 +37,7 @@ object TransmittableResolution:
       def inferredOrWildcard(tpe: TypeRepr) =
         if IsInferred(tpe) then tpe else TypeBounds.empty
 
-      object approximator extends SimpleTypeMap(quotes):
+      object approximator extends TypeMap(quotes):
         override def transform(tpe: TypeRepr) = tpe match
           case _ if tpe.typeSymbol == defn.AnyClass || tpe.typeSymbol == defn.NothingClass =>
             TypeBounds.empty
@@ -56,7 +56,7 @@ object TransmittableResolution:
             super.transform(tpe)
       end approximator
 
-      object surrogator extends SimpleTypeMap(quotes):
+      object surrogator extends TypeMap(quotes):
         override def transform(tpe: TypeRepr) = tpe match
           case TypeBounds(low, hi) if low.typeSymbol == defn.NothingClass =>
             TypeBounds(low, super.transform(hi))
@@ -72,7 +72,7 @@ object TransmittableResolution:
 
       Implicits.search(resolutionType) match
         case result: ImplicitSearchSuccess =>
-          object deskolemizerAndTransmittablesAliaser extends SimpleTypeMap(quotes):
+          object deskolemizerAndTransmittablesAliaser extends TypeMap(quotes):
             override def transform(tpe: TypeRepr) = tpe match
               case _ if tpe.typeSymbol == transmittable =>
                 val aliased =
@@ -199,7 +199,7 @@ object TransmittableResolution:
                     newInstatiation
                   }
 
-            object substitutor extends SimpleTypeMap(quotes):
+            object substitutor extends TypeMap(quotes):
               override def transform(tpe: TypeRepr) = tpe match
                 case tpe: ParamRef => instatiations.get(tpe) match
                   case Some(tpe) => transform(tpe)

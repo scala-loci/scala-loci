@@ -191,14 +191,56 @@ object reflectionExtensions:
     RefChanger(from, to).transformTerm(term)(owner)
   end changeRefs
 
-  trait SimpleTypeMap[Q <: Quotes & Singleton](val quotes: Q):
+  def changeParamRefs(using Quotes)(
+      fromBinder: quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
+      toBinder: quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
+      tpe: quotes.reflect.TypeRepr): quotes.reflect.TypeRepr =
     import quotes.reflect.*
 
+    object paramRefChanger extends TypeMap(quotes):
+      def toBinderParam = toBinder match
+        case toBinder: RecursiveType => (_: Int) => toBinder.recThis
+        case toBinder: LambdaType => toBinder match
+          case toBinder: MethodType => toBinder.param
+          case toBinder: PolyType => toBinder.param
+          case toBinder: TypeLambda => toBinder.param
+
+      override def transform(tpe: TypeRepr) = tpe match
+        case ParamRef(binder, paramNum) if binder == fromBinder => toBinderParam(paramNum)
+        case RecursiveThis(binder) if binder == fromBinder => toBinderParam(0)
+        case tpe => super.transform(tpe)
+
+    paramRefChanger.transform(tpe)
+  end changeParamRefs
+
+  trait TypeMap[Q <: Quotes & Singleton](val quotes: Q):
+    import quotes.reflect.*
+
+    private given quotes.type = quotes
+
     def transform(tpe: TypeRepr): TypeRepr = tpe match
+      case tpe: NamedType =>
+        def member(symbol: Symbol, name: String) = tpe match
+          case _: TypeRef => symbol.typeMember(name)
+          case _: TermRef => symbol.fieldMember(name)
+        val qualifier = transform(tpe.qualifier)
+        if qualifier != tpe.qualifier then
+          val symbol = member(qualifier.typeSymbol, tpe.name)
+          val memberSymbol = if symbol.exists then symbol else member(qualifier.termSymbol, tpe.name)
+          qualifier.select(memberSymbol)
+        else
+          tpe
+      case tpe: ThisType =>
+        val tref = transform(tpe.tref)
+        if tref != tpe.tref then This(tref.typeSymbol).tpe else tpe
+      case SuperType(tpethis, tpesuper) =>
+        val thistpe = transform(tpethis)
+        val supertpe = transform(tpesuper)
+        if thistpe != tpethis || supertpe != tpesuper then SuperType(thistpe, supertpe) else tpe
       case tpe: AppliedType =>
         val tycon = transform(tpe.tycon)
         val args = tpe.args map transform
-        if tycon != tpe.tycon || args != tpe.args then tycon.appliedTo(args) else tpe
+        if tycon != tpe.tycon || args != tpe.args then AppliedType(tycon, args) else tpe
       case tpe: TypeBounds =>
         val low = transform(tpe.low)
         val hi = transform(tpe.hi)
@@ -207,9 +249,58 @@ object reflectionExtensions:
         val parent = transform(tpe.parent)
         val info = transform(tpe.info)
         if parent != tpe.parent || info != tpe.info then Refinement(parent, tpe.name, info) else tpe
+      case tpe: MatchType =>
+        val bound = transform(tpe.bound)
+        val scrutinee = transform(tpe.scrutinee)
+        val cases = tpe.cases map transform
+        if bound != tpe.bound || scrutinee != tpe.scrutinee || cases != tpe.cases then MatchType(bound, scrutinee, cases) else tpe
+      case tpe: MatchCase =>
+        val pattern = transform(tpe.pattern)
+        val rhs = transform(tpe.rhs)
+        if pattern != tpe.pattern || rhs != tpe.rhs then MatchCase(pattern, rhs) else tpe
+      case tpe: ByNameType =>
+        val underlying = transform(tpe.underlying)
+        if underlying != tpe.underlying then ByNameType(underlying) else tpe
+      case tpe: MethodType =>
+        val paramTypes = tpe.paramTypes map transform
+        val resType = transform(tpe.resType)
+        if paramTypes != tpe.paramTypes || resType != tpe.resType then
+          val methodType = MethodType(tpe.paramNames)(_ => paramTypes, _ => resType)
+          changeParamRefs(tpe, methodType, methodType)
+        else
+          tpe
+      case tpe: PolyType =>
+        val paramBounds = tpe.paramBounds map { transform(_) match
+          case tpe: TypeBounds => tpe
+          case _ => TypeBounds.empty
+        }
+        val resType = transform(tpe.resType)
+        if paramBounds != tpe.paramBounds || resType != tpe.resType then
+          val polyType = PolyType(tpe.paramNames)(_ => paramBounds, _ => resType)
+          changeParamRefs(tpe, polyType, polyType)
+        else
+          tpe
+      case tpe: TypeLambda =>
+        val paramTypes = tpe.paramTypes map { transform(_) match
+          case tpe: TypeBounds => tpe
+          case _ => TypeBounds.empty
+        }
+        val resType = transform(tpe.resType)
+        if paramTypes != tpe.paramTypes || resType != tpe.resType then
+          val typeLambda = TypeLambda(tpe.paramNames, _ => paramTypes, _ => resType)
+          changeParamRefs(tpe, typeLambda, typeLambda)
+        else
+          tpe
+      case tpe: RecursiveType =>
+        val underlying = transform(tpe.underlying)
+        if underlying != tpe.underlying then
+          val recursiveType = RecursiveType(_ => underlying)
+          changeParamRefs(tpe, recursiveType, recursiveType)
+        else
+          tpe
       case _ =>
         tpe
-  end SimpleTypeMap
+  end TypeMap
 
   extension (using Quotes)(printerModule: quotes.reflect.PrinterModule)
     def SafeTypeReprCode = safeTypeReprPrinter(quotes.reflect.Printer.TypeReprCode)

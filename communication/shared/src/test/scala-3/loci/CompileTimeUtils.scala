@@ -21,7 +21,7 @@ object CompileTimeUtils:
   def assertTypeImpl[T: Type](value: Expr[Any])(using Quotes): Expr[Unit] =
     import quotes.reflect.*
 
-    object normalizer extends SimpleTypeMap(quotes):
+    object normalizer extends TypeMap(quotes):
       override def transform(tpe: TypeRepr) = tpe.dealias match
         case tpe: TypeRef => TypeIdent(tpe.typeSymbol).tpe
         case tpe => super.transform(tpe)
@@ -39,7 +39,7 @@ object CompileTimeUtils:
   def assertExactTypeImpl[T: Type](value: Expr[Any])(using Quotes): Expr[Unit] =
     import quotes.reflect.*
 
-    object normalizer extends SimpleTypeMap(quotes):
+    object normalizer extends TypeMap(quotes):
       override def transform(tpe: TypeRepr) = tpe match
         case tpe: TypeRef => TypeIdent(tpe.typeSymbol).tpe
         case _ => super.transform(tpe)
