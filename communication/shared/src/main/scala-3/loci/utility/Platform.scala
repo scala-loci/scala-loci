@@ -13,7 +13,9 @@ object platform:
   def value[T: Type](selection: Expr[Seq[(Boolean, T) | T]])(using Quotes): Expr[T] =
     import quotes.reflect.*
 
-    val selectionElements = (selection.asTerm.underlyingArgument: @unchecked) match
+    val selectionElements = selection.asTerm match
+      case Inlined(_, List(), Repeated(elems, _)) => elems
+      case Inlined(_, List(), Typed(Repeated(elems, _), _)) => elems
       case Repeated(elems, _) => elems
       case Typed(Repeated(elems, _), _) => elems
 

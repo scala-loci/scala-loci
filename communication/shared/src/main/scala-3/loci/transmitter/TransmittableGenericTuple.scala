@@ -46,7 +46,12 @@ object GenericTuple:
         case '{ Transmittable.Resolution.resolution[B, I, R](using $i, $b, $transmittable) } => transmittable
         case '{ Transmittable.Resolution.resolutionAlternation[B, I, R](using $i, $b, $transmittable) } => transmittable
 
-      val Block(_, expr) = delegation.asTerm.underlyingArgument: @unchecked
+      val expr = delegation.asTerm match
+        case Inlined(_, List(), Inlined(_, List(), Inlined(_, List(), Block(_, expr)))) => expr
+        case Inlined(_, List(), Inlined(_, List(), Block(_, expr))) => expr
+        case Inlined(_, List(), Block(_, expr)) => expr
+        case Block(_, expr) => expr
+
       val '{ new Delegation[BT, IT, RT, D, false]($delegates, $provide, $receive) } = expr.asExpr: @unchecked
 
       val (provideTransformation, receiveTransformation) =
