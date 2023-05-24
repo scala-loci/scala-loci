@@ -91,6 +91,19 @@ object reflectionExtensions:
         case NonFatal(_) => fallback
   end extension
 
+  extension (using Quotes)(term: quotes.reflect.Term)
+    def substituteRefs(using Quotes)(
+        from: quotes.reflect.Symbol,
+        to: quotes.reflect.Symbol,
+        owner: quotes.reflect.Symbol) =
+      Substitutor.substituteRefsInTerm(Map(from -> to), owner, term)
+
+    def substituteRefs(using Quotes)(
+        substitutions: Map[quotes.reflect.Symbol, quotes.reflect.Symbol],
+        owner: quotes.reflect.Symbol) =
+      Substitutor.substituteRefsInTerm(substitutions, owner, term)
+  end extension
+
   extension (using Quotes)(tpe: quotes.reflect.TypeRepr)
     @targetName("safeShowType") def safeShow: String = tpe.safeShow("<?>", quotes.reflect.Printer.SafeTypeReprCode)
     @targetName("safeShowType") def safeShow(fallback: String): String = tpe.safeShow(fallback, quotes.reflect.Printer.SafeTypeReprCode)
@@ -161,6 +174,22 @@ object reflectionExtensions:
     def substitute(from: quotes.reflect.ParamRef, to: quotes.reflect.TypeRepr) =
       TypeParamSubstition.substitute(tpe, from, to)
 
+    def substituteRefs(using Quotes)(from: quotes.reflect.Symbol, to: quotes.reflect.Symbol) =
+      Substitutor.substituteRefsInType(Map(from -> to), tpe)
+
+    def substituteRefs(using Quotes)(substitutions: Map[quotes.reflect.Symbol, quotes.reflect.Symbol]) =
+      Substitutor.substituteRefsInType(substitutions, tpe)
+
+    def substituteParamRefs(
+        fromBinder: quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
+        toBinder: quotes.reflect.LambdaType | quotes.reflect.RecursiveType) =
+      Substitutor.substituteParamRefsInType(Map(fromBinder -> toBinder), tpe)
+
+    def substituteParamRefs(substitutionBinders: Map[
+        quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
+        quotes.reflect.LambdaType | quotes.reflect.RecursiveType]) =
+      Substitutor.substituteParamRefsInType(substitutionBinders, tpe)
+
     def resolvedMemberType(symbol: quotes.reflect.Symbol) =
       import quotes.reflect.*
 
@@ -179,39 +208,87 @@ object reflectionExtensions:
         getOrElse symbol)
   end extension
 
-  def changeRefs(using Quotes)(from: quotes.reflect.Symbol, to: quotes.reflect.Symbol, owner: quotes.reflect.Symbol, term: quotes.reflect.Term) =
-    import quotes.reflect.*
+  private object Substitutor:
+    def substituteRefsInTerm(using Quotes)(
+        substitutions: Map[quotes.reflect.Symbol, quotes.reflect.Symbol],
+        owner: quotes.reflect.Symbol,
+        term: quotes.reflect.Term): quotes.reflect.Term =
+      import quotes.reflect.*
 
-    class RefChanger(from: Symbol, to: Symbol) extends TreeMap:
-      private val toTerm = Ref(to)
-      override def transformTerm(term: Term)(owner: Symbol) = term match
-        case ref: Ref if ref.symbol == from => toTerm
-        case _ => super.transformTerm(term)(owner)
+      object substitutor extends TreeMap:
+        override def transformTerm(term: Term)(owner: Symbol) = term match
+          case term: This =>
+            substitutions.get(term.symbol).fold(super.transformTerm(term)(owner)) { This(_) }
+          case term: Ident =>
+            substitutions.get(term.symbol).fold(super.transformTerm(term)(owner)) { Ref(_) }
+          case term: Select =>
+            substitutions.get(term.symbol).fold(super.transformTerm(term)(owner)) { symbol =>
+              transformTerm(term.qualifier)(owner).select(symbol)
+            }
+          case _ =>
+            super.transformTerm(term)(owner)
 
-    RefChanger(from, to).transformTerm(term)(owner)
-  end changeRefs
+        override def transformTypeTree(tree: TypeTree)(owner: Symbol) = tree match
+          case Inferred() =>
+            val tpe = substituteRefsInType(substitutions, tree.tpe)
+            if tpe != tree.tpe then TypeTree.of(using tpe.asType) else tree
+          case tree: TypeIdent =>
+            substitutions.get(tree.symbol).fold(super.transformTypeTree(tree)(owner)) { TypeIdent(_) }
+          case tree: TypeSelect =>
+            substitutions.get(tree.symbol).fold(super.transformTypeTree(tree)(owner)) { symbol =>
+              TypeSelect(transformTerm(tree.qualifier)(owner), symbol.name)
+            }
+          case _ =>
+            super.transformTypeTree(tree)(owner)
+      end substitutor
 
-  def changeParamRefs(using Quotes)(
-      fromBinder: quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
-      toBinder: quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
-      tpe: quotes.reflect.TypeRepr): quotes.reflect.TypeRepr =
-    import quotes.reflect.*
+      substitutor.transformTerm(term)(owner)
+    end substituteRefsInTerm
 
-    object paramRefChanger extends TypeMap(quotes):
-      def toBinderParam = toBinder match
-        case toBinder: RecursiveType => (_: Int) => toBinder.recThis
-        case toBinder: LambdaType => toBinder match
-          case toBinder: MethodType => toBinder.param
-          case toBinder: PolyType => toBinder.param
-          case toBinder: TypeLambda => toBinder.param
+    def substituteRefsInType(using Quotes)(
+        substitutions: Map[quotes.reflect.Symbol, quotes.reflect.Symbol],
+        tpe: quotes.reflect.TypeRepr): quotes.reflect.TypeRepr =
+      import quotes.reflect.*
 
-      override def transform(tpe: TypeRepr) = tpe match
-        case ParamRef(binder, paramNum) if binder == fromBinder => toBinderParam(paramNum)
-        case RecursiveThis(binder) if binder == fromBinder => toBinderParam(0)
-        case tpe => super.transform(tpe)
+      object substitutor extends TypeMap(quotes):
+        override def transform(tpe: TypeRepr) = tpe match
+          case tpe: NamedType =>
+            substitutions.get(tpe.typeSymbol).fold(super.transform(tpe)) { transform(tpe.qualifier).select(_) }
+          case tpe =>
+            super.transform(tpe)
 
-    paramRefChanger.transform(tpe)
-  end changeParamRefs
+      substitutor.transform(tpe)
+    end substituteRefsInType
+
+    def substituteParamRefsInType(using Quotes)(
+        substitutionBinders: Map[
+          quotes.reflect.LambdaType | quotes.reflect.RecursiveType,
+          quotes.reflect.LambdaType | quotes.reflect.RecursiveType],
+        tpe: quotes.reflect.TypeRepr): quotes.reflect.TypeRepr =
+      import quotes.reflect.*
+
+      val substitutions = substitutionBinders.toMap[TypeRepr, LambdaType | RecursiveType]
+
+      object substitutor extends TypeMap(quotes):
+        override def transform(tpe: TypeRepr) = tpe match
+          case ParamRef(binder, paramNum) =>
+            substitutions.get(binder).fold(tpe) {
+              case binder: MethodType => binder.param(paramNum)
+              case binder: PolyType => binder.param(paramNum)
+              case binder: TypeLambda => binder.param(paramNum)
+              case _ => tpe
+            }
+          case RecursiveThis(binder) =>
+            substitutions.get(binder).fold(tpe) {
+              case binder: RecursiveType => binder.recThis
+              case _ => tpe
+            }
+          case tpe =>
+            super.transform(tpe)
+
+      substitutor.transform(tpe)
+    end substituteParamRefsInType
+  end Substitutor
 
   trait TypeMap[Q <: Quotes & Singleton](val quotes: Q):
     import quotes.reflect.*
@@ -266,7 +343,7 @@ object reflectionExtensions:
         val resType = transform(tpe.resType)
         if paramTypes != tpe.paramTypes || resType != tpe.resType then
           val methodType = MethodType(tpe.paramNames)(_ => paramTypes, _ => resType)
-          changeParamRefs(tpe, methodType, methodType)
+          methodType.substituteParamRefs(tpe, methodType)
         else
           tpe
       case tpe: PolyType =>
@@ -277,7 +354,7 @@ object reflectionExtensions:
         val resType = transform(tpe.resType)
         if paramBounds != tpe.paramBounds || resType != tpe.resType then
           val polyType = PolyType(tpe.paramNames)(_ => paramBounds, _ => resType)
-          changeParamRefs(tpe, polyType, polyType)
+          polyType.substituteParamRefs(tpe, polyType)
         else
           tpe
       case tpe: TypeLambda =>
@@ -288,14 +365,14 @@ object reflectionExtensions:
         val resType = transform(tpe.resType)
         if paramTypes != tpe.paramTypes || resType != tpe.resType then
           val typeLambda = TypeLambda(tpe.paramNames, _ => paramTypes, _ => resType)
-          changeParamRefs(tpe, typeLambda, typeLambda)
+          typeLambda.substituteParamRefs(tpe, typeLambda)
         else
           tpe
       case tpe: RecursiveType =>
         val underlying = transform(tpe.underlying)
         if underlying != tpe.underlying then
           val recursiveType = RecursiveType(_ => underlying)
-          changeParamRefs(tpe, recursiveType, recursiveType)
+          recursiveType.substituteParamRefs(tpe, recursiveType)
         else
           tpe
       case _ =>
