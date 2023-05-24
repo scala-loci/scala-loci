@@ -5,28 +5,34 @@ package components
 
 import utility.reflectionExtensions.*
 
+import scala.annotation.experimental
 import scala.quoted.*
 
+@experimental
 trait PlacementContextTypes:
-  this: Component with Commons with ErrorReporter with Annotations with PlacementInfo =>
+  this: Component & Commons & ErrorReporter & Annotations & PlacementInfo =>
   import quotes.reflect.*
 
   object PlacementLiftingConversion:
     def unapply(term: Term): Option[Term] = term match
-      case Inlined(Some(call), List(conversion: ValDef), erased @ Typed(Apply(_, List(rhs)), _))
+      case Inlined(Some(call), List(conversion: ValDef), erased @ MaybeTyped(Apply(_, List(rhs))))
         if call.symbol == symbols.placed.companionModule.moduleClass &&
            !(conversion.tpt.tpe =:= TypeRepr.of[Nothing]) && conversion.tpt.tpe <:< types.conversion &&
            !(erased.tpe =:= TypeRepr.of[Nothing]) && erased.tpe <:< types.placed =>
         rhs match
-          case Typed(Repeated(List(Inlined(_, List(), rhs)), _), _) => Some(rhs)
-          case Typed(Repeated(List(rhs), _), _) => Some(rhs)
-          case Repeated(List(Inlined(_, List(), rhs)), _) => Some(rhs)
-          case Repeated(List(rhs), _) => Some(rhs)
+          case MaybeTyped(Repeated(List(Inlined(_, List(), rhs)), _)) => Some(rhs)
+          case MaybeTyped(Repeated(List(rhs), _)) => Some(rhs)
           case _ => Some(rhs)
-      case Inlined(Some(call), List(conversion: ValDef, ValDef(_, _, Some(rhs))), erased @ Typed(Apply(_, List(_)), _))
+      case Inlined(Some(call), List(conversion: ValDef, ValDef(_, _, Some(rhs))), erased @ MaybeTyped(Apply(_, List(_))))
         if call.symbol == symbols.placed.companionModule.moduleClass &&
            !(conversion.tpt.tpe =:= TypeRepr.of[Nothing]) && conversion.tpt.tpe <:< types.conversion &&
            !(erased.tpe =:= TypeRepr.of[Nothing]) && erased.tpe <:< types.placed =>
+        rhs match
+          case Inlined(_, List(), rhs) => Some(rhs)
+          case _ => Some(rhs)
+      case Apply(Select(conversion, _), List(rhs))
+        if conversion.symbol.owner == symbols.placed.companionModule.moduleClass &&
+           !(conversion.tpe =:= TypeRepr.of[Nothing]) && conversion.tpe <:< types.conversion =>
         rhs match
           case Inlined(_, List(), rhs) => Some(rhs)
           case _ => Some(rhs)
@@ -51,14 +57,14 @@ trait PlacementContextTypes:
         case expr => Block(List(expr), erased))
 
   private def placedExpressionSyntaxInfo(rhs: Option[Term]) = rhs match
-    case Some(Lambda(List(arg), Apply(Apply(fun, List(Lambda(_, _))), _))) if arg.symbol.isImplicit && fun.symbol.owner == symbols.on => (true, true)
-    case Some(Apply(Apply(fun, List(Lambda(_, _))), _)) if fun.symbol.owner == symbols.on => (true, false)
+    case Some(MaybeTyped(Lambda(List(arg), Apply(Apply(fun, List(Lambda(_, _))), _)))) if arg.symbol.isImplicit && fun.symbol.owner == symbols.on => (true, true)
+    case Some(MaybeTyped(Apply(Apply(fun, List(Lambda(_, _))), _))) if fun.symbol.owner == symbols.on => (true, false)
     case _ => (false, false)
 
   private def stripPlacedExpressionSyntax(symbol: Symbol, placementInfo: PlacementInfo, rhs: Term) =
     val (rhsStripped, arg) = rhs match
-      case Lambda(List(arg), Apply(Apply(fun, List(Lambda(_, rhs))), _)) if arg.symbol.isImplicit && fun.symbol.owner == symbols.on => rhs -> Some(arg)
-      case Apply(Apply(fun, List(Lambda(List(arg), rhs))), _) if fun.symbol.owner == symbols.on => rhs -> Some(arg)
+      case MaybeTyped(Lambda(List(arg), Apply(Apply(fun, List(Lambda(_, rhs))), _))) if arg.symbol.isImplicit && fun.symbol.owner == symbols.on => rhs -> Some(arg)
+      case MaybeTyped(Apply(Apply(fun, List(Lambda(List(arg), rhs))), _)) if fun.symbol.owner == symbols.on => rhs -> Some(arg)
       case _ => rhs -> None
     normalBody(arg.fold(symbol) { _.symbol.owner.owner }, placementInfo, rhsStripped)
 
@@ -72,7 +78,7 @@ trait PlacementContextTypes:
 
   private def stripPlacementLiftingConversion(symbol: Symbol, placementInfo: PlacementInfo, rhs: Term): Term =
     val (rhsStripped, arg) = rhs match
-      case Lambda(List(arg), rhs) if arg.symbol.isImplicit => stripPlacementLiftingConversion(rhs) -> Some(arg)
+      case MaybeTyped(Lambda(List(arg), rhs)) if arg.symbol.isImplicit => stripPlacementLiftingConversion(rhs) -> Some(arg)
       case _ => rhs -> None
     normalBody(arg.fold(symbol) { _.symbol.owner.owner }, placementInfo, rhsStripped)
 
@@ -131,19 +137,37 @@ trait PlacementContextTypes:
           ValDef.copy(stat)(name, normalizedType, rhs)
       else
         stat
+    case stat @ DefDef(name, List(TermParamClause(List(param))), tpt, rhs)
+        if tpt.tpe.typeSymbol == defn.UnitClass && (stat.symbol.flags is Flags.FieldAccessor) =>
+      val info = stat.symbol.info match
+        case MethodType(List(name), List(param), result) =>
+          PlacementInfo(param) map: placementInfo =>
+            MethodType(List(name))(_ => List(placementInfo.canonicalType), _ => result)
+        case _ =>
+          None
+      info.fold(stat): info =>
+        SymbolMutator.get.fold(
+          errorAndCancel(noTypeInferenceMessage, stat.posInUserCode)):
+          _.setInfo(stat.symbol, info)
+        val paramss = List(TermParamClause(List(ValDef.copy(param)(param.name, TypeTree.of(using info.paramTypes.head.asType), param.rhs))))
+        DefDef.copy(stat)(name, paramss, tpt, rhs)
     case stat @ DefDef(name, paramss, tpt, _) =>
       val (placementInfo, rhs, expressionInContextFunction) = normalizePlacementContextType(stat.symbol, tpt, stat.rhs, stat.posInUserCode, normalizeBody)
       if placementInfo exists { !_.modality.local } then
         paramss collectFirst Function.unlift(_.params find { _.symbol.isImplicit }) foreach: param =>
           errorAndCancel("Non-local placed values cannot have implicit arguments.", param.posInUserCode)
+      val normalizedStat =
+        if placementInfo.isDefined && !expressionInContextFunction || normalizeBody then
+          placementInfo.fold(stat): placementInfo =>
+            val normalizedType = if placementInfo.canonical then tpt else TypeTree.of(using placementInfo.canonicalType.asType)
+            DefDef.copy(stat)(name, paramss, normalizedType, rhs)
+        else
+          stat
       if placementInfo.isDefined && !expressionInContextFunction then
-        tryIncrementContextResultCount(stat.symbol)
-      if normalizeBody then
-        placementInfo.fold(stat): placementInfo =>
-          val normalizedType = if placementInfo.canonical then tpt else TypeTree.of(using placementInfo.canonicalType.asType)
-          DefDef.copy(stat)(name, paramss, normalizedType, rhs)
-      else
-        stat
+        SymbolMutator.get.fold(errorAndCancel(noTypeInferenceMessage, stat.posInUserCode)): symbolMutator =>
+          symbolMutator.removeAnnotation(normalizedStat.symbol, symbols.contextResultCount)
+          symbolMutator.annotateContextResults(normalizedStat)
+      if normalizeBody then normalizedStat else stat
 
   private def normalizePlacementContextType(term: Term, symbol: Symbol): Term =
     PlacementInfo(term.tpe.resultType).fold(term) { placementInfo =>

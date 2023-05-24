@@ -22,6 +22,15 @@ object reflectionExtensions:
       !(symbol.flags is quotes.reflect.Flags.Module) &&
       !(symbol.flags is quotes.reflect.Flags.Package)
 
+    def isFieldAccessor =
+      symbol.flags is quotes.reflect.Flags.FieldAccessor
+
+    def isCaseAccessor =
+      symbol.flags is quotes.reflect.Flags.CaseAccessor
+
+    def isParamAccessor =
+      symbol.flags is quotes.reflect.Flags.ParamAccessor
+
     def isStable =
       symbol.isTerm &&
       ((!(symbol.flags is quotes.reflect.Flags.Mutable) &&
@@ -45,7 +54,29 @@ object reflectionExtensions:
       symbol.flags is quotes.reflect.Flags.Module
   end extension
 
+  extension (using Quotes)(flags: quotes.reflect.Flags)
+    def &~(other: quotes.reflect.Flags) =
+      import quotes.reflect.Flags.*
+      Seq(Abstract, Artifact, Case, CaseAccessor, Contravariant, Covariant, Deferred,
+          EmptyFlags, Enum, Erased, Exported, ExtensionMethod, FieldAccessor, Final,
+          Given, HasDefault, Implicit, Infix, Inline, Invisible, Lazy, Local, Macro, Method, Module, Mutable,
+          NoInits, Opaque, Open, Override, Package, Param, ParamAccessor, Private, PrivateLocal, Protected,
+          Scala2x, Sealed, StableRealizable, Synthetic, Trait, Transparent).foldLeft(EmptyFlags) { (result, flag) =>
+        if (flags is flag) && !(other is flag) then result | flag else result
+      }
+  end extension
+
   extension (using Quotes)(tree: quotes.reflect.Tree)
+    @targetName("safeShowTree") def safeShow: String = tree.safeShow("<?>", quotes.reflect.Printer.TreeCode)
+    @targetName("safeShowTree") def safeShow(fallback: String): String = tree.safeShow(fallback, quotes.reflect.Printer.TreeCode)
+    @targetName("safeShowTree") def safeShow(printer: quotes.reflect.Printer[quotes.reflect.Tree]): String = tree.safeShow("<?>", printer)
+    @targetName("safeShowTree") def safeShow(fallback: String, printer: quotes.reflect.Printer[quotes.reflect.Tree]): String =
+      try
+        val result = tree.show(using printer).trim
+        if result.nonEmpty then result else fallback
+      catch
+        case NonFatal(_) => fallback
+
     def posInUserCode =
       import quotes.reflect.*
 
@@ -79,16 +110,6 @@ object reflectionExtensions:
         else
           Position.ofMacroExpansion
     end posInUserCode
-
-    @targetName("safeShowTree") def safeShow: String = tree.safeShow("<?>", quotes.reflect.Printer.TreeCode)
-    @targetName("safeShowTree") def safeShow(fallback: String): String = tree.safeShow(fallback, quotes.reflect.Printer.TreeCode)
-    @targetName("safeShowTree") def safeShow(printer: quotes.reflect.Printer[quotes.reflect.Tree]): String = tree.safeShow("<?>", printer)
-    @targetName("safeShowTree") def safeShow(fallback: String, printer: quotes.reflect.Printer[quotes.reflect.Tree]): String =
-      try
-        val result = tree.show(using printer).trim
-        if result.nonEmpty then result else fallback
-      catch
-        case NonFatal(_) => fallback
   end extension
 
   extension (using Quotes)(term: quotes.reflect.Term)

@@ -5,8 +5,11 @@ package components
 
 import utility.reflectionExtensions.*
 
+import scala.annotation.experimental
+
+@experimental
 trait PlacementInfo:
-  this: Component with Commons =>
+  this: Component & Commons =>
   import quotes.reflect.*
 
   enum Modality(val local: Boolean, val subjective: Boolean, val subjectivePeerType: Option[TypeRepr]):

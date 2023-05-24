@@ -4,8 +4,10 @@ package impl
 
 import utility.reflectionExtensions.*
 
+import scala.annotation.experimental
 import scala.quoted.*
 
+@experimental
 def swapLambdaResult(using Quotes)(block: quotes.reflect.Block, resultType: quotes.reflect.TypeRepr, rhs: quotes.reflect.Term) =
   import quotes.reflect.*
 

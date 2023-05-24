@@ -5,8 +5,11 @@ package components
 
 import utility.reflectionExtensions.*
 
+import scala.annotation.experimental
+
+@experimental
 trait PlacedExpressions:
-  this: Component with Commons with ErrorReporter with PlacementInfo with PlacementContextTypes =>
+  this: Component & Commons & ErrorReporter & PlacementInfo & PlacementContextTypes =>
   import quotes.reflect.*
 
   private def checkPlacementTypes(tpe: TypeRepr, pos: Position, message: String) =
@@ -324,6 +327,9 @@ trait PlacedExpressions:
         DefDef.copy(stat)(name, paramss, tpt, rhs map { erasePlacementTypesFromBody(_, stat.symbol) })
       case PlacedStatement(stat: Term) =>
         erasePlacementTypesFromBody(stat, module.symbol)
+      case stat @ DefDef(_, List(TermParamClause(List(_))), tpt, _)
+          if tpt.tpe.typeSymbol == defn.UnitClass && stat.symbol.isFieldAccessor =>
+        stat
       case stat =>
         eraserCheckOnly.transformStatement(stat)(module.symbol)
         stat

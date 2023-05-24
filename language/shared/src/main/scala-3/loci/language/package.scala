@@ -3,10 +3,10 @@ package language
 
 import embedding.*
 
-import scala.annotation.MacroAnnotation
+import scala.annotation.{experimental, MacroAnnotation}
 import scala.quoted.*
 
-//@experimental
+@experimental
 class multitier extends MacroAnnotation:
   def this(accessorGeneration: AccessorGeneration) = this()
   def transform(using Quotes)(tree: quotes.reflect.Definition): List[quotes.reflect.Definition] =

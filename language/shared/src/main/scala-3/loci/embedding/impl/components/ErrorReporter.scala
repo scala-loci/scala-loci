@@ -3,6 +3,9 @@ package embedding
 package impl
 package components
 
+import scala.annotation.experimental
+
+@experimental
 trait ErrorReporter:
   this: Component =>
   import quotes.reflect.*

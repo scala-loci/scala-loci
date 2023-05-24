@@ -17,7 +17,7 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.3.0-RC1-bin-20230118-9337bd6-NIGHTLY")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.15", "2.13.10", "3.3.0")
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value

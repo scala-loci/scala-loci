@@ -5,9 +5,11 @@ package components
 
 import utility.reflectionExtensions.*
 
+import scala.annotation.experimental
 import scala.reflect.TypeTest
 import scala.quoted.*
 
+@experimental
 trait Commons:
   this: Component =>
   import quotes.reflect.*
@@ -26,7 +28,7 @@ trait Commons:
     val single = TypeRepr.of[language.Single[?]].typeSymbol
     val optional = TypeRepr.of[language.Optional[?]].typeSymbol
     val multiple = TypeRepr.of[language.Multiple[?]].typeSymbol
-//    val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
+    val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
     val contextFunction1 = TypeRepr.of[ContextFunction1[?, ?]].typeSymbol
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
     val compileTimeOnly = TypeRepr.of[annotation.compileTimeOnly].typeSymbol
@@ -48,6 +50,11 @@ trait Commons:
     val body = "body"
     val apply = "apply"
     val tie = "Tie"
+
+  object MaybeTyped:
+    def unapply(term: Term): Some[Term] = term match
+      case Typed(expr, _) => unapply(expr)
+      case _ => Some(term)
 
   final class PackedValueType[T](using t: Type[T]):
     opaque type Type = T

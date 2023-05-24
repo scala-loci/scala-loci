@@ -4,6 +4,9 @@ package impl
 
 import scala.quoted.*
 
-trait Component:
+sealed trait Component:
   val quotes: Quotes
   given quotes.type = quotes
+
+object Component:
+  trait withQuotes[Q <: Quotes & Singleton](val quotes: Q) extends Component

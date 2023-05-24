@@ -5,10 +5,11 @@ package components
 
 import utility.reflectionExtensions.*
 
-import scala.annotation.targetName
+import scala.annotation.{experimental, targetName}
 
+@experimental
 trait PeerInfo:
-  this: Component with Commons =>
+  this: Component & Commons =>
   import quotes.reflect.*
 
   enum Multiplicity:
