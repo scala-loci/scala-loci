@@ -1,9 +1,10 @@
 package loci
 package embedding
 
-import loci.language.{on => _, _}
+import loci.language.{on as _, *}
 
-import scala.annotation.compileTimeOnly
+import scala.annotation.{compileTimeOnly, experimental}
+import scala.quoted.*
 
 object Placement {
   sealed trait Context[P]
@@ -16,10 +17,14 @@ object Placement {
     @compileTimeOnly("Expression must be placed on a peer")
     given Context[Any]()
 
+  @experimental
   sealed trait On[P]:
-    def apply[T, U](v: Context[P] ?=> T)(using PlacedClean[U on P, P, T, T, U]): U on P
-    infix def local[T, U](v: Context[P] ?=> T)(using PlacedClean[U on P, P, T, T, U]): Local[U] on P
-    infix def sbj[R, T, U](v: Context[P] ?=> Remote[R] => T)(using PlacedClean[U on P, P, T, T, U]): U per R on P
+    transparent inline def apply[T, U](inline v: Context[P] ?=> T)(using PlacedClean[U on P, P, T, T, U]): U on P =
+      ${ inferrablePlacementContextClosure[U on P]('v) }
+    transparent inline infix def local[T, U](inline v: Context[P] ?=> T)(using PlacedClean[U on P, P, T, T, U]): Local[U] on P =
+      ${ inferrablePlacementContextClosure[Local[U] on P]('v) }
+    transparent inline infix def sbj[R, T, U](inline v: Context[P] ?=> Remote[R] => T)(using PlacedClean[U on P, P, T, T, U]): U per R on P =
+      ${ inferrablePlacementContextClosure[U per R on P]('v) }
 
 //  sealed trait Placed {
 //    def apply[P, T, U, S](v: Context[P] => T)(implicit ev0: PlacedType[T, S], ev1: PlacedClean[U on P, P, S, S, U]): U on P

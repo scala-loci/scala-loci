@@ -1,7 +1,7 @@
 package loci
 package embedding
 
-import loci.language.*
+import loci.language.{on as _, *}
 
 abstract class PlacedValue[-P, +T] private[loci]()
 //  extends Dynamic:
@@ -14,11 +14,6 @@ object PlacedValue // extends transmitter.RemoteAccessor.Default
 
 sealed trait Placed[-P, +T] extends PlacedValue[P, T]:
   def test: Int = 0
-//  def and[T0, T1, P0, PT, P1, T0_on_P0](v: T0_on_P0)(implicit
-//    ev0: T0_on_P0 <:< (T0 on P0),
-//    ev1: CommonSuperType[T, T0, T1],
-//    ev2: CommonSuperType[P @uncheckedVariance, P0, PT],
-//    ev3: AnyUpcast[PT, P1]): T1 on P1
 //  def to[R, U](r: RemoteSbj[R, T, U]): U
 //  def from[R]: T @uncheckedVariance from R
 //  def from[R](r: Remote[R]): T @uncheckedVariance fromSingle R
@@ -26,6 +21,13 @@ sealed trait Placed[-P, +T] extends PlacedValue[P, T]:
 //  def from[R, placed[_, _]](r: RemoteSelection[R, placed]): T @uncheckedVariance placed R
 
 object Placed:
+//  extension [P, T](inline placed: Placed[P, T])
+//    transparent inline infix def and[T0, T1, P0, PT, P1, T0_on_P0](inline v: T0_on_P0)(using
+//      ev0: T0_on_P0 <:< (T0 on P0),
+//      ev1: CommonSuperType[T, T0, T1],
+//      ev2: CommonSuperType[P, P0, PT],
+//      ev3: AnyUpcast[PT, P1]): T1 on P1 = ${ Placement.apply2Impl[T1 on P1]('placed, 'v) }
+
   inline given lift[P, T]: Conversion[T, Placed[P, T] & T] with
     transparent inline def apply(v: T) = erased(v): Placed[P, T] & T
 

@@ -2,7 +2,8 @@ package loci
 package language
 
 import embedding.*
-import scala.annotation.StaticAnnotation
+
+import scala.annotation.{experimental, StaticAnnotation}
 
 final class peer extends StaticAnnotation
 
@@ -33,6 +34,6 @@ infix type per[T, P] = Placed.Subjective[P, T]
 //
 //def placed: Placement.Placed = erased
 //def on: Placement.Select[Placement.Run] = erased
-def on[P]: Placement.On[P] /*with Placement.Run[P, from]*/ = erased
+@experimental def on[P]: Placement.On[P] /*with Placement.Run[P, from]*/ = erased
 //def remote: Placement.Narrow with Placement.Select[Placement.Call] with Placement.Call[Nothing, from] with Gateway[Nothing] = erased
 //def remote[P]: Placement.Call[P, from] with Gateway[P] = erased
