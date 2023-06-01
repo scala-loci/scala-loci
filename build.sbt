@@ -202,7 +202,10 @@ lazy val lociLanguage = lociProject.scala2only(
   name = "language",
   project = crossProject(JSPlatform, JVMPlatform)
     crossType CrossType.Full
-    settings (retypecheck, macroparadise, macrodeclaration, scalatest),
+    settings (Test / fullClasspath := {
+                (Test / fullClasspath).value filterNot { _.data == (Compile / classDirectory).value }
+              },
+              retypecheck, macroparadise, macrodeclaration, scalatest),
   dependsOn = lociLanguageRuntime)
 
 lazy val lociLanguageJVM = lociLanguage.jvm
