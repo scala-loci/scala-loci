@@ -27,7 +27,7 @@ object Multitier:
     tree match
       case tree: ClassDef =>
         val phases = List(
-          processor.normalizePlacementContextTypes,
+          processor.normalizePlacementExpressions,
           processor.erasePlacementTypesFromExpressions,
           processor.split)
 

@@ -19,7 +19,7 @@ trait Commons:
     val `language.per` = Symbol.requiredPackage("loci.language.package$package").typeMember("per")
     val `language.on` = Symbol.requiredPackage("loci.language.package$package").typeMember("on")
     val `embedding.on` = Symbol.requiredPackage("loci.embedding.package$package").typeMember("on")
-    val on = TypeRepr.of[PlacedExpression.On[?]].typeSymbol
+    val placedExpression = TypeRepr.of[PlacedExpression.type].typeSymbol
     val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
     val remote = TypeRepr.of[language.Remote[?]].typeSymbol
@@ -70,13 +70,23 @@ trait Commons:
 //    given Type[Type3] = t
 //    given Type[Type4] = t
 
-  extension (tpe: TypeRepr) def asPackedValueType: PackedValueType[?] = tpe.asType match
-    case t: Type[Any] @unchecked if tpe <:< TypeRepr.of[Any] => PackedValueType(using t)
-    case _ => throw IllegalArgumentException(s"${tpe.safeShow} cannot be used as a value type")
+  extension (tpe: TypeRepr)
+    def asPackedValueType: PackedValueType[?] = tpe.asType match
+      case t: Type[Any] @unchecked if tpe <:< TypeRepr.of[Any] => PackedValueType(using t)
+      case _ => throw IllegalArgumentException(s"${tpe.safeShow} cannot be used as a value type")
+
+  extension (pos: Position)
+    def startPosition = if pos.startLine != pos.endLine then Position(pos.sourceFile, pos.start, pos.start) else pos
+    def endPosition = if pos.startLine != pos.endLine then Position(pos.sourceFile, pos.end, pos.end) else pos
 
   given ValOrDefDef: TypeTest[Tree, ValDef | DefDef] = tree =>
     summon[TypeTest[Tree, ValDef]].unapply(tree) orElse
     summon[TypeTest[Tree, DefDef]].unapply(tree)
+
+  def contextMethodType[T: Type, R: Type] =
+    val Inlined(_, _, Block(List(lambda), _)) = '{ (_: T) ?=> erased: R }.asTerm: @unchecked
+    val tpe @ MethodType(_, _, _) = lambda.symbol.info: @unchecked
+    tpe
 
   def isMultitierModule(symbol: Symbol): Boolean =
     symbol.getAnnotation(symbols.multitier).isDefined

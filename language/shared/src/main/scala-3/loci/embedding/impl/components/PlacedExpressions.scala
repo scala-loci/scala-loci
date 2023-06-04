@@ -12,6 +12,32 @@ trait PlacedExpressions:
   this: Component & Commons & ErrorReporter & PlacementInfo & PlacementContextTypes =>
   import quotes.reflect.*
 
+  private object PlacementLiftingConversion:
+    def unapply(term: Term): Option[Term] = term match
+      case Inlined(Some(call), List(conversion: ValDef), erased @ MaybeTyped(Apply(_, List(rhs))))
+        if call.symbol == symbols.placed.companionModule.moduleClass &&
+           !(conversion.tpt.tpe =:= TypeRepr.of[Nothing]) && conversion.tpt.tpe <:< types.conversion &&
+           !(erased.tpe =:= TypeRepr.of[Nothing]) && erased.tpe <:< types.placed =>
+        rhs match
+          case MaybeTyped(Repeated(List(Inlined(_, List(), rhs)), _)) => Some(rhs)
+          case MaybeTyped(Repeated(List(rhs), _)) => Some(rhs)
+          case _ => Some(rhs)
+      case Inlined(Some(call), List(conversion: ValDef, ValDef(_, _, Some(rhs))), erased @ MaybeTyped(Apply(_, List(_))))
+        if call.symbol == symbols.placed.companionModule.moduleClass &&
+           !(conversion.tpt.tpe =:= TypeRepr.of[Nothing]) && conversion.tpt.tpe <:< types.conversion &&
+           !(erased.tpe =:= TypeRepr.of[Nothing]) && erased.tpe <:< types.placed =>
+        rhs match
+          case Inlined(_, List(), rhs) => Some(rhs)
+          case _ => Some(rhs)
+      case Apply(Select(conversion, _), List(rhs))
+        if conversion.symbol.owner == symbols.placed.companionModule.moduleClass &&
+           !(conversion.tpe =:= TypeRepr.of[Nothing]) && conversion.tpe <:< types.conversion =>
+        rhs match
+          case Inlined(_, List(), rhs) => Some(rhs)
+          case _ => Some(rhs)
+      case _ =>
+        None
+
   private def checkPlacementTypes(tpe: TypeRepr, pos: Position, message: String) =
     val symbol = tpe.typeSymbol
     if symbol == symbols.`language.per` ||  symbol == symbols.`language.on` ||  symbol == symbols.`embedding.on` ||
@@ -79,13 +105,11 @@ trait PlacedExpressions:
       case _ => super.transformStatement(stat)(owner)
 
     def transformValDef(stat: ValDef)(owner: Symbol) =
-      val symbol = stat.symbol
-      val tpt = transformTypeTree(stat.tpt)(symbol)
-      val rhs = stat.rhs map { transformTerm(_)(symbol) }
+      val tpt = transformTypeTree(stat.tpt)(stat.symbol)
       if canceled then
         stat
       else if tpt == stat.tpt then
-        ValDef.copy(stat)(stat.name, tpt, rhs)
+        ValDef.copy(stat)(stat.name, tpt, stat.rhs map { transformTerm(_)(stat.symbol) })
       else
         val info = adaptedDefinitionType(stat)
         val privateWithin = if stat.symbol.flags is Flags.Protected then stat.symbol.protectedWithin else stat.symbol.privateWithin
@@ -93,18 +117,17 @@ trait PlacedExpressions:
         copyAnnotations(stat.symbol, symbol)
         substitute(stat.symbol, symbol)
         if stat.symbol.owner.isClassDef then replace(stat.symbol, symbol)
-        ValDef(symbol, rhs map { _.changeOwner(symbol) })
+        ValDef(symbol, stat.rhs map { rhs => transformTerm(rhs.changeOwner(symbol))(symbol) })
 
     def transformDefDef(stat: DefDef)(owner: Symbol) =
       val paramss = stat.paramss mapConserve:
-        case TypeParamClause(params) => TypeParamClause(transformSubTrees(params)(owner))
-        case TermParamClause(params) => TermParamClause(transformSubTrees(params)(owner))
+        case TypeParamClause(params) => TypeParamClause(transformSubTrees(params)(stat.symbol))
+        case TermParamClause(params) => TermParamClause(transformSubTrees(params)(stat.symbol))
       val tpt = transformTypeTree(stat.returnTpt)(stat.symbol)
-      val rhs = stat.rhs map { transformTerm(_)(stat.symbol) }
       if canceled then
         stat
       else if paramss == stat.paramss && tpt == stat.returnTpt then
-        DefDef.copy(stat)(stat.name, paramss, tpt, rhs)
+        DefDef.copy(stat)(stat.name, paramss, tpt, stat.rhs map { transformTerm(_)(stat.symbol) })
       else
         val info = adaptedDefinitionType(stat)
         val privateWithin = if stat.symbol.flags is Flags.Protected then stat.symbol.protectedWithin else stat.symbol.privateWithin
@@ -112,9 +135,9 @@ trait PlacedExpressions:
         copyAnnotations(stat.symbol, symbol)
         substitute(stat.symbol, symbol)
         if stat.symbol.owner.isClassDef then replace(stat.symbol, symbol)
-        DefDef(symbol, paramss => {
+        DefDef(symbol, paramss =>
           (stat.paramss flatMap { _.params map { _.symbol } }) zip (paramss.flatten map { _.symbol }) foreach { substitute(_, _) }
-          rhs map { _.changeOwner(symbol) } })
+          stat.rhs map { rhs => transformTerm(rhs.changeOwner(symbol))(symbol) })
   end AdapatingDefinitionTypeCopier
 
   private class ExpressionPlacementTypesEraser(checkOnly: Boolean, substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit)
@@ -124,11 +147,9 @@ trait PlacedExpressions:
       TypePlacementTypesEraser(stat.posInUserCode, checkOnly).transform(stat.symbol.info)
 
     override def transformTerm(term: Term)(owner: Symbol) = term match
-      // check there are no remaining placement lifting conversions
-      case PlacementLiftingConversion(expr) =>
-        transformTerm(expr)(owner)
-        if !canceled then errorAndCancel("Illegal use of value with placement type.", term.posInUserCode)
-        term
+      // erase placement lifting conversions
+      case PlacementLiftingConversion(expr) if !checkOnly =>
+        transformTerm(expr.changeOwner(owner))(owner)
 
       // check access to subjective placed values
       case PlacedValue(_, placementInfo) if !checkOnly =>

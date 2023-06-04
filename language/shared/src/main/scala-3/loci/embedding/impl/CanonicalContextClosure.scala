@@ -14,11 +14,6 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
 
   object info extends Component.withQuotes(quotes), Commons, PlacementInfo
 
-  def contextMethodType[T: Type, R: Type] =
-    val Inlined(_, _, Block(List(lambda), _)) = '{ (_: T) ?=> erased : R }.asTerm: @unchecked
-    val tpe @ MethodType(_, _, _) = lambda.symbol.info: @unchecked
-    tpe
-
   def clean(tpe: TypeRepr) = tpe.asType match
     case '[ t `on` p ] =>
       val local = TypeRepr.of[t].typeSymbol == info.symbols.`language.Local`
@@ -95,11 +90,9 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
                       setMode.invoke(context, pattern)
 
                   val block @ Block(List(lambda: DefDef), closure @ Closure(meth, _)) =
-                    r.asType match
-                      case '[ r ] =>
-                        peer.asType match
-                          case '[ p ] =>
-                            Lambda(symbol, contextMethodType[Placement.Context[p], r], (symbol, _) => result.changeOwner(symbol)): @unchecked
+                    (r.asType, peer.asType) match
+                      case ('[ r ], '[ p ]) =>
+                        Lambda(symbol, info.contextMethodType[Placement.Context[p], r], (symbol, _) => result.changeOwner(symbol)): @unchecked
 
                   Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(info.symbols.`language.on`.typeRef.appliedTo(typeArgs)))).asExpr match
                     case result: Expr[R] @unchecked => return result
