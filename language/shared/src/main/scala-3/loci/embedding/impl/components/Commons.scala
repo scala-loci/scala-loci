@@ -19,7 +19,7 @@ trait Commons:
     val `language.per` = Symbol.requiredPackage("loci.language.package$package").typeMember("per")
     val `language.on` = Symbol.requiredPackage("loci.language.package$package").typeMember("on")
     val `embedding.on` = Symbol.requiredPackage("loci.embedding.package$package").typeMember("on")
-    val on = TypeRepr.of[Placement.On[?]].typeSymbol
+    val on = TypeRepr.of[PlacedExpression.On[?]].typeSymbol
     val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
     val remote = TypeRepr.of[language.Remote[?]].typeSymbol

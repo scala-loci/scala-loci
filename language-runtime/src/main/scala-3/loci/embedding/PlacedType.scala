@@ -1,8 +1,10 @@
 package loci
 package embedding
 
-import loci.language.{on => on0, _}
-import embedding.{on => on1}
+import loci.language.{on as _, *}
+import loci.utility.reflectionExtensions.*
+
+import scala.quoted.*
 
 
 sealed trait PeerType[Q, R, P]
@@ -14,23 +16,11 @@ object PeerType extends PeerTypeDefault:
   given nothing[P]: PeerType[Nothing, P, P] = erased
 
 
-sealed trait PlacedType[T, U]
-
-sealed trait PlacedTypeDefault:
-  given default[T]: PlacedType[T, T] = erased
-
-sealed trait PlacedTypeSubjective extends PlacedTypeDefault:
-  given subjective[T, P]: PlacedType[Remote[P] => T, T per P] = erased
-
-object PlacedType extends PlacedTypeSubjective:
-  given nothing: PlacedType[Nothing, Nothing] = erased
-
-
 sealed trait CanonicalPlacedTypeAlias[T, U]
 
 sealed trait CanonicalPlacedTypeAliasNonSelected:
-  given on0[T, P]: CanonicalPlacedTypeAlias[T on0 P, T on P] = erased
-  given on1[T, P]: CanonicalPlacedTypeAlias[T on1 P, T on P] = erased
+  given on0[T, P, _on_[T, P] <: T on P]: CanonicalPlacedTypeAlias[Placement.Context[P] ?=> (T _on_ P), T on P] = erased
+  given on1[T, P, _on_[T, P] <: T on P]: CanonicalPlacedTypeAlias[T _on_ P, T on P] = erased
   given from[T, P]: CanonicalPlacedTypeAlias[T from P, T from P] = erased
 
 object CanonicalPlacedTypeAlias extends CanonicalPlacedTypeAliasNonSelected:
@@ -40,10 +30,7 @@ object CanonicalPlacedTypeAlias extends CanonicalPlacedTypeAliasNonSelected:
 
 sealed trait PlacedClean[+V, L, T, T_, +U]
 
-sealed trait PlacedCleanFallback:
-  given fallback[V, L, T, U]: PlacedClean[V, L, T, T, U] = erased
-
-sealed trait PlacedCleanDefault extends PlacedCleanFallback:
+sealed trait PlacedCleanDefault:
   given default[V, L, T]: PlacedClean[V, L, T, T, T] = erased
 
 sealed trait PlacedCleanHigherKind1 extends PlacedCleanDefault:
@@ -129,26 +116,28 @@ sealed trait PlacedCleanRemotePeerSelection extends PlacedCleanHigherKind8:
   given remotePeerSelectionMultiple[V, L, T, P]: PlacedClean[V, L, T fromMultiple P, T fromMultiple P, Unit] = erased
 
 sealed trait PlacedCleanRemotePeer extends PlacedCleanRemotePeerSelection:
-  given remotePeer0[V, L, T, P]: PlacedClean[V, L, T on0 P, T on0 P, Unit] = erased
-  given remotePeer1[V, L, T, P]: PlacedClean[V, L, T on1 P, T on1 P, Unit] = erased
+  given remotePeer0[V, L, T, P, _on_[T, P] <: T on P]
+    : PlacedClean[V, L, Placement.Context[P] ?=> (T _on_ P), Placement.Context[P] ?=> (T _on_ P), Unit] = erased
+  given remotePeer1[V, L, T, P, _on_[T, P] <: T on P]
+    : PlacedClean[V, L, T _on_ P, T _on_ P, Unit] = erased
 
 sealed trait PlacedCleanLocalPeer extends PlacedCleanRemotePeer:
-  given localPeer0[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on0 P, T on0 P, U] = erased
-  given localPeer1[V, L <: P, T, U, P](using PlacedClean[V, L, T, T, U]): PlacedClean[V, L, T on1 P, T on1 P, U] = erased
+  given localPeer0[V, L <: P, T, U, P, _on_[T, P] <: T on P](using PlacedClean[V, L, T, T, U])
+    : PlacedClean[V, L, Placement.Context[P] ?=> (T _on_ P), Placement.Context[P] ?=> (T _on_ P), U] = erased
+  given localPeer1[V, L <: P, T, U, P, _on_[T, P] <: T on P](using PlacedClean[V, L, T, T, U])
+    : PlacedClean[V, L, T _on_ P, T _on_ P, U] = erased
 
 sealed trait PlacedCleanLocalPeerLocal extends PlacedCleanLocalPeer:
-  given localPeerLocal0[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
-    _Local_[T] =:= T,
-    PlacedClean[V, L, T, T, U])
-  : PlacedClean[V, L, _Local_[T] on0 P, _Local_[T] on0 P, U] = erased
-  given localPeerLocal1[V, L <: P, T, U, P, _Local_[T] <: Local[T]](using
-    _Local_[T] =:= T,
-    PlacedClean[V, L, T, T, U])
-  : PlacedClean[V, L, _Local_[T] on1 P, _Local_[T] on1 P, U] = erased
+  given localPeerLocal0[V, L, T, U, P, _on_[T, P] <: T on P, _Local_[T] <: Local[T]](using PlacedClean[V, L, T, T, U])
+    : PlacedClean[V, L, Placement.Context[P] ?=> (_Local_[T] _on_ P), Placement.Context[P] ?=> (_Local_[T] _on_ P), U] = erased
+  given localPeerLocal1[V, L, T, U, P, _on_[T, P] <: T on P, _Local_[T] <: Local[T]](using PlacedClean[V, L, T, T, U])
+    : PlacedClean[V, L, _Local_[T] _on_ P, _Local_[T] _on_ P, U] = erased
 
 sealed trait PlacedCleanSubjective extends PlacedCleanLocalPeerLocal:
-  given subjectivePeer0[V, L, T, P, R]: PlacedClean[V, L, T per R on0 P, T per R on0 P, Unit] = erased
-  given subjectivePeer1[V, L, T, P, R]: PlacedClean[V, L, T per R on1 P, T per R on1 P, Unit] = erased
+  given subjective0[V, L, T, P, R, _on_[T, P] <: T on P]
+    : PlacedClean[V, L, Placement.Context[P] ?=> (T per R _on_ P), Placement.Context[P] ?=> (T per R _on_ P), Unit] = erased
+  given subjective1[V, L, T, P, R, _on_[T, P] <: T on P]
+    : PlacedClean[V, L, T per R _on_ P, T per R _on_ P, Unit] = erased
 
 sealed trait PlacedCleanAny extends PlacedCleanSubjective:
   given any[V, L]: PlacedClean[V, L, Any, Any, Any] = erased
@@ -156,17 +145,33 @@ sealed trait PlacedCleanAny extends PlacedCleanSubjective:
 sealed trait PlacedCleanNothingSubjective extends PlacedCleanAny:
   given nothing[V, L]: PlacedClean[V, L, Nothing, Nothing, Nothing] = erased
 
-object PlacedClean extends PlacedCleanNothingSubjective
-//  implicit def macroGenerated[V, L, T, U](implicit ev: MacroGenerated[V on L, L, T, T, U])
-//    : PlacedClean[V on L, L, T, T, U] = erased(ev)
-//
-//
-//  sealed trait MacroGenerated[+V, L, T, T_, +U]
-//
-//  object MacroGenerated {
-//    implicit def macroGenerated[V, L, T, U]: MacroGenerated[V on L, L, T, T, U] =
-//      macro impl.PlacedType[V, L, T]
-//
-//    implicit def macroGeneratedAmbiguous[V, L, T, U]: MacroGenerated[V on L, L, T, T, U] =
-//      macro impl.PlacedType.macroExpansion
-//  }
+object PlacedClean extends PlacedCleanNothingSubjective:
+  transparent inline given clean[V, L, T, Any](using loci.transmitter.DummyImplicit.Resolvable): PlacedClean[V, L, T, T, Nothing] =
+    ${ cleanExpr[V, L, T] }
+
+  def cleanExpr[V: Type, L: Type, T: Type](using Quotes) = cleanType[V, L, T] match
+    case '[ t ] => '{ erased: PlacedClean[V, L, T, T, t] } match
+      case result: Expr[PlacedClean[V, L, T, T, Nothing]] @unchecked => result
+
+  def cleanType[V: Type, L: Type, T: Type](using Quotes) =
+    import quotes.reflect.*
+
+    val local = Symbol.requiredPackage("loci.language.package$package").typeMember("Local")
+    val unit = defn.UnitClass.typeRef
+
+    object processor extends TypeMap(quotes):
+      override def transform(tpe: TypeRepr) = tpe match
+        case _ if tpe.typeSymbol.flags is Flags.Opaque => tpe
+        case AppliedType(tycon, List(arg)) if tycon.typeSymbol == local => transform(arg)
+        case _ => tpe.asType match
+          case '[ Nothing ] => tpe
+          case '[ language.on[t `per` r, p] ] => unit
+          case '[ embedding.on[t `per` r, p] ] => unit
+          case '[ language.on[t, p] ] => if TypeRepr.of[L] <:< TypeRepr.of[p] then transform(TypeRepr.of[t]) else unit
+          case '[ embedding.on[t, p] ] => if TypeRepr.of[L] <:< TypeRepr.of[p] then transform(TypeRepr.of[t]) else unit
+          case '[ t `from` p ] => unit
+          case _ => super.transform(tpe)
+
+    processor.transform(TypeRepr.of[T]).asType
+  end cleanType
+end PlacedClean

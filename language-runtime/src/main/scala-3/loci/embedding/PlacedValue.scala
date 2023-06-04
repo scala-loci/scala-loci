@@ -28,8 +28,8 @@ object Placed:
 //      ev2: CommonSuperType[P, P0, PT],
 //      ev3: AnyUpcast[PT, P1]): T1 on P1 = ${ Placement.apply2Impl[T1 on P1]('placed, 'v) }
 
-  inline given lift[P, T]: Conversion[T, Placed[P, T] & T] with
-    transparent inline def apply(v: T) = erased(v): Placed[P, T] & T
+  inline given lift[L, T, U](using Placement.Context[L], PlacedClean[Any, L, T, T, U]): Conversion[T, U on L] with
+    transparent inline def apply(v: T) = erased(v): U on L
 
   trait Subjective[-P, +T]:
     protected def apply(v: Remote[P]): T

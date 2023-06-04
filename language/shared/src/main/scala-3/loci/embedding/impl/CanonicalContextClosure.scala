@@ -1,23 +1,41 @@
 package loci
 package embedding
+package impl
+
+import components.*
 
 import scala.annotation.experimental
 import scala.quoted.*
 import scala.util.control.NonFatal
 
 @experimental
-def inferrablePlacementContextClosure[T: Type](using Quotes)(v: Expr[Any]*): Expr[T] =
+def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quotes)(v: Expr[Any]*): Expr[R] =
   import quotes.reflect.*
+
+  object info extends Component.withQuotes(quotes), Commons, PlacementInfo
 
   def contextMethodType[T: Type, R: Type] =
     val Inlined(_, _, Block(List(lambda), _)) = '{ (_: T) ?=> erased : R }.asTerm: @unchecked
     val tpe @ MethodType(_, _, _) = lambda.symbol.info: @unchecked
     tpe
 
-  val result = Block(v.toList map { _.asTerm }, Typed(Ref('{ erased }.asTerm.underlyingArgument.symbol), TypeTree.of[T]))
+  def clean(tpe: TypeRepr) = tpe.asType match
+    case '[ t `on` p ] =>
+      val local = TypeRepr.of[t].typeSymbol == info.symbols.`language.Local`
+      PlacedClean.cleanType[t on p, p, t] match
+        case '[ u ] =>
+          val u = if local then info.symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
+          info.symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
+    case '[ r ] =>
+      TypeRepr.of[r]
 
-  val `language.on` = Symbol.requiredPackage("loci.language.package$package").typeMember("on")
-  val `embedding.on` = Symbol.requiredPackage("loci.embedding.package$package").typeMember("on")
+  def canonical(tpe: TypeRepr) =
+    info.PlacementInfo(tpe).fold(tpe): placementInfo =>
+      info.symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs)
+
+  val r = canonical(clean(TypeRepr.of[R]))
+
+  val result = Block(v.toList map { _.asTerm }, Typed(Ref('{ erased }.asTerm.underlyingArgument.symbol), TypeTree.of(using r.asType)))
 
   // To make the context function type inferrable, we hack the current context and change its mode to `Pattern`
   // as this mode lets the context function type propagate without resolving the context argument:
@@ -27,8 +45,8 @@ def inferrablePlacementContextClosure[T: Type](using Quotes)(v: Expr[Any]*): Exp
   // is the outer-most in the surrounding val or def.
   // Hence, no further type-checking will happen in the current context.
   try
-    TypeRepr.of[T] match
-      case AppliedType(fun, typeArgs @ List(_, peer)) if fun.typeSymbol == `embedding.on` =>
+    r match
+      case AppliedType(fun, typeArgs @ List(_, peer)) if fun.typeSymbol == info.symbols.`embedding.on` =>
         val symbol = Symbol.spliceOwner.owner
         if symbol.isDefDef || symbol.isValDef then
           val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
@@ -77,17 +95,20 @@ def inferrablePlacementContextClosure[T: Type](using Quotes)(v: Expr[Any]*): Exp
                       setMode.invoke(context, pattern)
 
                   val block @ Block(List(lambda: DefDef), closure @ Closure(meth, _)) =
-                    peer.asType match
-                      case '[ p ] =>
-                        Lambda(symbol, contextMethodType[Placement.Context[p], T], (symbol, _) => result.changeOwner(symbol)): @unchecked
+                    r.asType match
+                      case '[ r ] =>
+                        peer.asType match
+                          case '[ p ] =>
+                            Lambda(symbol, contextMethodType[Placement.Context[p], r], (symbol, _) => result.changeOwner(symbol)): @unchecked
 
-                  Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(`language.on`.typeRef.appliedTo(typeArgs)))).asExpr match
-                    case block: Expr[T] @unchecked => return block
+                  Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(info.symbols.`language.on`.typeRef.appliedTo(typeArgs)))).asExpr match
+                    case result: Expr[R] @unchecked => return result
 
                 case _ =>
       case _ =>
   catch
     case NonFatal(e) =>
 
-  result.asExprOf[T]
-end inferrablePlacementContextClosure
+  result.asExpr match
+    case result: Expr[R] @unchecked => result
+end inferrableCanonicalPlacementTypeContextClosure
