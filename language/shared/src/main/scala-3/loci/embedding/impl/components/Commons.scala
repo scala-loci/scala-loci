@@ -34,6 +34,7 @@ trait Commons:
     val compileTimeOnly = TypeRepr.of[annotation.compileTimeOnly].typeSymbol
     val targetName = TypeRepr.of[annotation.targetName].typeSymbol
     val erased = '{ embedding.erased }.asTerm.underlyingArgument.symbol
+    val erasedArgs = '{ embedding.erased(()) }.asTerm.underlyingArgument.symbol
     val asInstanceOf = '{ null.asInstanceOf }.asTerm.underlyingArgument.symbol
 
   object types:

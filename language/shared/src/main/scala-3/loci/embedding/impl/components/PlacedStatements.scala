@@ -9,29 +9,52 @@ import scala.annotation.experimental
 import scala.quoted.*
 
 @experimental
-trait PlacementContextTypes:
-  this: Component & Commons & ErrorReporter & PlacementInfo & PeerInfo =>
+trait PlacedStatements:
+  this: Component & Commons & ErrorReporter & Placements & Peers =>
   import quotes.reflect.*
 
   private def cleanPlacementExpression(placementInfo: PlacementInfo, expr: Term) =
-    val (cleanExpr, erasedSymbol, expressionOwner) = Term.betaReduce(expr) getOrElse expr match
-      case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.placedExpression => body match
+    object PlacementSyntaxPrefix:
+      def unapply(term: Term): Option[(ValDef, Term)] = term match
+        case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.placedExpression =>
+          Some(prefix -> body)
+        case _ =>
+          None
+
+    object PlacementSyntaxBody:
+      def unapply(term: Term): Option[(ValDef, Term)] = term match
         case outer @ Block(List(Inlined(_, List(), inner @ Block((evidence: ValDef) :: _, _))), erased: Typed)
           if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
              evidence.tpt.tpe <:< types.context &&
-             erased.expr.symbol == symbols.erased =>
-          (Block.copy(outer)(inner.statements.tail :+ inner.expr, erased), Some(evidence.symbol), Some(prefix.symbol.owner))
-        case expr => (expr, None, Some(prefix.symbol.owner))
-      case expr => (expr, None, None)
+             (erased.symbol == symbols.erased || erased.symbol == symbols.erasedArgs) =>
+          Some(evidence -> Block.copy(outer)(inner.statements.tail :+ inner.expr, erased))
+        case _ =>
+          None
+
+    def tryBetaReduce(expr: Term) = Term.betaReduce(expr) getOrElse expr
+
+    val (cleanExpr, erasedSymbol, expressionOwner) = expr match
+      case Apply(select @ Select(PlacementSyntaxPrefix(prefix, expr), names.apply), List(arg)) =>
+        tryBetaReduce(expr.select(select.symbol).appliedTo(arg)) match
+          case PlacementSyntaxBody(evidence, expr) => (expr, Some(evidence.symbol), Some(prefix.symbol.owner))
+          case expr => (expr, None, Some(prefix.symbol.owner))
+      case _ => tryBetaReduce(expr) match
+        case PlacementSyntaxPrefix(prefix, expr) => expr match
+          case PlacementSyntaxBody(evidence, expr) => (expr, Some(evidence.symbol), Some(prefix.symbol.owner))
+          case _ => (expr, None, Some(prefix.symbol.owner))
+        case _ => (expr, None, None)
 
     def erasedContext = Typed(
       Ref(symbols.erased),
       TypeTree.of(using symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs).asType))
 
     cleanExpr match
-      case Block(_, erased: Typed) if erased.expr.symbol == symbols.erased => (cleanExpr, erasedSymbol, expressionOwner)
-      case Block(stats, expr) => (Block(stats :+ expr, erasedContext), erasedSymbol, expressionOwner)
-      case expr => (Block(List(expr), erasedContext), erasedSymbol, expressionOwner)
+      case Block(_, erased: Typed) if erased.expr.symbol == symbols.erased || erased.expr.symbol == symbols.erasedArgs =>
+        (cleanExpr, erasedSymbol, expressionOwner)
+      case Block(stats, expr) =>
+        (Block(stats :+ expr, erasedContext), erasedSymbol, expressionOwner)
+      case expr =>
+        (Block(List(expr), erasedContext), erasedSymbol, expressionOwner)
   end cleanPlacementExpression
 
   private def cleanPlacementExpressionOrClosure(placementInfo: PlacementInfo, expr: Term) =
@@ -107,7 +130,7 @@ trait PlacementContextTypes:
     checkPeerType(stat, placementInfo.peerType, module, statement, "placed on")
     placementInfo.modality.subjectivePeerType foreach { checkPeerType(stat, _, module, subjectiveStatement, "subjective to") }
 
-  def normalizePlacementExpressions(module: ClassDef): ClassDef =
+  def normalizePlacedStatements(module: ClassDef): ClassDef =
     val body = module.body map:
       case stat @ ValDef(name, tpt, rhs) =>
         placementType(stat, tpt).fold(stat): placementInfo =>
@@ -139,7 +162,7 @@ trait PlacementContextTypes:
     end body
 
     ClassDef.copy(module)(module.name, module.constructor, module.parents, module.self, body)
-  end normalizePlacementExpressions
+  end normalizePlacedStatements
 
   private class NormalizedDefBodyProcessor(transform: Option[((ValDef, Symbol) => ValDef, (Symbol, Term, Term) => (Term, Option[Term]))]) extends TreeMap:
     def dropLastExpr(block: Block) = block.statements match
@@ -187,4 +210,4 @@ trait PlacementContextTypes:
   def extractNormalizedExpression(term: Term, owner: Symbol) =
     val processor = NormalizedDefBodyProcessor(transform = None)
     processor.transformTerm(term)(owner)
-end PlacementContextTypes
+end PlacedStatements

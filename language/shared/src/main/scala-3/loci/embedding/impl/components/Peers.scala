@@ -8,7 +8,7 @@ import utility.reflectionExtensions.*
 import scala.annotation.{experimental, targetName}
 
 @experimental
-trait PeerInfo:
+trait Peers:
   this: Component & Commons =>
   import quotes.reflect.*
 
@@ -65,4 +65,4 @@ trait PeerInfo:
     private def bottomType(tpe: TypeRef) =
       tpe.typeSymbol == defn.NothingClass
   end PeerInfo
-end PeerInfo
+end Peers

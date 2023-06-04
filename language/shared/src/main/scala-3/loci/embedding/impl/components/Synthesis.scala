@@ -10,7 +10,7 @@ import scala.collection.mutable
 
 @experimental
 trait Synthesis:
-  this: Component & Commons & ErrorReporter & Annotations & PlacementInfo & PeerInfo =>
+  this: Component & Commons & ErrorReporter & Annotations & Placements & Peers =>
   import quotes.reflect.*
 
   sealed trait SynthesizedDefinition

@@ -17,18 +17,18 @@ object Multitier:
       Commons,
       ErrorReporter,
       Annotations,
-      PlacementInfo,
-      PeerInfo,
+      Placements,
+      Peers,
       Synthesis,
-      PlacementContextTypes,
+      PlacedStatements,
       PlacedExpressions,
       Splitting
 
     tree match
       case tree: ClassDef =>
         val phases = List(
-          processor.normalizePlacementExpressions,
-          processor.erasePlacementTypesFromExpressions,
+          processor.normalizePlacedStatements,
+          processor.eraseMultitierConstructs,
           processor.split)
 
         val processed = phases.foldLeft(tree): (tree, process) =>

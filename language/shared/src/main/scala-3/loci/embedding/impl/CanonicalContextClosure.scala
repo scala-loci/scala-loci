@@ -12,7 +12,7 @@ import scala.util.control.NonFatal
 def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quotes)(v: Expr[Any]*): Expr[R] =
   import quotes.reflect.*
 
-  object info extends Component.withQuotes(quotes), Commons, PlacementInfo
+  object info extends Component.withQuotes(quotes), Commons, Placements
 
   def clean(tpe: TypeRepr) = tpe.asType match
     case '[ t `on` p ] =>

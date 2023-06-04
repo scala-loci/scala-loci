@@ -10,7 +10,7 @@ import scala.collection.mutable
 
 @experimental
 trait Splitting:
-  this: Component & Commons /*with ErrorReporter*/ & Annotations & PlacementInfo & PeerInfo & Synthesis & PlacementContextTypes =>
+  this: Component & Commons /*with ErrorReporter*/ & Annotations & Placements & Peers & Synthesis & PlacedStatements =>
   import quotes.reflect.*
 
   def split(module: ClassDef): ClassDef =

@@ -8,7 +8,7 @@ import utility.reflectionExtensions.*
 import scala.annotation.experimental
 
 @experimental
-trait PlacementInfo:
+trait Placements:
   this: Component & Commons =>
   import quotes.reflect.*
 
@@ -53,7 +53,7 @@ trait PlacementInfo:
 
   object PlacedValue:
     def unapply(tree: Term): Option[(Term, PlacementInfo)] = tree match
-      case Apply(Select(qualifier, names.apply), List(_)) if isMultitierModule(qualifier.symbol.owner) =>
+      case Apply(Select(qualifier, names.apply), List(_)) if qualifier.symbol.exists && isMultitierModule(qualifier.symbol.owner) =>
         PlacementInfo(qualifier.tpe.widenTermRefByName.resultType) map { qualifier -> _ }
       case _ =>
         None
@@ -70,4 +70,4 @@ trait PlacementInfo:
       case _ =>
         None
   end PlacedStatement
-end PlacementInfo
+end Placements

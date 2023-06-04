@@ -9,7 +9,7 @@ import scala.annotation.experimental
 
 @experimental
 trait PlacedExpressions:
-  this: Component & Commons & ErrorReporter & PlacementInfo & PlacementContextTypes =>
+  this: Component & Commons & ErrorReporter & Placements & PlacedStatements =>
   import quotes.reflect.*
 
   private object PlacementLiftingConversion:
@@ -30,13 +30,28 @@ trait PlacedExpressions:
           case Inlined(_, List(), rhs) => Some(rhs)
           case _ => Some(rhs)
       case Apply(Select(conversion, _), List(rhs))
-        if conversion.symbol.owner == symbols.placed.companionModule.moduleClass &&
+        if conversion.symbol.exists && conversion.symbol.owner == symbols.placed.companionModule.moduleClass &&
            !(conversion.tpe =:= TypeRepr.of[Nothing]) && conversion.tpe <:< types.conversion =>
         rhs match
           case Inlined(_, List(), rhs) => Some(rhs)
           case _ => Some(rhs)
       case _ =>
         None
+
+  private object MultitierConstructFragment:
+    def unapply(term: Term): Boolean = term match
+      case Inlined(Some(call), _, _)
+        if call.symbol == symbols.placed.companionModule.moduleClass ||
+           call.symbol == symbols.placedExpression =>
+        true
+      case Apply(Select(conversion, _), List(rhs))
+        if conversion.symbol.exists &&
+           (conversion.symbol.owner == symbols.placed.companionModule.moduleClass ||
+            conversion.symbol.owner == symbols.placedExpression) =>
+        true
+      case _ =>
+        (term.symbol == symbols.erased || term.symbol == symbols.erasedArgs) &&
+        !(term.tpe =:= TypeRepr.of[Nothing]) && term.tpe <:< types.placed
 
   private def checkPlacementTypes(tpe: TypeRepr, pos: Position, message: String) =
     val symbol = tpe.typeSymbol
@@ -54,7 +69,6 @@ trait PlacedExpressions:
               symbols.`embedding.on`.typeRef.appliedTo(args.reverse)
             case _ =>
               tpe
-
           PlacementInfo(corrected).fold(super.transform(corrected)) { placementInfo =>
             if placementInfo.modality.subjective then
               TypeRepr.of[Unit]
@@ -150,6 +164,11 @@ trait PlacedExpressions:
       // erase placement lifting conversions
       case PlacementLiftingConversion(expr) if !checkOnly =>
         transformTerm(expr.changeOwner(owner))(owner)
+
+      // check there are no remaining multitier language constructs
+      case MultitierConstructFragment() =>
+        errorAndCancel("Multitier construct should have been processed by macro expansion but was not.", term.posInUserCode)
+        term
 
       // check access to subjective placed values
       case PlacedValue(_, placementInfo) if !checkOnly =>
@@ -337,7 +356,7 @@ trait PlacedExpressions:
     case _ =>
       eraserCheckOnly.transformTree(tpt)(owner)
 
-  def erasePlacementTypesFromExpressions(module: ClassDef): ClassDef =
+  def eraseMultitierConstructs(module: ClassDef): ClassDef =
     val body = module.body map:
       case PlacedStatement(stat @ ValDef(name, tpt, rhs)) =>
         checkPlacementTypesInResult(tpt, stat.symbol)
@@ -356,5 +375,5 @@ trait PlacedExpressions:
         stat
 
     ClassDef.copy(module)(module.name, module.constructor, module.parents, module.self, body)
-  end erasePlacementTypesFromExpressions
+  end eraseMultitierConstructs
 end PlacedExpressions
