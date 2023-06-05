@@ -3,7 +3,7 @@ package language
 
 import embedding.*
 
-import scala.annotation.experimental
+import scala.annotation.{compileTimeOnly, experimental}
 
 //def connect[P](setup: Connector[ConnectionsBase.Protocol]): Connections =
 //  macro impl.Connections.setup
@@ -18,11 +18,13 @@ import scala.annotation.experimental
 //  macro impl.Connections.factory
 
 @experimental
-object on extends PlacedExpression.Select[PlacedExpression.Run]:
-  sealed trait on[P] extends PlacedExpression.On.Fallback[P], PlacedExpression.Run[P, from]
-  transparent inline def apply[P]: on[P] = ${ PlacedExpression.On[P] }
+@compileTimeOnly("Placed expression can only used in multitier module")
+object on extends Select[Run]:
+  sealed trait on[P] extends On.Fallback[P], Run[P, from]
+  transparent inline def apply[P]: on[P] = ${ On[P] }
 
 @experimental
-object remote extends PlacedExpression.Narrow, PlacedExpression.Select[PlacedExpression.Call], PlacedExpression.Call[Nothing, from], Gateway[Nothing]:
-  sealed trait remote[P] extends PlacedExpression.Call[P, from], Gateway[P]
+@compileTimeOnly("Placed expression can only used in multitier module")
+object remote extends Narrow, Select[Call], Call[Nothing, from], Gateway[Nothing]:
+  sealed trait remote[P] extends Call[P, from], Gateway[P]
   def apply[P]: remote[P] = erased

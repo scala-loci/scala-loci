@@ -41,13 +41,13 @@ trait PlacedExpressions:
   private object MultitierConstructFragment:
     def unapply(term: Term): Boolean = term match
       case Inlined(Some(call), _, _)
-        if call.symbol == symbols.placed.companionModule.moduleClass ||
-           call.symbol == symbols.placedExpression =>
+        if call.symbol == symbols.on ||
+           call.symbol == symbols.placed.companionModule.moduleClass =>
         true
       case Apply(Select(conversion, _), List(rhs))
         if conversion.symbol.exists &&
-           (conversion.symbol.owner == symbols.placed.companionModule.moduleClass ||
-            conversion.symbol.owner == symbols.placedExpression) =>
+           (conversion.symbol.owner == symbols.on ||
+            conversion.symbol.owner == symbols.placed.companionModule.moduleClass) =>
         true
       case _ =>
         (term.symbol == symbols.erased || term.symbol == symbols.erasedArgs) &&
@@ -80,14 +80,9 @@ trait PlacedExpressions:
 
       checkPlacementTypes(erasedType, pos, "Illegal use of value with placement type.")
 
-      val termSymbol = erasedType.termSymbol
-
-      def underExpansion(symbol: Symbol): Boolean =
-        symbol == Symbol.spliceOwner || symbol.maybeOwner.exists && underExpansion(symbol.maybeOwner)
-
-      if !canceled && termSymbol.exists && (isMultitierModule(termSymbol.owner) || !underExpansion(termSymbol)) then
+      if !canceled then
         val widenedErasedType = erasedType.widen
-        if widenedErasedType != erasedType && isMultitierModule(erasedType.termSymbol.owner) then
+        if widenedErasedType != erasedType then
           TypePlacementTypesEraser(pos, checkOnly = true).transform(widenedErasedType)
 
       erasedType

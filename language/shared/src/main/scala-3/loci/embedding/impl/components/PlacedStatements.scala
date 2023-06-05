@@ -16,7 +16,7 @@ trait PlacedStatements:
   private def cleanPlacementExpression(placementInfo: PlacementInfo, expr: Term) =
     object PlacementSyntaxPrefix:
       def unapply(term: Term): Option[(ValDef, Term)] = term match
-        case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.placedExpression =>
+        case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.on =>
           Some(prefix -> body)
         case _ =>
           None

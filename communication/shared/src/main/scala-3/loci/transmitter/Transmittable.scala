@@ -1,6 +1,8 @@
 package loci
 package transmitter
 
+import utility.DummyImplicit
+
 import scala.annotation.{compileTimeOnly, implicitNotFound}
 import scala.quoted.*
 import scala.util.Try

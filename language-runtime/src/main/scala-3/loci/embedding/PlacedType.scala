@@ -3,6 +3,7 @@ package embedding
 
 import loci.language.{on as _, *}
 import loci.utility.reflectionExtensions.*
+import utility.DummyImplicit
 
 import scala.quoted.*
 
@@ -146,7 +147,7 @@ sealed trait PlacedCleanNothingSubjective extends PlacedCleanAny:
   given nothing[V, L]: PlacedClean[V, L, Nothing, Nothing, Nothing] = erased
 
 object PlacedClean extends PlacedCleanNothingSubjective:
-  transparent inline given clean[V, L, T, Any](using loci.transmitter.DummyImplicit.Resolvable): PlacedClean[V, L, T, T, Nothing] =
+  transparent inline given clean[V, L, T, Any](using DummyImplicit.Resolvable): PlacedClean[V, L, T, T, Nothing] =
     ${ cleanExpr[V, L, T] }
 
   def cleanExpr[V: Type, L: Type, T: Type](using Quotes) = cleanType[V, L, T] match
@@ -156,7 +157,7 @@ object PlacedClean extends PlacedCleanNothingSubjective:
   def cleanType[V: Type, L: Type, T: Type](using Quotes) =
     import quotes.reflect.*
 
-    val local = Symbol.requiredPackage("loci.language.package$package").typeMember("Local")
+    val local = Symbol.requiredPackage("loci.language").typeMember("Local")
     val unit = defn.UnitClass.typeRef
 
     object processor extends TypeMap(quotes):
