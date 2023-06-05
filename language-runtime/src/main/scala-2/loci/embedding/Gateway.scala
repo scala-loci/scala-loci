@@ -4,7 +4,7 @@ package embedding
 import scala.language.dynamics
 import scala.language.experimental.macros
 
-sealed trait Gateway[+R] extends Dynamic {
+trait Gateway[+R] extends Dynamic {
   def selectDynamic(key: String): Unit = macro GatewayResolutionFailure.selectDynamic
   def updateDynamic(key: String)(value: Any): Unit = macro GatewayResolutionFailure.updateDynamic
   def applyDynamic(key: String)(args: Any*): Unit = macro GatewayResolutionFailure.applyDynamic

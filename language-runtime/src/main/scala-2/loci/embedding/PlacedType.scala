@@ -2,6 +2,7 @@ package loci
 package embedding
 
 import language._
+import utility.DummyImplicit
 
 import scala.language.experimental.macros
 
@@ -191,17 +192,6 @@ sealed trait PlacedCleanNothingSubjective extends PlacedCleanAny {
 }
 
 object PlacedClean extends PlacedCleanNothingSubjective {
-  implicit def macroGenerated[V, L, T, U](implicit ev: MacroGenerated[V on L, L, T, T, U])
-    : PlacedClean[V on L, L, T, T, U] = erased(ev)
-
-
-  sealed trait MacroGenerated[+V, L, T, T_, +U]
-
-  object MacroGenerated {
-    implicit def macroGenerated[V, L, T, U]: MacroGenerated[V on L, L, T, T, U] =
-      macro impl.PlacedType[V, L, T]
-
-    implicit def macroGeneratedAmbiguous[V, L, T, U]: MacroGenerated[V on L, L, T, T, U] =
-      macro impl.PlacedType.macroExpansion
-  }
+  implicit def macroGenerated[V, L, T, U](implicit ev: DummyImplicit.Resolvable): PlacedClean[V on L, L, T, T, U] =
+    macro impl.PlacedType[V, L, T]
 }

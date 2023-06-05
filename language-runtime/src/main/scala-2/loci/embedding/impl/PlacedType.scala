@@ -9,26 +9,26 @@ import scala.reflect.macros.whitebox
 object PlacedType {
   def apply[
       V: c.WeakTypeTag, L: c.WeakTypeTag, T: c.WeakTypeTag](
-      c: whitebox.Context): c.Tree = {
+      c: whitebox.Context)(ev: c.Tree): c.Tree = {
     import c.universe._
 
     val local = symbolOf[Local[_]]
     val placedValue = typeOf[PlacedValue[_, _]]
     val placed = typeOf[Placed[_, _]]
     val subjective = typeOf[Placed.Subjective[_, _]]
-    val macroGenerated = symbolOf[PlacedClean.MacroGenerated.type]
+    val placedClean = symbolOf[PlacedClean.type]
     val erased = q"${termNames.ROOTPKG}.loci.embedding.erased"
 
     val v = weakTypeOf[V]
     val l = weakTypeOf[L]
     val t = weakTypeOf[T]
 
-    if (t.typeSymbol.isParameter && t.typeSymbol.owner.owner == macroGenerated)
+    if (t.typeSymbol.isParameter && t.typeSymbol.owner.owner == placedClean)
       c.abort(c.enclosingPosition, "")
 
 
-    def placedClean(p: Type, l: Type, t: Type, u: Type): Type = {
-      val TypeRef(pre, sym, _) = typeOf[PlacedClean.MacroGenerated[Any, Any, Any, Any, Any]]: @unchecked
+    def placedCleanType(p: Type, l: Type, t: Type, u: Type): Type = {
+      val TypeRef(pre, sym, _) = typeOf[PlacedClean[Any, Any, Any, Any, Any]]: @unchecked
       internal.typeRef(pre, sym, List(p, l, t, t, u))
     }
 
@@ -126,12 +126,9 @@ object PlacedType {
 
     if (v.typeSymbol.isParameter) {
       val v = clean(t, l)
-      q"$erased: ${placedClean(on(v, l), l, t, v)}"
+      q"$erased: ${placedCleanType(on(v, l), l, t, v)}"
     }
     else
-      q"$erased: ${placedClean(on(v, l), l, t, v)}"
+      q"$erased: ${placedCleanType(on(v, l), l, t, v)}"
   }
-
-  def macroExpansion(c: whitebox.Context): c.Tree =
-    c.abort(c.enclosingPosition, "Macro expansion executed")
 }

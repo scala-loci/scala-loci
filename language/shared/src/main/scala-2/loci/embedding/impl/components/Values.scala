@@ -683,7 +683,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
             if (!localPeer && !(localSymbols contains tree.symbol))
               c.abort(tree.pos, accessMessage)
           }
-          else if ((tree.tpe.finalResultType.baseClasses exists { _.owner == symbols.placement }) ||
+          else if ((tree.tpe.finalResultType.baseClasses exists { symbols.placement contains _ }) ||
                    tree.symbol == symbols.and)
             c.abort(tree.pos, "Unexpected multitier construct")
 

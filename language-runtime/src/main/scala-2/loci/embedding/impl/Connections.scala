@@ -8,7 +8,7 @@ class Connections(val c: blackbox.Context) {
   import c.universe._
 
   def setup(setup: Tree): Tree = {
-    val q"$_.$name[$tpt](...$_)" = c.macroApplication: @unchecked
+    val q"$_.$name.apply[$tpt](...$_)" = c.macroApplication: @unchecked
 
     q"${termNames.ROOTPKG}.loci.embedding.Connections.$name(${signature(tpt)}, $setup)"
   }

@@ -1,5 +1,5 @@
 package loci
-package transmitter
+package utility
 
 import scala.language.experimental.macros
 import scala.reflect.macros.whitebox
