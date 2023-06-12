@@ -35,7 +35,7 @@ trait Splitting:
 
               List(DefDef(placedInit, _ => stat.rhs map { rhs =>
                 val term = stat match
-                  case PlacedStatement(_) => extractNormalizedExpression(rhs, stat.symbol)
+                  case PlacedStatement(_) => extractPlacedBody(rhs)
                   case _ => rhs
                 term.changeOwner(placedInit)
               }))
@@ -43,7 +43,7 @@ trait Splitting:
                 if placed.owner == placedValues =>
               List(ValDef(placed, stat.rhs map { rhs =>
                 val term = stat match
-                  case PlacedStatement(_) => extractNormalizedExpression(rhs, stat.symbol)
+                  case PlacedStatement(_) => extractPlacedBody(rhs)
                   case _ => rhs
                 term.changeOwner(placed)
               }))
@@ -55,7 +55,7 @@ trait Splitting:
             DefDef(placed, paramss =>
               stat.rhs map { rhs =>
                 val term = stat match
-                  case PlacedStatement(_) => extractNormalizedExpression(rhs, stat.symbol)
+                  case PlacedStatement(_) => extractPlacedBody(rhs)
                   case _ => rhs
                 term.changeOwner(placed).substituteRefs((stat.symbol.paramSymss.flatten zip (paramss flatMap { _ map { _.symbol } })).toMap, stat.symbol)
               })
@@ -67,7 +67,7 @@ trait Splitting:
             indices += peer -> (index + 1)
             if placedValues == placedValuesSymbol(module.symbol, defn.AnyClass) then
               if peer == defn.AnyClass then
-                List(extractNormalizedExpression(term, module.symbol).changeOwner(localDummy))
+                List(extractPlacedBody(term).changeOwner(localDummy))
               else
                 val symbol = Symbol.newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic, Symbol.noSymbol)
                 List(
@@ -75,7 +75,7 @@ trait Splitting:
                   Ref(symbol).appliedToNone)
             else if placedValues == placedValuesSymbol(module.symbol, placementInfo.peerType.typeSymbol) then
               val symbol = Symbol.newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
-              val rhs = extractNormalizedExpression(term, module.symbol) match
+              val rhs = extractPlacedBody(term) match
                 case Block(statements, expr) if expr.tpe.typeSymbol != defn.UnitClass =>
                    Block(statements :+ expr, Literal(UnitConstant()))
                 case expr if expr.tpe.typeSymbol != defn.UnitClass =>
@@ -102,8 +102,8 @@ trait Splitting:
       //       maybe remove `transformNormalizedExpression`
       stat match
         case PlacedStatement(_) =>
-          transformNormalizedExpression(term, stat.symbol,
-            (expr, _) => expr,
+          transformPlacedBody(
+            term,
             (_, _, expr) => Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(expr.tpe) -> None)
         case _ =>
           Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(stat.symbol.info.finalResultType)

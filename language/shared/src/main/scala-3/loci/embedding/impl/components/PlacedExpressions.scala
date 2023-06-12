@@ -80,9 +80,14 @@ trait PlacedExpressions:
 
       checkPlacementTypes(erasedType, pos, "Illegal use of value with placement type.")
 
-      if !canceled then
+      val termSymbol = erasedType.termSymbol
+
+      def underExpansion(symbol: Symbol): Boolean =
+        symbol == Symbol.spliceOwner || symbol.maybeOwner.exists && underExpansion(symbol.maybeOwner)
+
+      if !canceled && termSymbol.exists && (isMultitierModule(termSymbol.owner) || !underExpansion(termSymbol)) then
         val widenedErasedType = erasedType.widen
-        if widenedErasedType != erasedType then
+        if widenedErasedType != erasedType && isMultitierModule(erasedType.termSymbol.owner) then
           TypePlacementTypesEraser(pos, checkOnly = true).transform(widenedErasedType)
 
       erasedType
@@ -231,7 +236,7 @@ trait PlacedExpressions:
         transformTree
   end ExpressionPlacementTypesEraser
 
-  private object subjectiveTypesInClosuresChecker extends TreeTraverser:
+  private object typesInClosuresChecker extends TreeTraverser:
     override def traverseTree(tree: Tree)(owner: Symbol) = tree match
       case Lambda(_, _) =>
         val Block(_, Closure(_, tpe)) = tree: @unchecked
@@ -320,10 +325,12 @@ trait PlacedExpressions:
     var substitutions = List.empty[(Symbol, Symbol)]
     var replacements = List.empty[(Symbol, Symbol)]
     val eraser = ExpressionPlacementTypesEraser(checkOnly = false, substitutions ::= _ -> _, replacements ::= _ -> _)
-    val expr = transformNormalizedExpression(term, owner,
-      eraserCheckOnly.transformValDef(_)(_),
-      (symbol, term, expr) => (if canceled then term else eraseSubjectiveTypesInClosures(eraser.transformTerm(term)(symbol))) -> Some(expr))
-    if !canceled then subjectiveTypesInClosuresChecker.traverseTree(expr)(owner)
+    val expr = transformPlacedBody(
+      term,
+      (symbol, body, expr) =>
+        val term = if canceled then body else eraseSubjectiveTypesInClosures(eraser.transformTerm(body)(symbol))
+        if !canceled then typesInClosuresChecker.traverseTree(term)(owner)
+        term -> Some(expr))
     if canceled then term else substituteReferences(expr, owner, substitutions, replacements)
 
   private def checkPlacementTypesInArguments(paramss: List[ParamClause], owner: Symbol) =

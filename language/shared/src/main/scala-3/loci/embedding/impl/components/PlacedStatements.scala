@@ -13,36 +13,37 @@ trait PlacedStatements:
   this: Component & Commons & ErrorReporter & Placements & Peers =>
   import quotes.reflect.*
 
+  private object PlacementSyntaxPrefix:
+    def unapply(term: Term): Option[(ValDef, Term)] = term match
+      case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.on =>
+        Some(prefix -> body)
+      case _ =>
+        None
+
+  private object PlacementSyntaxBody:
+    def unapply(term: Term): Option[Term] = term match
+      case outer @ Block(List(Inlined(_, List(), inner @ Block((evidence: ValDef) :: _, _))), erased: Typed)
+        if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
+           evidence.tpt.tpe <:< types.context &&
+           (erased.symbol == symbols.erased || erased.symbol == symbols.erasedArgs) =>
+        Some(Block.copy(outer)(inner.statements.tail :+ inner.expr, erased))
+      case _ =>
+        None
+
+  private def tryBetaReduce(expr: Term) =
+    Term.betaReduce(expr) getOrElse expr
+
   private def cleanPlacementExpression(placementInfo: PlacementInfo, expr: Term) =
-    object PlacementSyntaxPrefix:
-      def unapply(term: Term): Option[(ValDef, Term)] = term match
-        case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.on =>
-          Some(prefix -> body)
-        case _ =>
-          None
-
-    object PlacementSyntaxBody:
-      def unapply(term: Term): Option[(ValDef, Term)] = term match
-        case outer @ Block(List(Inlined(_, List(), inner @ Block((evidence: ValDef) :: _, _))), erased: Typed)
-          if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
-             evidence.tpt.tpe <:< types.context &&
-             (erased.symbol == symbols.erased || erased.symbol == symbols.erasedArgs) =>
-          Some(evidence -> Block.copy(outer)(inner.statements.tail :+ inner.expr, erased))
-        case _ =>
-          None
-
-    def tryBetaReduce(expr: Term) = Term.betaReduce(expr) getOrElse expr
-
-    val (cleanExpr, erasedSymbol, expressionOwner) = expr match
+    val (cleanExpr, expressionOwner) = expr match
       case Apply(select @ Select(PlacementSyntaxPrefix(prefix, expr), names.apply), List(arg)) =>
         tryBetaReduce(expr.select(select.symbol).appliedTo(arg)) match
-          case PlacementSyntaxBody(evidence, expr) => (expr, Some(evidence.symbol), Some(prefix.symbol.owner))
-          case expr => (expr, None, Some(prefix.symbol.owner))
+          case PlacementSyntaxBody(expr) => expr -> Some(prefix.symbol.owner)
+          case expr => expr -> Some(prefix.symbol.owner)
       case _ => tryBetaReduce(expr) match
         case PlacementSyntaxPrefix(prefix, expr) => expr match
-          case PlacementSyntaxBody(evidence, expr) => (expr, Some(evidence.symbol), Some(prefix.symbol.owner))
-          case _ => (expr, None, Some(prefix.symbol.owner))
-        case _ => (expr, None, None)
+          case PlacementSyntaxBody(expr) => expr -> Some(prefix.symbol.owner)
+          case _ => expr -> Some(prefix.symbol.owner)
+        case _ => expr -> None
 
     def erasedContext = Typed(
       Ref(symbols.erased),
@@ -50,11 +51,11 @@ trait PlacedStatements:
 
     cleanExpr match
       case Block(_, erased: Typed) if erased.expr.symbol == symbols.erased || erased.expr.symbol == symbols.erasedArgs =>
-        (cleanExpr, erasedSymbol, expressionOwner)
+        cleanExpr -> expressionOwner
       case Block(stats, expr) =>
-        (Block(stats :+ expr, erasedContext), erasedSymbol, expressionOwner)
+        Block(stats :+ expr, erasedContext) -> expressionOwner
       case expr =>
-        (Block(List(expr), erasedContext), erasedSymbol, expressionOwner)
+        Block(List(expr), erasedContext) -> expressionOwner
   end cleanPlacementExpression
 
   private def cleanPlacementExpressionOrClosure(placementInfo: PlacementInfo, expr: Term) =
@@ -64,39 +65,33 @@ trait PlacedStatements:
            arg.tpt.tpe <:< types.context &&
            arg.symbol.isImplicit =>
         val Block(List(lambda: DefDef), closure) = block: @unchecked
-        val (body, erasedSymbol, expressionOwner) = cleanPlacementExpression(placementInfo, lambda.rhs.get)
-        (Block.copy(block)(
+        val (body, expressionOwner) = cleanPlacementExpression(placementInfo, lambda.rhs.get)
+        Block.copy(block)(
           List(DefDef.copy(lambda)(lambda.name, lambda.paramss, lambda.returnTpt, Some(body.changeOwner(lambda.symbol)))),
-          closure),
-         erasedSymbol,
-         expressionOwner.nonEmpty)
+          closure) -> expressionOwner.nonEmpty
       case _ =>
-        val (body, erasedSymbol, expressionOwner) = cleanPlacementExpression(placementInfo, expr)
-        expressionOwner.fold(body, erasedSymbol, false): expressionOwner =>
+        val (body, expressionOwner) = cleanPlacementExpression(placementInfo, expr)
+        expressionOwner.fold(body -> false): expressionOwner =>
           val peer = placementInfo.peerType.asPackedValueType
           val placement = symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs).asPackedValueType
           val tpe = contextMethodType[Placement.Context[peer.Type], placement.Type]
           val block @ Block(List(lambda: DefDef), closure @ Closure(meth, _)) =
             Lambda(expressionOwner, tpe, (symbol, _) => body.changeOwner(symbol)): @unchecked
-          (Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(placementInfo.canonicalType))), erasedSymbol, true)
+          Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(placementInfo.canonicalType))) -> true
 
-  private class ErasedSymbolCleaner(symbol: Symbol) extends TreeMap:
-    val peerType = symbol.info.baseType(types.context.typeSymbol).typeArgs.head.asType
-
-    override def transformTerm(term: Term)(owner: Symbol) =
-      if term.symbol == symbol then
-        peerType match
-          case '[ p ] => '{ Placement.Context.fallback[p] }.asTerm
-      else
+  private object contextVariableCleaner extends TreeMap:
+    override def transformTerm(term: Term)(owner: Symbol) = term match
+      case Ident(_) =>
+        term.tpe.asType match
+          case '[ Nothing ] | '[ Null ] => term
+          case '[ Placement.Context[p] ] => '{ Placement.Context.fallback[p] }.asTerm
+          case _ => term
+      case _ =>
         super.transformTerm(term)(owner)
-  end ErasedSymbolCleaner
 
   private def cleanPlacementSyntax(placementInfo: PlacementInfo, rhs: Term)(owner: Symbol): (Term, Boolean) =
-    cleanPlacementExpressionOrClosure(placementInfo, rhs) match
-      case (rhs, Some(erasedSymbol), placedExpressionSyntax) =>
-        ErasedSymbolCleaner(erasedSymbol).transformTerm(rhs)(owner) -> placedExpressionSyntax
-      case (rhs, _, placedExpressionSyntax) =>
-        rhs -> placedExpressionSyntax
+    val (expr, placedExpressionSyntax) = cleanPlacementExpressionOrClosure(placementInfo, rhs)
+    contextVariableCleaner.transformTerm(expr)(owner) -> placedExpressionSyntax
 
   private def cleanPlacementSyntax(placementInfo: PlacementInfo, rhs: Option[Term])(owner: Symbol): Option[Term] =
     rhs map: rhs =>
@@ -129,6 +124,38 @@ trait PlacedStatements:
       case _ => ("Placed statement", "Subjective placed statement")
     checkPeerType(stat, placementInfo.peerType, module, statement, "placed on")
     placementInfo.modality.subjectivePeerType foreach { checkPeerType(stat, _, module, subjectiveStatement, "subjective to") }
+
+  private def processPlacedBody(term: Term, transform: Option[(Symbol, Term, Term) => (Term, Option[Term])]) =
+    def dropLastExpr(block: Block) = block.statements match
+      case (term: Term) +: Nil => term
+      case statements :+ (term: Term) => Block.copy(block)(statements, term)
+      case statements => Block.copy(block)(statements, Literal(UnitConstant()))
+
+    def appendExpr(original: Block)(term: Term, expr: Term) = term match
+      case Lambda(_, _) => Block.copy(original)(List(term), expr)
+      case block @ Block(statements, Literal(UnitConstant())) => Block.copy(block)(statements, expr)
+      case block @ Block(statements, _) => Block.copy(block)(statements :+ block.expr, expr)
+      case _ => Block.copy(original)(List(term), expr)
+
+    term match
+      case Block(List(lambda @ DefDef(name, args @ List(TermParamClause(List(arg))), tpt, Some(block @ Block(_, erased: Typed)))), closure: Closure)
+          if arg.symbol.isImplicit &&
+             !(arg.symbol.info =:= TypeRepr.of[Nothing]) && arg.symbol.info <:< types.context &&
+             erased.tpe.typeSymbol == symbols.`embedding.on` =>
+        val body = dropLastExpr(block)
+        transform.fold(body): transform =>
+          val (rhs, expr) = transform(lambda.symbol, body, erased)
+          Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(expr.fold(rhs) { appendExpr(block)(rhs, _) }))), closure)
+      case _ =>
+        errorAndCancel("Unexpected shape of placed expression.", term.posInUserCode)
+        term
+  end processPlacedBody
+
+  def transformPlacedBody(term: Term, transform: (Symbol, Term, Term) => (Term, Option[Term])) =
+    processPlacedBody(term, Some(transform))
+
+  def extractPlacedBody(term: Term) =
+    processPlacedBody(term, None)
 
   def normalizePlacedStatements(module: ClassDef): ClassDef =
     val body = module.body map:
@@ -163,51 +190,4 @@ trait PlacedStatements:
 
     ClassDef.copy(module)(module.name, module.constructor, module.parents, module.self, body)
   end normalizePlacedStatements
-
-  private class NormalizedDefBodyProcessor(transform: Option[((ValDef, Symbol) => ValDef, (Symbol, Term, Term) => (Term, Option[Term]))]) extends TreeMap:
-    def dropLastExpr(block: Block) = block.statements match
-      case (term: Term) :: Nil => term
-      case statements :+ (term: Term) => Block.copy(block)(statements, term)
-      case statements => Block.copy(block)(statements, Literal(UnitConstant()))
-
-    def appendExpr(original: Block)(term: Term, expr: Term) = term match
-      case Lambda(_, _) => Block.copy(original)(List(term), expr)
-      case block @ Block(statements, Literal(UnitConstant())) => Block.copy(block)(statements, expr)
-      case block @ Block(statements, _) => Block.copy(block)(statements :+ block.expr, expr)
-      case _ => Block.copy(original)(List(term), expr)
-
-    override def transformTerm(term: Term)(owner: Symbol) = term match
-      case Block(List(lambda @ DefDef(name, args @ List(TermParamClause(List(arg))), tpt, Some(block @ Block(_, erased: Typed)))), closure: Closure)
-          if arg.symbol.isImplicit &&
-             !(arg.symbol.info =:= TypeRepr.of[Nothing]) && arg.symbol.info <:< types.context &&
-             erased.tpe.typeSymbol == symbols.`embedding.on` =>
-        val body = dropLastExpr(block)
-        transform match
-          case Some(_, transform) =>
-            val (rhs, expr) = transform(lambda.symbol, body, erased)
-            Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(expr.fold(rhs) { appendExpr(block)(rhs, _) }))), closure)
-          case _ =>
-            body
-
-      // TODO: this "outer" stuff should be copied/duplicated depending on some configuration argument
-
-      case Block(List(lambda @ DefDef(name, List(clause @ TermParamClause(arg :: _)), tpt, Some(body))), closure: Closure)
-          if arg.symbol.isImplicit =>
-        val params = transform match
-          case Some(transformArg, _) => clause.params map { transformArg(_, lambda.symbol) }
-          case _ => clause.params
-        val rhs = transformTerm(body)(lambda.symbol)
-        Block.copy(term)(List(DefDef.copy(lambda)(name, List(TermParamClause(params)), tpt, Some(rhs))), closure)
-
-      case _ =>
-        term
-  end NormalizedDefBodyProcessor
-
-  def transformNormalizedExpression(term: Term, owner: Symbol, transformArg: (ValDef, Symbol) => ValDef, transform: (Symbol, Term, Term) => (Term, Option[Term])) =
-    val processor = NormalizedDefBodyProcessor(transform = Some(transformArg, transform))
-    processor.transformTerm(term)(owner)
-
-  def extractNormalizedExpression(term: Term, owner: Symbol) =
-    val processor = NormalizedDefBodyProcessor(transform = None)
-    processor.transformTerm(term)(owner)
 end PlacedStatements

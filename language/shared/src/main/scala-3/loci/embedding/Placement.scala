@@ -16,15 +16,15 @@ object On:
   trait Fallback[P]:
     transparent inline def apply[T, U](
         inline v: Placement.Context[P] ?=> T)(
-        using PlacedClean[U on P, P, T, T, U]): U on P =
+        using PlacedClean[P, T, T, U]): U on P =
       ${ impl.inferrableCanonicalPlacementTypeContextClosure[U, U on P]('v) }
     transparent inline infix def local[T, U](
         inline v: Placement.Context[P] ?=> T)(
-        using PlacedClean[U on P, P, T, T, U]): Local[U] on P =
+        using PlacedClean[P, T, T, U]): Local[U] on P =
       ${ impl.inferrableCanonicalPlacementTypeContextClosure[U, Local[U] on P]('v) }
     transparent inline infix def sbj[R, T, U](
         inline v: Placement.Context[P] ?=> Remote[R] => T)(
-        using PlacedClean[U on P, P, T, T, U]): U per R on P =
+        using PlacedClean[P, T, T, U]): U per R on P =
       ${ impl.inferrableCanonicalPlacementTypeContextClosure[Remote[R] => U, U per R on P]('v) }
 
 @experimental
@@ -50,10 +50,10 @@ trait Capture[P, placed[_, _]]:
 
 trait Block[P, placed[_, _]]:
   def apply[T, U, U_placed_P](v: Placement.Context[P] => T)(using
-    PlacedClean[U on P, P, T, T, U],
+    PlacedClean[P, T, T, U],
     CanonicalPlacedTypeAlias[U placed P, U_placed_P]): U_placed_P = erased
   infix def sbj[R, T, U, U_per_R_placed_P](v: Placement.Context[P] => Remote[R] => T)(using
-    PlacedClean[U on P, P, T, T, U],
+    PlacedClean[P, T, T, U],
     CanonicalPlacedTypeAlias[U per R placed P, U_per_R_placed_P]): U_per_R_placed_P = erased
 
 trait Narrow:
