@@ -3,6 +3,7 @@ package embedding
 package impl
 
 import components.*
+import utility.reflectionExtensions.*
 
 import scala.annotation.experimental
 import scala.quoted.*
@@ -11,26 +12,60 @@ import scala.util.control.NonFatal
 @experimental
 def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quotes)(v: Expr[Any]*): Expr[R] =
   import quotes.reflect.*
+  import info.*
 
   object info extends Component.withQuotes(quotes), Commons, Placements
 
+  object NestedPlacementExpression:
+    def unapply(term: Term): Option[(ValDef, Tree, Term)] = term match
+      case Inlined(_, List(), Block(List(evidence: ValDef), Inlined(_, List(), Block(List(), expr @ Inlined(Some(call), _, _))))) =>
+        Some(evidence, call, expr)
+      case Inlined(_, List(), Block(List(evidence: ValDef), Inlined(_, List(), expr @ Inlined(Some(call), _, _)))) =>
+        Some(evidence, call, expr)
+      case Inlined(_, List(), Block(List(evidence: ValDef), Block(List(), expr @ Inlined(Some(call), _, _)))) =>
+        Some(evidence, call, expr)
+      case Inlined(_, List(), Block(List(evidence: ValDef), expr @ Inlined(Some(call), _, _))) =>
+        Some(evidence, call, expr)
+      case _ =>
+        None
+
+  object SyntheticContextParameter:
+    def unapply(term: Term): Option[(ValDef, Term)] = term match
+      case Inlined(_, List(), Block(List(evidence: ValDef), body)) =>
+        Some(evidence, body)
+      case _ =>
+        None
+
+  def namedOwner(symbol: Symbol) =
+    symbol findAncestor { symbol => !symbol.isAnonymousFunction } getOrElse symbol
+
   def clean(tpe: TypeRepr) = tpe.asType match
     case '[ t `on` p ] =>
-      val local = TypeRepr.of[t].typeSymbol == info.symbols.`language.Local`
+      val local = TypeRepr.of[t].typeSymbol == symbols.`language.Local`
       PlacedClean.cleanType[p, t] match
         case '[ u ] =>
-          val u = if local then info.symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
-          info.symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
+          val u = if local then symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
+          symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
     case '[ r ] =>
       TypeRepr.of[r]
 
   def canonical(tpe: TypeRepr) =
-    info.PlacementInfo(tpe).fold(tpe): placementInfo =>
-      info.symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs)
+    PlacementInfo(tpe).fold(tpe): placementInfo =>
+      symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs)
 
-  val r = canonical(clean(TypeRepr.of[R]))
+  val terms = v.toList map { _.asTerm }
 
-  val result = Block(v.toList map { _.asTerm }, Typed(Ref('{ erased }.asTerm.underlyingArgument.symbol), TypeTree.of(using r.asType)))
+  val result = terms match
+    case List(NestedPlacementExpression(evidence, call, expr))
+      if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
+         evidence.tpt.tpe <:< types.context &&
+         call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
+      expr
+    case _ =>
+      val tpe = canonical(clean(TypeRepr.of[R]))
+      Block(terms, Typed(Ref('{ erased }.asTerm.underlyingArgument.symbol), TypeTree.of(using tpe.asType)))
+
+  val r = result.tpe
 
   // To make the context function type inferrable, we hack the current context and change its mode to `Pattern`
   // as this mode lets the context function type propagate without resolving the context argument:
@@ -41,9 +76,9 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
   // Hence, no further type-checking will happen in the current context.
   try
     r match
-      case AppliedType(fun, typeArgs @ List(_, peer)) if fun.typeSymbol == info.symbols.`embedding.on` =>
-        val symbol = Symbol.spliceOwner.owner
-        if symbol.isDefDef || symbol.isValDef then
+      case AppliedType(fun, typeArgs @ List(_, peer)) if fun.typeSymbol == symbols.`embedding.on` =>
+        val symbol = namedOwner(Symbol.spliceOwner.owner)
+        if (symbol.isDefDef || symbol.isValDef) && !symbol.isLocalDummy then
           val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
           val contextClass = Class.forName("dotty.tools.dotc.core.Contexts$Context")
           val freshContextClass = Class.forName("dotty.tools.dotc.core.Contexts$FreshContext")
@@ -73,6 +108,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
           val pattern = modeClass.getMethod("Pattern").invoke(null)
           val completer = infoOrCompleter.invoke(denot.invoke(symbol, context))
 
+          // check whether the type of the surrounding val or def is still to be inferred
           if completerClass.isInstance(completer) then
             val rhs = unforcedRhs.invoke(original.invoke(completer))
             val term =
@@ -82,6 +118,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
                   case _ => rhs
               else rhs
 
+            // check whether the expanding function is the outer-most in the surrounding val or def
             if contains.invoke(Position.ofMacroExpansion, sourcePos.invoke(term, context)) == true then
               outersIterator.invoke(context) match
                 case outers: Iterator[?] =>
@@ -92,12 +129,32 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
                   val block @ Block(List(lambda: DefDef), closure @ Closure(meth, _)) =
                     (r.asType, peer.asType) match
                       case ('[ r ], '[ p ]) =>
-                        Lambda(symbol, info.contextMethodType[Placement.Context[p], r], (symbol, _) => result.changeOwner(symbol)): @unchecked
+                        Lambda(symbol, contextMethodType[Placement.Context[p], r], (symbol, _) => result.changeOwner(symbol)): @unchecked
 
-                  Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(info.symbols.`language.on`.typeRef.appliedTo(typeArgs)))).asExpr match
+                  Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(symbols.`language.on`.typeRef.appliedTo(typeArgs)))).asExpr match
                     case result: Expr[R] @unchecked => return result
 
                 case _ =>
+            end if
+          else
+            // If the surrounding val or def has an explicit type annotation,
+            // the `MultitierPreprocessor` can inject a `placed` expression
+            // to improve type inference within the body
+            // (in particular discarding non-Unit values, i.e., insertion of Unit values).
+            // If the surrounding val or def is not placed,
+            // it will not have an `on` placement type and the peer type will be inferred as `Any`.
+            // In such case, we just expand to the unprocessed expression passed to the expanding function
+            // without any added context argument.
+            terms match
+              case List(SyntheticContextParameter(evidence, body))
+                if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
+                   evidence.tpt.tpe <:< types.context &&
+                   peer.typeSymbol == defn.AnyClass &&
+                   symbol.info.resultType.typeSymbol != symbols.`language.on` &&
+                   symbol.info.resultType.typeSymbol != symbols.`embedding.on` =>
+                body.asExpr match
+                  case result: Expr[R] @unchecked => return result
+              case _ =>
       case _ =>
   catch
     case NonFatal(e) =>

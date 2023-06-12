@@ -19,6 +19,10 @@ import scala.annotation.{compileTimeOnly, experimental}
 
 @experimental
 @compileTimeOnly("Placed expression can only used in multitier module")
+object placed extends On.Placed
+
+@experimental
+@compileTimeOnly("Placed expression can only used in multitier module")
 object on extends Select[Run]:
   sealed trait on[P] extends On.Fallback[P], Run[P, from]
   transparent inline def apply[P]: on[P] = ${ On[P] }

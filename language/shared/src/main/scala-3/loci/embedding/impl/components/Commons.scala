@@ -80,6 +80,15 @@ trait Commons:
     def startPosition = if pos.startLine != pos.endLine then Position(pos.sourceFile, pos.start, pos.start) else pos
     def endPosition = if pos.startLine != pos.endLine then Position(pos.sourceFile, pos.end, pos.end) else pos
 
+  extension (symbol: Symbol)
+    def findAncestor(predicate: Symbol => Boolean): Option[Symbol] =
+      if symbol.exists then
+        if predicate(symbol) then Some(symbol) else symbol.maybeOwner.findAncestor(predicate)
+      else
+        None
+    def hasAncestor(ancestors: Symbol*): Boolean =
+      (symbol findAncestor { ancestors contains _ }).isDefined
+
   given ValOrDefDef: TypeTest[Tree, ValDef | DefDef] = tree =>
     summon[TypeTest[Tree, ValDef]].unapply(tree) orElse
     summon[TypeTest[Tree, DefDef]].unapply(tree)

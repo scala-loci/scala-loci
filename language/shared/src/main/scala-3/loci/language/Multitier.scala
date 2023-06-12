@@ -7,9 +7,9 @@ import scala.annotation.{experimental, MacroAnnotation}
 import scala.quoted.*
 
 @experimental
-class multitier(using AnnotationTyper) extends MacroAnnotation:
-  def this(accessorGeneration: AccessorGeneration)(using AnnotationTyper) = this(using AnnotationTyper())
-  def this(unit: Unit) = this(using AnnotationTyper())
+class multitier(using MultitierPreprocessor) extends MacroAnnotation:
+  def this(accessorGeneration: AccessorGeneration)(using MultitierPreprocessor) = this(using MultitierPreprocessor())
+  def this(unit: Unit) = this(using MultitierPreprocessor())
   def transform(using Quotes)(tree: quotes.reflect.Definition): List[quotes.reflect.Definition] =
     impl.Multitier.annotation(tree)
 

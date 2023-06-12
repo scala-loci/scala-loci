@@ -27,6 +27,11 @@ object On:
         using PlacedClean[P, T, T, U]): U per R on P =
       ${ impl.inferrableCanonicalPlacementTypeContextClosure[Remote[R] => U, U per R on P]('v) }
 
+  @experimental
+  trait Placed:
+    transparent inline def apply[T, P](inline v: Placement.Context[P] ?=> T): T on P =
+      ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, T on P]('v) }
+
 @experimental
 trait On[P]:
   transparent inline def apply[T](inline v: Placement.Context[P] ?=> T): T on P =

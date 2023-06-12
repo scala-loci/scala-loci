@@ -1,23 +1,24 @@
 package loci
-package language
+package embedding
 
-import loci.embedding.impl.SymbolMutator
+import impl.SymbolMutator
 
 import java.lang.reflect.Field
 import java.util.IdentityHashMap
 import scala.quoted.*
 import scala.util.control.NonFatal
 
-final class AnnotationTyper
+final class MultitierPreprocessor
 
-object AnnotationTyper:
-  transparent inline given AnnotationTyper = ${ injectAnnotations }
+object MultitierPreprocessor:
+  transparent inline given MultitierPreprocessor = ${ preprocess }
 
-  def injectAnnotations(using Quotes): Expr[AnnotationTyper] =
+  def preprocess(using Quotes): Expr[MultitierPreprocessor] =
     import quotes.reflect.*
 
     val multitier = Symbol.requiredClass("loci.language.multitier")
     val deferred = Symbol.requiredClass("loci.language.deferred")
+    val placed = Symbol.requiredMethod("loci.language.placed.apply")
     val compileTimeOnly = Symbol.requiredClass("scala.annotation.compileTimeOnly")
     val uninitialized = Symbol.requiredMethod("scala.compiletime.uninitialized")
 
@@ -45,17 +46,21 @@ object AnnotationTyper:
         val symDenotationClass = Class.forName("dotty.tools.dotc.core.SymDenotations$SymDenotation")
         val annotationClass = Class.forName("dotty.tools.dotc.core.Annotations$Annotation")
         val completerClass = Class.forName("dotty.tools.dotc.typer.Namer$Completer")
+        val sourceFileClass = Class.forName("dotty.tools.dotc.util.SourceFile")
         val sourcePositionClass = Class.forName("dotty.tools.dotc.util.SourcePosition")
         val positionedClass = Class.forName("dotty.tools.dotc.ast.Positioned")
         val treeClass = Class.forName("dotty.tools.dotc.ast.Trees$Tree")
         val defTreeClass = Class.forName("dotty.tools.dotc.ast.Trees$DefTree")
         val blockClass = Class.forName("dotty.tools.dotc.ast.Trees$Block")
+        val applyClass = Class.forName("dotty.tools.dotc.ast.Trees$Apply")
         val templateClass = Class.forName("dotty.tools.dotc.ast.Trees$Template")
         val valOrDefDefClass = Class.forName("dotty.tools.dotc.ast.Trees$ValOrDefDef")
         val valDefClass = Class.forName("dotty.tools.dotc.ast.Trees$ValDef")
         val defDefClass = Class.forName("dotty.tools.dotc.ast.Trees$DefDef")
         val typeDefClass = Class.forName("dotty.tools.dotc.ast.Trees$TypeDef")
+        val appliedTypeTreeClass = Class.forName("dotty.tools.dotc.ast.Trees$AppliedTypeTree")
         val moduleDefClass = Class.forName("dotty.tools.dotc.ast.untpd$ModuleDef")
+        val infixOpClass = Class.forName("dotty.tools.dotc.ast.untpd$InfixOp")
         val typedSpliceClass = Class.forName("dotty.tools.dotc.ast.untpd$TypedSplice")
         val modifiersClass = Class.forName("dotty.tools.dotc.ast.untpd$Modifiers")
 
@@ -73,12 +78,15 @@ object AnnotationTyper:
         val rawMods = defTreeClass.getMethod("rawMods")
         val setMods = defTreeClass.getMethod("setMods", modifiersClass)
         val stats = blockClass.getMethod("stats")
+        val apply = applyClass.getMethod("apply", treeClass, classOf[List[?]], sourceFileClass)
         val unforcedBody = templateClass.getMethod("unforcedBody")
         val unforcedRhs = valOrDefDefClass.getMethod("unforcedRhs")
+        val tpt = valOrDefDefClass.getMethod("tpt")
         val valRhs = valDefClass.getDeclaredField("preRhs")
         val defRhs = defDefClass.getDeclaredField("preRhs")
         val rhs = typeDefClass.getMethod("rhs")
         val impl = moduleDefClass.getMethod("impl")
+        val op = infixOpClass.getMethod("op")
         val typedSplice = typedSpliceClass.getMethod("apply", treeClass, classOf[Boolean], contextClass)
         val splice = typedSpliceClass.getMethod("splice")
         val modFlags = modifiersClass.getMethod("flags")
@@ -165,6 +173,24 @@ object AnnotationTyper:
           catch
             case NonFatal(e) =>
 
+        def maybePlacementTypeConstructorTree(tree: Any) = tree match
+          case Tree(
+              TypeIdent("on") |
+              TypeSelect(Ident("language"), "on") |
+              TypeSelect(Select(Ident("loci"), "language"), "on") |
+              TypeSelect(Select(Select(Ident("_root_"), "loci"), "language"), "on") |
+              TypeSelect(Ident("embedding"), "on") |
+              TypeSelect(Select(Ident("loci"), "embedding"), "on") |
+              TypeSelect(Select(Select(Ident("_root_"), "loci"), "embedding"), "on")) =>
+            true
+          case _ =>
+            false
+
+        def maybePlacementTypeTree(tree: Any) = tree match
+          case _ if infixOpClass.isInstance(tree) => maybePlacementTypeConstructorTree(op.invoke(tree))
+          case Tree(Applied(tpt, List(_, _))) => maybePlacementTypeConstructorTree(tpt)
+          case _ => false
+
         def TypedSplice(tree: Tree) =
           typedSplice.invoke(null, tree, false, context)
 
@@ -202,13 +228,21 @@ object AnnotationTyper:
 
         def processTree(decl: Any, multitierAnnottee: Boolean, compileTimeOnlyAnnotation: Term, tree: Any): Unit =
           if valOrDefDefClass.isInstance(tree) then
-            if multitierAnnottee && (flags(decl) is Flags.Module) && isEmpty.invoke(unforcedRhs.invoke(tree)) == true then
-              if !mayHaveAnnotationSymbol(tree, deferred) then
-                setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(deferredAnnotation)))
+            val rhs = unforcedRhs.invoke(tree)
+            if isEmpty.invoke(rhs) == true then
+              if multitierAnnottee && (flags(decl) is Flags.Module) then
+                if !mayHaveAnnotationSymbol(tree, deferred) then
+                  setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(deferredAnnotation)))
+                if valDefClass.isInstance(tree) then
+                  mutateValOrDefRhs(valRhs, tree, TypedSplice(Ref(uninitialized)))
+                if defDefClass.isInstance(tree) then
+                  mutateValOrDefRhs(defRhs, tree, TypedSplice(Ref(uninitialized)))
+            else if maybePlacementTypeTree(tpt.invoke(tree)) then
+              def placedRhs = apply.invoke(null, TypedSplice(Ref(placed)), List(rhs), Position.ofMacroExpansion.sourceFile)
               if valDefClass.isInstance(tree) then
-                mutateValOrDefRhs(valRhs, tree, TypedSplice(Ref(uninitialized)))
+                mutateValOrDefRhs(valRhs, tree, placedRhs)
               if defDefClass.isInstance(tree) then
-                mutateValOrDefRhs(defRhs, tree, TypedSplice(Ref(uninitialized)))
+                mutateValOrDefRhs(defRhs, tree, placedRhs)
 
             if !mayHaveAnnotationSymbol(tree, compileTimeOnly) then
               setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(compileTimeOnlyAnnotation)))
@@ -243,6 +277,6 @@ object AnnotationTyper:
       catch
         case NonFatal(e) =>
 
-    '{ AnnotationTyper() }
-  end injectAnnotations
-end AnnotationTyper
+    '{ MultitierPreprocessor() }
+  end preprocess
+end MultitierPreprocessor

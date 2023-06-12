@@ -41,13 +41,10 @@ trait PlacedExpressions:
   private object MultitierConstructFragment:
     def unapply(term: Term): Boolean = term match
       case Inlined(Some(call), _, _)
-        if call.symbol == symbols.on ||
-           call.symbol == symbols.placed.companionModule.moduleClass =>
+          if call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass, symbols.placed.companionModule.moduleClass) =>
         true
-      case Apply(Select(conversion, _), List(rhs))
-        if conversion.symbol.exists &&
-           (conversion.symbol.owner == symbols.on ||
-            conversion.symbol.owner == symbols.placed.companionModule.moduleClass) =>
+      case Apply(Select(conversion, _), List(_))
+          if conversion.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass, symbols.placed.companionModule.moduleClass) =>
         true
       case _ =>
         (term.symbol == symbols.erased || term.symbol == symbols.erasedArgs) &&

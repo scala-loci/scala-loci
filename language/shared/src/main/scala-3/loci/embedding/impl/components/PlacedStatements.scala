@@ -14,36 +14,50 @@ trait PlacedStatements:
   import quotes.reflect.*
 
   private object PlacementSyntaxPrefix:
-    def unapply(term: Term): Option[(ValDef, Term)] = term match
-      case Inlined(Some(call), (prefix: ValDef) :: _, body) if call.symbol == symbols.on =>
-        Some(prefix -> body)
+    def unapply(term: Term): Option[(Option[ValDef], Term)] = term match
+      case Inlined(Some(call), List(), body)
+          if call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
+        body match
+          case PlacementSyntaxPrefix(prefix, body) => Some(prefix -> body)
+          case _ => Some(None -> body)
+      case Inlined(Some(call), List(prefix: ValDef), body)
+          if call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
+        body match
+          case PlacementSyntaxPrefix(_, body) => Some(Some(prefix) -> body)
+          case _ => Some(Some(prefix) -> body)
       case _ =>
         None
 
   private object PlacementSyntaxBody:
-    def unapply(term: Term): Option[Term] = term match
+    def unapply(term: Term): Option[(ValDef, Term)] = term match
       case outer @ Block(List(Inlined(_, List(), inner @ Block((evidence: ValDef) :: _, _))), erased: Typed)
         if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
            evidence.tpt.tpe <:< types.context &&
            (erased.symbol == symbols.erased || erased.symbol == symbols.erasedArgs) =>
-        Some(Block.copy(outer)(inner.statements.tail :+ inner.expr, erased))
+        Some(evidence -> Block.copy(outer)(inner.statements.tail :+ inner.expr, erased))
       case _ =>
         None
 
   private def tryBetaReduce(expr: Term) =
     Term.betaReduce(expr) getOrElse expr
 
-  private def cleanPlacementExpression(placementInfo: PlacementInfo, expr: Term) =
-    val (cleanExpr, expressionOwner) = expr match
+  private def cleanPlacementExpression(placementInfo: PlacementInfo, term: Term): (Term, Option[Symbol]) =
+    val (cleanExpr, expressionOwner) = term match
       case Apply(select @ Select(PlacementSyntaxPrefix(prefix, expr), names.apply), List(arg)) =>
         tryBetaReduce(expr.select(select.symbol).appliedTo(arg)) match
-          case PlacementSyntaxBody(expr) => expr -> Some(prefix.symbol.owner)
-          case expr => expr -> Some(prefix.symbol.owner)
-      case _ => tryBetaReduce(expr) match
+          case PlacementSyntaxBody(evidence, expr) => expr -> Some((prefix getOrElse evidence).symbol.owner)
+          case expr if prefix.isEmpty => cleanPlacementExpression(placementInfo, expr) match
+            case result @ (_, Some(_)) => result
+            case _ => term -> None
+          case expr => expr -> Some(prefix.get.symbol.owner)
+      case _ => tryBetaReduce(term) match
         case PlacementSyntaxPrefix(prefix, expr) => expr match
-          case PlacementSyntaxBody(expr) => expr -> Some(prefix.symbol.owner)
-          case _ => expr -> Some(prefix.symbol.owner)
-        case _ => expr -> None
+          case PlacementSyntaxBody(evidence, expr) => expr -> Some((prefix getOrElse evidence).symbol.owner)
+          case _ if prefix.isEmpty => cleanPlacementExpression(placementInfo, expr) match
+            case result @ (_, Some(_)) => result
+            case _ => term -> None
+          case _ => expr -> Some(prefix.get.symbol.owner)
+        case _ => term -> None
 
     def erasedContext = Typed(
       Ref(symbols.erased),
@@ -97,6 +111,17 @@ trait PlacedStatements:
     rhs map: rhs =>
       val (expr, _) = cleanPlacementSyntax(placementInfo, rhs)(owner)
       expr
+
+  private def cleanSpuriousPlacementSyntax(rhs: Option[Term]): Option[Term] =
+    rhs map:
+      case PlacementSyntaxPrefix(_, Inlined(_, List(), expr)) => expr
+      case PlacementSyntaxPrefix(_, expr) => expr
+      case expr => expr
+
+  private def cleanSpuriousPlacementSyntax(stat: ValDef | DefDef): ValDef | DefDef =
+    stat match
+      case ValDef(name, tpt, rhs) => ValDef.copy(stat)(name, tpt, cleanSpuriousPlacementSyntax(rhs))
+      case DefDef(name, paramss, tpt, rhs) => DefDef.copy(stat)(name, paramss, tpt, cleanSpuriousPlacementSyntax(rhs))
 
   private def placementType(stat: ValDef | DefDef, tpt: TypeTree) =
     PlacementInfo(stat.symbol.info.resultType) filter: placementInfo =>
@@ -160,12 +185,12 @@ trait PlacedStatements:
   def normalizePlacedStatements(module: ClassDef): ClassDef =
     val body = module.body map:
       case stat @ ValDef(name, tpt, rhs) =>
-        placementType(stat, tpt).fold(stat): placementInfo =>
+        placementType(stat, tpt).fold(cleanSpuriousPlacementSyntax(stat)): placementInfo =>
           checkPlacementType(stat, placementInfo, module)
           ValDef.copy(stat)(name, tpt, cleanPlacementSyntax(placementInfo, rhs)(stat.symbol))
 
       case stat @ DefDef(name, paramss, tpt, rhs) =>
-        placementType(stat, tpt).fold(stat): placementInfo =>
+        placementType(stat, tpt).fold(cleanSpuriousPlacementSyntax(stat)): placementInfo =>
           checkPlacementType(stat, placementInfo, module)
           if !placementInfo.modality.local then
             paramss collectFirst Function.unlift(_.params find { _.symbol.isImplicit }) foreach: param =>
