@@ -8,8 +8,8 @@ import org.scalatest.matchers.should.Matchers
 @multitier object PeerValueCacheModule {
   @peer type Node
 
-  def f(x: Int): Local[Int via Node] on Node = on[Node] local { implicit! =>
-    x.asValueRef
+  def f(x: Int): Local[Int at Node] on Node = on[Node] local { implicit! =>
+    remote ref x
   }
 }
 

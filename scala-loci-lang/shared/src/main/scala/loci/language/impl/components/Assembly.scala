@@ -295,7 +295,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       case q"$recv[$tpt]($arg)" if recv.symbol == symbols.remoteCast =>
         atPos(tree.pos) { q"$arg.asRemote[$tpt]" }
       case q"$cast[..$tpts]($arg)" if cast.symbol == symbols.valueRefCast =>
-        atPos(tree.pos) { q"$arg.asVia[${tpts.last}]" }
+        atPos(tree.pos) { q"$arg.at[${tpts.last}]" }
       case _ =>
         super.transform(tree)
     }

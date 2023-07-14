@@ -79,6 +79,7 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val SelectApply = typeOf[Placement.Select[Placement.Run]] member TermName("apply")
     val BlockApply = typeOf[Placement.Block[_, PlacedValue]] member TermName("apply")
     val CaptureCapture = typeOf[Placement.Capture[_, PlacedValue]] member TermName("capture")
+    val valueRefCreatorRemote = symbolOf[valueref.remote.type]
     val valueRefAccessor = symbolOf[valueref.ValueRefAccessor[_, _, _]]
     val valueRefCast = symbolOf[valueref.ValueRef[_, _]].companion.info member TermName("cast")
   }
@@ -149,7 +150,6 @@ class Commons[C <: blackbox.Context](val engine: Engine[C]) extends Component[C]
     val nonInstantiable = typeOf[NonInstantiable]
     val union = typeOf[_ | _]
     val uniquePeerId = typeOf[UUID]
-    val valueRefCreator = typeOf[valueref.ValueRefCreator[_, _]]
     val valueRefAccessor = typeOf[valueref.ValueRefAccessor[_, _, _]]
     val valueRefPeerAccessor = typeOf[valueref.ValueRefPeerAccessor[_, _, _]]
     val valueRefLocalAccessor = typeOf[valueref.ValueRefLocalAccessor[_, _]]

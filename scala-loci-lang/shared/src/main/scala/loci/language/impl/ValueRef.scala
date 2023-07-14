@@ -3,10 +3,10 @@ package loci.language.impl
 import scala.reflect.macros.blackbox
 
 object ValueRef {
-  def asVia[V: c.WeakTypeTag, R: c.WeakTypeTag](c: blackbox.Context): c.Tree = {
+  def at[V: c.WeakTypeTag, R: c.WeakTypeTag](c: blackbox.Context): c.Tree = {
     import c.universe._
 
-    val q"$expr.asVia[$tpt]" = c.macroApplication: @unchecked
+    val q"$expr.at[$tpt]" = c.macroApplication: @unchecked
     val valueType = weakTypeOf[V]
 
     val enclosingMultitierMacro = c.enclosingMacros exists { c =>

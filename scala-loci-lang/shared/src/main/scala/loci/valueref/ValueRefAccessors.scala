@@ -12,7 +12,8 @@ import loci.valueref.ValueRefAccessors.PeerValueCacheMiss
 
 import java.util.UUID
 import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 trait ValueRefAccessors {
 
@@ -24,7 +25,7 @@ trait ValueRefAccessors {
     implicit val context: Context[P],
     implicit val executionContext: ExecutionContext,
   ) {
-    def getValue: Future[V] = {
+    def deref: Future[V] = {
       ref.peerId match {
         case id if id == peerId =>
           Future.successful(cache.getAs[V](ref.valueId).getOrElse(throw PeerValueCacheMiss(ref.valueId)))
@@ -37,6 +38,10 @@ trait ValueRefAccessors {
         }
       }
     }
+
+    def deref_?(timeout: Duration): V = Await.result(deref, timeout)
+
+    def deref_! : V = deref_?(Duration.Inf)
   }
 
   implicit class ValueRefPeerAccessor[V, R, P](ref: ValueRef[V, R])(
@@ -45,7 +50,7 @@ trait ValueRefAccessors {
     implicit val remotePeerIds: Map[UUID, Remote[R]],
     implicit val context: Context[P]
   ) {
-    def getRemote: Remote[R] = {
+    def peer: Remote[R] = {
       ref.peerId match {
         case id if id == peerId => new SelfReference[R](signature)
         case id => remotePeerIds.getOrElse(id, throw NotConnectedToPeerWithId(id))
@@ -58,7 +63,7 @@ trait ValueRefAccessors {
     implicit val cache: PeerValueCache,
     implicit val context: Context[P]
   ) {
-    def getValueLocally: V = {
+    def derefLocally: V = {
       ref.peerId match {
         case id if id == peerId => cache.getAs[V](ref.valueId).getOrElse(throw PeerValueCacheMiss(ref.valueId))
         case id => throw IllegalLocalAccess(peerId, id)

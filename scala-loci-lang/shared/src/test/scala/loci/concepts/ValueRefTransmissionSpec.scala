@@ -12,11 +12,11 @@ import scala.concurrent.Future
 @multitier object ValueRefTransmissionModule {
   @peer type Node <: { type Tie <: Single[Node] }
 
-  def generateValueRef(x: Int): Int via Node on Node = on[Node] { implicit! =>
-    x.asValueRef
+  def generateValueRef(x: Int): Int at Node on Node = on[Node] { implicit! =>
+    remote ref x
   }
 
-  def transmitValueRef(ref: Int via Node): Future[Int via Node] on Node = on[Node] { implicit! =>
+  def transmitValueRef(ref: Int at Node): Future[Int at Node] on Node = on[Node] { implicit! =>
     on[Node].run.capture(ref)(implicit! => ref).asLocal
   }
 }

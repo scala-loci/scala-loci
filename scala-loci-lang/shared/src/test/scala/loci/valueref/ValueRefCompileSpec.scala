@@ -15,9 +15,9 @@ class ValueRefCompileSpec extends AnyFlatSpec with Matchers with NoLogging {
       @peer type A
       @peer type B
 
-      def nonAccess(ref: Int via A): Int via A on B = on[B] { implicit! =>
+      def nonAccess(ref: Int at A): Int at A on B = on[B] { implicit! =>
         println(ref)
-        val ref2: Int via A = ref.copy()
+        val ref2: Int at A = ref.copy()
         ref2
       }
     }""" should compile
@@ -28,8 +28,8 @@ class ValueRefCompileSpec extends AnyFlatSpec with Matchers with NoLogging {
       @peer type A
       @peer type B
 
-      def access(ref: Int via A): Future[Int] on B = on[B] { implicit! =>
-        ref.getValue
+      def access(ref: Int at A): Future[Int] on B = on[B] { implicit! =>
+        ref.deref
       }
     }""" shouldNot compile
   }
@@ -38,8 +38,8 @@ class ValueRefCompileSpec extends AnyFlatSpec with Matchers with NoLogging {
     """@multitier object Module {
       @peer type Node <: { type Tie <: Multiple[Node] }
 
-      def f(x: Int via Node): Unit on Node = on[Node] { implicit! =>
-        val y: Remote[Node] = x.getRemote
+      def f(x: Int at Node): Unit on Node = on[Node] { implicit! =>
+        val y: Remote[Node] = x.peer
       }
     }"""
   }
@@ -48,8 +48,8 @@ class ValueRefCompileSpec extends AnyFlatSpec with Matchers with NoLogging {
     """@multitier object Module {
       @peer type Node
 
-      def f(x: Int via Node): Unit on Node = on[Node] { implicit! =>
-        val y: Int = x.getValueLocally
+      def f(x: Int at Node): Unit on Node = on[Node] { implicit! =>
+        val y: Int = x.derefLocally
       }
     }"""
   }

@@ -20,12 +20,12 @@ case class ValueRef[+V, +P](
   valueId: UUID,
   signature: Peer.Signature
 ) {
-  def asVia[R]: Option[ValueRef[V, R]] = macro impl.ValueRef.asVia[V, R]
+  def at[R]: Option[ValueRef[V, R]] = macro impl.ValueRef.at[V, R]
 }
 
 object ValueRef {
 
-  @compileTimeOnly("Call only allowed in multitier code. Use `ref.asVia[P]` instead.")
+  @compileTimeOnly("Call only allowed in multitier code. Use `ref.at[P]` instead.")
   def cast[V, P](ref: ValueRef[V, _]): Option[ValueRef[V, P]] = erased
 
   implicit def transmittable[V, P]: IdenticallyTransmittable[ValueRef[V, P]] = IdenticallyTransmittable()

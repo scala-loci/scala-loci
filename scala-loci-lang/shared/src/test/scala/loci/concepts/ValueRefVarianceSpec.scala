@@ -25,12 +25,12 @@ object Thing {
 @multitier object ValueRefValueTypeVarianceModule {
   @peer type Node <: { type Tie <: Optional[Node] }
 
-  def generateRef(): Thing via Node on Node = on[Node] { implicit! =>
-    ConcreteThing().asValueRef
+  def generateRef(): Thing at Node on Node = on[Node] { implicit! =>
+    remote ref ConcreteThing()
   }
 
-  def accessRef(ref: Thing via Node): Future[Thing] on Node = on[Node] { implicit! =>
-    ref.getValue
+  def accessRef(ref: Thing at Node): Future[Thing] on Node = on[Node] { implicit! =>
+    ref.deref
   }
 }
 
@@ -38,12 +38,12 @@ object Thing {
   @peer type Node <: { type Tie <: Optional[Node] }
   @peer type ConcreteNode <: Node { type Tie <: Optional[Node] }
 
-  def generateRef(x: String): String via Node on ConcreteNode = on[ConcreteNode] { implicit! =>
-    x.asValueRef
+  def generateRef(x: String): String at Node on ConcreteNode = on[ConcreteNode] { implicit! =>
+    remote ref x
   }
 
-  def accessRef(ref: String via Node): Future[String] on Node = on[Node] { implicit! =>
-    ref.getValue
+  def accessRef(ref: String at Node): Future[String] on Node = on[Node] { implicit! =>
+    ref.deref
   }
 }
 
@@ -52,14 +52,14 @@ object Thing {
   @peer type A <: Node { type Tie <: Optional[A] with Optional[B] }
   @peer type B <: Node { type Tie <: Optional[A] with Optional[B] }
 
-  def generateRef(x: String): String via Node on Node = on[A] { implicit! =>
-    s"$x via A".asValueRef
+  def generateRef(x: String): String at Node on Node = on[A] { implicit! =>
+    remote ref s"$x at A"
   } and on[B] { implicit! =>
-    s"$x via B".asValueRef
+    remote ref s"$x at B"
   }
 
-  def isViaA(ref: String via Node): Boolean on Node = { implicit! =>
-    ref.asVia[A].isDefined
+  def isViaA(ref: String at Node): Boolean on Node = { implicit! =>
+    ref.at[A].isDefined
   }
 }
 
@@ -68,12 +68,12 @@ object Thing {
   @peer type A <: Node
   @peer type B <: Node
 
-  def generateRef(x: String): String via Node on Node = on[Node] { implicit! =>
-    x.asValueRef
+  def generateRef(x: String): String at Node on Node = on[Node] { implicit! =>
+    remote ref x
   }
 
-  def isViaA(ref: String via Node): Boolean on Node = { implicit! =>
-    ref.asVia[A].isDefined
+  def isViaA(ref: String at Node): Boolean on Node = { implicit! =>
+    ref.at[A].isDefined
   }
 }
 
@@ -94,7 +94,7 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     )
 
     val ref = nodeA.instance.current.map {
-      _.retrieve[Thing via ValueRefValueTypeVarianceModule.Node](ValueRefValueTypeVarianceModule.generateRef())
+      _.retrieve[Thing at ValueRefValueTypeVarianceModule.Node](ValueRefValueTypeVarianceModule.generateRef())
     }.get
 
     nodeB.instance.current.map {
@@ -116,7 +116,7 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     )
 
     val ref = nodeA.instance.current.map {
-      _.retrieve[String via ValueRefPeerTypeVarianceModule.Node](ValueRefPeerTypeVarianceModule.generateRef("test"))
+      _.retrieve[String at ValueRefPeerTypeVarianceModule.Node](ValueRefPeerTypeVarianceModule.generateRef("test"))
     }.get
 
     nodeB.instance.current.map {
@@ -138,7 +138,7 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     )
 
     val ref = nodeA.instance.current.map {
-      _.retrieve[String via ValueRefPeerCastingModule.Node](ValueRefPeerCastingModule.generateRef("test"))
+      _.retrieve[String at ValueRefPeerCastingModule.Node](ValueRefPeerCastingModule.generateRef("test"))
     }.get
 
     val isViaA = nodeB.instance.current.map {
@@ -159,7 +159,7 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     )
 
     val ref = b1.instance.current.map {
-      _.retrieve[String via ValueRefPeerCastingModule.Node](ValueRefPeerCastingModule.generateRef("test"))
+      _.retrieve[String at ValueRefPeerCastingModule.Node](ValueRefPeerCastingModule.generateRef("test"))
     }.get
 
     val isViaA = b2.instance.current.map {
@@ -172,7 +172,7 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     val a = multitier start new Instance[ValueRefDowncastModule.A](contexts.Immediate.global)
 
     val ref = a.instance.current.map {
-      _.retrieve[String via ValueRefDowncastModule.Node](ValueRefDowncastModule.generateRef("test"))
+      _.retrieve[String at ValueRefDowncastModule.Node](ValueRefDowncastModule.generateRef("test"))
     }.get
 
     val isViaA = a.instance.current.map {
@@ -185,7 +185,7 @@ class ValueRefVarianceSpec extends AsyncFlatSpec with Matchers with NoLogging {
     val b = multitier start new Instance[ValueRefDowncastModule.B](contexts.Immediate.global)
 
     val ref = b.instance.current.map {
-      _.retrieve[String via ValueRefDowncastModule.Node](ValueRefDowncastModule.generateRef("test"))
+      _.retrieve[String at ValueRefDowncastModule.Node](ValueRefDowncastModule.generateRef("test"))
     }.get
 
     val isViaA = b.instance.current.map {

@@ -18,18 +18,18 @@ import scala.concurrent.Future
 @multitier object ValueRefModule {
   @peer type Node <: { type Tie <: Optional[Node] }
 
-  def generateRef(x: Int): String via Node on Node = on[Node] { implicit! =>
+  def generateRef(x: Int): String at Node on Node = on[Node] { implicit! =>
     val s = s"value $x"
-    val ref = s.asValueRef
+    val ref = remote ref s
     ref
   }
 
-  def accessRef(ref: String via Node): Future[String] on Node = on[Node] { implicit! =>
-    ref.getValue
+  def accessRef(ref: String at Node): Future[String] on Node = on[Node] { implicit! =>
+    ref.deref
   }
 
-  def accessRefLocally(ref: String via Node): String on Node = on[Node] { implicit! =>
-    ref.getValueLocally
+  def accessRefLocally(ref: String at Node): String on Node = on[Node] { implicit! =>
+    ref.derefLocally
   }
 }
 
@@ -52,7 +52,7 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
     val numbers = 1 to 10
 
     val refs = numbers.map { x =>
-      val ref: String via ValueRefModule.Node =
+      val ref: String at ValueRefModule.Node =
         nodeA.instance.current.map { _.retrieve(ValueRefModule.generateRef(x)) }.get
       ref
     }
@@ -72,7 +72,7 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
       contexts.Immediate.global
     )
 
-    val ref: String via ValueRefModule.Node = node.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
+    val ref: String at ValueRefModule.Node = node.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
     node.instance.current.map { _.retrieve(ValueRefModule.accessRef(ref)).map { _ shouldEqual "value 42" } }.get
   }
 
@@ -80,7 +80,7 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
     val nodeA = multitier start new Instance[ValueRefModule.Node](contexts.Immediate.global)
     val nodeB = multitier start new Instance[ValueRefModule.Node](contexts.Immediate.global)
 
-    val ref: String via ValueRefModule.Node =
+    val ref: String at ValueRefModule.Node =
       nodeA.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
 
     nodeB.instance.current.map {
@@ -101,7 +101,7 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
       connect[ValueRefModule.Node](listener.createConnector())
     )
 
-    val ref: String via ValueRefModule.Node =
+    val ref: String at ValueRefModule.Node =
       nodeA.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
     val fakeRef = ref.copy[String, ValueRefModule.Node](valueId = UUID.randomUUID())
 
@@ -115,7 +115,7 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
   it should "access a value reference locally when it lives on the accessing peer" in {
     val node = multitier start new Instance[ValueRefModule.Node](contexts.Immediate.global)
 
-    val ref: String via ValueRefModule.Node =
+    val ref: String at ValueRefModule.Node =
       node.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
 
     node.instance.current.map { _.retrieve[String](ValueRefModule.accessRefLocally(ref)) }.get shouldEqual "value 42"
@@ -132,7 +132,7 @@ class ValueRefSpec extends AsyncFlatSpec with Matchers with NoLogging {
       connect[ValueRefModule.Node](listener.createConnector())
     )
 
-    val ref: String via ValueRefModule.Node =
+    val ref: String at ValueRefModule.Node =
       nodeA.instance.current.map { _.retrieve(ValueRefModule.generateRef(42)) }.get
 
     an[IllegalLocalAccess] shouldBe thrownBy {

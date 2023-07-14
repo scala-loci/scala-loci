@@ -70,7 +70,7 @@ class RemoteValueReference[C <: blackbox.Context](val engine: Engine[C]) extends
 
     object ValueRefCreatorTransformer extends Transformer {
       override def transform(tree: Tree): Tree = tree match {
-        case tree if tree.tpe real_<:< types.valueRefCreator =>
+        case tree @ q"$remoteRef[..$_](..$_)(..$_)" if remoteRef.symbol != null && remoteRef.symbol.owner == symbols.valueRefCreatorRemote =>
           count += 1
           super.transform(replaceValueRefCreatorArgs(tree))
         case tree => super.transform(tree)
