@@ -90,7 +90,7 @@ trait PlacedExpressions:
       erasedType
   end TypePlacementTypesEraser
 
-  private abstract class AdapatingDefinitionTypeCopier(substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit) extends TreeMap:
+  private abstract class AdapatingDefinitionTypeCopier(substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit) extends SafeTreeMap(quotes):
     def copyAnnotations(from: Symbol, to: Symbol) =
       if from.annotations.nonEmpty then
         SymbolMutator.get.fold(

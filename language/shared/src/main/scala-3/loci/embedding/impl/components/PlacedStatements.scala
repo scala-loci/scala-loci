@@ -93,7 +93,7 @@ trait PlacedStatements:
             Lambda(expressionOwner, tpe, (symbol, _) => body.changeOwner(symbol)): @unchecked
           Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(placementInfo.canonicalType))) -> true
 
-  private object contextVariableCleaner extends TreeMap:
+  private object contextVariableCleaner extends SafeTreeMap(quotes):
     override def transformTerm(term: Term)(owner: Symbol) = term match
       case Ident(_) =>
         term.tpe.asType match
