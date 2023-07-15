@@ -236,7 +236,7 @@ object reflectionExtensions:
         term: quotes.reflect.Term): quotes.reflect.Term =
       import quotes.reflect.*
 
-      object substitutor extends TreeMap:
+      object substitutor extends SafeTreeMap(quotes):
         override def transformTerm(term: Term)(owner: Symbol) = term match
           case term: This =>
             substitutions.get(term.symbol).fold(super.transformTerm(term)(owner)) { This(_) }
@@ -399,6 +399,99 @@ object reflectionExtensions:
       case _ =>
         tpe
   end TypeMap
+
+  trait SafeTreeMap[Q <: Quotes & Singleton](val quotes: Q):
+    import quotes.reflect.*
+
+    private given quotes.type = quotes
+
+    private object underlying extends TreeMap:
+      override def transformTree(tree: Tree)(owner: Symbol): Tree =
+        SafeTreeMap.this.transformTree(tree)(owner)
+      override def transformStatement(tree: Statement)(owner: Symbol): Statement =
+        SafeTreeMap.this.transformStatement(tree)(owner)
+      override def transformTerm(tree: Term)(owner: Symbol): Term =
+        SafeTreeMap.this.transformTerm(tree)(owner)
+      override def transformTypeTree(tree: TypeTree)(owner: Symbol): TypeTree =
+        SafeTreeMap.this.transformTypeTree(tree)(owner)
+      override def transformCaseDef(tree: CaseDef)(owner: Symbol): CaseDef =
+        SafeTreeMap.this.transformCaseDef(tree)(owner)
+      override def transformTypeCaseDef(tree: TypeCaseDef)(owner: Symbol): TypeCaseDef =
+        SafeTreeMap.this.transformTypeCaseDef(tree)(owner)
+      override def transformStats(trees: List[Statement])(owner: Symbol): List[Statement] =
+        SafeTreeMap.this.transformStats(trees)(owner)
+      override def transformTrees(trees: List[Tree])(owner: Symbol): List[Tree] =
+        SafeTreeMap.this.transformTrees(trees)(owner)
+      override def transformTerms(trees: List[Term])(owner: Symbol): List[Term] =
+        SafeTreeMap.this.transformTerms(trees)(owner)
+      override def transformTypeTrees(trees: List[TypeTree])(owner: Symbol): List[TypeTree] =
+        SafeTreeMap.this.transformTypeTrees(trees)(owner)
+      override def transformCaseDefs(trees: List[CaseDef])(owner: Symbol): List[CaseDef] =
+        SafeTreeMap.this.transformCaseDefs(trees)(owner)
+      override def transformTypeCaseDefs(trees: List[TypeCaseDef])(owner: Symbol): List[TypeCaseDef] =
+        SafeTreeMap.this.transformTypeCaseDefs(trees)(owner)
+      override def transformSubTrees[Tr <: Tree](trees: List[Tr])(owner: Symbol): List[Tr] =
+        SafeTreeMap.this.transformSubTrees(trees)(owner)
+
+      def superTransformTree(tree: Tree)(owner: Symbol): Tree =
+        super.transformTree(tree)(owner)
+      def superTransformStatement(tree: Statement)(owner: Symbol): Statement =
+        super.transformStatement(tree)(owner)
+      def superTransformTerm(tree: Term)(owner: Symbol): Term =
+        super.transformTerm(tree)(owner)
+      def superTransformTypeTree(tree: TypeTree)(owner: Symbol): TypeTree =
+        super.transformTypeTree(tree)(owner)
+      def superTransformCaseDef(tree: CaseDef)(owner: Symbol): CaseDef =
+        super.transformCaseDef(tree)(owner)
+      def superTransformTypeCaseDef(tree: TypeCaseDef)(owner: Symbol): TypeCaseDef =
+        super.transformTypeCaseDef(tree)(owner)
+      def superTransformStats(trees: List[Statement])(owner: Symbol): List[Statement] =
+        super.transformStats(trees)(owner)
+      def superTransformTrees(trees: List[Tree])(owner: Symbol): List[Tree] =
+        super.transformTrees(trees)(owner)
+      def superTransformTerms(trees: List[Term])(owner: Symbol): List[Term] =
+        super.transformTerms(trees)(owner)
+      def superTransformTypeTrees(trees: List[TypeTree])(owner: Symbol): List[TypeTree] =
+        super.transformTypeTrees(trees)(owner)
+      def superTransformCaseDefs(trees: List[CaseDef])(owner: Symbol): List[CaseDef] =
+        super.transformCaseDefs(trees)(owner)
+      def superTransformTypeCaseDefs(trees: List[TypeCaseDef])(owner: Symbol): List[TypeCaseDef] =
+        super.transformTypeCaseDefs(trees)(owner)
+      def superTransformSubTrees[Tr <: Tree](trees: List[Tr])(owner: Symbol): List[Tr] =
+        super.transformSubTrees(trees)(owner)
+    end underlying
+
+    def transformTree(tree: Tree)(owner: Symbol): Tree =
+      underlying.superTransformTree(tree)(owner)
+    def transformStatement(tree: Statement)(owner: Symbol): Statement =
+      underlying.superTransformStatement(tree)(owner)
+    def transformTerm(tree: Term)(owner: Symbol): Term =
+      underlying.superTransformTerm(tree)(owner)
+    def transformTypeTree(tree: TypeTree)(owner: Symbol): TypeTree = tree match
+      case tree: TypeBoundsTree =>
+        // workaround for issue: https://github.com/lampepfl/dotty/issues/17003
+        TypeBoundsTree.copy(tree)(transformTypeTree(tree.low)(owner), transformTypeTree(tree.hi)(owner)).asInstanceOf[TypeTree]
+      case _ =>
+        underlying.superTransformTypeTree(tree)(owner)
+    def transformCaseDef(tree: CaseDef)(owner: Symbol): CaseDef =
+      underlying.superTransformCaseDef(tree)(owner)
+    def transformTypeCaseDef(tree: TypeCaseDef)(owner: Symbol): TypeCaseDef =
+      underlying.superTransformTypeCaseDef(tree)(owner)
+    def transformStats(trees: List[Statement])(owner: Symbol): List[Statement] =
+      underlying.superTransformStats(trees)(owner)
+    def transformTrees(trees: List[Tree])(owner: Symbol): List[Tree] =
+      underlying.superTransformTrees(trees)(owner)
+    def transformTerms(trees: List[Term])(owner: Symbol): List[Term] =
+      underlying.superTransformTerms(trees)(owner)
+    def transformTypeTrees(trees: List[TypeTree])(owner: Symbol): List[TypeTree] =
+      underlying.superTransformTypeTrees(trees)(owner)
+    def transformCaseDefs(trees: List[CaseDef])(owner: Symbol): List[CaseDef] =
+      underlying.superTransformCaseDefs(trees)(owner)
+    def transformTypeCaseDefs(trees: List[TypeCaseDef])(owner: Symbol): List[TypeCaseDef] =
+      underlying.superTransformTypeCaseDefs(trees)(owner)
+    def transformSubTrees[Tr <: Tree](trees: List[Tr])(owner: Symbol): List[Tr] =
+      underlying.superTransformSubTrees(trees)(owner)
+  end SafeTreeMap
 
   extension (using Quotes)(printerModule: quotes.reflect.PrinterModule)
     def SafeTypeReprCode = safeTypeReprPrinter(quotes.reflect.Printer.TypeReprCode)

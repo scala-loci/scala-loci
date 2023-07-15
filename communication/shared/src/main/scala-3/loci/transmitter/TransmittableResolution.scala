@@ -89,7 +89,7 @@ object TransmittableResolution:
                 super.transform(tpe)
           end deskolemizerAndTransmittablesAliaser
 
-          object optimizer extends TreeMap:
+          object optimizer extends SafeTreeMap(quotes):
             override def transformTypeTree(tree: TypeTree)(owner: Symbol) =
               val tpe = deskolemizerAndTransmittablesAliaser.transform(tree.tpe)
               if tpe != tree.tpe then TypeTree.of(using tpe.asType) else tree
@@ -206,7 +206,7 @@ object TransmittableResolution:
                   case _ => super.transform(tpe)
                 case _ => super.transform(tpe)
 
-            object instatiationsCollector extends TreeMap:
+            object instatiationsCollector extends SafeTreeMap(quotes):
               override def transformTerm(tree: Term)(owner: Symbol) = tree match
                 case Apply(fun, args) =>
                   val transformedFun = transformTerm(fun)(owner)
@@ -238,7 +238,7 @@ object TransmittableResolution:
                   super.transformTerm(tree)(owner)
             end instatiationsCollector
 
-            object instatiationsInserter extends TreeMap:
+            object instatiationsInserter extends SafeTreeMap(quotes):
               override def transformTypeTree(tree: TypeTree)(owner: Symbol) =
                 val tpe = substitutor.transform(tree.tpe)
                 if tpe != tree.tpe then TypeTree.of(using tpe.asType) else tree
