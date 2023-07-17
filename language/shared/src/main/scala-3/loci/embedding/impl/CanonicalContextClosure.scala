@@ -63,7 +63,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
       expr
     case _ =>
       val tpe = canonical(clean(TypeRepr.of[R]))
-      Block(terms, Typed(Ref('{ erased }.asTerm.underlyingArgument.symbol), TypeTree.of(using tpe.asType)))
+      Block(terms, Typed(Ref(info.symbols.erased), TypeTree.of(using tpe.asType)))
 
   val r = result.tpe
 
@@ -107,6 +107,20 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
           val context = ctx.invoke(quotes)
           val pattern = modeClass.getMethod("Pattern").invoke(null)
           val completer = infoOrCompleter.invoke(denot.invoke(symbol, context))
+
+          object singletonTypeChecker extends TypeMap(quotes):
+            override def transform(tpe: TypeRepr) = tpe match
+              case tpe: TermRef if
+                (tpe.termSymbol hasAncestor info.isMultitierModule) &&
+                (tpe.termSymbol hasAncestor: symbol =>
+                  !completerClass.isInstance(infoOrCompleter.invoke(denot.invoke(symbol, context))) && PlacementInfo(symbol.info).isDefined) =>
+                report.errorAndAbort("Singleton types for values in multitier modules not supported")
+              case _: NamedType =>
+                tpe
+              case _ =>
+                super.transform(tpe)
+
+          singletonTypeChecker.transform(TypeRepr.of[T])
 
           // check whether the type of the surrounding val or def is still to be inferred
           if completerClass.isInstance(completer) then
@@ -158,6 +172,8 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
       case _ =>
   catch
     case NonFatal(e) =>
+      if e.getClass.getCanonicalName == "scala.quoted.runtime.StopMacroExpansion" then
+        throw e
 
   result.asExpr match
     case result: Expr[R] @unchecked => result

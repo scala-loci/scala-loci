@@ -86,8 +86,10 @@ trait Commons:
         if predicate(symbol) then Some(symbol) else symbol.maybeOwner.findAncestor(predicate)
       else
         None
+    def hasAncestor(predicate: Symbol => Boolean): Boolean =
+      findAncestor(predicate).isDefined
     def hasAncestor(ancestors: Symbol*): Boolean =
-      (symbol findAncestor { ancestors contains _ }).isDefined
+      symbol hasAncestor { ancestors contains _ }
 
   given ValOrDefDef: TypeTest[Tree, ValDef | DefDef] = tree =>
     summon[TypeTest[Tree, ValDef]].unapply(tree) orElse

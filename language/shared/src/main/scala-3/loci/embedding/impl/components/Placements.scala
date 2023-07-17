@@ -35,7 +35,7 @@ trait Placements:
         case _ =>
           None
 
-      tpe match
+      def placementInfo(tpe: TypeRepr) = tpe match
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.on` =>
           Some:
             modality(args.head).fold(PlacementInfo(tpe, canonical = true, tpe, args.head, args.last, Modality.None)): info =>
@@ -46,8 +46,17 @@ trait Placements:
             modality(args.head).fold(PlacementInfo(tpe, canonical = false, symbols.`language.on`.typeRef.appliedTo(args), args.head, args.last, Modality.None)): info =>
               val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, args.last))
               info.copy(tpe = tpe, canonical = false, canonicalType = canonicalType, peerType = args.last)
+        case AndType(AppliedType(tycon, args), right) if tycon.typeSymbol == symbols.placed && args.last =:= right =>
+          PlacementInfo(symbols.`embedding.on`.typeRef.appliedTo(args.reverse))
         case _ =>
           None
+
+      tpe match
+        case AppliedType(tycon, args @ List(AppliedType(_, List(peerType)), _)) if tycon.typeSymbol == symbols.contextFunction1 && args.head <:< types.context =>
+          placementInfo(args.last) collect:
+            case placementInfo if placementInfo.peerType =:= peerType && !placementInfo.canonical => placementInfo
+        case tpe =>
+          placementInfo(tpe)
     end apply
   end PlacementInfo
 

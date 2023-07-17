@@ -66,12 +66,11 @@ trait PlacedExpressions:
               symbols.`embedding.on`.typeRef.appliedTo(args.reverse)
             case _ =>
               tpe
-          PlacementInfo(corrected).fold(super.transform(corrected)) { placementInfo =>
+          PlacementInfo(corrected).fold(super.transform(corrected)): placementInfo =>
             if placementInfo.modality.subjective then
               TypeRepr.of[Unit]
             else
               transform(placementInfo.valueType)
-          }
         else
           super.transform(tpe)
 
