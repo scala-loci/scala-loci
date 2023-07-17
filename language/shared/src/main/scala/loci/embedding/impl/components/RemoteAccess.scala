@@ -1311,7 +1311,7 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
             if (tree.children.nonEmpty) min(tree.children.head) else Int.MaxValue,
             if (tree.pos != NoPosition) tree.pos.point else Int.MaxValue)
 
-        val index = trees indexWhere { tree => tree.pos != NoPosition && min(tree) > pos.point }
+        val index = if (pos != NoPosition) trees indexWhere { tree => tree.pos != NoPosition && min(tree) > pos.point } else -1
 
         val count = if (index == -1) trees.size - 1 else if (index > 0) index - 1 else 0
 
