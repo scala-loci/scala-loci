@@ -38,8 +38,7 @@ trait Synthesis:
     if !symbol.exists then
       val symbol = owner.typeMember(mangledName)
       if !symbol.exists then
-        val symbol = Symbol.newClass(owner, if canMakeTargetName then name else mangledName, parents, decls, selfType = None)
-        SymbolMutator.getOrErrorAndAbort.setFlag(symbol, Flags.Trait | Flags.Synthetic)
+        val symbol = newClass(owner, if canMakeTargetName then name else mangledName, Flags.Synthetic | Flags.Trait, parents, decls, selfType = None)
         tryMakeTargetName(symbol, mangledName)
         symbol
       else
@@ -85,7 +84,7 @@ trait Synthesis:
         val universal =
           val universal = universalValues.fieldMember(universalName)
           if !universal.exists then
-            val universal = Symbol.newVal(universalValues, universalName, info, symbol.flags &~ Flags.PrivateLocal, Symbol.noSymbol)
+            val universal = newVal(universalValues, universalName, info, symbol.flags &~ Flags.PrivateLocal, Symbol.noSymbol)
             copyAnnotations(symbol, universal, decrementContextResultCount = false)
             universal
           else
@@ -94,21 +93,21 @@ trait Synthesis:
 //        val universalProxy = Option.when(symbol.flags is Flags.Private):
 //          val universalProxy = universalValues.fieldMember(proxyName)
 //          if !universalProxy.exists then
-//            Symbol.newMethod(universalValues, proxyName, ByNameType(info), Flags.Synthetic, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
+//            newMethod(universalValues, proxyName, ByNameType(info), Flags.Synthetic, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
 //          else
 //            universalProxy
 
         val universalInit =
           val universalInit = universalValues.fieldMember(placedName)
           if !universalInit.exists then
-            Symbol.newMethod(universalValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic, Symbol.noSymbol)
+            newMethod(universalValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic, Symbol.noSymbol)
           else
             universalInit
 
         val placedInit =
           val placedInit = placedValues.fieldMember(placedName)
           if !placedInit.exists then
-            val placedInit = Symbol.newMethod(placedValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+            val placedInit = newMethod(placedValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
             copyAnnotations(symbol, placedInit, decrementContextResultCount = false)
             placedInit
           else
@@ -155,9 +154,9 @@ trait Synthesis:
         placedValues.methodMember(name) find { _.info =:= info } getOrElse {
           val placed =
             if isVal then
-              Symbol.newVal(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
+              newVal(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
             else
-              Symbol.newMethod(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
+              newMethod(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
           copyAnnotations(symbol, placed, decrementContextResultCount = info != symbol.info)
           placed
         }

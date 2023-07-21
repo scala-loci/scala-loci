@@ -150,10 +150,16 @@ trait PlacedStatements:
     checkPeerType(stat, placementInfo.peerType, module, statement, "placed on")
     placementInfo.modality.subjectivePeerType foreach { checkPeerType(stat, _, module, subjectiveStatement, "subjective to") }
 
+    val pos = stat match
+      case ValDef(_, Inferred(), _) | DefDef(_, _, Inferred(), _) => stat.posInUserCode.startPosition
+      case ValDef(_, tpt, _) => tpt.posInUserCode
+      case DefDef(_, _, tpt, _) => tpt.posInUserCode
+      case _ => stat.posInUserCode.startPosition
+
     object singletonTypeChecker extends TypeMap(quotes):
       override def transform(tpe: TypeRepr) = tpe match
         case _: TermRef if tpe.termSymbol hasAncestor isMultitierModule =>
-          errorAndCancel("Singleton types for values in multitier modules not supported", stat.posInUserCode.startPosition)
+          errorAndCancel("Singleton types for values of multitier modules not supported", pos)
           tpe
         case _: NamedType =>
           tpe

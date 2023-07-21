@@ -114,7 +114,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
                 (tpe.termSymbol hasAncestor info.isMultitierModule) &&
                 (tpe.termSymbol hasAncestor: symbol =>
                   !completerClass.isInstance(infoOrCompleter.invoke(denot.invoke(symbol, context))) && PlacementInfo(symbol.info).isDefined) =>
-                report.errorAndAbort("Singleton types for values in multitier modules not supported")
+                report.errorAndAbort("Singleton types for values of multitier modules not supported")
               case _: NamedType =>
                 tpe
               case _ =>

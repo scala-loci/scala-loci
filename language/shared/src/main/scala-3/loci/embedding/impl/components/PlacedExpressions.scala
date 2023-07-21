@@ -123,7 +123,7 @@ trait PlacedExpressions:
       else
         val info = adaptedDefinitionType(stat)
         val privateWithin = if stat.symbol.flags is Flags.Protected then stat.symbol.protectedWithin else stat.symbol.privateWithin
-        val symbol = Symbol.newVal(owner, stat.name, info, stat.symbol.flags, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
+        val symbol = newVal(owner, stat.name, info, stat.symbol.flags, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
         copyAnnotations(stat.symbol, symbol)
         substitute(stat.symbol, symbol)
         if stat.symbol.owner.isClassDef then replace(stat.symbol, symbol)
@@ -141,7 +141,7 @@ trait PlacedExpressions:
       else
         val info = adaptedDefinitionType(stat)
         val privateWithin = if stat.symbol.flags is Flags.Protected then stat.symbol.protectedWithin else stat.symbol.privateWithin
-        val symbol = Symbol.newMethod(owner, stat.name, info, stat.symbol.flags, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
+        val symbol = newMethod(owner, stat.name, info, stat.symbol.flags, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
         copyAnnotations(stat.symbol, symbol)
         substitute(stat.symbol, symbol)
         if stat.symbol.owner.isClassDef then replace(stat.symbol, symbol)

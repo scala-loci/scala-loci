@@ -69,12 +69,12 @@ trait Splitting:
               if peer == defn.AnyClass then
                 List(extractPlacedBody(term).changeOwner(localDummy))
               else
-                val symbol = Symbol.newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic, Symbol.noSymbol)
+                val symbol = newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic, Symbol.noSymbol)
                 List(
                   DefDef(symbol, _ => Some(Literal(UnitConstant()))),
                   Ref(symbol).appliedToNone)
             else if placedValues == placedValuesSymbol(module.symbol, placementInfo.peerType.typeSymbol) then
-              val symbol = Symbol.newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+              val symbol = newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
               val rhs = extractPlacedBody(term) match
                 case Block(statements, expr) if expr.tpe.typeSymbol != defn.UnitClass =>
                    Block(statements :+ expr, Literal(UnitConstant()))

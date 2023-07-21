@@ -97,7 +97,7 @@ class SymbolMutator private ():
 object SymbolMutator:
   private val instance =
     try Some(SymbolMutator())
-    catch case _: ClassNotFoundException | _ : NoSuchMethodException => None
+    catch case _: ClassNotFoundException | _ : NoSuchFieldException | _ : NoSuchMethodException => None
 
   def get: Option[SymbolMutator] = instance
 
