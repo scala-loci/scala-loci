@@ -56,12 +56,27 @@ object reflectionExtensions:
 
   extension (using Quotes)(flags: quotes.reflect.Flags)
     def &~(other: quotes.reflect.Flags) =
-      import quotes.reflect.Flags.*
-      Seq(Abstract, Artifact, Case, CaseAccessor, Contravariant, Covariant, Deferred,
-          EmptyFlags, Enum, Erased, Exported, ExtensionMethod, FieldAccessor, Final,
-          Given, HasDefault, Implicit, Infix, Inline, Invisible, Lazy, Local, Macro, Method, Module, Mutable,
-          NoInits, Opaque, Open, Override, Package, Param, ParamAccessor, Private, PrivateLocal, Protected,
-          Scala2x, Sealed, StableRealizable, Synthetic, Trait, Transparent).foldLeft(EmptyFlags) { (result, flag) =>
+      import quotes.reflect.*
+      import Flags.*
+
+      var allFlags = List(
+        Abstract, Artifact, Case, CaseAccessor, Contravariant, Covariant, Deferred,
+        EmptyFlags, Enum, Erased, Exported, ExtensionMethod, FieldAccessor, Final,
+        Given, HasDefault, Implicit, Infix, Inline, Invisible, Lazy, Local, Macro, Method, Module, Mutable,
+        NoInits, Opaque, Open, Override, Package, Param, ParamAccessor, Private, PrivateLocal, Protected,
+        Scala2x, Sealed, StableRealizable, Synthetic, Trait, Transparent)
+
+      try
+        val flagsClass = Class.forName("dotty.tools.dotc.core.Flags$")
+        val flags = flagsClass.getField("MODULE$")
+        val absOverride = flagsClass.getMethod("AbsOverride")
+        absOverride.invoke(flags.get(null)) match
+          case flags: Flags @unchecked if Flags.EmptyFlags.getClass.isInstance(flags) => allFlags ::= flags
+          case _ =>
+      catch
+        case _: ClassNotFoundException | _: NoSuchFieldException | _: NoSuchMethodException =>
+
+      allFlags.foldLeft(EmptyFlags) { (result, flag) =>
         if (flags is flag) && !(other is flag) then result | flag else result
       }
   end extension
