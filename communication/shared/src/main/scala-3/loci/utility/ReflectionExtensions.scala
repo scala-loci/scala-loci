@@ -1,7 +1,7 @@
 package loci
 package utility
 
-import scala.annotation.targetName
+import scala.annotation.{experimental, targetName}
 import scala.quoted.*
 import scala.util.control.NonFatal
 
@@ -175,10 +175,12 @@ object reflectionExtensions:
     def withResultType(res: quotes.reflect.TypeRepr): quotes.reflect.TypeRepr =
       import quotes.reflect.*
       tpe match
-        case MethodType(paramNames, paramTypes, resType) =>
-          MethodType(paramNames)(_ => paramTypes, _ => resType.withResultType(res))
-        case PolyType(paramNames, paramBounds, resType) =>
-          MethodType(paramNames)(_ => paramBounds, _ => resType.withResultType(res))
+        case tpe @ MethodType(paramNames, paramTypes, resType) =>
+          MethodType(paramNames)(_ => paramTypes, resType.withResultType(res).substituteParamRefs(tpe, _))
+        case tpe @ PolyType(paramNames, paramBounds, resType) =>
+          MethodType(paramNames)(_ => paramBounds, resType.withResultType(res).substituteParamRefs(tpe, _))
+        case tpe @ TypeLambda(paramNames, paramBounds, resType) =>
+          TypeLambda(paramNames, _ => paramBounds, resType.withResultType(res).substituteParamRefs(tpe, _))
         case ByNameType(underlying) =>
           ByNameType(underlying.withResultType(res))
         case _ =>
@@ -206,6 +208,28 @@ object reflectionExtensions:
 
     def stripLazyRef: quotes.reflect.TypeRepr =
       LazyRefStripping.strip(tpe)
+
+    @experimental
+    def substituteParamRefsByTermRefs(binder: quotes.reflect.Symbol) =
+      import quotes.reflect.*
+
+      def termSymbol(binder: TypeRepr, paramNum: Int, tpe: TypeRepr, paramSymss: List[List[Symbol]]): Option[Symbol] = tpe match
+        case `binder` if paramSymss.nonEmpty && paramSymss.head.sizeIs > paramNum =>
+          Some(paramSymss.head(paramNum))
+        case tpe: LambdaType if paramSymss.nonEmpty =>
+          termSymbol(binder, paramNum, tpe.resType, paramSymss.tail)
+        case _ =>
+          None
+
+      object substitutor extends TypeMap(quotes):
+        override def transform(tpe: TypeRepr) = tpe match
+          case tpe: ParamRef =>
+            termSymbol(tpe.binder, tpe.paramNum, binder.info, binder.paramSymss).fold(tpe) { _.termRef }
+          case tpe =>
+            super.transform(tpe)
+
+      substitutor.transform(tpe)
+    end substituteParamRefsByTermRefs
 
     def substitute(from: quotes.reflect.ParamRef, to: quotes.reflect.TypeRepr) =
       TypeParamSubstition.substitute(tpe, from, to)

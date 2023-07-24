@@ -137,7 +137,7 @@ trait PlacedStatements:
       errorAndCancel(
         s"$statement must be $relation a peer type but is $relation ${peerType.safeShow}",
         stat.posInUserCode.startPosition)
-    if peerType.typeSymbol.owner != module.symbol then
+    if peerType.typeSymbol != defn.AnyClass && peerType.typeSymbol.owner != module.symbol then
       errorAndCancel(
         s"$statement must be $relation a peer of module ${fullName(module.symbol)} " +
         s"but is $relation a peer in module ${fullName(peerType.typeSymbol.owner)}",

@@ -10,23 +10,15 @@ import scala.collection.mutable
 
 @experimental
 trait Synthesis:
-  this: Component & Commons & ErrorReporter & Annotations & Placements & Peers =>
+  this: Component & Commons & Annotations & Placements =>
   import quotes.reflect.*
 
-  sealed trait SynthesizedDefinition
+  case class SynthesizedDefinitions(original: Symbol, binding: Option[Symbol], impls: List[Symbol])
 
-  object SynthesizedDefinition:
-//    case class Split(original: Symbol, proxy: Symbol, proxyInit: Symbol, placed: Symbol, placedInit: Symbol) extends SynthesizedDefinition
-//    case class Split(original: Symbol, universal: Symbol, universalProxy: Option[Symbol], universalInit: Symbol, placedInit: Symbol) extends SynthesizedDefinition
-    case class Split(original: Symbol, universal: Symbol, universalInit: Symbol, placedInit: Symbol) extends SynthesizedDefinition
-    case class Moved(original: Symbol, placed: Symbol) extends SynthesizedDefinition
-    case object None extends SynthesizedDefinition
-
-  def mangleSymbolName(symbol: Symbol) = f"loci$$${s"${implementationForm(symbol)} ${fullName(symbol)}".hashCode}%08x"
-
-  private val synthesizedMovedSplitCache = mutable.Map.empty[Symbol, SynthesizedDefinition.Moved | SynthesizedDefinition.Split]
-  private val synthesizedMovedCache = mutable.Map.empty[Symbol, SynthesizedDefinition.Moved]
+  private val synthesizedDefinitionsCache = mutable.Map.empty[Symbol, SynthesizedDefinitions]
   private val placedValuesSymbolCache = mutable.Map.empty[(Symbol, Symbol), Symbol]
+
+  private def mangleSymbolName(symbol: Symbol) = f"loci$$${s"${implementationForm(symbol)} ${fullName(symbol)}".hashCode}%08x"
 
   private def implementationForm(symbol: Symbol) =
     if symbol.flags is Flags.Module then "object"
@@ -62,16 +54,15 @@ trait Synthesis:
               symbolMutator.updateAnnotationWithTree(to, tree)
 
   private def erasePlacementType(info: TypeRepr) =
-    PlacementInfo(info.resultType).fold(info -> defn.AnyClass) { placementInfo =>
+    PlacementInfo(info.resultType).fold(info -> defn.AnyClass): placementInfo =>
       val erasedInfo = placementInfo.modality match
         case Modality.Subjective(peerType) =>
           info.withResultType(symbols.function1.typeRef.appliedTo(List(symbols.remote.typeRef.appliedTo(peerType), placementInfo.valueType)))
         case _ =>
           info.withResultType(placementInfo.valueType)
       erasedInfo -> placementInfo.peerType.typeSymbol
-    }
 
-  def synthesizedVal(symbol: Symbol): SynthesizedDefinition.Moved | SynthesizedDefinition.Split = synthesizedMovedSplitCache.getOrElse(symbol, {
+  def synthesizedVal(symbol: Symbol): SynthesizedDefinitions = synthesizedDefinitionsCache.getOrElse(symbol, {
     val (info, peer) = erasePlacementType(symbol.info)
 
     if peer != defn.AnyClass && !(symbol.flags is Flags.Lazy) && !(symbol.flags is Flags.Deferred) && !(symbol.flags is Flags.Inline) then
@@ -80,7 +71,7 @@ trait Synthesis:
       val universalValues = placedValuesSymbol(symbol.owner, defn.AnyClass)
       val placedValues = placedValuesSymbol(symbol.owner, peer)
 
-      synthesizedMovedSplitCache.getOrElse(symbol, {
+      synthesizedDefinitionsCache.getOrElse(symbol, {
         val universal =
           val universal = universalValues.fieldMember(universalName)
           if !universal.exists then
@@ -113,26 +104,22 @@ trait Synthesis:
           else
             placedInit
 
-        val definition = SynthesizedDefinition.Split(symbol, universal, universalInit, placedInit)
-        synthesizedMovedSplitCache += symbol -> definition
-        synthesizedMovedSplitCache += universal -> definition
-//        universalProxy foreach { synthesizedMovedSplitCache += _ -> definition }
-        synthesizedMovedSplitCache += universalInit -> definition
-        synthesizedMovedSplitCache += placedInit -> definition
+        val definition = SynthesizedDefinitions(symbol, Some(universal), List(universalInit, placedInit))
+        synthesizedDefinitionsCache += symbol -> definition
         definition
       })
     else
       synthesizedValOrDef(symbol, isVal = true)
   })
 
-  def synthesizedDef(symbol: Symbol) =
+  def synthesizedDef(symbol: Symbol): SynthesizedDefinitions =
     synthesizedValOrDef(symbol, isVal = false)
 
-  private def synthesizedValOrDef(symbol: Symbol, isVal: Boolean): SynthesizedDefinition.Moved = synthesizedMovedCache.getOrElse(symbol, {
+  private def synthesizedValOrDef(symbol: Symbol, isVal: Boolean): SynthesizedDefinitions = synthesizedDefinitionsCache.getOrElse(symbol, {
     val (name, info, peer) =
       symbol.info match
-        case MethodType(List(name), List(param), result)
-          if result.typeSymbol == defn.UnitClass &&
+        case MethodType(List(paramName), List(paramType), resultType)
+          if resultType.typeSymbol == defn.UnitClass &&
              !isVal &&
              symbol.isFieldAccessor &&
              (symbol.name endsWith "_=") =>
@@ -141,41 +128,40 @@ trait Synthesis:
               s"<placed private ${symbol.name.dropRight(2)} of ${fullName(symbol.owner)}>_="
             else
               symbol.name
-          val (info, _) = erasePlacementType(param)
-          (name, MethodType(List(name))(_ => List(info), _ => result), defn.AnyClass)
+          val (info, _) = erasePlacementType(paramType)
+          (name, MethodType(List(paramName))(_ => List(info), _ => resultType), defn.AnyClass)
         case _ =>
           val (info, peer) = erasePlacementType(symbol.info)
           (symbol.name, info, peer)
 
     val placedValues = placedValuesSymbol(symbol.owner, peer)
 
-    synthesizedMovedCache.getOrElse(symbol, {
-      val placed =
-        placedValues.methodMember(name) find { _.info =:= info } getOrElse {
-          val placed =
-            if isVal then
-              newVal(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
-            else
-              newMethod(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
-          copyAnnotations(symbol, placed, decrementContextResultCount = info != symbol.info)
-          placed
-        }
-      val definition = SynthesizedDefinition.Moved(symbol, placed)
-      synthesizedMovedCache += symbol -> definition
-      synthesizedMovedCache += placed -> definition
-      synthesizedMovedSplitCache += symbol -> definition
-      synthesizedMovedSplitCache += placed -> definition
+    synthesizedDefinitionsCache.getOrElse(symbol, {
+      val impl = placedValues.methodMember(name) find { _.info =:= info } getOrElse:
+        val impl =
+          if isVal then
+            newVal(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
+          else
+            newMethod(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
+        copyAnnotations(symbol, impl, decrementContextResultCount = info != symbol.info)
+        impl
+      val definition =
+        if isVal then
+          SynthesizedDefinitions(symbol, Some(impl), List.empty)
+        else
+          SynthesizedDefinitions(symbol, None, List(impl))
+      synthesizedDefinitionsCache += symbol -> definition
       definition
     })
   })
 
-  def synthesizedDefinition(symbol: Symbol): SynthesizedDefinition =
+  def synthesizedDefinitions(symbol: Symbol): SynthesizedDefinitions =
     if symbol.isField then
       synthesizedVal(symbol)
     else if symbol.isMethod then
       synthesizedDef(symbol)
     else
-      SynthesizedDefinition.None
+      SynthesizedDefinitions(symbol, None, List.empty)
 
   def placedValuesSymbol(module: Symbol, peer: Symbol): Symbol = placedValuesSymbolCache.getOrElse(module -> peer, {
     val name = fullName(module)
@@ -189,18 +175,9 @@ trait Synthesis:
       if peer == defn.AnyClass then mangledName else s"$mangledName$$${peer.name}",
       parents): symbol =>
         placedValuesSymbolCache += module -> peer -> symbol
-        module.declarations flatMap { decl =>
-          synthesizedDefinition(decl) match
-//            case SynthesizedDefinition.Split(_, universal, universalProxy, universalInit, _) if peer == defn.AnyClass =>
-//              universalProxy.fold(List(universal, universalInit)) { List(universal, _, universalInit) }
-            case SynthesizedDefinition.Split(_, universal, universalInit, _) if peer == defn.AnyClass =>
-              List(universal, universalInit)
-            case SynthesizedDefinition.Split(_, _, _, placedInit) if placedInit.owner == symbol =>
-              List(placedInit)
-            case SynthesizedDefinition.Moved(_, placed) if placed.owner == symbol =>
-              List(placed)
-            case _ =>
-              List.empty
-        }
+        module.declarations flatMap: decl =>
+          val definitions = synthesizedDefinitions(decl)
+          (definitions.binding collect { case binding if binding.owner == symbol => binding }) ++
+          (definitions.impls collect { case impl if impl.owner == symbol => impl })
   })
 end Synthesis

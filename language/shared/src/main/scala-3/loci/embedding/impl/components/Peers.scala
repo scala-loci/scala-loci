@@ -21,6 +21,7 @@ trait Peers:
 
   object PeerInfo:
     def apply(tpe: TypeRepr): Option[PeerInfo] = tpe match
+      case tpe: TypeRef if tpe.typeSymbol == defn.AnyClass => Some(PeerInfo(tpe, List.empty))
       case tpe: TypeRef if tpe.typeSymbol.hasAnnotation(symbols.peer) => tpe.qualifier.memberType(tpe.typeSymbol) match
         case TypeBounds(low: TypeRef, hi) if bottomType(low) => hi match
           case hi: TypeRef if topType(hi) => Some(PeerInfo(tpe, List.empty))
@@ -40,7 +41,7 @@ trait Peers:
       val symbol =
         if tpe.typeSymbol.exists then tpe.typeSymbol
         else tpe.baseClasses.headOption getOrElse Symbol.noSymbol
-      symbol.typeMembers flatMap { symbol => PeerInfo(tpe.select(symbol)) }
+      PeerInfo(defn.AnyClass.typeRef, List.empty) :: (symbol.typeMembers flatMap { symbol => PeerInfo(tpe.select(symbol)) })
 
     private def ties(tpe: TypeRepr): Option[List[(TypeRepr, Multiplicity)]] = tpe match
       case tpe: TypeRef if topType(tpe) =>

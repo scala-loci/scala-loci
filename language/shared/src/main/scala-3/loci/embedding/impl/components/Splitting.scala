@@ -10,91 +10,99 @@ import scala.collection.mutable
 
 @experimental
 trait Splitting:
-  this: Component & Commons /*with ErrorReporter*/ & Annotations & Placements & Peers & Synthesis & PlacedStatements =>
+  this: Component & Commons & Placements & Peers & Synthesis & PlacedStatements =>
   import quotes.reflect.*
+
+  private def synthesizePlacedDefinition(impl: Symbol, original: Statement, module: Symbol, peer: Symbol): ValDef | DefDef =
+    val rhs = original match
+      case stat: ValDef => stat.rhs
+      case stat: DefDef => stat.rhs
+      case _ => None
+
+    val synthesizedBody = rhs map: rhs =>
+      val term = original match
+        case _ if impl.owner != placedValuesSymbol(module, peer) =>
+          Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(impl.info.resultType)
+        case PlacedStatement(_) =>
+          extractPlacedBody(rhs)
+        case _ =>
+          rhs
+      term.changeOwner(impl)
+
+    if impl.isMethod then
+      DefDef(impl, paramss => synthesizedBody map:
+        _.substituteRefs((original.symbol.paramSymss.flatten zip (paramss flatMap { _ map { _.symbol } })).toMap, original.symbol))
+    else
+      ValDef(impl, synthesizedBody)
+  end synthesizePlacedDefinition
 
   def split(module: ClassDef): ClassDef =
     val indices = mutable.Map.empty[Symbol, Int]
 
-    val placedBody = defn.AnyClass :: (PeerInfo.ofModule(module.symbol) map { _.peerType.typeSymbol }) map { peer =>
-      val placedValues = placedValuesSymbol(module.symbol, peer)
-      @threadUnsafe lazy val localDummy = SymbolMutator.getOrErrorAndAbort.createLocalDummy(placedValues)
+    val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
 
-      val body = module.body flatMap:
-        case stat: ValDef if !stat.symbol.isModuleDef =>
-          synthesizedVal(stat.symbol) match
-            case SynthesizedDefinition.Split(_, universal, universalInit, placedInit)
-                if placedValues == placedValuesSymbol(module.symbol, defn.AnyClass) =>
-              List(
-                ValDef(universal, Some(Ref(universalInit).appliedToNone)),
-                DefDef(universalInit, _ => Some(Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(universal.info))))
-            case SynthesizedDefinition.Split(_, universal, universalInit, placedInit)
-                if placedInit.owner == placedValues =>
+    val universalPlacedValues = placedValuesSymbol(module.symbol, defn.AnyClass)
+    @threadUnsafe lazy val universalPlacedValuesLocalDummy = SymbolMutator.getOrErrorAndAbort.createLocalDummy(universalPlacedValues)
 
-              // TODO: "universal" and "universalInit" not used: make this its own `SynthesizedDefinition` case
+    extension (self: Map[Symbol, List[Statement]])
+      inline def prepended(symbol: Symbol, stats: Statement*) =
+        self + (symbol -> (stats.toList ++ self.getOrElse(symbol, List.empty)))
 
-              List(DefDef(placedInit, _ => stat.rhs map { rhs =>
-                val term = stat match
-                  case PlacedStatement(_) => extractPlacedBody(rhs)
-                  case _ => rhs
-                term.changeOwner(placedInit)
-              }))
-            case SynthesizedDefinition.Moved(_, placed)
-                if placed.owner == placedValues =>
-              List(ValDef(placed, stat.rhs map { rhs =>
-                val term = stat match
-                  case PlacedStatement(_) => extractPlacedBody(rhs)
-                  case _ => rhs
-                term.changeOwner(placed)
-              }))
-            case _ =>
-              List.empty
-        case stat: DefDef =>
-          val SynthesizedDefinition.Moved(_, placed) = synthesizedDef(stat.symbol)
-          Option.when(placed.owner == placedValues):
-            DefDef(placed, paramss =>
-              stat.rhs map { rhs =>
-                val term = stat match
-                  case PlacedStatement(_) => extractPlacedBody(rhs)
-                  case _ => rhs
-                term.changeOwner(placed).substituteRefs((stat.symbol.paramSymss.flatten zip (paramss flatMap { _ map { _.symbol } })).toMap, stat.symbol)
-              })
-        case PlacedStatement(term: Term) =>
-          PlacementInfo(term.tpe.widenDealias.typeArgs.last).toList flatMap: placementInfo =>
-            val peer = placementInfo.peerType.typeSymbol
-            val index = indices.getOrElse(peer, 0)
-            val name = s"<placed statement ${index} of ${fullName(peer)}>"
-            indices += peer -> (index + 1)
-            if placedValues == placedValuesSymbol(module.symbol, defn.AnyClass) then
-              if peer == defn.AnyClass then
-                List(extractPlacedBody(term).changeOwner(localDummy))
-              else
-                val symbol = newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic, Symbol.noSymbol)
-                List(
-                  DefDef(symbol, _ => Some(Literal(UnitConstant()))),
-                  Ref(symbol).appliedToNone)
-            else if placedValues == placedValuesSymbol(module.symbol, placementInfo.peerType.typeSymbol) then
-              val symbol = newMethod(placedValues, name, MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit]), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
-              val rhs = extractPlacedBody(term) match
-                case Block(statements, expr) if expr.tpe.typeSymbol != defn.UnitClass =>
-                   Block(statements :+ expr, Literal(UnitConstant()))
-                case expr if expr.tpe.typeSymbol != defn.UnitClass =>
-                  Block(List(expr), Literal(UnitConstant()))
-                case expr =>
-                  expr
-              List(DefDef(symbol, _ => Some(rhs.changeOwner(symbol))))
-            else
-              List.empty
-        case term: Term if placedValues == placedValuesSymbol(module.symbol, defn.AnyClass) =>
-          Some(term.changeOwner(localDummy))
-        case _ =>
-          None
+    val placedBodies = module.body.foldLeft(Map.empty[Symbol, List[Statement]]):
+      case (bodies, stat @ (_: ValDef | _: DefDef)) if !stat.symbol.isModuleDef =>
+        val peer = PlacementInfo(stat.symbol.info.widenTermRefByName.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
+        val definitions = synthesizedDefinitions(stat.symbol)
 
+        val bodiesWithBinding: Map[Symbol, List[Statement]] = definitions match
+          case SynthesizedDefinitions(_, Some(binding), List()) =>
+            bodies.prepended(binding.owner, synthesizePlacedDefinition(binding, stat, module.symbol, peer))
+          case SynthesizedDefinitions(_, Some(binding), impl :: _) =>
+            bodies.prepended(binding.owner, ValDef(binding, Some(Ref(impl).appliedToNone)))
+          case _ =>
+            bodies
+
+        definitions.impls.foldLeft(bodiesWithBinding): (bodies, impl) =>
+          bodies.prepended(impl.owner, synthesizePlacedDefinition(impl, stat, module.symbol, peer))
+
+      case (bodies, term: Term) =>
+        val placementInfo = PlacementInfo(term.tpe.resultType)
+        val peer = placementInfo.fold(defn.AnyClass) { _.peerType.typeSymbol }
+        val index = indices.getOrElse(peer, 0)
+        val name = s"<placed statement ${index} of ${fullName(peer)}>"
+        indices += peer -> (index + 1)
+
+        val bodiesUniversalValues =
+          if !placementInfo.isDefined then
+            bodies.prepended(universalPlacedValues, term.changeOwner(universalPlacedValuesLocalDummy))
+          else if peer == defn.AnyClass then
+            bodies.prepended(universalPlacedValues, extractPlacedBody(term).changeOwner(universalPlacedValuesLocalDummy))
+          else
+            val symbol = newMethod(universalPlacedValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol)
+            bodies.prepended(universalPlacedValues, DefDef(symbol, _ => Some(Literal(UnitConstant()))), Ref(symbol).appliedToNone)
+
+        if peer == defn.AnyClass then
+          bodiesUniversalValues
+        else
+          val placedValues = placedValuesSymbol(module.symbol, peer)
+          val symbol = newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+          val rhs = extractPlacedBody(term) match
+            case Block(statements, expr) if expr.tpe.typeSymbol != defn.UnitClass =>
+              Block(statements :+ expr, Literal(UnitConstant()))
+            case expr if expr.tpe.typeSymbol != defn.UnitClass =>
+              Block(List(expr), Literal(UnitConstant()))
+            case expr =>
+              expr
+          bodiesUniversalValues.prepended(placedValues, DefDef(symbol, _ => Some(rhs.changeOwner(symbol))))
+
+      case (bodies, _) =>
+        bodies
+    end placedBodies
+
+    val placedBody = PeerInfo.ofModule(module.symbol) map: peerInfo =>
+      val placedValues = placedValuesSymbol(module.symbol, peerInfo.peerType.typeSymbol)
       val tpe = placedValues.typeRef
       val parents = tpe.baseClasses.tail map { parent => TypeTree.of(using tpe.baseType(parent).asType) }
-      ClassDef(placedValues, parents, body)
-    }
-
+      ClassDef(placedValues, parents, placedBodies.getOrElse(placedValues, List.empty).reverse)
 
     def eraseBody(stat: Definition, term: Term) =
       // TODO: in any case, we want to keep all implicit functions and inject `null` into the body
@@ -104,12 +112,12 @@ trait Splitting:
         case PlacedStatement(_) =>
           transformPlacedBody(
             term,
-            (_, _, expr) => Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(expr.tpe) -> None)
+            (_, _, expr) => Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(expr.tpe.substituteParamRefsByTermRefs(stat.symbol)) -> None)
         case _ =>
-          Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(stat.symbol.info.finalResultType)
+          Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(stat.symbol.info.finalResultType.substituteParamRefsByTermRefs(stat.symbol))
 
     val body = module.body flatMap:
-      case stat @ ValDef(name, tpt, rhs) =>
+      case stat @ ValDef(name, tpt, rhs) if !stat.symbol.isModuleDef =>
         Some(ValDef.copy(stat)(name, tpt, rhs map { eraseBody(stat, _) }))
       case stat @ DefDef(name, paramss, tpt, rhs) if !stat.symbol.isFieldAccessor =>
         Some(DefDef.copy(stat)(name, paramss, tpt, rhs map { eraseBody(stat, _) }))
