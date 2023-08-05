@@ -9,7 +9,7 @@ import scala.annotation.experimental
 
 @experimental
 trait PlacedExpressions:
-  this: Component & Commons & ErrorReporter & Placements & PlacedStatements =>
+  this: Component & Commons & ErrorReporter & Placements & PlacedTransformations & PlacedStatements =>
   import quotes.reflect.*
 
   private object PlacementLiftingConversion:
@@ -321,12 +321,10 @@ trait PlacedExpressions:
     var substitutions = List.empty[(Symbol, Symbol)]
     var replacements = List.empty[(Symbol, Symbol)]
     val eraser = ExpressionPlacementTypesEraser(checkOnly = false, substitutions ::= _ -> _, replacements ::= _ -> _)
-    val expr = transformPlacedBody(
-      term,
-      (symbol, body, expr) =>
-        val term = if canceled then body else eraseSubjectiveTypesInClosures(eraser.transformTerm(body)(symbol))
-        if !canceled then typesInClosuresChecker.traverseTree(term)(owner)
-        term -> Some(expr))
+    val expr = transformPlacedBody(term): (symbol, body, expr) =>
+      val term = if canceled then body else eraseSubjectiveTypesInClosures(eraser.transformTerm(body)(symbol))
+      if !canceled then typesInClosuresChecker.traverseTree(term)(owner)
+      term -> Some(expr)
     if canceled then term else substituteReferences(expr, owner, substitutions, replacements)
 
   private def checkPlacementTypesInArguments(paramss: List[ParamClause], owner: Symbol) =

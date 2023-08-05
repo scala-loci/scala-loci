@@ -19,9 +19,10 @@ object Multitier:
       Annotations,
       Placements,
       Peers,
-      Synthesis,
+      PlacedTransformations,
       PlacedStatements,
       PlacedExpressions,
+      Synthesis,
       Splitting
 
     tree match

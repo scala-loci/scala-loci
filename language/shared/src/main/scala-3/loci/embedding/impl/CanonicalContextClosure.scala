@@ -171,9 +171,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
               case _ =>
       case _ =>
   catch
-    case NonFatal(e) =>
-      if e.getClass.getCanonicalName == "scala.quoted.runtime.StopMacroExpansion" then
-        throw e
+    case NonFatal(e) if e.getClass.getCanonicalName != "scala.quoted.runtime.StopMacroExpansion" =>
 
   result.asExpr match
     case result: Expr[R] @unchecked => result

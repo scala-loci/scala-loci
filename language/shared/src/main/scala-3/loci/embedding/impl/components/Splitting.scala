@@ -10,7 +10,7 @@ import scala.collection.mutable
 
 @experimental
 trait Splitting:
-  this: Component & Commons & Placements & Peers & Synthesis & PlacedStatements =>
+  this: Component & Commons & Placements & Peers & PlacedTransformations & PlacedStatements & Synthesis =>
   import quotes.reflect.*
 
   private def synthesizePlacedDefinition(impl: Symbol, original: Statement, module: Symbol, peer: Symbol): ValDef | DefDef =
@@ -20,14 +20,13 @@ trait Splitting:
       case _ => None
 
     val synthesizedBody = rhs map: rhs =>
-      val term = original match
+      original match
         case _ if impl.owner != placedValuesSymbol(module, peer) =>
-          Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(impl.info.resultType)
+          Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(impl.info.resultType.substituteParamRefsByTermRefs(impl))
         case PlacedStatement(_) =>
-          extractPlacedBody(rhs)
+          extractPlacedBody(rhs).changeOwner(impl)
         case _ =>
-          rhs
-      term.changeOwner(impl)
+          rhs.changeOwner(impl)
 
     if impl.isMethod then
       DefDef(impl, paramss => synthesizedBody map:
@@ -40,9 +39,8 @@ trait Splitting:
     val indices = mutable.Map.empty[Symbol, Int]
 
     val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
-
     val universalPlacedValues = placedValuesSymbol(module.symbol, defn.AnyClass)
-    @threadUnsafe lazy val universalPlacedValuesLocalDummy = SymbolMutator.getOrErrorAndAbort.createLocalDummy(universalPlacedValues)
+    val universalPlacedValuesLocalDummy = SymbolMutator.getOrErrorAndAbort.createLocalDummy(universalPlacedValues)
 
     extension (self: Map[Symbol, List[Statement]])
       inline def prepended(symbol: Symbol, stats: Statement*) =
@@ -53,7 +51,7 @@ trait Splitting:
         val peer = PlacementInfo(stat.symbol.info.widenTermRefByName.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
         val definitions = synthesizedDefinitions(stat.symbol)
 
-        val bodiesWithBinding: Map[Symbol, List[Statement]] = definitions match
+        val bodiesWithBinding = definitions match
           case SynthesizedDefinitions(_, Some(binding), List()) =>
             bodies.prepended(binding.owner, synthesizePlacedDefinition(binding, stat, module.symbol, peer))
           case SynthesizedDefinitions(_, Some(binding), impl :: _) =>
@@ -105,16 +103,9 @@ trait Splitting:
       ClassDef(placedValues, parents, placedBodies.getOrElse(placedValues, List.empty).reverse)
 
     def eraseBody(stat: Definition, term: Term) =
-      // TODO: in any case, we want to keep all implicit functions and inject `null` into the body
-      //       no distinction between placed/non-placed values
-      //       maybe remove `transformNormalizedExpression`
-      stat match
-        case PlacedStatement(_) =>
-          transformPlacedBody(
-            term,
-            (_, _, expr) => Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(expr.tpe.substituteParamRefsByTermRefs(stat.symbol)) -> None)
-        case _ =>
-          Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(stat.symbol.info.finalResultType.substituteParamRefsByTermRefs(stat.symbol))
+      transformBody(term, stat.symbol): (expr, owners) =>
+        val tpe = owners.foldLeft(expr.tpe) { _.substituteParamRefsByTermRefs(_) }
+        Literal(NullConstant()).select(symbols.asInstanceOf).appliedToType(tpe)
 
     val body = module.body flatMap:
       case stat @ ValDef(name, tpt, rhs) if !stat.symbol.isModuleDef =>

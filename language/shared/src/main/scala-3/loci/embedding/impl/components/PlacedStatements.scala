@@ -125,10 +125,15 @@ trait PlacedStatements:
 
   private def placementType(stat: ValDef | DefDef, tpt: TypeTree) =
     PlacementInfo(stat.symbol.info.resultType) filter: placementInfo =>
-      if !placementInfo.canonical then
-        val (message, pos) = tpt match
-          case Inferred() => "Placement type could not be inferred. Explicit type ascription required" -> stat.posInUserCode.startPosition
-          case _ => "Invalid placement type. Placement types imported by loci.language.* required" -> tpt.posInUserCode
+      def pos = tpt match
+        case Inferred() => stat.posInUserCode.startPosition
+        case _ => tpt.posInUserCode
+      if placementInfo.valueType.isContextFunctionType then
+        errorAndCancel(s"Placed type cannot be a context function type: ${placementInfo.valueType.safeShow}", pos)
+      else if !placementInfo.canonical then
+        val message = tpt match
+          case Inferred() => "Placement type could not be inferred. Explicit type ascription required"
+          case _ => "Invalid placement type. Placement types imported by loci.language.* required"
         errorAndCancel(s"$message: ${placementInfo.showCanonical}", pos)
       placementInfo.canonical
 
@@ -168,38 +173,6 @@ trait PlacedStatements:
 
     singletonTypeChecker.transform(placementInfo.valueType)
   end checkPlacementType
-
-  private def processPlacedBody(term: Term, transform: Option[(Symbol, Term, Term) => (Term, Option[Term])]) =
-    def dropLastExpr(block: Block) = block.statements match
-      case (term: Term) +: Nil => term
-      case statements :+ (term: Term) => Block.copy(block)(statements, term)
-      case statements => Block.copy(block)(statements, Literal(UnitConstant()))
-
-    def appendExpr(original: Block)(term: Term, expr: Term) = term match
-      case Lambda(_, _) => Block.copy(original)(List(term), expr)
-      case block @ Block(statements, Literal(UnitConstant())) => Block.copy(block)(statements, expr)
-      case block @ Block(statements, _) => Block.copy(block)(statements :+ block.expr, expr)
-      case _ => Block.copy(original)(List(term), expr)
-
-    term match
-      case Block(List(lambda @ DefDef(name, args @ List(TermParamClause(List(arg))), tpt, Some(block @ Block(_, erased: Typed)))), closure: Closure)
-          if arg.symbol.isImplicit &&
-             !(arg.symbol.info =:= TypeRepr.of[Nothing]) && arg.symbol.info <:< types.context &&
-             erased.tpe.typeSymbol == symbols.`embedding.on` =>
-        val body = dropLastExpr(block)
-        transform.fold(body): transform =>
-          val (rhs, expr) = transform(lambda.symbol, body, erased)
-          Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(expr.fold(rhs) { appendExpr(block)(rhs, _) }))), closure)
-      case _ =>
-        errorAndCancel("Unexpected shape of placed expression.", term.posInUserCode)
-        term
-  end processPlacedBody
-
-  def transformPlacedBody(term: Term, transform: (Symbol, Term, Term) => (Term, Option[Term])) =
-    processPlacedBody(term, Some(transform))
-
-  def extractPlacedBody(term: Term) =
-    processPlacedBody(term, None)
 
   def normalizePlacedStatements(module: ClassDef): ClassDef =
     val body = module.body map:
