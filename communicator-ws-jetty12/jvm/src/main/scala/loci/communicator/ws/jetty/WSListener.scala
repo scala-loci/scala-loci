@@ -16,7 +16,7 @@ private class WSListener[P <: WS: WSProtocolFactory](
   self =>
 
   protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
-    webSocketUpgradeHandler.configure { wsContainer: ServerWebSocketContainer =>
+    webSocketUpgradeHandler.configure { (wsContainer: ServerWebSocketContainer) =>
       wsContainer.addMapping(
         pathspec,
         new WebSocketCreator {
