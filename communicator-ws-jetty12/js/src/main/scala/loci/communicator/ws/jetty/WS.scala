@@ -2,8 +2,7 @@ package loci
 package communicator
 package ws.jetty
 
-import org.eclipse.jetty.servlet.ServletContextHandler
-import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest
+import org.eclipse.jetty.websocket.server.{ServerUpgradeRequest, WebSocketUpgradeHandler}
 
 import scala.annotation.compileTimeOnly
 import scala.concurrent.duration._
@@ -16,7 +15,7 @@ trait WS
   val path: String
   val host: Option[String]
   val port: Option[Int]
-  val request: Option[JettyServerUpgradeRequest]
+  val request: Option[ServerUpgradeRequest]
 
   override def toString = s"WS($path, $host, $port)"
 }
@@ -29,8 +28,8 @@ object WS extends WSSetupFactory {
     heartbeatDelay: FiniteDuration = 3.seconds,
     heartbeatTimeout: FiniteDuration = 10.seconds)
 
-  def apply(context: ServletContextHandler, pathspec: String): Listener[WS] = unavailable
-  def apply(context: ServletContextHandler, pathspec: String, properties: Properties): Listener[WS] = unavailable
+  def apply(context: WebSocketUpgradeHandler, pathspec: String): Listener[WS] = unavailable
+  def apply(context: WebSocketUpgradeHandler, pathspec: String, properties: Properties): Listener[WS] = unavailable
 
   def apply(url: String): Connector[WS] = unavailable
   def apply(url: String, properties: Properties): Connector[WS] = unavailable

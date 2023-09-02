@@ -3,8 +3,7 @@ package communicator
 package ws.jetty
 
 
-import org.eclipse.jetty.websocket.core.server.ServerUpgradeRequest
-import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest
+import org.eclipse.jetty.websocket.server.ServerUpgradeRequest
 
 import scala.util.{Failure, Success, Try}
 
@@ -12,7 +11,7 @@ private sealed trait WSProtocolFactory[P <: WS] {
   def make(url: String, host: Option[String], port: Option[Int],
     setup: ConnectionSetup[P], authenticated: Boolean,
     encrypted: Boolean, integrityProtected: Boolean,
-    request: Option[JettyServerUpgradeRequest]): Try[P]
+    request: Option[ServerUpgradeRequest]): Try[P]
 }
 
 private object WSProtocolFactory {
@@ -22,7 +21,7 @@ private object WSProtocolFactory {
     def make(url: String, host: Option[String], port: Option[Int],
         setup: ConnectionSetup[WS], authenticated: Boolean,
         encrypted: Boolean, integrityProtected: Boolean,
-        request: Option[JettyServerUpgradeRequest]): Try[WS] =
+        request: Option[ServerUpgradeRequest]): Try[WS] =
       Success(construct(
         url, host, port, setup, authenticated,
         encrypted, integrityProtected, request))
@@ -32,7 +31,7 @@ private object WSProtocolFactory {
     def make(url: String, host: Option[String], port: Option[Int],
         setup: ConnectionSetup[WS.Secure], authenticated: Boolean,
         encrypted: Boolean, integrityProtected: Boolean,
-        request: Option[JettyServerUpgradeRequest]): Try[WS.Secure] =
+        request: Option[ServerUpgradeRequest]): Try[WS.Secure] =
       construct(
           url, host, port, setup, authenticated,
           encrypted, integrityProtected, request) match {
@@ -45,7 +44,7 @@ private object WSProtocolFactory {
       _url: String, _host: Option[String], _port: Option[Int],
       _setup: ConnectionSetup[WS], _authenticated: Boolean,
       _encrypted: Boolean, _integrityProtected: Boolean,
-      _request: Option[JettyServerUpgradeRequest]) =
+      _request: Option[ServerUpgradeRequest]) =
     if (_encrypted && _integrityProtected)
       new WS.Secure {
         val path = _url;val host = _host;val port  = _port

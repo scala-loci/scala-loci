@@ -132,12 +132,12 @@ val jetty = libraryDependencies ++= {
     "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
 }
 
-val jetty11 = libraryDependencies ++= {
-  val jettyVersion = "11.0.13"
+val jetty12 = libraryDependencies ++= {
+  val jettyVersion = "12.0.1"
   Seq(
-    "org.eclipse.jetty.websocket" % "websocket-jetty-server" % jettyVersion exclude ("org.eclipse.jetty", "jetty-annotations"),
-    "org.eclipse.jetty.websocket" % "websocket-jetty-client" % jettyVersion,
-    "org.eclipse.jetty.websocket" % "websocket-jetty-api" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
     "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
 }
 
@@ -174,7 +174,7 @@ lazy val lociJVM = lociProject(
              lociCommunicatorWsAkkaPlayJVM,
              lociCommunicatorWsJavalinJVM,
              lociCommunicatorWsJettyJVM,
-             lociCommunicatorWsJetty11JVM,
+             lociCommunicatorWsJetty12JVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = lociProject(
@@ -194,7 +194,7 @@ lazy val lociJS = lociProject(
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
              lociCommunicatorWsJettyJS,
-             lociCommunicatorWsJetty11JS,
+             lociCommunicatorWsJetty12JS,
              lociCommunicatorWebRtcJS))
 
 
@@ -399,16 +399,16 @@ lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
 lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
 
 
-lazy val lociCommunicatorWsJetty11 = lociProject(
-  name = "Jetty 11 WebSocket communicator",
-  file = "communicator-ws-jetty11",
+lazy val lociCommunicatorWsJetty12 = lociProject(
+  name = "Jetty 12 WebSocket communicator",
+  file = "communicator-ws-jetty12",
   project = crossProject(JSPlatform, JVMPlatform)
             crossType CrossType.Dummy
-            settings (jetty11, scalatest),
+            settings (jetty12, scalatest),
   dependsOn = lociCommunication)
 
-lazy val lociCommunicatorWsJetty11JVM = lociCommunicatorWsJetty11.jvm
-lazy val lociCommunicatorWsJetty11JS = lociCommunicatorWsJetty11.js
+lazy val lociCommunicatorWsJetty12JVM = lociCommunicatorWsJetty12.jvm
+lazy val lociCommunicatorWsJetty12JS = lociCommunicatorWsJetty12.js
 
 
 lazy val lociCommunicatorWsJavalin = lociProject(

@@ -27,7 +27,9 @@ private class WSConnector[P <: WS : WSProtocolFactory](
         val client = new WebSocketClient()
         client.start()
         client.connect(socket, uri)
-        socket.doClosed.notice foreach { _ => client.stop() }
+        socket.doClosed.notice foreach { _ =>
+          client.stop()
+        }
     }
   }
 }
