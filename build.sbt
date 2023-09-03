@@ -132,14 +132,22 @@ val jetty = libraryDependencies ++= {
     "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
 }
 
-val jetty12 = libraryDependencies ++= {
-  val jettyVersion = "12.0.1"
-  Seq(
-    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
-    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
-    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
-    "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
-}
+val jetty12 = Seq(
+  libraryDependencies ++= {
+    if (`is 2.12+`(scalaVersion.value)) {
+      val jettyVersion = "12.0.1"
+      Seq(
+        "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
+        "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
+        "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
+        "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
+    }
+    else Seq.empty
+  },
+  compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
+  publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value),
+  Test / test := (if (`is 2.12+`(scalaVersion.value)) {(Test / test).value} else {})
+)
 
 
 lazy val loci = lociProject(
