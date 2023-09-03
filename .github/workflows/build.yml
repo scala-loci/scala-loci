@@ -21,10 +21,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Set up JDK 11
-      uses: coursier/setup-action@v1.2.0-M3
+    - uses: coursier/cache-action@v6
+      continue-on-error: true
+
+    - name: Set up JDK 17
+      uses: coursier/setup-action@v1.3.3
       with:
-        jvm: 11
+        jvm: 17
         apps: sbt
 
     - name: Build
