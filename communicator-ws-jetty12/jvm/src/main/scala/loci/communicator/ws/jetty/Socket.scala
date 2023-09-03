@@ -93,6 +93,9 @@ private class Socket[P <: WS: WSProtocolFactory](val protocol: P, properties: WS
   }
 
   override def onWebSocketClose(statusCode: Int, reason: String): Unit = {
+
+    println(s"closing message because $reason")
+
     synchronized {
       heartbeatTask.cancel(true)
       timeoutTask.cancel(true)
@@ -102,6 +105,7 @@ private class Socket[P <: WS: WSProtocolFactory](val protocol: P, properties: WS
   }
 
   override def onWebSocketError(cause: Throwable): Unit = {
+    println(s"received expliit error $cause")
     connectionFailed(Failure(cause))
     close()
   }
@@ -121,6 +125,7 @@ private class Socket[P <: WS: WSProtocolFactory](val protocol: P, properties: WS
   }
 
   def close(): Unit = {
+    println(s"called explicit close")
     synchronized {
       val session = getSession
       if (session != null)
