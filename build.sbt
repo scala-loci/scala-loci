@@ -136,7 +136,7 @@ val jetty = libraryDependencies ++= {
 val jetty12 = Seq(
   libraryDependencies ++= {
     if (`is 2.12+`(scalaVersion.value)) {
-      val jettyVersion = "12.0.1"
+      val jettyVersion = "12.0.0"
       Seq(
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
