@@ -8,7 +8,7 @@ import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 
-class JettyWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging {
+class Jetty12WebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Jetty WebSocket Registry"
 
   val port = 45851
