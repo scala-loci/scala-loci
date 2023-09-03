@@ -65,10 +65,10 @@ val jsjavasecurerandom = libraryDependencies +=
   "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.15" % TestInternal
+  "org.scalatest" %%% "scalatest" % "3.2.16" % TestInternal
 
 val scribe = libraryDependencies +=
-  "com.outr" %%% "scribe" % "3.10.6"
+  "com.outr" %%% "scribe" % "3.10.7"
 
 val retypecheck = libraryDependencies ++= {
   if (`is 3+`(scalaVersion.value))
@@ -118,18 +118,19 @@ val play = libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play" % "[2.5,2.9)" % Provided cross CrossVersion.for3Use2_13 withIsTransitive false)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "2.3.0" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "2.6.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
   "io.javalin" % "javalin" % "4.6.7"
 
 val jetty = libraryDependencies ++= {
-  val jettyVersion = "9.4.50.v20221201"
+  val jettyVersion = "9.4.52.v20230823"
   Seq(
     "org.eclipse.jetty.websocket" % "websocket-server" % jettyVersion,
     "org.eclipse.jetty.websocket" % "websocket-client" % jettyVersion,
     "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion,
-    "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
+    // "com.outr"  %% "scribe-slf4j"  % "3.10.7" % TestInternal
+    "org.slf4j" % "slf4j-nop" % "2.0.7" % TestInternal)
 }
 
 val jetty12 = Seq(
@@ -140,7 +141,8 @@ val jetty12 = Seq(
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
-        "org.slf4j" % "slf4j-nop" % "2.0.6" % TestInternal)
+        // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
+        "org.slf4j" % "slf4j-nop" % "2.0.7" % TestInternal)
     }
     else Seq.empty
   },
