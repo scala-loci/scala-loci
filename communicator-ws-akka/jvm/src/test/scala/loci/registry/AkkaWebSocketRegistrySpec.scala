@@ -3,8 +3,6 @@ package registry
 
 import communicator.ws.akka._
 
-import java.io.{OutputStream, PrintStream}
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 
@@ -15,22 +13,16 @@ class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging
 
   val port = 45848
 
-  val silentStream = new PrintStream(new OutputStream {
-    def write(b: Int) = { }
-  })
-
   it should "handle binding and lookup correctly" in {
     for (_ <- 1 to 50) {
       val listener = WS(port)
       val connector = WS(s"ws://localhost:$port")
 
-      Console.withOut(silentStream) {
-        RegistryTests.`handle binding and lookup correctly`(
-          listener,
-          connector,
-          setupListener = awaitBinding(listener, 1.minute),
-          cleanup = awaitTermination(1.minute))
-      }
+      RegistryTests.`handle binding and lookup correctly`(
+        listener,
+        connector,
+        setupListener = awaitBinding(listener, 1.minute),
+        cleanup = awaitTermination(1.minute))
     }
   }
 
@@ -39,13 +31,11 @@ class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging
       val listener = WS(port)
       val connector = WS(s"ws://localhost:$port")
 
-      Console.withOut(silentStream) {
-        RegistryTests.`handle subjective binding and lookup correctly`(
-          listener,
-          connector,
-          setupListener = awaitBinding(listener, 1.minute),
-          cleanup = awaitTermination(1.minute))
-      }
+      RegistryTests.`handle subjective binding and lookup correctly`(
+        listener,
+        connector,
+        setupListener = awaitBinding(listener, 1.minute),
+        cleanup = awaitTermination(1.minute))
     }
   }
 }
