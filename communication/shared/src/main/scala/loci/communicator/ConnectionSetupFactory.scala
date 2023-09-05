@@ -9,10 +9,10 @@ object ConnectionSetupFactory {
 
     val self: Implementation[_]
 
-    final def listener(url: String, props: ConnectionSetupFactory.Properties) =
+    final def listener(url: String, props: ConnectionSetupFactory.Properties): Option[Listener[P]] =
       setup(url, props, listener)
 
-    final def connector(url: String, props: ConnectionSetupFactory.Properties) =
+    final def connector(url: String, props: ConnectionSetupFactory.Properties): Option[Connector[P]] =
       setup(url, props, connector)
 
     private def setup[S <: ConnectionSetup[_]](

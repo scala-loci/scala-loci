@@ -86,10 +86,10 @@ class Registry {
   }
 
 
-  private def createChannel(name: String, anchorDefault: String, remote: RemoteRef) =
+  private def createChannel(name: String, anchorDefault: String, remote: RemoteRef): Registry.Channel =
     Registry.Channel(name, anchorDefault, remote, this)
 
-  private def closeChannel(channel: Registry.Channel, notifyRemote: Boolean) = {
+  private def closeChannel(channel: Registry.Channel, notifyRemote: Boolean): Unit = {
     logging.trace(s"closing channel ${channel.name}")
 
     if (notifyRemote)
@@ -104,7 +104,7 @@ class Registry {
   }
 
 
-  private def send(channel: Registry.Channel, message: MessageBuffer) =
+  private def send(channel: Registry.Channel, message: MessageBuffer): Unit =
     if (channel.open)
       bufferedSend(
         channel,
@@ -181,10 +181,10 @@ class Registry {
     }
   }
 
-  private def request(abstraction: Registry.AbstractionRef, message: MessageBuffer) =
+  private def request(abstraction: Registry.AbstractionRef, message: MessageBuffer): Unit =
     send(Registry.Message.Request, abstraction, message)
 
-  private def respond(abstraction: Registry.AbstractionRef, message: Try[MessageBuffer]) = {
+  private def respond(abstraction: Registry.AbstractionRef, message: Try[MessageBuffer]): Unit = {
     message match {
       case Success(message) =>
         send(
@@ -210,7 +210,7 @@ class Registry {
     }
   }
 
-  private def send(method: String, abstraction: Registry.AbstractionRef, message: MessageBuffer) =
+  private def send(method: String, abstraction: Registry.AbstractionRef, message: MessageBuffer): Unit =
     connections.send(
       abstraction.remote,
       Message(

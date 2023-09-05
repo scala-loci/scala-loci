@@ -8,6 +8,7 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.{Http, HttpExt}
 import akka.http.scaladsl.model.headers
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.RouteResult
 import akka.http.scaladsl.server.{RequestContext, Route}
 import akka.stream.Materializer
 
@@ -71,23 +72,23 @@ private object WSListener {
       extends WebSocketRoute with Listener[P] {
     private val connected = new ConcurrentLinkedQueue[Connected[P]]
 
-    private def route(authenticatedName: Option[String]) =
+    private def route(authenticatedName: Option[String]): Route =
       webSocketRoute(this, authenticatedName, properties) { connection =>
         val iterator = connected.iterator
         while (iterator.hasNext)
           iterator.next().fire(connection)
       }
 
-    def apply(authenticatedName: String) = route(Some(authenticatedName))
+    def apply(authenticatedName: String): Route = route(Some(authenticatedName))
 
-    def apply(authenticatedName: Option[String]) = route(authenticatedName)
+    def apply(authenticatedName: Option[String]): Route = route(authenticatedName)
 
-    def apply(v: RequestContext) = route(None)(v)
+    def apply(v: RequestContext): Future[RouteResult] = route(None)(v)
 
     protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
       connected.add(connectionEstablished)
       Success(new Listening {
-        def stopListening(): Unit = connected remove connectionEstablished
+        def stopListening(): Unit = connected.remove(connectionEstablished)
       })
     }
   }
