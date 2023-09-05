@@ -22,13 +22,8 @@ private object WSActorSystem {
 
   def retrieve(): (ActorSystem, ActorMaterializer) = synchronized {
     if (count == 0) {
-      val config = ConfigFactory.parseString(
-        """
-        akka.http {
-          server { remote-address-header = on }
-          parsing { tls-session-info-header = on }
-        }
-        """)
+      val defaultConfig = ConfigFactory.load()
+      val config = defaultConfig.getConfig("loci.communicator.ws.akka").withFallback(defaultConfig)
 
       actorSystem = ActorSystem("websocket-system", config)
       actorMaterializer = ActorMaterializer()
