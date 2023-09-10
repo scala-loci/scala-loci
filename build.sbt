@@ -108,13 +108,18 @@ val jsoniter = Seq(
 val akkaHttp = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
   "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-http" % "10.1.15" % TestInternal cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % TestInternal cross CrossVersion.for3Use2_13,
   "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided cross CrossVersion.for3Use2_13,
   "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided cross CrossVersion.for3Use2_13)
 
 val play = libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
   "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-http" % "10.1.15" % TestInternal cross CrossVersion.for3Use2_13,
+  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % TestInternal cross CrossVersion.for3Use2_13,
   "com.typesafe.play" %% "play" % "2.7.9" % CompileInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
+  "com.typesafe.play" %% "play" % "2.7.9" % TestInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
   "com.typesafe.play" %% "play" % "[2.5,2.9)" % Provided cross CrossVersion.for3Use2_13 withIsTransitive false)
 
 val scalajsDom = libraryDependencies +=
