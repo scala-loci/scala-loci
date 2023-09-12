@@ -6,7 +6,10 @@ import LociUtil.autoImport._
 object lociProject extends LociProjectBuilder(includeScalaVersion = _ => true) {
   def apply(project: Project) = project
   def apply(project: sbt.Project) = project
+
   def scala2only = new LociProjectBuilder(includeScalaVersion = `is 2.x`)
+
+  def `scala 2.12+` = new LociProjectBuilder(includeScalaVersion = `is 2.12+`)
 }
 
 object Projects {
