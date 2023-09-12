@@ -148,6 +148,7 @@ val jetty12 = Seq(
 lazy val loci = lociProject(
   project in file(".")
   settings (publish / skip := true,
+            crossScalaVersions := Nil,
             Global / onLoad := {
               val project = System.getenv("SCALA_PLATFORM") match {
                 case "jvm" => Some("lociJVM")
@@ -164,6 +165,7 @@ lazy val loci = lociProject(
 lazy val lociJVM = lociProject(
   project in file(".jvm")
   settings (publish / skip := true,
+            crossScalaVersions := Nil,
             build := taskSequence(Compile / compile, Test / compile).value)
   aggregate (lociLanguageJVM, lociLanguageRuntimeJVM, lociCommunicationJVM,
              lociSerializerUpickleJVM,
@@ -184,6 +186,7 @@ lazy val lociJVM = lociProject(
 lazy val lociJS = lociProject(
   project in file(".js")
   settings (publish / skip := true,
+            crossScalaVersions := Nil,
             build := taskSequence(Compile / compile, Test / compile,
                                   Compile / fastLinkJS, Test / fastLinkJS).value)
   aggregate (lociLanguageJS, lociLanguageRuntimeJS, lociCommunicationJS,
