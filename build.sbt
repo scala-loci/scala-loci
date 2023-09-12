@@ -80,16 +80,14 @@ val circe = Seq(
     Seq(
       "io.circe" %%% "circe-core" % "0.14.1",
       "io.circe" %%% "circe-parser" % "0.14.1")
-  }).value,
-  compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
-  publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value))
+  }).value
+)
 
 val jsoniter = Seq(
   libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
     "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.13.22"
-  }).value,
-  compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
-  publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value))
+  }).value
+)
 
 val akkaHttp = libraryDependencies ++= { (only.jvm orPlatformCompileTimeStubs Def.setting {
   Seq(
@@ -139,10 +137,8 @@ val jetty12 = Seq(
       "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
       // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
       "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
-  }).value,
-  compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
-  publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value),
-  Test / test := (if (`is 2.12+`(scalaVersion.value)) (Test / test).value else { }))
+  }).value
+)
 
 
 lazy val loci = lociProject(
@@ -284,7 +280,7 @@ lazy val lociSerializerUpickleJVM = lociSerializerUpickle.jvm
 lazy val lociSerializerUpickleJS = lociSerializerUpickle.js
 
 
-lazy val lociSerializerCirce = lociProject(
+lazy val lociSerializerCirce = lociProject.`scala 2.12+`(
   name = "Circe serializer",
   file = "serializer-circe",
   project = crossProject(JSPlatform, JVMPlatform)
@@ -296,7 +292,7 @@ lazy val lociSerializerCirceJVM = lociSerializerCirce.jvm
 lazy val lociSerializerCirceJS = lociSerializerCirce.js
 
 
-lazy val lociSerializerJsoniterScala = lociProject(
+lazy val lociSerializerJsoniterScala = lociProject.`scala 2.12+`(
   name = "Jsoniter Scala serializer",
   file = "serializer-jsoniter-scala",
   project = crossProject(JSPlatform, JVMPlatform)
@@ -404,7 +400,7 @@ lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
 lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
 
 
-lazy val lociCommunicatorWsJetty12 = lociProject(
+lazy val lociCommunicatorWsJetty12 = lociProject.`scala 2.12+`(
   name = "Jetty 12 WebSocket communicator",
   file = "communicator-ws-jetty12",
   project = crossProject(JSPlatform, JVMPlatform)
