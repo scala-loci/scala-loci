@@ -3,17 +3,20 @@ import sbt.Keys._
 import sbtcrossproject.{CrossClasspathDependency => Dependency, CrossProject => Project}
 import LociUtil.autoImport._
 
-object lociProject extends LociProjectBuilder(scala2only = false) {
+object lociProject extends LociProjectBuilder(includeScalaVersion = _ => true) {
   def apply(project: Project) = project
   def apply(project: sbt.Project) = project
-  def scala2only = new LociProjectBuilder(scala2only = true)
+
+  def scala2only = new LociProjectBuilder(includeScalaVersion = `is 2.x`)
+
+  def `scala 2.12+` = new LociProjectBuilder(includeScalaVersion = `is 2.12+`)
 }
 
 object Projects {
   def apply(dependencies: Dependency*) = dependencies.toSeq
 }
 
-class LociProjectBuilder(scala2only: Boolean) {
+class LociProjectBuilder(includeScalaVersion: String => Boolean) {
   def apply(name: String, project: Project): Project =
     apply(name, name, project, Seq.empty)
 
@@ -42,8 +45,8 @@ class LociProjectBuilder(scala2only: Boolean) {
         }
       },
 
-      compile / skip := (compile / skip).value || scala2only && `is 3+`(scalaVersion.value),
-      publish / skip := (publish / skip).value || scala2only && `is 3+`(scalaVersion.value),
+      compile / skip := (compile / skip).value || !includeScalaVersion(scalaVersion.value),
+      publish / skip := (publish / skip).value || !includeScalaVersion(scalaVersion.value),
       Test / test := { if (includeScalaVersion(scalaVersion.value)) (Test / test).value })
 
     if (dependsOn.nonEmpty)
