@@ -17,12 +17,14 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.18", "2.13.12", "3.3.1")
+// NOTE: most preferred version at head
+ThisBuild / crossScalaVersions := Seq("2.13.12", "3.3.1", "2.12.18", "2.11.12")
 
 ThisBuild / scalaVersion := {
-  val versions = (ThisBuild / crossScalaVersions).value
-  val version = Option(System.getenv("SCALA_VERSION")) getOrElse versions(versions.size - 2)
-  versions.reverse find { _ startsWith version } getOrElse versions.last
+  val availableVersions = (ThisBuild / crossScalaVersions).value
+  val fallbackVersion = availableVersions.head
+  val preferredVersion = Option(System.getenv("SCALA_VERSION")) getOrElse fallbackVersion
+  availableVersions.find { _ startsWith preferredVersion } getOrElse fallbackVersion
 }
 
 
