@@ -165,6 +165,7 @@ lazy val loci = lociProject(
   project in file(".")
   settings (defaultSettings,
             publish / skip := true,
+            crossScalaVersions := Nil,
             Global / onLoad := {
               val project = System.getenv("SCALA_PLATFORM") match {
                 case "jvm" => Some("lociJVM")
@@ -182,6 +183,7 @@ lazy val lociJVM = lociProject(
   project in file(".jvm")
   settings (defaultSettings,
             publish / skip := true,
+            crossScalaVersions := Nil,
             build := taskSequence(Compile / compile, Test / compile).value)
   aggregate (lociLanguageJVM, lociLanguageRuntimeJVM, lociCommunicationJVM,
              lociSerializerUpickleJVM,
@@ -203,6 +205,7 @@ lazy val lociJS = lociProject(
   project in file(".js")
   settings (defaultSettings,
             publish / skip := true,
+            crossScalaVersions := Nil,
             build := taskSequence(Compile / compile, Test / compile,
                                   Compile / fastLinkJS, Test / fastLinkJS).value)
   aggregate (lociLanguageJS, lociLanguageRuntimeJS, lociCommunicationJS,
