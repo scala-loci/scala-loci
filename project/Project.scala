@@ -47,6 +47,7 @@ class LociProjectBuilder(includeScalaVersion: String => Boolean) {
 
       compile / skip := (compile / skip).value || !includeScalaVersion(scalaVersion.value),
       publish / skip := (publish / skip).value || !includeScalaVersion(scalaVersion.value),
+      Test / test := (if (includeScalaVersion(scalaVersion.value)) {(Test / test).value} else {}),
     )
 
     if (dependsOn.nonEmpty)
