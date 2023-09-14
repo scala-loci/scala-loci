@@ -43,7 +43,8 @@ class LociProjectBuilder(scala2only: Boolean) {
       },
 
       compile / skip := (compile / skip).value || scala2only && `is 3+`(scalaVersion.value),
-      publish / skip := (publish / skip).value || scala2only && `is 3+`(scalaVersion.value))
+      publish / skip := (publish / skip).value || scala2only && `is 3+`(scalaVersion.value),
+      Test / test := { if (includeScalaVersion(scalaVersion.value)) (Test / test).value })
 
     if (dependsOn.nonEmpty)
       lociProject dependsOn (dependsOn map { dependency =>
