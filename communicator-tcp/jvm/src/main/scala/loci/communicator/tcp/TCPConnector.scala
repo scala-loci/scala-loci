@@ -7,8 +7,7 @@ import java.net.Socket
 import scala.util.{Failure, Success}
 import scala.util.control.NonFatal
 
-private class TCPConnector(
-  host: String, port: Int, properties: TCP.Properties)
+private case class TCPConnector(host: String, port: Int, properties: TCP.Properties)
     extends Connector[TCP] {
 
   protected def connect(connectionEstablished: Connected[TCP]): Unit = {
