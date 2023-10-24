@@ -20,7 +20,7 @@ trait TCPSetupFactory
 
   protected def listener(
       url: String, scheme: String, location: String, properties: TCP.Properties) =
-    parse(location) match {
+    TCPSetupFactory.parse(location) match {
       case (Some(interface), Some(port)) => Some(TCP(port, interface, properties))
       case (None, Some(port)) => Some(TCP(port, properties))
       case _ => None
@@ -28,12 +28,16 @@ trait TCPSetupFactory
 
   protected def connector(
       url: String, scheme: String, location: String, properties: TCP.Properties) =
-    parse(location) match {
+    TCPSetupFactory.parse(location) match {
       case (Some(host), Some(port)) => Some(TCP(host, port, properties))
       case _ => None
     }
 
-  protected def parse(location: String): (Option[String], Option[Int]) =
+}
+
+object TCPSetupFactory {
+
+  private def parse(location: String): (Option[String], Option[Int]) =
     try {
       val index = location lastIndexOf ':'
       if (index != -1) {
@@ -52,4 +56,5 @@ trait TCPSetupFactory
       case _: NumberFormatException =>
         (None, None)
     }
+
 }
