@@ -12,7 +12,7 @@ trait TCP
   val host: String
   val port: Int
 
-  override def toString = s"TCP($host, $port)"
+  override def toString: String = TCPSetupFactory.getURL(host, port)
 }
 
 object TCP extends TCPSetupFactory {

@@ -37,6 +37,10 @@ trait TCPSetupFactory
 
 object TCPSetupFactory {
 
+  def getURL(host: String, port: Int): String = {
+    s"tcp://$host:$port"
+  }
+
   private def parse(location: String): (Option[String], Option[Int]) =
     try {
       val index = location lastIndexOf ':'
