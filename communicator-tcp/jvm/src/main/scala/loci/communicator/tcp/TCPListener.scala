@@ -32,7 +32,7 @@ private case class TCPListener(port: Int, interface: String, properties: TCP.Pro
         executor.shutdown()
       }
 
-      new Thread() {
+      val thread = new Thread() {
         override def run(): Unit =
           try
             while (true) {
@@ -52,7 +52,9 @@ private case class TCPListener(port: Int, interface: String, properties: TCP.Pro
                 connectionEstablished.fire(Failure(exception))
               }
           }
-      }.start()
+      }
+      thread.setDaemon(true)
+      thread.start()
 
       Success(new Listening {
         override def stopListening(): Unit =
