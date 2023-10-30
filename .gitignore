@@ -24,6 +24,9 @@ target/
 *.synctex.gz
 *.toc
 
+.*.swp
+.*.swo
+
 .vscode
 .metals
 metals.sbt
