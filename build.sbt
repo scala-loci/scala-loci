@@ -191,7 +191,8 @@ lazy val lociJVM = lociProject(
              lociCommunicatorWsAkkaPlayJVM,
              lociCommunicatorWsJavalinJVM,
              lociCommunicatorWsJettyJVM,
-             lociCommunicatorWsJetty12JVM,
+             // including jetty 12 by default kills the 2.11 tests … but publication works …
+             //lociCommunicatorWsJetty12JVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = lociProject(
@@ -211,7 +212,8 @@ lazy val lociJS = lociProject(
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
              lociCommunicatorWsJettyJS,
-             lociCommunicatorWsJetty12JS,
+             // including jetty 12 by default kills the 2.11 tests … but publication works …
+             // lociCommunicatorWsJetty12JS,
              lociCommunicatorWebRtcJS))
 
 
