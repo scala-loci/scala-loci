@@ -3,10 +3,12 @@ package language
 package transmitter
 
 import _root_.rescala.interface.RescalaInterface
+import loci.language.transmitter.internal.{RescalaEventAccessor, RescalaGateway, RescalaSignalAccessor}
+import loci.transmitter.internal.{RescalaEventTransmittable, RescalaSignalTransmittable}
 
 class RescalaTransmitter[I <: RescalaInterface](val interface: I) extends
-  loci.transmitter.RescalaSignalTransmittable with
-  loci.transmitter.RescalaEventTransmittable with
+  RescalaSignalTransmittable with
+  RescalaEventTransmittable with
   RescalaSignalAccessor with
   RescalaEventAccessor with
   RescalaGateway

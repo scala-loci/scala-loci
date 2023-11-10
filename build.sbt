@@ -78,9 +78,9 @@ val retypecheck = libraryDependencies ++= {
     Seq("io.github.scala-loci" %% "retypecheck" % "0.10.0")
 }
 
-// 0.32 is the last version supporting Scala 2.11-2.13
+// 0.33.0 is the last one supporting Scala 2.11-2.13
 val rescala = libraryDependencies +=
-  "de.tu-darmstadt.stg" %%% "rescala" % "0.32.0"
+  "de.tu-darmstadt.stg" %%% "rescala" % "0.33.0"
 
 val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "2.0.0"

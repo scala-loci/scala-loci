@@ -1,9 +1,9 @@
-package loci
-package language
-package transmitter
+package loci.language.transmitter.internal
 
 import _root_.rescala.interface.RescalaInterface
 import _root_.rescala.operator.cutOutOfUserComputation
+import loci.language.Remote
+import loci.language.transmitter.{Multiple, Optional, RemoteAccessor, Single, Transmission, from}
 
 private[loci] trait RescalaSignalAccessor {
   val interface: RescalaInterface

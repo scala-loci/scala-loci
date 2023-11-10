@@ -1,12 +1,11 @@
-package loci
-package language
-package transmitter
-
-import communicator.Connector
-import messaging.ConnectionsBase
+package loci.language.transmitter.internal
 
 import _root_.rescala.interface.RescalaInterface
 import _root_.rescala.operator.cutOutOfUserComputation
+import loci.communicator.Connector
+import loci.language.Remote
+import loci.language.transmitter.{Connection, Gateway, Multiple, Optional, RemoteGateway, Single}
+import loci.messaging.ConnectionsBase
 
 private[loci] trait RescalaGateway {
   val interface: RescalaInterface

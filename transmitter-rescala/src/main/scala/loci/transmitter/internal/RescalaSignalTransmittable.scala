@@ -1,8 +1,8 @@
-package loci
-package transmitter
+package loci.transmitter.internal
 
 import _root_.rescala.interface.RescalaInterface
 import _root_.rescala.operator.Pulse
+import loci.transmitter.{ConnectedTransmittable, RemoteAccessException, Transmittable}
 
 private[loci] trait RescalaSignalTransmittable {
   val interface: RescalaInterface
