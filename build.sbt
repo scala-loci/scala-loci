@@ -17,7 +17,7 @@ ThisBuild / scalacOptions ++= {
     Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.18", "2.13.11", "3.3.0")
+ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.18", "2.13.12", "3.3.1")
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value
@@ -65,8 +65,9 @@ val jsjavasecurerandom = libraryDependencies +=
   "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.16" % TestInternal
+  "org.scalatest" %%% "scalatest" % "3.2.17" % TestInternal
 
+// 3.10.7 is the latest version to support scalajs 1.12
 val scribe = libraryDependencies +=
   "com.outr" %%% "scribe" % "3.10.7"
 
@@ -77,6 +78,7 @@ val retypecheck = libraryDependencies ++= {
     Seq("io.github.scala-loci" %% "retypecheck" % "0.10.0")
 }
 
+// 0.32 is the last version supporting Scala 2.11-2.13
 val rescala = libraryDependencies +=
   "de.tu-darmstadt.stg" %%% "rescala" % "0.32.0"
 
@@ -123,19 +125,19 @@ val play = libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play" % "[2.5,2.9)" % Provided cross CrossVersion.for3Use2_13 withIsTransitive false)
 
 val scalajsDom = libraryDependencies +=
-  "org.scala-js" % "scalajs-dom" % "2.6.0" cross ScalaJSCrossVersion.binary
+  "org.scala-js" % "scalajs-dom" % "2.8.0" cross ScalaJSCrossVersion.binary
 
 val javalin = libraryDependencies +=
-  "io.javalin" % "javalin" % "4.6.7"
+  "io.javalin" % "javalin" % "4.6.8"
 
 val jetty = libraryDependencies ++= {
-  val jettyVersion = "9.4.52.v20230823"
+  val jettyVersion = "9.4.53.v20231009"
   Seq(
     "org.eclipse.jetty.websocket" % "websocket-server" % jettyVersion,
     "org.eclipse.jetty.websocket" % "websocket-client" % jettyVersion,
     "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion,
     // "com.outr"  %% "scribe-slf4j"  % "3.10.7" % TestInternal
-    "org.slf4j" % "slf4j-nop" % "2.0.7" % TestInternal)
+    "org.slf4j" % "slf4j-nop" % "2.0.9" % TestInternal)
 }
 
 val jetty12 = Seq(
@@ -147,7 +149,7 @@ val jetty12 = Seq(
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
         // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
-        "org.slf4j" % "slf4j-nop" % "2.0.7" % TestInternal)
+        "org.slf4j" % "slf4j-nop" % "2.0.9" % TestInternal)
     }
     else Seq.empty
   },
