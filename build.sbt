@@ -191,6 +191,7 @@ lazy val lociJVM = lociProject(
              lociCommunicatorWsAkkaPlayJVM,
              lociCommunicatorWsJavalinJVM,
              lociCommunicatorWsJettyJVM,
+             lociCommunicatorWsJetty12JVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = lociProject(
@@ -210,6 +211,7 @@ lazy val lociJS = lociProject(
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
              lociCommunicatorWsJettyJS,
+             lociCommunicatorWsJetty12JS,
              lociCommunicatorWebRtcJS))
 
 
