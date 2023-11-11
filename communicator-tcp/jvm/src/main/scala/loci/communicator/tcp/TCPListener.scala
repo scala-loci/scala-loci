@@ -27,20 +27,20 @@ private class TCPListener(
 
       socket.bind(new InetSocketAddress(InetAddress.getByName(interface), port))
 
-      def terminate() = {
+      def terminate(): Unit = {
         try socket.close()
         catch { case _: IOException => }
         executor.shutdown()
       }
 
       new Thread() {
-        override def run() =
+        override def run(): Unit =
           try
             while (true) {
               val connection = socket.accept()
               if (connection != null)
                 executor.execute(new Runnable {
-                  def run() = TCPHandler.handleConnection(
+                  def run(): Unit = TCPHandler.handleConnection(
                     connection, properties, TCPListener.this, { connection =>
                       connectionEstablished.fire(Success(connection))
                     })
