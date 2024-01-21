@@ -137,19 +137,19 @@ val jetty = libraryDependencies ++= {
     "org.eclipse.jetty.websocket" % "websocket-client" % jettyVersion,
     "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion,
     // "com.outr"  %% "scribe-slf4j"  % "3.10.7" % TestInternal
-    "org.slf4j" % "slf4j-nop" % "2.0.9" % TestInternal)
+    "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
 }
 
 val jetty12 = Seq(
   libraryDependencies ++= {
     if (`is 2.12+`(scalaVersion.value)) {
-      val jettyVersion = "12.0.0"
+      val jettyVersion = "12.0.5"
       Seq(
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
         "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
         // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
-        "org.slf4j" % "slf4j-nop" % "2.0.9" % TestInternal)
+        "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
     }
     else Seq.empty
   },
