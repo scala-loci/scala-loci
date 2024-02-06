@@ -70,7 +70,7 @@ object SelectorResolution:
 
     def result(n: Int) =
       ConstantType(IntConstant(n)).asType match
-        case '[n] =>
+        case '[ n ] =>
           '{ IndexComputation[M, D, /, T, V, S, n] }
 
     def index(delegating: TypeRepr)(n: Int): Expr[IndexComputation[M, D, /, T, V, S, Nothing]] =

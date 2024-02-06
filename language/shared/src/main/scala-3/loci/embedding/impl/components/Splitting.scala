@@ -30,7 +30,7 @@ trait Splitting:
 
     if impl.isMethod then
       DefDef(impl, paramss => synthesizedBody map:
-        _.substituteRefs((original.symbol.paramSymss.flatten zip (paramss flatMap { _ map { _.symbol } })).toMap, original.symbol))
+        _.substituteRefs((original.symbol.paramSymss.flatten zip (paramss flatMap { _ map { _.symbol } })).toMap, impl))
     else
       ValDef(impl, synthesizedBody)
   end synthesizePlacedDefinition

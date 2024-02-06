@@ -36,18 +36,26 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
       case _ =>
         None
 
+  object PlacedType:
+    def unapply(tpe: TypeRepr): Option[(Type[?], Type[?])] =
+      tpe match
+        case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == symbols.`embedding.on` => Some(t.asType, p.asType)
+        case _ => tpe.asType match
+          case '[ t `on` p ] => Some(Type.of[t], Type.of[p])
+          case _ => None
+
   def namedOwner(symbol: Symbol) =
     symbol findAncestor { symbol => !symbol.isAnonymousFunction } getOrElse symbol
 
-  def clean(tpe: TypeRepr) = tpe.asType match
-    case '[ t `on` p ] =>
+  def clean(tpe: TypeRepr) = tpe match
+    case PlacedType('[ t ], '[ p ]) =>
       val local = TypeRepr.of[t].typeSymbol == symbols.`language.Local`
       PlacedClean.cleanType[p, t] match
         case '[ u ] =>
           val u = if local then symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
           symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
-    case '[ r ] =>
-      TypeRepr.of[r]
+    case _ =>
+      tpe
 
   def canonical(tpe: TypeRepr) =
     PlacementInfo(tpe).fold(tpe): placementInfo =>
@@ -69,6 +77,9 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
 
   // To make the context function type inferrable, we hack the current context and change its mode to `Pattern`
   // as this mode lets the context function type propagate without resolving the context argument:
+  // https://github.com/lampepfl/dotty/blob/3.0.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3483
+  // https://github.com/lampepfl/dotty/blob/3.1.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3547
+  // https://github.com/lampepfl/dotty/blob/3.2.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3687
   // https://github.com/lampepfl/dotty/blob/3.3.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3790
   //
   // This hack is without unwanted side effects since we ensure that the expanding function
@@ -78,7 +89,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
     r match
       case AppliedType(fun, typeArgs @ List(_, peer)) if fun.typeSymbol == symbols.`embedding.on` =>
         val symbol = namedOwner(Symbol.spliceOwner.owner)
-        if (symbol.isDefDef || symbol.isValDef) && !symbol.isLocalDummy then
+        if (symbol.isDefDef || symbol.isValDef) && !symbol.isLocalDummy && symbol.owner.isClassDef && isMultitierModule(symbol.owner) then
           val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
           val contextClass = Class.forName("dotty.tools.dotc.core.Contexts$Context")
           val freshContextClass = Class.forName("dotty.tools.dotc.core.Contexts$FreshContext")

@@ -163,6 +163,7 @@ object PlacedClean extends PlacedCleanAmbiguousResolutionBarrier:
   def cleanType[L: Type, T: Type](using Quotes) =
     import quotes.reflect.*
 
+    val on = Symbol.requiredPackage("loci.embedding").typeMember("on")
     val local = Symbol.requiredPackage("loci.language").typeMember("Local")
     val unit = defn.UnitClass.typeRef
 
@@ -170,6 +171,9 @@ object PlacedClean extends PlacedCleanAmbiguousResolutionBarrier:
       override def transform(tpe: TypeRepr) = tpe match
         case _ if tpe.typeSymbol.flags is Flags.Opaque => tpe
         case AppliedType(tycon, List(arg)) if tycon.typeSymbol == local => transform(arg)
+        case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == on => t.asType match
+          case '[ t `per` r ] => unit
+          case _ => if TypeRepr.of[L] <:< p then transform(t) else unit
         case _ => tpe.asType match
           case '[ Nothing ] | '[ Null ] => tpe
           case '[ language.on[t `per` r, p] ] => unit

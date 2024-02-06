@@ -20,7 +20,8 @@ object Selector:
         case d / t => t
         case _ => d
     case int.S[n] => S match
-      case Delegates[d / t] => Selected[Delegates[d], n]
+      case Delegates[d] => d match
+        case d / t => Selected[Delegates[d], n]
 
   final class IndexFallback[B, I, R, P, T <: Transmittables, S <: Transmittables, V]
 
