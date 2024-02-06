@@ -93,28 +93,28 @@ trait Commons:
 
   def newMethod(parent: Symbol, name: String, tpe: TypeRepr, flags: Flags, privateWithin: Symbol) =
     val symbol = Symbol.newMethod(parent, name, tpe, Flags.EmptyFlags, privateWithin)
-    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, flags &~ Flags.EmptyFlags)
+    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, flags.cleaned)
     symbol
 
   def newVal(parent: Symbol, name: String, tpe: TypeRepr, flags: Flags, privateWithin: Symbol) =
     val symbol = Symbol.newVal(parent, name, tpe, Flags.EmptyFlags, privateWithin)
-    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, flags &~ Flags.EmptyFlags)
+    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, flags.cleaned)
     symbol
 
   def newBind(parent: Symbol, name: String, flags: Flags, tpe: TypeRepr) =
     val symbol = Symbol.newBind(parent, name, Flags.EmptyFlags, tpe)
-    SymbolMutator.getOrErrorAndAbort.setFlag(symbol,  flags &~ Flags.EmptyFlags)
+    SymbolMutator.getOrErrorAndAbort.setFlag(symbol,  flags.cleaned)
     symbol
 
   def newClass(parent: Symbol, name: String, flags: Flags, parents: List[TypeRepr], decls: Symbol => List[Symbol], selfType: Option[TypeRepr]) =
     val symbol = Symbol.newClass(parent, name, parents, decls, selfType)
-    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, flags &~ Flags.EmptyFlags)
+    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, flags.cleaned)
     symbol
 
   def newModule(parent: Symbol, name: String, modFlags: Flags, clsFlags: Flags, parents: List[TypeRepr], decls: Symbol => List[Symbol], privateWithin: Symbol) =
     val symbol = Symbol.newModule(parent, name, Flags.EmptyFlags, Flags.EmptyFlags, parents, decls, privateWithin)
-    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, modFlags &~ Flags.EmptyFlags)
-    SymbolMutator.getOrErrorAndAbort.setFlag(symbol.moduleClass, clsFlags &~ Flags.EmptyFlags)
+    SymbolMutator.getOrErrorAndAbort.setFlag(symbol, modFlags.cleaned)
+    SymbolMutator.getOrErrorAndAbort.setFlag(symbol.moduleClass, clsFlags.cleaned)
     symbol
 
   given ValOrDefDef: TypeTest[Tree, ValDef | DefDef] = tree =>

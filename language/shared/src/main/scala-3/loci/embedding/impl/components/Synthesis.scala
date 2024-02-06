@@ -7,15 +7,29 @@ import utility.reflectionExtensions.*
 
 import scala.annotation.experimental
 import scala.collection.mutable
+import scala.util.control.NonFatal
 
 @experimental
 trait Synthesis:
   this: Component & Commons & Annotations & Placements =>
   import quotes.reflect.*
 
+  // - `binding` is defined:      stateful binding (`val` or `var`)
+  //    - `impl` empty:           binding keeps its definition
+  //                              (e.g., abstract, lazy or inline value,
+  //                              or value placed on `Any`)
+  //    - `impl` non-empty:       first element is the overridable `def` to initialize the binding
+  //                              following elements are the peer-specific implementations
+  // - `binding` is not defined:  stateless binding (`def`)
+  //                              peer-specific implementations
   case class SynthesizedDefinitions(original: Symbol, binding: Option[Symbol], impls: List[Symbol])
 
+  // `binding` is the overridable `def` to execute the statement
+  // `impls` are the peer-specific implementations
+  case class SynthesizedStatements(binding: Symbol, impls: List[Symbol])
+
   private val synthesizedDefinitionsCache = mutable.Map.empty[Symbol, SynthesizedDefinitions]
+  private val synthesizedStatementsCache = mutable.Map.empty[(Symbol, Symbol, Int), Option[SynthesizedStatements]]
   private val placedValuesSymbolCache = mutable.Map.empty[(Symbol, Symbol), Symbol]
 
   private def mangleSymbolName(symbol: Symbol) = f"loci$$${s"${implementationForm(symbol)} ${fullName(symbol)}".hashCode}%08x"
@@ -39,19 +53,20 @@ trait Synthesis:
       symbol
 
   private def copyAnnotations(from: Symbol, to: Symbol, decrementContextResultCount: Boolean) =
-    if from.annotations.nonEmpty then
+    def updateSymbolAnnotationWithTree(symbol: Symbol, tree: Tree): Unit =
       SymbolMutator.get.fold(
         report.warning("Annotations in multitier modules are ignored with current compiler version.", from.annotations.head.posInUserCode)):
-        symbolMutator =>
-          from.annotations foreach:
-            case tree @ Apply(fun, List(arg @ Literal(IntConstant(count))))
-              if decrementContextResultCount &&
-                 fun.symbol.isClassConstructor &&
-                 fun.symbol.owner == symbols.contextResultCount =>
-              if count > 1 then
-                symbolMutator.updateAnnotationWithTree(to, Apply.copy(tree)(fun, List(Literal.copy(arg)(IntConstant(count - 1)))))
-            case tree =>
-              symbolMutator.updateAnnotationWithTree(to, tree)
+        _.updateAnnotationWithTree(symbol, tree)
+
+    from.annotations foreach:
+      case tree @ Apply(fun, List(arg @ Literal(IntConstant(count))))
+        if decrementContextResultCount &&
+           fun.symbol.isClassConstructor &&
+           fun.symbol.owner == symbols.contextResultCount =>
+        if count > 1 then
+          updateSymbolAnnotationWithTree(to, Apply.copy(tree)(fun, List(Literal.copy(arg)(IntConstant(count - 1)))))
+      case tree =>
+        updateSymbolAnnotationWithTree(to, tree)
 
   private def erasePlacementType(info: TypeRepr) =
     PlacementInfo(info.resultType).fold(info -> defn.AnyClass): placementInfo =>
@@ -163,7 +178,27 @@ trait Synthesis:
     else
       SynthesizedDefinitions(symbol, None, List.empty)
 
-  def placedValuesSymbol(module: Symbol, peer: Symbol): Symbol = placedValuesSymbolCache.getOrElse(module -> peer, {
+  def synthesizedStatement(module: Symbol, peer: Symbol, index: Int): Option[SynthesizedStatements] = synthesizedStatementsCache.getOrElse((module, peer, index), {
+    if peer != defn.AnyClass then
+      val name = s"<placed statement ${index} of ${fullName(peer)}>"
+      val universalValues = placedValuesSymbol(module, defn.AnyClass)
+      val placedValues = placedValuesSymbol(module, peer)
+      val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
+
+      synthesizedStatementsCache.getOrElse((module, peer, index), {
+        val statement = Some(
+          SynthesizedStatements(
+            newMethod(universalValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol),
+            List(newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol))))
+        synthesizedStatementsCache += (module, peer, index) -> statement
+        statement
+      })
+    else
+      synthesizedStatementsCache += (module, peer, index) -> None
+      None
+  })
+
+  def placedValuesSymbol(module: Symbol, peer: Symbol): Symbol = placedValuesSymbolCache.getOrElse((module, peer), {
     val name = fullName(module)
     val mangledName = mangleSymbolName(module)
     val form = implementationForm(module)
@@ -174,10 +209,42 @@ trait Synthesis:
       if peer == defn.AnyClass then s"<placed values of $form $name>" else s"<placed values on $name$separator${peer.name}>",
       if peer == defn.AnyClass then mangledName else s"$mangledName$$${peer.name}",
       parents): symbol =>
-        placedValuesSymbolCache += module -> peer -> symbol
-        module.declarations flatMap: decl =>
-          val definitions = synthesizedDefinitions(decl)
-          (definitions.binding collect { case binding if binding.owner == symbol => binding }) ++
-          (definitions.impls collect { case impl if impl.owner == symbol => impl })
+        placedValuesSymbolCache += (module, peer) -> symbol
+
+        def collectDeclarations(binding: Option[Symbol], impls: List[Symbol]) =
+          (binding collect { case binding if binding.owner == symbol => binding }) ++
+          (impls collect { case impl if impl.owner == symbol => impl })
+
+        val indices = mutable.Map.empty[Symbol, Int]
+        val declarations =
+          try module.tree match
+            case ClassDef(_, _, _, _, body) =>
+              body flatMap:
+                case stat @ (_: ValDef | _: DefDef) if !stat.symbol.isModuleDef =>
+                  val definitions = synthesizedDefinitions(stat.symbol)
+                  collectDeclarations(definitions.binding, definitions.impls)
+                case statement: Term =>
+                  val statementPeer = PlacementInfo(statement.tpe.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
+                  if peer == defn.AnyClass || peer == statementPeer then
+                    val index = indices.getOrElse(statementPeer, 0)
+                    indices += statementPeer -> (index + 1)
+                    synthesizedStatement(module, statementPeer, index).toList flatMap: statement =>
+                      collectDeclarations(Some(statement.binding), statement.impls)
+                  else
+                    List.empty
+                case _ =>
+                  List.empty
+            case _ =>
+              List.empty
+          catch
+            case NonFatal(_) =>
+              List.empty
+
+        if declarations.isEmpty then
+          module.declarations flatMap: decl =>
+            val definitions = synthesizedDefinitions(decl)
+            collectDeclarations(definitions.binding, definitions.impls)
+        else
+          declarations
   })
 end Synthesis

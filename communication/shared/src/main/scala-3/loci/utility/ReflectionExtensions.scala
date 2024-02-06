@@ -79,6 +79,9 @@ object reflectionExtensions:
       allFlags.foldLeft(EmptyFlags) { (result, flag) =>
         if (flags is flag) && !(other is flag) then result | flag else result
       }
+
+    def cleaned =
+      flags &~ quotes.reflect.Flags.EmptyFlags
   end extension
 
   extension (using Quotes)(tree: quotes.reflect.Tree)

@@ -38,12 +38,11 @@ trait Splitting:
   def split(module: ClassDef): ClassDef =
     val indices = mutable.Map.empty[Symbol, Int]
 
-    val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
     val universalPlacedValues = placedValuesSymbol(module.symbol, defn.AnyClass)
     val universalPlacedValuesLocalDummy = SymbolMutator.getOrErrorAndAbort.createLocalDummy(universalPlacedValues)
 
     extension (self: Map[Symbol, List[Statement]])
-      inline def prepended(symbol: Symbol, stats: Statement*) =
+      inline def prepended(symbol: Symbol)(stats: Statement*) =
         self + (symbol -> (stats.toList ++ self.getOrElse(symbol, List.empty)))
 
     val placedBodies = module.body.foldLeft(Map.empty[Symbol, List[Statement]]):
@@ -53,44 +52,47 @@ trait Splitting:
 
         val bodiesWithBinding = definitions match
           case SynthesizedDefinitions(_, Some(binding), List()) =>
-            bodies.prepended(binding.owner, synthesizePlacedDefinition(binding, stat, module.symbol, peer))
+            bodies.prepended(binding.owner)(synthesizePlacedDefinition(binding, stat, module.symbol, peer))
           case SynthesizedDefinitions(_, Some(binding), impl :: _) =>
-            bodies.prepended(binding.owner, ValDef(binding, Some(Ref(impl).appliedToNone)))
+            bodies.prepended(binding.owner)(ValDef(binding, Some(Ref(impl).appliedToNone)))
           case _ =>
             bodies
 
         definitions.impls.foldLeft(bodiesWithBinding): (bodies, impl) =>
-          bodies.prepended(impl.owner, synthesizePlacedDefinition(impl, stat, module.symbol, peer))
+          bodies.prepended(impl.owner)(synthesizePlacedDefinition(impl, stat, module.symbol, peer))
 
       case (bodies, term: Term) =>
         val placementInfo = PlacementInfo(term.tpe.resultType)
         val peer = placementInfo.fold(defn.AnyClass) { _.peerType.typeSymbol }
         val index = indices.getOrElse(peer, 0)
-        val name = s"<placed statement ${index} of ${fullName(peer)}>"
         indices += peer -> (index + 1)
 
         val bodiesUniversalValues =
           if !placementInfo.isDefined then
-            bodies.prepended(universalPlacedValues, term.changeOwner(universalPlacedValuesLocalDummy))
+            bodies.prepended(universalPlacedValues)(term.changeOwner(universalPlacedValuesLocalDummy))
           else if peer == defn.AnyClass then
-            bodies.prepended(universalPlacedValues, extractPlacedBody(term).changeOwner(universalPlacedValuesLocalDummy))
+            bodies.prepended(universalPlacedValues)(extractPlacedBody(term).changeOwner(universalPlacedValuesLocalDummy))
           else
-            val symbol = newMethod(universalPlacedValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol)
-            bodies.prepended(universalPlacedValues, DefDef(symbol, _ => Some(Literal(UnitConstant()))), Ref(symbol).appliedToNone)
+            synthesizedStatement(module.symbol, peer, index).fold(bodies): statement =>
+              if !(statement.binding.owner.declarations contains statement.binding) then
+                SymbolMutator.get foreach { _.enter(statement.binding.owner, statement.binding) }
+              bodies.prepended(universalPlacedValues)(DefDef(statement.binding, _ => Some(Literal(UnitConstant()))), Ref(statement.binding).appliedToNone)
 
         if peer == defn.AnyClass then
           bodiesUniversalValues
         else
-          val placedValues = placedValuesSymbol(module.symbol, peer)
-          val symbol = newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol)
-          val rhs = extractPlacedBody(term) match
-            case Block(statements, expr) if expr.tpe.typeSymbol != defn.UnitClass =>
-              Block(statements :+ expr, Literal(UnitConstant()))
-            case expr if expr.tpe.typeSymbol != defn.UnitClass =>
-              Block(List(expr), Literal(UnitConstant()))
-            case expr =>
-              expr
-          bodiesUniversalValues.prepended(placedValues, DefDef(symbol, _ => Some(rhs.changeOwner(symbol))))
+          synthesizedStatement(module.symbol, peer, index).fold(bodiesUniversalValues): statement =>
+            val rhs = extractPlacedBody(term) match
+              case Block(statements, expr) if expr.tpe.typeSymbol != defn.UnitClass =>
+                Block(statements :+ expr, Literal(UnitConstant()))
+              case expr if expr.tpe.typeSymbol != defn.UnitClass =>
+                Block(List(expr), Literal(UnitConstant()))
+              case expr =>
+                expr
+            statement.impls.foldLeft(bodiesUniversalValues): (bodies, impl) =>
+              if !(impl.owner.declarations contains impl) then
+                SymbolMutator.get foreach { _.enter(impl.owner, impl) }
+              bodies.prepended(impl.owner)(DefDef(impl, _ => Some(rhs.changeOwner(impl))))
 
       case (bodies, _) =>
         bodies
