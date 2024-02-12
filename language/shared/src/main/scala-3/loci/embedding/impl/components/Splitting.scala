@@ -61,6 +61,35 @@ trait Splitting:
         definitions.impls.foldLeft(bodiesWithBinding): (bodies, impl) =>
           bodies.prepended(impl.owner)(synthesizePlacedDefinition(impl, stat, module.symbol, peer))
 
+      case (bodies, term: ClassDef) if term.symbol.isModuleDef =>
+        val placedValues = placedValuesSymbol(term.symbol, defn.AnyClass)
+        val nestedModule = synthesizedModule(term.symbol)
+        val parentTypes = List(TypeRepr.of[Object], placedValues.typeRef)
+        def bodySymbols(symbol: Symbol): List[Symbol] =
+          if parentTypes exists { _ <:< types.placedValues } then
+            List(newMethod(symbol, names.systemCreate, ByNameType(types.system), Flags.Protected, Symbol.noSymbol))
+          else
+            List.empty
+
+        val symbol = newClass(nestedModule.binding, names.anon, Flags.Final | Flags.NoInits | Flags.Synthetic, parentTypes, bodySymbols, selfType = None)
+        val tpe = symbol.typeRef
+
+        val parents = tpe.baseClasses.tail map: parent =>
+          val typeTree = TypeTree.of(using tpe.baseType(parent).asType)
+          if parent == placedValues then
+            New(typeTree).select(parent.primaryConstructor).appliedTo(This(nestedModule.binding.owner))
+          else
+            typeTree
+
+        val body = symbol.declarations collect:
+          case symbol if !symbol.isClassConstructor =>
+            DefDef(symbol, _ => Some(Select.unique(This(nestedModule.binding.owner), names.system)))
+
+        val classDef = ClassDef(symbol, parents, body)
+        val instantiation = Typed(New(TypeIdent(symbol)).select(symbol.primaryConstructor).appliedToNone, TypeIdent(placedValues))
+
+        bodies.prepended(nestedModule.binding.owner)(ValDef(nestedModule.binding, Some(Block(List(classDef), instantiation))))
+
       case (bodies, term: Term) =>
         val placementInfo = PlacementInfo(term.tpe.resultType)
         val peer = placementInfo.fold(defn.AnyClass) { _.peerType.typeSymbol }
@@ -102,7 +131,9 @@ trait Splitting:
       val placedValues = placedValuesSymbol(module.symbol, peerInfo.peerType.typeSymbol)
       val tpe = placedValues.typeRef
       val parents = tpe.baseClasses.tail map { parent => TypeTree.of(using tpe.baseType(parent).asType) }
-      ClassDef(placedValues, parents, placedBodies.getOrElse(placedValues, List.empty).reverse)
+      val params = placedValues.declaredFields collect { case symbol if symbol.isParamAccessor => ValDef(symbol, None) }
+      val classDef = ClassDef(placedValues, parents, params ++ placedBodies.getOrElse(placedValues, List.empty).reverse)
+      ClassDef.copy(classDef)(classDef.name, DefDef(classDef.constructor.symbol, _ => None), classDef.parents, classDef.self, classDef.body)
 
     def eraseBody(stat: Definition, term: Term) =
       transformBody(term, stat.symbol): (expr, owners) =>
@@ -114,6 +145,8 @@ trait Splitting:
         Some(ValDef.copy(stat)(name, tpt, rhs map { eraseBody(stat, _) }))
       case stat @ DefDef(name, paramss, tpt, rhs) if !stat.symbol.isFieldAccessor =>
         Some(DefDef.copy(stat)(name, paramss, tpt, rhs map { eraseBody(stat, _) }))
+      case stat: ClassDef if stat.symbol.isModuleDef && !isMultitierModule(stat.symbol) =>
+        Some(split(stat))
       case stat: Definition =>
         Some(stat)
       case stat =>

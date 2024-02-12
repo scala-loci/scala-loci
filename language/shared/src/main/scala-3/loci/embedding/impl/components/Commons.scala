@@ -45,12 +45,16 @@ trait Commons:
     val context = TypeRepr.of[Placement.Context[?]]
     val conversion = TypeRepr.of[Conversion[?, ?]]
     val placedValues = TypeRepr.of[loci.runtime.PlacedValues]
+    val system = TypeRepr.of[loci.runtime.System]
 
   object names:
 //    val sbj = "sbj"
     val body = "body"
     val apply = "apply"
     val tie = "Tie"
+    val system = "$loci$sys"
+    val systemCreate = "$loci$sys$create"
+    val anon = "$anon"
 
   object MaybeTyped:
     def unapply(term: Term): Some[Term] = term match
