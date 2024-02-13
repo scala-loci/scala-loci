@@ -75,7 +75,7 @@ private object WSPlayListener {
         connected.add(connectionEstablished)
 
         Success(new Listening {
-          def stopListening(): Unit = connected.remove(connectionEstablished)
+          override def stopListening(): Unit = connected.remove(connectionEstablished)
         })
       }
     }

@@ -45,7 +45,7 @@ private class WSListener[P <: WS: WSProtocolFactory](
     WebSocketUpgradeFilter.configure(context)
 
     Success(new Listening {
-      def stopListening() = ()
+      override def stopListening(): Unit = ()
     })
   }
 }

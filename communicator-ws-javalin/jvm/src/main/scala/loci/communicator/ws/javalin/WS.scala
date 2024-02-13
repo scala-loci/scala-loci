@@ -42,7 +42,7 @@ object WS extends WSSetupFactory {
         })
 
         Success(new Listening {
-          def stopListening(): Unit = ()
+          override def stopListening(): Unit = ()
         })
       }
     }

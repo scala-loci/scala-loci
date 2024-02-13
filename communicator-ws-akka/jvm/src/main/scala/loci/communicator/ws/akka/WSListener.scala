@@ -88,7 +88,7 @@ private object WSListener {
     protected def startListening(connectionEstablished: Connected[P]): Try[Listening] = {
       connected.add(connectionEstablished)
       Success(new Listening {
-        def stopListening(): Unit = connected remove connectionEstablished
+        override def stopListening(): Unit = connected.remove(connectionEstablished)
       })
     }
   }
@@ -123,7 +123,7 @@ private object WSListener {
         connected.add(connectionEstablished)
 
         Success(new Listening {
-          def stopListening(): Unit = WSActorSystem synchronized {
+          override def stopListening(): Unit = WSActorSystem synchronized {
             connected.remove(connectionEstablished)
 
             if (connected.isEmpty) {

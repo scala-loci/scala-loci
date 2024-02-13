@@ -58,7 +58,7 @@ private class WSListener[P <: WS: WSProtocolFactory](
     }
 
     Success(new Listening {
-      def stopListening() = ()
+      override def stopListening(): Unit = ()
     })
   }
 }

@@ -56,7 +56,7 @@ private class TCPListener(
       }.start()
 
       Success(new Listening {
-        def stopListening(): Unit =
+        override def stopListening(): Unit =
           if (running.getAndSet(false))
             terminate()
       })

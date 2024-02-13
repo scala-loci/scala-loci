@@ -98,7 +98,7 @@ class NetworkListener(
   protected def startListening(connectionEstablished: Connected[SimulationProtocol]) = {
     connected += connectionEstablished
     Success(new Listening {
-      def stopListening() = { }
+      override def stopListening(): Unit = { }
     })
   }
 }
