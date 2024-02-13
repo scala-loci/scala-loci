@@ -19,6 +19,7 @@ object Multitier:
       Annotations,
       Placements,
       Peers,
+      Access,
       PlacedTransformations,
       PlacedStatements,
       PlacedExpressions,

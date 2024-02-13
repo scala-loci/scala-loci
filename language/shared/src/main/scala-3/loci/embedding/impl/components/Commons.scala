@@ -133,6 +133,14 @@ trait Commons:
   def isMultitierModule(symbol: Symbol): Boolean =
     symbol.getAnnotation(symbols.multitier).isDefined
 
+  def isMultitierNestedPath(symbol: Symbol): Boolean =
+    symbol.exists && (isMultitierModule(symbol) || symbol.isModuleDef && isMultitierNestedPath(symbol.maybeOwner))
+
+  def isStablePath(term: Term): Boolean = term match
+    case This(_) | Ident(_) => true
+    case Select(qualifier, _) => term.symbol.isStable && isStablePath(qualifier)
+    case _ => false
+
   def fullName(symbol: Symbol): String =
     def fullName(symbol: Symbol, name: String): String =
       val owner = symbol.maybeOwner
