@@ -37,13 +37,7 @@ trait Access:
          from.hasAncestor(path.symbol.moduleClass) then
         multitierOuterAccess(from, path.symbol.moduleClass)
       else if isMultitierNestedPath(qualifier.symbol) then
-        val symbol =
-          if path.symbol.isModuleDef then
-            Some(synthesizedModule(path.symbol).binding)
-          else
-            synthesizedDefinitions(path.symbol).binding
-        symbol flatMap: symbol =>
-          multitierAccessPath(qualifier, from) map { _.select(symbol) }
+        multitierAccessPath(qualifier, from) map { _.select(synthesizedDefinitions(path.symbol).binding) }
       else
         None
     case _ =>

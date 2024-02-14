@@ -12,7 +12,6 @@ import scala.util.control.NonFatal
 object Synthesis:
   private val synthesizedDefinitionsCache = mutable.Map.empty[Any, Any]
   private val synthesizedStatementsCache = mutable.Map.empty[Any, Any]
-  private val synthesizedModulesCache = mutable.Map.empty[Any, Any]
   private val placedValuesSymbolCache = mutable.Map.empty[Any, Any]
 
 @experimental
@@ -20,29 +19,13 @@ trait Synthesis:
   this: Component & Commons & Annotations & Placements =>
   import quotes.reflect.*
 
-  // - `binding` is defined:      stateful binding (`val` or `var`)
-  //    - `impl` empty:           binding keeps its definition
-  //                              (e.g., abstract, lazy or inline value,
-  //                              or value placed on `Any`)
-  //    - `impl` non-empty:       first element is the overridable `def` to initialize the binding
-  //                              following elements are the peer-specific implementations
-  // - `binding` is not defined:  stateless binding (`def`)
-  //                              peer-specific implementations
-  case class SynthesizedDefinitions(original: Symbol, binding: Option[Symbol], impls: List[Symbol])
-
-  // `binding` is the overridable `def` to execute the statement
-  // `impls` are the peer-specific implementations
+  case class SynthesizedDefinitions(original: Symbol, binding: Symbol, init: Option[Symbol], impls: List[Symbol])
   case class SynthesizedStatements(binding: Symbol, impls: List[Symbol])
-
-  // `binding` is the `lazy val` that refers to the split values of the module
-  case class SynthesizedModule(original: Symbol, binding: Symbol)
 
   private val synthesizedDefinitionsCache = Synthesis.synthesizedDefinitionsCache match
     case cache: mutable.Map[Symbol, SynthesizedDefinitions] @unchecked => cache
   private val synthesizedStatementsCache = Synthesis.synthesizedStatementsCache match
     case cache: mutable.Map[(Symbol, Symbol, Int), Option[SynthesizedStatements]] @unchecked => cache
-  private val synthesizedModulesCache = Synthesis.synthesizedModulesCache match
-    case cache: mutable.Map[Symbol, SynthesizedModule] @unchecked => cache
   private val placedValuesSymbolCache = Synthesis.placedValuesSymbolCache match
     case cache: mutable.Map[(Symbol, Symbol), Symbol] @unchecked => cache
 
@@ -91,65 +74,12 @@ trait Synthesis:
           info.withResultType(placementInfo.valueType)
       erasedInfo -> placementInfo.peerType.typeSymbol
 
-  def synthesizedVal(symbol: Symbol): SynthesizedDefinitions = synthesizedDefinitionsCache.getOrElse(symbol, {
-    val (info, peer) = erasePlacementType(symbol.info)
-
-    if peer != defn.AnyClass && !(symbol.flags is Flags.Lazy) && !(symbol.flags is Flags.Deferred) && !(symbol.flags is Flags.Inline) then
-      val universalName = if symbol.flags is Flags.Private then s"<placed private ${symbol.name} of ${fullName(symbol.owner)}>" else symbol.name
-      val placedName = s"<placed ${symbol.name} of ${fullName(symbol.owner)}>"
-      val universalValues = placedValuesSymbol(symbol.owner, defn.AnyClass)
-      val placedValues = placedValuesSymbol(symbol.owner, peer)
-
-      synthesizedDefinitionsCache.getOrElse(symbol, {
-        val universal =
-          val universal = universalValues.fieldMember(universalName)
-          if !universal.exists then
-            val universal = newVal(universalValues, universalName, info, symbol.flags &~ Flags.PrivateLocal, Symbol.noSymbol)
-            copyAnnotations(symbol, universal, decrementContextResultCount = false)
-            universal
-          else
-            universal
-
-//        val universalProxy = Option.when(symbol.flags is Flags.Private):
-//          val universalProxy = universalValues.fieldMember(proxyName)
-//          if !universalProxy.exists then
-//            newMethod(universalValues, proxyName, ByNameType(info), Flags.Synthetic, privateWithin.fold(Symbol.noSymbol) { _.typeSymbol })
-//          else
-//            universalProxy
-
-        val universalInit =
-          val universalInit = universalValues.fieldMember(placedName)
-          if !universalInit.exists then
-            newMethod(universalValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic, Symbol.noSymbol)
-          else
-            universalInit
-
-        val placedInit =
-          val placedInit = placedValues.fieldMember(placedName)
-          if !placedInit.exists then
-            val placedInit = newMethod(placedValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
-            copyAnnotations(symbol, placedInit, decrementContextResultCount = false)
-            placedInit
-          else
-            placedInit
-
-        val definition = SynthesizedDefinitions(symbol, Some(universal), List(universalInit, placedInit))
-        synthesizedDefinitionsCache += symbol -> definition
-        definition
-      })
-    else
-      synthesizedValOrDef(symbol, isVal = true)
-  })
-
-  def synthesizedDef(symbol: Symbol): SynthesizedDefinitions =
-    synthesizedValOrDef(symbol, isVal = false)
-
-  private def synthesizedValOrDef(symbol: Symbol, isVal: Boolean): SynthesizedDefinitions = synthesizedDefinitionsCache.getOrElse(symbol, {
-    val (name, info, peer) =
+  private def synthesizedValOrDef(symbol: Symbol): SynthesizedDefinitions = synthesizedDefinitionsCache.getOrElse(symbol, {
+    val placedName = s"<placed ${symbol.name} of ${fullName(symbol.owner)}>"
+    val (universalName, info, peer) =
       symbol.info match
         case MethodType(List(paramName), List(paramType), resultType)
           if resultType.typeSymbol == defn.UnitClass &&
-             !isVal &&
              symbol.isFieldAccessor &&
              (symbol.name endsWith "_=") =>
           val name =
@@ -160,69 +90,116 @@ trait Synthesis:
           val (info, _) = erasePlacementType(paramType)
           (name, MethodType(List(paramName))(_ => List(info), _ => resultType), defn.AnyClass)
         case _ =>
+          val name = if symbol.flags is Flags.Private then s"<placed private ${symbol.name} of ${fullName(symbol.owner)}>" else symbol.name
           val (info, peer) = erasePlacementType(symbol.info)
-          (symbol.name, info, peer)
+          (name, info, peer)
 
+    val universalValues = placedValuesSymbol(symbol.owner, defn.AnyClass)
     val placedValues = placedValuesSymbol(symbol.owner, peer)
 
     synthesizedDefinitionsCache.getOrElse(symbol, {
-      val impl = placedValues.methodMember(name) find { _.info =:= info } getOrElse:
-        val impl =
-          if isVal then
-            newVal(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
-          else
-            newMethod(placedValues, name, info, symbol.flags | Flags.Synthetic, Symbol.noSymbol)
-        copyAnnotations(symbol, impl, decrementContextResultCount = info != symbol.info)
-        impl
-      val definition =
-        if isVal then
-          SynthesizedDefinitions(symbol, Some(impl), List.empty)
+      val universalOnly = peer == defn.AnyClass || (symbol.flags is Flags.Deferred)
+      val flags = if universalOnly then symbol.flags else symbol.flags &~ Flags.PrivateLocal
+      val decrementContextResultCount = info != symbol.info
+
+      val universal =
+        val universal = universalValues.fieldMember(universalName)
+        if !universal.exists then
+          val universal = newVal(universalValues, universalName, info, flags, Symbol.noSymbol)
+          copyAnnotations(symbol, universal, decrementContextResultCount)
+          universal
         else
-          SynthesizedDefinitions(symbol, None, List(impl))
+          universal
+
+      val definition =
+        if !universalOnly then
+          if symbol.isMethod then
+            val placed = placedValues.methodMember(universalName) find { _.info =:= info } getOrElse:
+              val placed = newMethod(placedValues, universalName, info, flags | Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+              copyAnnotations(symbol, placed, decrementContextResultCount)
+              placed
+            SynthesizedDefinitions(symbol, universal, None, List(placed))
+          else
+            val universalInit =
+              val universalInit = universalValues.fieldMember(placedName)
+              if !universalInit.exists then
+                newMethod(universalValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic, Symbol.noSymbol)
+              else
+                universalInit
+
+            val placedInit =
+              val placedInit = placedValues.fieldMember(placedName)
+              if !placedInit.exists then
+                val placedInit = newMethod(placedValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+                copyAnnotations(symbol, placedInit, decrementContextResultCount)
+                placedInit
+              else
+                placedInit
+
+            SynthesizedDefinitions(symbol, universal, Some(universalInit), List(placedInit))
+        else
+          SynthesizedDefinitions(symbol, universal, None, List.empty)
+      end definition
+
+      synthesizedDefinitionsCache += symbol -> definition
+      definition
+    })
+  })
+
+  private def synthesizedModule(symbol: Symbol): SynthesizedDefinitions = synthesizedDefinitionsCache.getOrElse(symbol, {
+    val module = if symbol.isClassDef then symbol else symbol.moduleClass
+    val modulePlacedValues = placedValuesSymbol(module, defn.AnyClass)
+    val ownerPlacedValues = placedValuesSymbol(module.owner, defn.AnyClass)
+    synthesizedDefinitionsCache.getOrElse(symbol, {
+      val binding =
+        val binding = ownerPlacedValues.fieldMember(module.companionModule.name)
+        if !binding.exists then
+          newVal(ownerPlacedValues, module.companionModule.name, modulePlacedValues.typeRef, Flags.Final | Flags.Lazy | Flags.StableRealizable, Symbol.noSymbol)
+        else
+          binding
+      val definition = SynthesizedDefinitions(module, binding, None, List.empty)
       synthesizedDefinitionsCache += symbol -> definition
       definition
     })
   })
 
   def synthesizedDefinitions(symbol: Symbol): SynthesizedDefinitions =
-    if symbol.isField then
-      synthesizedVal(symbol)
-    else if symbol.isMethod then
-      synthesizedDef(symbol)
+    if symbol.isModuleDef then
+      synthesizedModule(symbol)
     else
-      SynthesizedDefinitions(symbol, None, List.empty)
+      synthesizedValOrDef(symbol)
 
-  def synthesizedModule(symbol: Symbol): SynthesizedModule = synthesizedModulesCache.getOrElse(symbol, {
-    val module = if symbol.isClassDef then symbol else symbol.moduleClass
-    val modulePlacedValues = placedValuesSymbol(module, defn.AnyClass)
-    val ownerPlacedValues = placedValuesSymbol(module.owner, defn.AnyClass)
-    synthesizedModulesCache.getOrElse(symbol, {
-      val binding = newVal(ownerPlacedValues, module.companionModule.name, modulePlacedValues.typeRef, Flags.Final | Flags.Lazy | Flags.StableRealizable, Symbol.noSymbol)
-      val definition = SynthesizedModule(module, binding)
-      synthesizedModulesCache += symbol -> definition
-      definition
+  def synthesizedStatement(module: Symbol, peer: Symbol, index: Int): Option[SynthesizedStatements] =
+    synthesizedStatementsCache.getOrElse((module, peer, index), {
+      if peer != defn.AnyClass then
+        val name = s"<placed statement ${index} of ${fullName(peer)}>"
+        val universalValues = placedValuesSymbol(module, defn.AnyClass)
+        val placedValues = placedValuesSymbol(module, peer)
+        val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
+
+        synthesizedStatementsCache.getOrElse((module, peer, index), {
+          val binding =
+            val binding = universalValues.fieldMember(name)
+            if !binding.exists then
+              newMethod(universalValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol)
+            else
+              binding
+
+          val impl =
+            val impl = placedValues.fieldMember(name)
+            if !impl.exists then
+              newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+            else
+              impl
+
+          val statement = Some(SynthesizedStatements(binding, List(impl)))
+          synthesizedStatementsCache += (module, peer, index) -> statement
+          statement
+        })
+      else
+        synthesizedStatementsCache += (module, peer, index) -> None
+        None
     })
-  })
-
-  def synthesizedStatement(module: Symbol, peer: Symbol, index: Int): Option[SynthesizedStatements] = synthesizedStatementsCache.getOrElse((module, peer, index), {
-    if peer != defn.AnyClass then
-      val name = s"<placed statement ${index} of ${fullName(peer)}>"
-      val universalValues = placedValuesSymbol(module, defn.AnyClass)
-      val placedValues = placedValuesSymbol(module, peer)
-      val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
-
-      synthesizedStatementsCache.getOrElse((module, peer, index), {
-        val statement = Some(
-          SynthesizedStatements(
-            newMethod(universalValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol),
-            List(newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol))))
-        synthesizedStatementsCache += (module, peer, index) -> statement
-        statement
-      })
-    else
-      synthesizedStatementsCache += (module, peer, index) -> None
-      None
-  })
 
   def placedValuesSymbol(module: Symbol, peer: Symbol): Symbol = placedValuesSymbolCache.getOrElse((module, peer), {
     val name = fullName(module)
@@ -242,28 +219,26 @@ trait Synthesis:
       parents): symbol =>
         placedValuesSymbolCache += (module, peer) -> symbol
 
-        def collectDeclarations(binding: Option[Symbol], impls: List[Symbol]) =
-          (binding collect { case binding if binding.owner == symbol => binding }) ++
-          (impls collect { case impl if impl.owner == symbol => impl })
+        def collectDeclarations(impls: List[Symbol]) =
+          impls collect { case impl if impl.owner == symbol => impl }
 
         val indices = mutable.Map.empty[Symbol, Int]
         val declarations =
           try module.tree match
             case ClassDef(_, _, _, _, body) =>
               body flatMap:
-                case stat: ClassDef if stat.symbol.isModuleDef =>
-                  val definition = synthesizedModule(stat.symbol)
-                  if definition.binding.owner == symbol then List(definition.binding) else List.empty
-                case stat @ (_: ValDef | _: DefDef) if !stat.symbol.isModuleDef =>
+                case stat @ (_: ValDef | _: DefDef | _: ClassDef)
+                    if (stat.symbol.isField || stat.symbol.isMethod) && !stat.symbol.isModuleDef ||
+                       stat.symbol.isClassDef && stat.symbol.isModuleDef=>
                   val definitions = synthesizedDefinitions(stat.symbol)
-                  collectDeclarations(definitions.binding, definitions.impls)
+                  collectDeclarations(definitions.binding :: definitions.init.toList ++ definitions.impls)
                 case statement: Term =>
                   val statementPeer = PlacementInfo(statement.tpe.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
                   if peer == defn.AnyClass || peer == statementPeer then
                     val index = indices.getOrElse(statementPeer, 0)
                     indices += statementPeer -> (index + 1)
                     synthesizedStatement(module, statementPeer, index).toList flatMap: statement =>
-                      collectDeclarations(Some(statement.binding), statement.impls)
+                      collectDeclarations(statement.binding :: statement.impls)
                   else
                     List.empty
                 case _ =>
@@ -277,12 +252,11 @@ trait Synthesis:
         val decls =
           if declarations.isEmpty then
             module.declarations flatMap: decl =>
-              if decl.isClassDef && decl.isModuleDef then
-                val definition = synthesizedModule(decl)
-                if definition.binding.owner == symbol then List(definition.binding) else List.empty
-              else
+              if (decl.isField || decl.isMethod) && !decl.isModuleDef || decl.isClassDef && decl.isModuleDef then
                 val definitions = synthesizedDefinitions(decl)
-                collectDeclarations(definitions.binding, definitions.impls)
+                collectDeclarations(definitions.binding :: definitions.init.toList ++ definitions.impls)
+              else
+                List.empty
           else
             declarations
 

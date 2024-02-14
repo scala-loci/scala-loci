@@ -46,15 +46,16 @@ trait Splitting:
         self + (symbol -> (stats.toList ++ self.getOrElse(symbol, List.empty)))
 
     val placedBodies = module.body.foldLeft(Map.empty[Symbol, List[Statement]]):
-      case (bodies, stat @ (_: ValDef | _: DefDef)) if !stat.symbol.isModuleDef =>
+      case (bodies, stat @ (_: ValDef | _: DefDef)) if (stat.symbol.isField || stat.symbol.isMethod) && !stat.symbol.isModuleDef =>
         val peer = PlacementInfo(stat.symbol.info.widenTermRefByName.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
         val definitions = synthesizedDefinitions(stat.symbol)
 
         val bodiesWithBinding = definitions match
-          case SynthesizedDefinitions(_, Some(binding), List()) =>
+          case SynthesizedDefinitions(_, binding, None, _) =>
             bodies.prepended(binding.owner)(synthesizePlacedDefinition(binding, stat, module.symbol, peer))
-          case SynthesizedDefinitions(_, Some(binding), impl :: _) =>
-            bodies.prepended(binding.owner)(ValDef(binding, Some(Ref(impl).appliedToNone)))
+          case SynthesizedDefinitions(_, binding, Some(init), _) =>
+            bodies.prepended(binding.owner)(ValDef(binding, Some(Ref(init).appliedToNone)))
+              .prepended(init.owner)(synthesizePlacedDefinition(init, stat, module.symbol, peer))
           case _ =>
             bodies
 
@@ -63,7 +64,7 @@ trait Splitting:
 
       case (bodies, term: ClassDef) if term.symbol.isModuleDef =>
         val placedValues = placedValuesSymbol(term.symbol, defn.AnyClass)
-        val nestedModule = synthesizedModule(term.symbol)
+        val nestedModule = synthesizedDefinitions(term.symbol)
         val parentTypes = List(TypeRepr.of[Object], placedValues.typeRef)
         def bodySymbols(symbol: Symbol): List[Symbol] =
           if parentTypes exists { _ <:< types.placedValues } then
