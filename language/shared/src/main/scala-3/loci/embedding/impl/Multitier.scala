@@ -24,14 +24,16 @@ object Multitier:
       PlacedStatements,
       PlacedExpressions,
       Synthesis,
-      Splitting
+      Splitting,
+      Invocation
 
     tree match
       case tree: ClassDef =>
         val phases = List(
           processor.normalizePlacedStatements,
           processor.eraseMultitierConstructs,
-          processor.split)
+          processor.split,
+          processor.rewireInvocations)
 
         val processed = phases.foldLeft(tree): (tree, process) =>
           if processor.canceled then tree else process(tree)

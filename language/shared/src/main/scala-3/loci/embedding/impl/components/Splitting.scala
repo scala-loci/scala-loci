@@ -5,7 +5,7 @@ package components
 
 import utility.reflectionExtensions.*
 
-import scala.annotation.{experimental, threadUnsafe}
+import scala.annotation.experimental
 import scala.collection.mutable
 
 @experimental

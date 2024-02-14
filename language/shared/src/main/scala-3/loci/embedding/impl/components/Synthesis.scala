@@ -143,6 +143,7 @@ trait Synthesis:
     val ownerPlacedValues = placedValuesSymbol(module.owner, defn.AnyClass)
     synthesizedDefinitionsCache.getOrElse(symbol, {
       val binding = ownerPlacedValues.fieldMember(module.companionModule.name) orElse:
+                                                                                        // Flags.Final | Flags.Lazy | Flags.Module | Flags.StableRealizable
         newVal(ownerPlacedValues, module.companionModule.name, modulePlacedValues.typeRef, Flags.Final | Flags.Lazy | Flags.StableRealizable, Symbol.noSymbol)
       val definition = SynthesizedDefinitions(module, binding, None, List.empty)
       synthesizedDefinitionsCache += symbol -> definition
@@ -198,7 +199,7 @@ trait Synthesis:
       parents): symbol =>
         placedValuesSymbolCache += (module, peer) -> symbol
 
-        def collectDeclarations(impls: List[Symbol]) =
+        inline def collectDeclarations(impls: List[Symbol]) =
           impls collect { case impl if impl.owner == symbol => impl }
 
         val indices = mutable.Map.empty[Symbol, Int]
@@ -239,7 +240,7 @@ trait Synthesis:
           else
             declarations
 
-        if module.owner hasAncestor isMultitierModule then
+        if peer == defn.AnyClass && (module.owner hasAncestor isMultitierModule) then
           val name = "<outer placed values>"
           val tpe = placedValuesSymbol(module.owner, defn.AnyClass).typeRef
           newVal(symbol, name, tpe, Flags.ParamAccessor, Symbol.noSymbol) :: decls
@@ -248,8 +249,9 @@ trait Synthesis:
     end symbol
 
     val (names, tpes) = (symbol.declaredFields collect { case symbol if symbol.isParamAccessor => symbol.name -> symbol.info }).unzip
-    val tpe = MethodType(names)(_ => tpes, _ => symbol.typeRef)
-    SymbolMutator.getOrErrorAndAbort.setInfo(symbol.primaryConstructor, tpe)
+    if names.nonEmpty then
+      val tpe = MethodType(names)(_ => tpes, _ => symbol.typeRef)
+      SymbolMutator.getOrErrorAndAbort.setInfo(symbol.primaryConstructor, tpe)
 
     symbol
   })
