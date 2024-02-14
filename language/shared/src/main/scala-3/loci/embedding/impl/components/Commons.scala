@@ -94,6 +94,8 @@ trait Commons:
       findAncestor(predicate).isDefined
     def hasAncestor(ancestors: Symbol*): Boolean =
       symbol hasAncestor { ancestors contains _ }
+    def orElse(other: Symbol): Symbol =
+      if symbol.exists then symbol else other
 
   def newMethod(parent: Symbol, name: String, tpe: TypeRepr, flags: Flags, privateWithin: Symbol) =
     val symbol = Symbol.newMethod(parent, name, tpe, Flags.EmptyFlags, privateWithin)

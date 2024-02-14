@@ -64,6 +64,7 @@ trait Synthesis:
           updateSymbolAnnotationWithTree(to, Apply.copy(tree)(fun, List(Literal.copy(arg)(IntConstant(count - 1)))))
       case tree =>
         updateSymbolAnnotationWithTree(to, tree)
+  end copyAnnotations
 
   private def erasePlacementType(info: TypeRepr) =
     PlacementInfo(info.resultType).fold(info -> defn.AnyClass): placementInfo =>
@@ -102,14 +103,10 @@ trait Synthesis:
       val flags = if universalOnly then symbol.flags else symbol.flags &~ Flags.PrivateLocal
       val decrementContextResultCount = info != symbol.info
 
-      val universal =
-        val universal = universalValues.fieldMember(universalName)
-        if !universal.exists then
-          val universal = newVal(universalValues, universalName, info, flags, Symbol.noSymbol)
-          copyAnnotations(symbol, universal, decrementContextResultCount)
-          universal
-        else
-          universal
+      val universal = universalValues.fieldMember(universalName) orElse:
+        val universal = newVal(universalValues, universalName, info, flags, Symbol.noSymbol)
+        copyAnnotations(symbol, universal, decrementContextResultCount)
+        universal
 
       val definition =
         if !universalOnly then
@@ -120,21 +117,15 @@ trait Synthesis:
               placed
             SynthesizedDefinitions(symbol, universal, None, List(placed))
           else
-            val universalInit =
-              val universalInit = universalValues.fieldMember(placedName)
-              if !universalInit.exists then
-                newMethod(universalValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic, Symbol.noSymbol)
-              else
-                universalInit
+            val methodType = MethodType(List.empty)(_ => List.empty, _ => info)
 
-            val placedInit =
-              val placedInit = placedValues.fieldMember(placedName)
-              if !placedInit.exists then
-                val placedInit = newMethod(placedValues, placedName, MethodType(List.empty)(_ => List.empty, _ => info), Flags.Synthetic | Flags.Override, Symbol.noSymbol)
-                copyAnnotations(symbol, placedInit, decrementContextResultCount)
-                placedInit
-              else
-                placedInit
+            val universalInit = universalValues.fieldMember(placedName) orElse:
+              newMethod(universalValues, placedName, methodType, Flags.Synthetic, Symbol.noSymbol)
+
+            val placedInit = placedValues.fieldMember(placedName) orElse:
+              val placedInit = newMethod(placedValues, placedName, methodType, Flags.Synthetic | Flags.Override, Symbol.noSymbol)
+              copyAnnotations(symbol, placedInit, decrementContextResultCount)
+              placedInit
 
             SynthesizedDefinitions(symbol, universal, Some(universalInit), List(placedInit))
         else
@@ -151,12 +142,8 @@ trait Synthesis:
     val modulePlacedValues = placedValuesSymbol(module, defn.AnyClass)
     val ownerPlacedValues = placedValuesSymbol(module.owner, defn.AnyClass)
     synthesizedDefinitionsCache.getOrElse(symbol, {
-      val binding =
-        val binding = ownerPlacedValues.fieldMember(module.companionModule.name)
-        if !binding.exists then
-          newVal(ownerPlacedValues, module.companionModule.name, modulePlacedValues.typeRef, Flags.Final | Flags.Lazy | Flags.StableRealizable, Symbol.noSymbol)
-        else
-          binding
+      val binding = ownerPlacedValues.fieldMember(module.companionModule.name) orElse:
+        newVal(ownerPlacedValues, module.companionModule.name, modulePlacedValues.typeRef, Flags.Final | Flags.Lazy | Flags.StableRealizable, Symbol.noSymbol)
       val definition = SynthesizedDefinitions(module, binding, None, List.empty)
       synthesizedDefinitionsCache += symbol -> definition
       definition
@@ -178,19 +165,11 @@ trait Synthesis:
         val unaryProcedureType = MethodType(List.empty)(_ => List.empty, _ => TypeRepr.of[Unit])
 
         synthesizedStatementsCache.getOrElse((module, peer, index), {
-          val binding =
-            val binding = universalValues.fieldMember(name)
-            if !binding.exists then
-              newMethod(universalValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol)
-            else
-              binding
+          val binding = universalValues.fieldMember(name) orElse:
+            newMethod(universalValues, name, unaryProcedureType, Flags.Synthetic, Symbol.noSymbol)
 
-          val impl =
-            val impl = placedValues.fieldMember(name)
-            if !impl.exists then
-              newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol)
-            else
-              impl
+          val impl = placedValues.fieldMember(name) orElse:
+            newMethod(placedValues, name, unaryProcedureType, Flags.Synthetic | Flags.Override, Symbol.noSymbol)
 
           val statement = Some(SynthesizedStatements(binding, List(impl)))
           synthesizedStatementsCache += (module, peer, index) -> statement
@@ -261,7 +240,7 @@ trait Synthesis:
             declarations
 
         if module.owner hasAncestor isMultitierModule then
-          val name = s"<outer placed values of ${implementationForm(module.owner)} ${fullName(module.owner)}>"
+          val name = "<outer placed values>"
           val tpe = placedValuesSymbol(module.owner, defn.AnyClass).typeRef
           newVal(symbol, name, tpe, Flags.ParamAccessor, Symbol.noSymbol) :: decls
         else
