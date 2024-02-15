@@ -24,31 +24,54 @@ object APIExtraction:
       val treeClass = Class.forName("dotty.tools.dotc.ast.Trees$Tree")
       val extractAPICollectorClass = Class.forName("dotty.tools.dotc.sbt.ExtractAPICollector")
       val classLikeClass = Class.forName("xsbti.api.ClassLike")
-      val analysisCallbackClass = Class.forName("xsbti.AnalysisCallback")
 
       val ctx = quotesImplClass.getMethod("ctx")
       val source = contextClass.getMethod("source")
       val apiSource = extractAPICollectorClass.getMethod("apiSource", treeClass)
       val mainClasses = extractAPICollectorClass.getMethod("mainClasses")
-      val api = analysisCallbackClass.getMethod("api", classOf[File], classLikeClass)
-      val mainClass = analysisCallbackClass.getMethod("mainClass", classOf[File], classOf[String])
+
+      val incrementalCallbackClass =
+        try Class.forName("dotty.tools.dotc.sbt.interfaces.IncrementalCallback")
+        catch case _: ClassNotFoundException => null
 
       val context = ctx.invoke(quotes)
-      val sbtCallback = contextClass.getMethod("sbtCallback").invoke(context)
+      val sourceFile = source.invoke(context)
 
-      if sbtCallback != null then
-        val sourceFile = source.invoke(context)
-        val abstractFile = sourceFile.getClass.getMethod("file").invoke(sourceFile)
-        val file = abstractFile.getClass.getMethod("file").invoke(abstractFile)
+      val (api, mainClass, callback, file) =
+        if incrementalCallbackClass != null then
+          // Scala 3.3.2 (and after)
+          val sourceFileClass = Class.forName("dotty.tools.dotc.util.SourceFile")
 
+          val api = incrementalCallbackClass.getMethod("api", sourceFileClass, classLikeClass)
+          val mainClass = incrementalCallbackClass.getMethod("mainClass", sourceFileClass, classOf[String])
+
+          val incCallback = contextClass.getMethod("incCallback").invoke(context)
+
+          (api, mainClass, incCallback, sourceFile)
+        else
+          // Scala 3.3.1 (and before)
+          val analysisCallbackClass = Class.forName("xsbti.AnalysisCallback")
+
+          val api = analysisCallbackClass.getMethod("api", classOf[File], classLikeClass)
+          val mainClass = analysisCallbackClass.getMethod("mainClass", classOf[File], classOf[String])
+
+          val abstractFile = sourceFile.getClass.getMethod("file").invoke(sourceFile)
+          val file = abstractFile.getClass.getMethod("file").invoke(abstractFile)
+
+          val sbtCallback = contextClass.getMethod("sbtCallback").invoke(context)
+
+          (api, mainClass, sbtCallback, file)
+        end if
+
+      if callback != null then
         val collector = extractAPICollectorClass.getConstructor(contextClass).newInstance(context)
 
         apiSource.invoke(collector, module) match
-          case classes: Iterable[?] => classes foreach { api.invoke(sbtCallback, file, _) }
+          case classes: Iterable[?] => classes foreach { api.invoke(callback, file, _) }
           case _ =>
 
         mainClasses.invoke(collector) match
-          case mainClasses: Iterable[?] => mainClasses foreach { mainClass.invoke(sbtCallback, file, _) }
+          case mainClasses: Iterable[?] => mainClasses foreach { mainClass.invoke(callback, file, _) }
           case _ =>
       end if
     catch

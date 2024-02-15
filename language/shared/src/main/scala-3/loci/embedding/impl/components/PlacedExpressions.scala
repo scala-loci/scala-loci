@@ -167,7 +167,7 @@ trait PlacedExpressions:
         term
 
       // check access to subjective placed values
-      case PlacedValue(_, placementInfo) if !checkOnly =>
+      case PlacedValueReference(_, placementInfo) if !checkOnly =>
         if placementInfo.modality.subjective then
           errorAndCancel("Illegal subjective access.", term.posInUserCode)
         super.transformTerm(term)(owner)
@@ -179,7 +179,7 @@ trait PlacedExpressions:
         Apply.copy(term)(fun, args)
 
       // keep direct placed values accesses through the intended language constructs
-      case Select(qualifier @ PlacedValue(_, _), name) if !checkOnly && term.symbol.owner == symbols.placed =>
+      case Select(qualifier @ PlacedValueReference(_, _), name) if !checkOnly && term.symbol.owner == symbols.placed =>
         qualifier match
           case Apply(fun: Select, args) =>
             Select.copy(term)(Apply.copy(qualifier)(Select.copy(fun)(super.transformTerm(fun.qualifier)(owner), fun.name), args), name)

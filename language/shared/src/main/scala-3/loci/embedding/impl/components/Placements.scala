@@ -60,13 +60,13 @@ trait Placements:
     end apply
   end PlacementInfo
 
-  object PlacedValue:
+  object PlacedValueReference:
     def unapply(tree: Term): Option[(Term, PlacementInfo)] = tree match
       case Apply(Select(qualifier, names.apply), List(_)) if qualifier.symbol.exists && isMultitierModule(qualifier.symbol.owner) =>
         PlacementInfo(qualifier.tpe.widenTermRefByName.resultType) map { qualifier -> _ }
       case _ =>
         None
-  end PlacedValue
+  end PlacedValueReference
 
   object PlacedStatement:
     def unapply(tree: Statement): Option[Statement] = tree match
