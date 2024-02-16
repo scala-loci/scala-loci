@@ -10,15 +10,22 @@ import scala.collection.mutable
 
 @experimental
 trait Invocation:
-  this: Component & Commons & Peers & Synthesis & Access=>
+  this: Component & Commons & ErrorReporter & Placements & Peers & Synthesis & Access=>
   import quotes.reflect.*
 
-  def rewireInvocations(module: ClassDef): ClassDef =
+  def accessPath(term: Select, module: Symbol, peer: Symbol): Option[Term] =
+    val path = multitierAccessPath(term, module, peer)
+    if path.isEmpty && isMultitierNestedPath(term.qualifier.symbol) then
+      errorAndCancel(
+        s"Access to multitier value ${term.symbol.name} not allowed from module ${fullName(module)}",
+        term.posInUserCode.endPosition)
+    path
 
-    object stuff extends SafeTreeMap(quotes):
+  def rewireInvocations(module: ClassDef): ClassDef =
+    object invocationRewriter extends SafeTreeMap(quotes):
       private val modules = mutable.Stack.empty[Symbol]
-      private val peers = mutable.Stack.empty[Symbol]
-      private val placedValues = mutable.Stack.empty[Map[Symbol, Symbol]]
+      private val peersTypes = mutable.Stack.empty[TypeRepr]
+      private val placedValues = mutable.Stack.empty[Map[Symbol, TypeRepr]]
 
       extension [S](stack: mutable.Stack[S]) private def runStacked[T](value: Option[S])(body: => T) =
         value.fold(body): value =>
@@ -29,26 +36,43 @@ trait Invocation:
 
       override def transformTerm(term: Term)(owner: Symbol) =
         val module = modules.head
-        val peer = peers.headOption getOrElse defn.AnyClass
 
-        super.transformTerm(term)(owner)
+        peersTypes.headOption.fold(super.transformTerm(term)(owner)): peerType =>
+          term match
+            // TODO: remote access to placed values of other peer instances
+
+            // placed values on the same peer
+            case PlacedValueReference(reference @ Select(_, _), placementInfo) =>
+              if !(peerType <:< placementInfo.peerType) then
+                errorAndCancel(
+                  s"Access to value on peer ${placementInfo.peerType.safeShow(Printer.SafeTypeReprShortCode)} not allowed " +
+                  s"from peer ${peerType.safeShow(Printer.SafeTypeReprShortCode)}",
+                  term.posInUserCode.endPosition)
+
+              accessPath(reference, module, peerType.typeSymbol) getOrElse { super.transformTerm(term)(owner) }
+
+            // non-placed values in multitier modules
+            case term @ Select(_, _) =>
+              accessPath(term, module, peerType.typeSymbol) getOrElse { super.transformTerm(term)(owner) }
+
+            case _ =>
+              super.transformTerm(term)(owner)
       end transformTerm
 
       override def transformStatement(stat: Statement)(owner: Symbol) = stat match
         case stat: ClassDef =>
           val symbol = stat.symbol
-          val peer = placedValues.headOption flatMap { _.get(symbol) } getOrElse defn.AnyClass
+          val peerType = placedValues.headOption flatMap { _.get(symbol) }
 
           val definitions =
             if isMultitierModule(symbol) then
               PeerInfo.ofModule(symbol) map: peerInfo =>
-                val peer = peerInfo.peerType.typeSymbol
-                placedValuesSymbol(symbol, peer) -> peer
+                placedValuesSymbol(symbol, peerInfo.peerType.typeSymbol) -> peerInfo.peerType
             else
               List.empty
 
           placedValues.runStacked(Some(definitions.toMap)):
-            peers.runStacked(Some(peer)):
+            peersTypes.runStacked(peerType):
               modules.runStacked(Option.when(isMultitierNestedPath(symbol)) { symbol }):
                 super.transformStatement(stat)(owner)
 
@@ -56,9 +80,9 @@ trait Invocation:
           placedValues.runStacked(Some(Map.empty)):
             super.transformStatement(stat)(owner)
       end transformStatement
-    end stuff
+    end invocationRewriter
 
-    val classDef @ ClassDef(_, _, _, _, _) = stuff.transformStatement(module)(module.symbol.owner): @unchecked
-    classDef
+    invocationRewriter.transformStatement(module)(module.symbol.owner) match
+      case module: ClassDef @unchecked => module
   end rewireInvocations
 end Invocation
