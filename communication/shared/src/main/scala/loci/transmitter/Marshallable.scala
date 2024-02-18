@@ -39,7 +39,7 @@ sealed trait MarshallableResolution {
         case _ => false
       }
 
-      def marshal(value: B, abstraction: AbstractionRef) =
+      def marshal(value: B, abstraction: AbstractionRef): MessageBuffer =
         try {
           implicit val context = contextBuilder(
             transmittable.transmittables, abstraction, ContextBuilder.sending)
@@ -50,7 +50,7 @@ sealed trait MarshallableResolution {
             throw new RemoteAccessException(s"marshalling failed: $value").initCause(exception)
         }
 
-      def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
+      def unmarshal(value: MessageBuffer, abstraction: AbstractionRef): Try[R] =
         try {
           implicit val context = contextBuilder(
             transmittable.transmittables, abstraction, ContextBuilder.receiving)
@@ -61,7 +61,7 @@ sealed trait MarshallableResolution {
             throw new RemoteAccessException(s"unmarshalling failed: $value").initCause(exception)
         }
 
-      def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+      def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef): P =
         try {
           implicit val context = contextBuilder(
             transmittable.transmittables, abstraction, ContextBuilder.receiving)
@@ -77,22 +77,22 @@ sealed trait MarshallableResolution {
 
 object Marshallable extends MarshallableResolution {
   implicit object unit extends Marshallable[Unit, Unit, Future[Unit]] {
-    def marshal(value: Unit, abstraction: AbstractionRef) =
+    def marshal(value: Unit, abstraction: AbstractionRef): MessageBuffer =
       MessageBuffer.empty
-    def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
+    def unmarshal(value: MessageBuffer, abstraction: AbstractionRef): Try[Unit] =
       Success(())
-    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef): Future[Unit] =
       (value map { _ map { _ => () } }).toFutureFromTry
     def connected = false
   }
 
   implicit object nothing extends Marshallable[Nothing, Nothing, Future[Nothing]] {
     def nothing = throw new RemoteAccessException("Unexpected value of bottom type")
-    def marshal(value: Nothing, abstraction: AbstractionRef) =
+    def marshal(value: Nothing, abstraction: AbstractionRef): MessageBuffer =
       nothing
-    def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
+    def unmarshal(value: MessageBuffer, abstraction: AbstractionRef): Try[Nothing] =
       nothing
-    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef): Future[Nothing] =
       (value map { _ map { _ => nothing } }).toFutureFromTry
     def connected = false
   }
