@@ -280,6 +280,27 @@ object reflectionExtensions:
         }
       }
 
+    def selectMemberType(name: String): Option[quotes.reflect.TypeRepr] =
+      tpe.selectMember(_.typeMemberTypeInRefinement(name), quotes.reflect.TypeSelect(_, name), _.typeMember(name))
+
+    def selectMemberField(name: String): Option[quotes.reflect.TypeRepr] =
+      tpe.selectMember(_.fieldMemberTypeInRefinement(name), quotes.reflect.Select.unique(_, name), _.fieldMember(name))
+
+    private inline def selectMember(
+        inline memberInRefinement: quotes.reflect.TypeRepr => Option[quotes.reflect.TypeRepr],
+        inline select: quotes.reflect.Term => quotes.reflect.Tree,
+        inline lookup: quotes.reflect.Symbol => quotes.reflect.Symbol): Option[quotes.reflect.TypeRepr] =
+      if memberInRefinement(tpe).isDefined then
+        select(quotes.reflect.Select.unique(quotes.reflect.Literal(quotes.reflect.NullConstant()), "asInstanceOf").appliedToType(tpe)) match
+          case tree: quotes.reflect.Term => Some(tree.tpe)
+          case tree: quotes.reflect.TypeTree => Some(tree.tpe)
+          case _ => None
+      else
+        tpe.baseClasses collectFirst Function.unlift { base =>
+          val member = lookup(base)
+          Option.when(member.exists)(tpe.select(member))
+        }
+
     private inline def typeMemberTypeInRefinement(inline name: String) =
       tpe.memberTypeInRefinement(name) {
         case _: quotes.reflect.TypeBounds => true
