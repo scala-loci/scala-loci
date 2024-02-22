@@ -77,7 +77,7 @@ object TransmittableResolution:
               case _ if tpe.typeSymbol == transmittable =>
                 val aliased =
                   aux.appliedTo(transmittableParameters map { param =>
-                    transform(boundsAsAlias(tpe.resolvedMemberType(param)))
+                    transform(boundsAsAlias(tpe.resolvedMemberType(param) getOrElse TypeRepr.of[Any]))
                   })
                 if aliased != tpe then aliased else tpe
               case TypeRef(qualifier, _) if qualifier.getClass.getSimpleName contains "Skolem" =>
@@ -99,7 +99,7 @@ object TransmittableResolution:
                   if fun.symbol.owner == resolutionDefault || fun.symbol.owner == resolutionAlternation =>
                 val tpe = arg.tpe.widenTermRefByName
                 val args = transmittableParameters map { param =>
-                  deskolemizerAndTransmittablesAliaser.transform(boundsAsAlias(tpe.resolvedMemberType(param)))
+                  deskolemizerAndTransmittablesAliaser.transform(boundsAsAlias(tpe.resolvedMemberType(param) getOrElse TypeRepr.of[Any]))
                 }
                 val Apply(TypeApply(resolution, _), _) = '{ Transmittable.Resolution(???) }.asTerm.underlying: @unchecked
 
@@ -125,7 +125,9 @@ object TransmittableResolution:
               if tpe.getClass.getSimpleName contains "TypeVar" then TypeTree.of(using tpe.asType).tpe else tpe
 
             def transmittableArgs(tpe: TypeRepr): List[TypeRepr] =
-              transmittableParameters.take(3) map { param => stripTypeVar(boundsAsAlias(tpe.resolvedMemberType(param))) }
+              transmittableParameters.take(3) map { param =>
+                stripTypeVar(boundsAsAlias(tpe.resolvedMemberType(param) getOrElse TypeRepr.of[Any]))
+              }
 
             def hasParamRef(tpe: TypeRepr): Boolean = stripTypeVar(tpe) match
               case AppliedType(tycon, args) => hasParamRef(tycon) || (args exists hasParamRef)
