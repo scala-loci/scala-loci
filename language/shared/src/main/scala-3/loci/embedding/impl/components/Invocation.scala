@@ -10,10 +10,10 @@ import scala.collection.mutable
 
 @experimental
 trait Invocation:
-  this: Component & Commons & ErrorReporter & Placements & Peers & Synthesis & Access=>
+  this: Component & Commons & ErrorReporter & Placements & Peers & AccessPath & Synthesis =>
   import quotes.reflect.*
 
-  def accessPath(term: Select, module: Symbol, peer: Symbol): Option[Term] =
+  private def accessPath(term: Select, module: Symbol, peer: Symbol): Option[Term] =
     val path = multitierAccessPath(term, module, peer)
     if path.isEmpty && isMultitierNestedPath(term.qualifier.symbol) then
       errorAndCancel(

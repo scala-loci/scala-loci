@@ -19,10 +19,11 @@ object Multitier:
       Annotations,
       Placements,
       Peers,
-      Access,
+      AccessPath,
       PlacedTransformations,
       PlacedStatements,
       PlacedExpressions,
+      RemoteAccess,
       Synthesis,
       Splitting,
       Invocation

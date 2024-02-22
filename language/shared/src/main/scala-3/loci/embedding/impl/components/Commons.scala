@@ -143,30 +143,31 @@ trait Commons:
     case Select(qualifier, _) => term.symbol.isStable && isStablePath(qualifier)
     case _ => false
 
-  def fullName(symbol: Symbol): String =
-    def fullName(symbol: Symbol, name: String): String =
+  def constructFullName(symbol: Symbol)(nameSeperatorSkip: Symbol => (String, String, Boolean)): String =
+    def constructFullName(symbol: Symbol, suffix: String): String =
       val owner = symbol.maybeOwner
 
-      val symbolName = if symbol.isType && symbol.isModuleDef && (symbol.name endsWith "$") then symbol.name.dropRight(1) else symbol.name
-//        if (symbol.name startsWith "$loci$multitier$")
-//          (owner.info member TermName(symbol.name.drop(16)) orElse symbol).name.toString
-//        else
-//          symbol.name
+      val (name, separator, skip) = nameSeperatorSkip(if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol)
 
-      if owner.exists && ((symbol.flags is Flags.Synthetic) || (symbolName startsWith "<") && (symbolName endsWith ">")) then
-        fullName(owner, name)
+      if owner.exists && suffix.nonEmpty && skip then
+        constructFullName(owner, suffix)
       else
-        val prefix = if !owner.exists || owner == defn.RootClass then symbolName else fullName(owner, symbolName)
+        val prefix = if !owner.exists || owner == defn.RootClass then name else constructFullName(owner, name)
 
-        if prefix.isEmpty || (prefix == "_root_" && name.nonEmpty) then
-          name
-        else if name.isEmpty then
+        if prefix.isEmpty || (prefix == "_root_" && suffix.nonEmpty) then
+          suffix
+        else if suffix.isEmpty then
           prefix
         else
-          val separator = if symbol.isType && !symbol.isPackageDef && !symbol.isModuleDef then "#" else "."
-          s"$prefix$separator$name"
-    end fullName
+          s"$prefix$separator$suffix"
+    end constructFullName
 
-    fullName(symbol, "")
-  end fullName
+    constructFullName(symbol, "")
+  end constructFullName
+
+  def fullName(symbol: Symbol): String =
+    constructFullName(symbol): symbol =>
+      (symbol.name,
+       if symbol.isType && !symbol.isPackageDef && !symbol.isModuleDef then "#" else ".",
+       symbol.isAnonymousClass || symbol.isAnonymousFunction || symbol.isPackageObject)
 end Commons

@@ -8,7 +8,7 @@ import utility.reflectionExtensions.*
 import scala.annotation.experimental
 
 @experimental
-trait Access:
+trait AccessPath:
   this: Component & Commons & Synthesis =>
   import quotes.reflect.*
 
@@ -43,4 +43,4 @@ trait Access:
     case _ =>
       None
   end multitierAccessPath
-end Access
+end AccessPath

@@ -96,7 +96,9 @@ object TypeToken:
     def serializeSymbol(symbol: Symbol): Option[List[TypeToken]] =
       Option.ensure(symbol.exists):
         val name = (if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol).name
-        if symbol.maybeOwner == defn.RootClass then
+        if symbol.isPackageObject then
+          serializeSymbol(symbol.owner)
+        else if symbol.maybeOwner == defn.RootClass then
           Some(List(escape(name)))
         else if symbol.maybeOwner.isPackageDef || symbol.maybeOwner.isModuleDef then
           serializeSymbol(symbol.maybeOwner) map { _ ++ List(token("."), escape(name)) }
@@ -119,7 +121,17 @@ object TypeToken:
           token("(") :: tuple
       case NoPrefix() =>
         Some(List.empty)
+      case tpe: TermRef if tpe.termSymbol.isPackageObject && tpe.qualifier =:= tpe.termSymbol.owner.typeRef =>
+        serializeType(tpe.qualifier, binders, path, pathPrefix)
       case tpe: NamedType =>
+        val termName =
+          tpe match
+            case _: TypeRef if !pathPrefix && tpe.typeSymbol.isClassDef && tpe.typeSymbol.isModuleDef =>
+              Some(tpe.typeSymbol.companionModule.name)
+            case _: TermRef =>
+              Some(tpe.name)
+            case _ =>
+              None
         val reference =
           tpe.qualifier match
             case TermRef(NoPrefix(), "_root_") | TypeRef(NoPrefix(), "_root_") =>
@@ -127,15 +139,14 @@ object TypeToken:
             case NoPrefix() | TermRef(_, _) | ThisType(_) | ParamRef(MethodType(_, _, _), _) =>
               serializeType(tpe.qualifier, binders, path = true, pathPrefix = true) map: prefix =>
                 if prefix.isEmpty then
-                  List(escape(tpe.name))
+                  List(escape(termName getOrElse tpe.name))
                 else
-                  prefix ++ List(token("."), escape(tpe.name))
+                  prefix ++ List(token("."), escape(termName getOrElse tpe.name))
             case _ =>
               serializeType(tpe.qualifier, binders, path = true, pathPrefix = true) map: prefix =>
-                prefix ++ List(token("#"), escape(tpe.name))
-        tpe match
-          case _: TermRef if !pathPrefix => reference map { _ ++ tokens(".", "type") }
-          case _ => reference
+                prefix ++ List(token("#"), escape(termName getOrElse tpe.name))
+        termName.fold(reference): _ =>
+          if pathPrefix then reference else reference map { _ ++ tokens(".", "type") }
       case tpe: ThisType =>
         val symbol = tpe.tref.typeSymbol
         if symbol == defn.RootClass then

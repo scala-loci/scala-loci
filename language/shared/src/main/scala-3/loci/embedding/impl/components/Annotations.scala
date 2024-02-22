@@ -64,4 +64,9 @@ trait Annotations:
         symbol,
         symbols.targetName,
         List(Literal(StringConstant(name))))
+
+  def targetName(symbol: Symbol) =
+    symbol.getAnnotation(symbols.targetName) match
+      case Some(Apply(_, List(Literal(StringConstant(name))))) => name
+      case _ => symbol.name
 end Annotations
