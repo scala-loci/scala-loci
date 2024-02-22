@@ -52,6 +52,12 @@ object reflectionExtensions:
 
     def isModuleDef =
       symbol.flags is quotes.reflect.Flags.Module
+
+    def isPackageObject =
+      (symbol.maybeOwner.flags is quotes.reflect.Flags.Package) &&
+      (symbol.flags is quotes.reflect.Flags.Module) &&
+      (symbol.flags is quotes.reflect.Flags.Synthetic) &&
+      (symbol.name == "package" || (symbol.name endsWith "$package"))
   end extension
 
   extension (using Quotes)(flags: quotes.reflect.Flags)
@@ -181,7 +187,7 @@ object reflectionExtensions:
         case tpe @ MethodType(paramNames, paramTypes, resType) =>
           MethodType(paramNames)(_ => paramTypes, resType.withResultType(res).substituteParamRefs(tpe, _))
         case tpe @ PolyType(paramNames, paramBounds, resType) =>
-          MethodType(paramNames)(_ => paramBounds, resType.withResultType(res).substituteParamRefs(tpe, _))
+          PolyType(paramNames)(_ => paramBounds, resType.withResultType(res).substituteParamRefs(tpe, _))
         case tpe @ TypeLambda(paramNames, paramBounds, resType) =>
           TypeLambda(paramNames, _ => paramBounds, resType.withResultType(res).substituteParamRefs(tpe, _))
         case ByNameType(underlying) =>

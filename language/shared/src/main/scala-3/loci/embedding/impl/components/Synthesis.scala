@@ -203,8 +203,13 @@ trait Synthesis:
           impls collect { case impl if impl.owner == symbol => impl }
 
         val indices = mutable.Map.empty[Symbol, Int]
+
+        val tree =
+          try module.tree
+          catch case NonFatal(_) => Literal(NullConstant())
+
         val declarations =
-          try module.tree match
+          module.tree match
             case ClassDef(_, _, _, _, body) =>
               body flatMap:
                 case stat @ (_: ValDef | _: DefDef | _: ClassDef)
@@ -224,9 +229,6 @@ trait Synthesis:
                 case _ =>
                   List.empty
             case _ =>
-              List.empty
-          catch
-            case NonFatal(_) =>
               List.empty
 
         val decls =
