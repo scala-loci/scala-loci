@@ -198,6 +198,9 @@ object reflectionExtensions:
     def finalResultType: quotes.reflect.TypeRepr =
       tpe.resultType.contextFunctionResultType
 
+    def dealiasNonOpaque: quotes.reflect.TypeRepr =
+      if tpe.typeSymbol.typeRef.isOpaqueAlias then tpe else tpe.dealias
+
     def widenDealias: quotes.reflect.TypeRepr =
       val dealiased = tpe.dealias
       if tpe != dealiased then
@@ -206,6 +209,17 @@ object reflectionExtensions:
         val widened = tpe.widen
         if tpe != widened then
           widened.widenDealias
+        else
+          tpe
+
+    def widenDealiasNonOpaque: quotes.reflect.TypeRepr =
+      val dealiased = tpe.dealiasNonOpaque
+      if tpe != dealiased then
+        dealiased.widenDealiasNonOpaque
+      else
+        val widened = tpe.widen
+        if tpe != widened then
+          widened.widenDealiasNonOpaque
         else
           tpe
 
@@ -253,22 +267,55 @@ object reflectionExtensions:
         quotes.reflect.LambdaType | quotes.reflect.RecursiveType]) =
       Substitutor.substituteParamRefsInType(substitutionBinders, tpe)
 
-    def resolvedMemberType(symbol: quotes.reflect.Symbol) =
+    def resolvedMemberType(symbol: quotes.reflect.Symbol): Option[quotes.reflect.TypeRepr] =
       import quotes.reflect.*
-
-      def memberTypeInRefinement(tpe: TypeRepr, name: String): Option[TypeRepr] = tpe match
-        case Refinement(_, `name`, info) => Some(info)
-        case Refinement(parent, _, _) => memberTypeInRefinement(parent, name)
-        case _ => None
-
-      memberTypeInRefinement(tpe, symbol.name) orElse
-      memberTypeInRefinement(tpe.dealias, symbol.name) getOrElse
-      tpe.memberType(tpe.baseClasses
-        collectFirst Function.unlift { base =>
+      val baseType = tpe.baseType
+      val memberTypeInRefinement =
+        if symbol.isType then baseType.typeMemberTypeInRefinement(symbol.name)
+        else if symbol.isField then baseType.fieldMemberTypeInRefinement(symbol.name)
+        else None
+      memberTypeInRefinement orElse {
+        baseType.baseClasses collectFirst Function.unlift { base =>
           val overriding = symbol.overridingSymbol(base)
-          Option.when(overriding.exists)(overriding)
+          Option.when(overriding.exists)(baseType.memberType(overriding))
         }
-        getOrElse symbol)
+      }
+
+    private inline def baseType = tpe match
+      case quotes.reflect.TypeBounds(_, hi) => hi
+      case _ => tpe
+
+    private inline def typeMemberTypeInRefinement(inline name: String) =
+      tpe.memberTypeInRefinement(name) {
+        case _: quotes.reflect.TypeBounds => true
+        case _ => false
+      }
+
+    private inline def fieldMemberTypeInRefinement(inline name: String) =
+      tpe.memberTypeInRefinement(name) {
+        case _: quotes.reflect.TypeBounds | _: quotes.reflect.ByNameType | _: quotes.reflect.MethodOrPoly => false
+        case _ => true
+      }
+
+    private def memberTypeInRefinement(member: String)(conforms: quotes.reflect.TypeRepr => Boolean): Option[quotes.reflect.TypeRepr] =
+      import quotes.reflect.*
+      tpe match
+        case Refinement(parent, name, info) =>
+          if name == member && conforms(info) then Some(info) else parent.memberTypeInRefinement(member)(conforms)
+        case AndType(left, right) =>
+          (left.memberTypeInRefinement(member)(conforms), right.memberTypeInRefinement(member)(conforms)) match
+            case (Some(left), Some(right)) => Some(AndType(left, right))
+            case (left, right) => left orElse right
+        case _ =>
+          val dealiased = tpe.dealiasNonOpaque
+          if tpe != dealiased then
+            dealiased.memberTypeInRefinement(member)(conforms)
+          else
+            val widened = tpe.widen
+            if tpe != widened then
+              widened.memberTypeInRefinement(member)(conforms)
+            else
+              None
   end extension
 
   private object Substitutor:
