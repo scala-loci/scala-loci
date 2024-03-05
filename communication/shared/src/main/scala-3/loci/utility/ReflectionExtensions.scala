@@ -56,8 +56,8 @@ object reflectionExtensions:
     def isPackageObject =
       (symbol.maybeOwner.flags is quotes.reflect.Flags.Package) &&
       (symbol.flags is quotes.reflect.Flags.Module) &&
-      (symbol.flags is quotes.reflect.Flags.Synthetic) &&
-      (symbol.name == "package" || (symbol.name endsWith "$package"))
+      (symbol.name == "package" || (symbol.name endsWith "$package") ||
+       symbol.name == "package$" || (symbol.name endsWith "$package$"))
   end extension
 
   extension (using Quotes)(flags: quotes.reflect.Flags)
@@ -284,6 +284,26 @@ object reflectionExtensions:
         baseType.baseClasses collectFirst Function.unlift { base =>
           val overriding = symbol.overridingSymbol(base)
           Option.when(overriding.exists)(baseType.memberType(overriding))
+        }
+      }
+
+    def resolvedTypeMemberType(name: String): Option[quotes.reflect.TypeRepr] =
+      import quotes.reflect.*
+      val baseType = tpe.baseType
+      baseType.typeMemberTypeInRefinement(name) orElse {
+        baseType.baseClasses collectFirst Function.unlift { base =>
+          val symbol = base.typeMember(name)
+          Option.when(symbol.exists)(baseType.memberType(symbol))
+        }
+      }
+
+    def resolvedFieldMemberType(name: String): Option[quotes.reflect.TypeRepr] =
+      import quotes.reflect.*
+      val baseType = tpe.baseType
+      baseType.fieldMemberTypeInRefinement(name) orElse {
+        baseType.baseClasses collectFirst Function.unlift { base =>
+          val symbol = base.fieldMember(name)
+          Option.when(symbol.exists)(baseType.memberType(symbol))
         }
       }
 
@@ -608,6 +628,37 @@ object reflectionExtensions:
     def transformSubTrees[Tr <: Tree](trees: List[Tr])(owner: Symbol): List[Tr] =
       underlying.superTransformSubTrees(trees)(owner)
   end SafeTreeMap
+
+  trait TupleExtractor[Q <: Quotes & Singleton](val quotes: Q):
+    import quotes.reflect.*
+
+    private given quotes.type = quotes
+
+    private val nil = TypeRepr.of[EmptyTuple].typeSymbol
+    private val cons = TypeRepr.of[? *: ?].typeSymbol
+
+    def apply(elements: List[TypeRepr]): TypeRepr =
+      if elements.nonEmpty && elements.sizeIs < 23 then
+        defn.TupleClass(elements.size).typeRef.appliedTo(elements)
+      else
+        elements.foldRight[TypeRepr](nil.typeRef): (tpe, tuple) =>
+          cons.typeRef.appliedTo(List(tpe, tuple))
+
+    @targetName("unapplyType")
+    def unapply(tpe: TypeRepr): Option[List[TypeRepr]] = tpe match
+      case _ if tpe.typeSymbol == nil =>
+        Some(List.empty)
+      case AppliedType(tycon, List(head, this(tail))) if tycon.typeSymbol == cons =>
+        Some(head :: tail)
+      case AppliedType(_, elements) if tpe.isTupleN =>
+        Some(elements)
+      case _ =>
+        None
+
+    @targetName("unapplyTerm")
+    def unapply(tpe: Term): Option[List[Term]] =
+      ???
+  end TupleExtractor
 
   extension (using Quotes)(printerModule: quotes.reflect.PrinterModule)
     def SafeTypeReprCode = safeTypeReprPrinter(quotes.reflect.Printer.TypeReprCode)

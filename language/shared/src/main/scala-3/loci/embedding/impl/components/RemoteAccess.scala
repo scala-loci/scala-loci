@@ -34,9 +34,37 @@ trait RemoteAccess:
     case '\\' => "$bslash"
     case c => if !Character.isJavaIdentifierPart(c) then f"$$u${c.toInt}%04X" else c.toString
 
-  private def guessClassName(symbol: Symbol) =
-    constructFullName(symbol): symbol =>
-      (encodeName(targetName(symbol)), if symbol.isPackageDef then "." else "$", symbol.isPackageObject)
+  private def classFileName(symbol: Symbol) =
+    constructFullName(symbol,
+      name = symbol => encodeName(targetName(symbol)),
+      separator = symbol => if symbol.isPackageDef then "." else "$",
+      skip = _.isPackageObject)
+
+  private def mangledSymbolName(symbol: Symbol) =
+    f"loci$$${s"${implementationForm(symbol)} ${fullName(symbol)}".hashCode}%08x"
+
+  private def implementationForm(symbol: Symbol) =
+    if symbol.flags is Flags.Module then "object"
+    else if symbol.flags is Flags.Trait then "trait"
+    else "class"
+
+  private def accessorSignature(name: String, params: List[List[Symbol]], result: TypeRepr) =
+    val paramsSignature = params flatMap: params =>
+      if params.isEmpty || params.head.isTerm then
+        TypeToken.`(` :: ((params flatMap { param => TypeToken.`,` ++ TypeToken.typeSignature(param.info) }).drop(2) :+ TypeToken.`)`)
+      else
+        List.empty
+    val signature =
+      TypeToken(name) :: paramsSignature ++ TypeToken.`:` ++ TypeToken.typeSignature(result)
+    TypeToken.serialize(signature)
+
+  private val unknownTransmittableSignature = "########"
+
+  private val abstractTransmittableSignature = "abstract"
+
+  private def transmittableSignature(term: Term) =
+    TermToken.serializeTerm(term).toOption.fold(unknownTransmittableSignature): term =>
+      f"${term.hashCode}%08x"
 
   def synthesizeAccessors(module: Symbol): List[Definition] =
     val tree =
@@ -45,7 +73,7 @@ trait RemoteAccess:
 
     tree match
       case tree: ClassDef => synthesizeAccessorsFromTree(tree)
-      case _ => synthesizeAccessorsFromClass(guessClassName(tree.symbol))
+      case _ => synthesizeAccessorsFromClass(classFileName(tree.symbol))
   end synthesizeAccessors
 
   private def synthesizeAccessorsFromTree(tree: ClassDef): List[Definition] =
