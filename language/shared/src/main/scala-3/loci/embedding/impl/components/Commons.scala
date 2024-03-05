@@ -143,31 +143,31 @@ trait Commons:
     case Select(qualifier, _) => term.symbol.isStable && isStablePath(qualifier)
     case _ => false
 
-  def constructFullName(symbol: Symbol)(nameSeperatorSkip: Symbol => (String, String, Boolean)): String =
+  def constructFullName(symbol: Symbol, name: Symbol => String, separator: Symbol => String, skip: Symbol => Boolean): String =
     def constructFullName(symbol: Symbol, suffix: String): String =
-      val owner = symbol.maybeOwner
+      val current = if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol
+      val owner = current.maybeOwner
+      val currentName = name(current)
 
-      val (name, separator, skip) = nameSeperatorSkip(if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol)
-
-      if owner.exists && suffix.nonEmpty && skip then
+      if owner.exists && suffix.nonEmpty && skip(current) then
         constructFullName(owner, suffix)
       else
-        val prefix = if !owner.exists || owner == defn.RootClass then name else constructFullName(owner, name)
+        val prefix = if !owner.exists || owner == defn.RootClass then currentName else constructFullName(owner, currentName)
 
         if prefix.isEmpty || (prefix == "_root_" && suffix.nonEmpty) then
           suffix
         else if suffix.isEmpty then
           prefix
         else
-          s"$prefix$separator$suffix"
+          s"$prefix${separator(current)}$suffix"
     end constructFullName
 
     constructFullName(symbol, "")
   end constructFullName
 
   def fullName(symbol: Symbol): String =
-    constructFullName(symbol): symbol =>
-      (symbol.name,
-       if symbol.isType && !symbol.isPackageDef && !symbol.isModuleDef then "#" else ".",
-       symbol.isAnonymousClass || symbol.isAnonymousFunction || symbol.isPackageObject)
+    constructFullName(symbol,
+      name = _.name,
+      separator = symbol => if symbol.isType && !symbol.isPackageDef && !symbol.isModuleDef then "#" else ".",
+      skip = symbol => symbol.isAnonymousClass || symbol.isAnonymousFunction || symbol.isPackageObject)
 end Commons

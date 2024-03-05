@@ -9,7 +9,7 @@ import scala.quoted.*
 import scala.util.control.Breaks.{break, tryBreakable}
 
 @experimental
-case class TypeToken(token: String, escaped: String)
+case class TypeToken private (token: String, escaped: String)
 
 @experimental
 object TypeToken:
@@ -54,41 +54,173 @@ object TypeToken:
       else
         TypeToken(token, escaped)
 
-  private trait TupleExtractor[Q <: Quotes & Singleton](val quotes: Q):
-    import quotes.reflect.*
-
-    private given quotes.type = quotes
-
-    private val nil = TypeRepr.of[EmptyTuple].typeSymbol
-    private val cons = TypeRepr.of[? *: ?].typeSymbol
-
-    def apply(elements: List[TypeRepr]): TypeRepr =
-      if elements.nonEmpty && elements.sizeIs < 23 then
-        defn.TupleClass(elements.size).typeRef.appliedTo(elements)
-      else
-        elements.foldRight[TypeRepr](nil.typeRef): (tpe, tuple) =>
-          cons.typeRef.appliedTo(List(tpe, tuple))
-
-    def unapply(tpe: TypeRepr): Option[List[TypeRepr]] = tpe match
-      case _ if tpe.typeSymbol == nil =>
-        Some(List.empty)
-      case AppliedType(tycon, List(head, tail)) if tycon.typeSymbol == cons =>
-        unapply(tail) map { head :: _ }
-      case AppliedType(_, elements) if tpe.isTupleN =>
-        Some(elements)
-      case _ =>
-        None
-  end TupleExtractor
-
   def apply(token: String): TypeToken = escape(token)
+
+  def apply(tokens: String*): List[TypeToken] = tokens.toList map escape
+
+  def apply(tokens: List[String]): List[TypeToken] = tokens map escape
+
+  val `.` = token(".")
+  val `#` = token("#")
+  val `(` = token("(")
+  val `)` = token(")")
+  val `[` = token("[")
+  val `]` = token("]")
+  val `{` = token("{")
+  val `}` = token("}")
+  val `:` = tokens(":", " ")
+  val `,` = tokens(",", " ")
+  val `;` = tokens(";", " ")
+  val `&` = tokens(" ", "&", " ")
+  val `|` = tokens(" ", "|", " ")
 
   def serialize(tokens: List[TypeToken]): String =
     (tokens flatMap { _.escaped }).mkString
 
-  def serializeType(using Quotes)(tpe: quotes.reflect.TypeRepr): Option[String] =
-    fromType(tpe) map serialize
+  def serializeTypeSignature(using Quotes)(tpe: quotes.reflect.TypeRepr): String =
+    serialize(typeSignature(tpe))
 
-  def fromType(using Quotes)(tpe: quotes.reflect.TypeRepr): Option[List[TypeToken]] =
+  def typeSignature(using Quotes)(tpe: quotes.reflect.TypeRepr): List[TypeToken] =
+    import quotes.reflect.*
+
+    object Tuple extends TupleExtractor(quotes)
+
+    def tuple(size: Int) = tokens("scala", ".", s"Tuple$size")
+    val any = tokens("scala", ".", "Any")
+
+    def underlying(tpe: TypeRepr): TypeRepr = tpe match
+      case tpe: AppliedType => underlying(tpe.tycon)
+      case tpe: AnnotatedType => underlying(tpe.underlying)
+      case tpe: Refinement => underlying(tpe.parent)
+      case tpe: ByNameType => underlying(tpe.underlying)
+      case _ => tpe
+
+    def symbolSignature(symbol: Symbol): List[TypeToken] =
+      val name = (if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol).name
+      if symbol.isPackageObject then
+        symbolSignature(symbol.owner)
+      else if symbol.maybeOwner == defn.RootClass then
+        List(escape(name))
+      else if symbol.maybeOwner.isClassDef && !symbol.maybeOwner.isPackageDef && !symbol.maybeOwner.isModuleDef then
+        symbolSignature(symbol.maybeOwner) ++ List(`#`, escape(name))
+      else
+        symbolSignature(symbol.maybeOwner) ++ List(`.`, escape(name))
+
+    def typeSignature(tpe: TypeRepr): List[TypeToken] =
+      underlying(tpe.dealiasNonOpaque) match
+        case _: AndType | _: OrType if tpe.typeSymbol.exists =>
+          symbolSignature(tpe.typeSymbol)
+        case Tuple(elements) =>
+          tuple(elements.size)
+        case tpe if tpe.typeSymbol.exists =>
+          symbolSignature(tpe.typeSymbol)
+        case tpe: ByNameType =>
+          typeSignature(tpe.underlying)
+        case tpe: TermRef =>
+          tpe.qualifier.resolvedFieldMemberType(tpe.name).fold(any)(typeSignature)
+        case tpe: TypeRef =>
+          tpe.qualifier.resolvedTypeMemberType(tpe.name).fold(any)(typeSignature)
+        case tpe: TypeBounds =>
+          typeSignature(tpe.hi)
+        case tpe: AndType =>
+          val left = typeSignature(tpe.left)
+          val right = typeSignature(tpe.right)
+          if left == any then
+            right
+          else if right == any then
+            left
+          else
+            val leftTokens =
+              if tpe.left.typeSymbol.exists then
+                left
+              else underlying(tpe.left.dealiasNonOpaque) match
+                case _: OrType => (TypeToken.`(` :: left) :+ TypeToken.`)`
+                case _ => left
+            val rightTokens =
+              if tpe.right.typeSymbol.exists then
+                right
+              else underlying(tpe.right.dealiasNonOpaque) match
+                case _: OrType => (TypeToken.`(` :: right) :+ TypeToken.`)`
+                case _ => right
+            leftTokens ++ TypeToken.`&` ++ rightTokens
+        case tpe: OrType =>
+          val left = typeSignature(tpe.left)
+          val right = typeSignature(tpe.right)
+          if left == any || right == any then any
+          else left ++ TypeToken.`|` ++ right
+        case ConstantType(BooleanConstant(value)) =>
+          tokens("scala", ".", "Boolean")
+        case ConstantType(ByteConstant(value)) =>
+          tokens("scala", ".", "Byte")
+        case ConstantType(ShortConstant(value)) =>
+          tokens("scala", ".", "Short")
+        case ConstantType(IntConstant(value)) =>
+          tokens("scala", ".", "Int")
+        case ConstantType(LongConstant(value)) =>
+          tokens("scala", ".", "Long")
+        case ConstantType(FloatConstant(value)) =>
+          tokens("scala", ".", "Float")
+        case ConstantType(DoubleConstant(value)) =>
+          tokens("scala", ".", "Double")
+        case ConstantType(CharConstant(value)) =>
+          tokens("scala", ".", "Char")
+        case ConstantType(StringConstant(value)) =>
+          tokens("scala", ".", "Predef", ".", "String")
+        case ConstantType(UnitConstant()) =>
+          tokens("scala", ".", "Unit")
+        case ConstantType(NullConstant()) =>
+          tokens("scala", ".", "Null")
+        case _ =>
+          any
+
+    def potentialMethodTypeSignature(tpe: TypeRepr, isMethodType: Boolean): List[TypeToken] = tpe match
+      case tpe: ByNameType =>
+        if isMethodType then
+          typeSignature(tpe.underlying)
+        else
+          `:` ++  typeSignature(tpe.underlying)
+
+      case tpe: PolyType =>
+        tpe.resType match
+          case _: MethodOrPoly => potentialMethodTypeSignature(tpe.resType, isMethodType = true)
+          case _ => `:` ++ typeSignature(tpe.resType)
+
+      case tpe: MethodType =>
+        val separator = tpe.resType match
+          case _: MethodOrPoly => List.empty
+          case _ => `:`
+
+        val params = tpe.paramTypes.foldRight(List.empty[TypeToken]): (tpe, params) =>
+          val param = typeSignature(tpe)
+          if params.isEmpty then param else param ++ (`,` ++ params)
+
+        val resType = potentialMethodTypeSignature(tpe.resType, isMethodType = true)
+
+        `(` :: (params :+ `)`) ++ separator ++ resType
+
+      case _ =>
+        typeSignature(tpe)
+    end potentialMethodTypeSignature
+
+    potentialMethodTypeSignature(tpe, isMethodType = false)
+  end typeSignature
+
+  inline def serializeType(using Quotes)(
+    inline `tpe | (tpe, from)`: quotes.reflect.TypeRepr | (quotes.reflect.TypeRepr, quotes.reflect.Symbol)): Option[String] =
+    inline `tpe | (tpe, from)` match
+      case tpe: quotes.reflect.TypeRepr => serializeTypeImpl(tpe, quotes.reflect.defn.RootClass)
+      case (tpe: quotes.reflect.TypeRepr, from: quotes.reflect.Symbol) => serializeTypeImpl(tpe, from)
+
+  private def serializeTypeImpl(using Quotes)(tpe: quotes.reflect.TypeRepr, from: quotes.reflect.Symbol): Option[String] =
+    fromType(tpe, from) map serialize
+
+  inline def fromType(using Quotes)(
+    inline `tpe | (tpe, from)`: quotes.reflect.TypeRepr | (quotes.reflect.TypeRepr, quotes.reflect.Symbol)): Option[List[TypeToken]] =
+    inline `tpe | (tpe, from)` match
+      case tpe: quotes.reflect.TypeRepr => fromTypeImpl(tpe, quotes.reflect.defn.RootClass)
+      case (tpe: quotes.reflect.TypeRepr, from: quotes.reflect.Symbol) => fromTypeImpl(tpe, from)
+
+  private def fromTypeImpl(using Quotes)(tpe: quotes.reflect.TypeRepr, from: quotes.reflect.Symbol): Option[List[TypeToken]] =
     import quotes.reflect.*
 
     object Tuple extends TupleExtractor(quotes)
@@ -101,33 +233,45 @@ object TypeToken:
         else if symbol.maybeOwner == defn.RootClass then
           Some(List(escape(name)))
         else if symbol.maybeOwner.isPackageDef || symbol.maybeOwner.isModuleDef then
-          serializeSymbol(symbol.maybeOwner) map { _ ++ List(token("."), escape(name)) }
+          serializeSymbol(symbol.maybeOwner) map { _ ++ List(`.`, escape(name)) }
         else if symbol.maybeOwner.isClassDef then
-          serializeSymbol(symbol.maybeOwner) map { _ ++ List(token("#"), escape(name)) }
+          serializeSymbol(symbol.maybeOwner) map { _ ++ List(`#`, escape(name)) }
         else
           None
+
+    def serializeOuterChain(from: Symbol, to: Symbol): Option[List[TypeToken]] =
+      Option.ensure(from.exists && from != defn.RootClass):
+        if from == to then
+          Some(List(token("!")))
+        else if from.maybeOwner.isClassDef && from.maybeOwner != defn.RootClass then
+          serializeOuterChain(from.maybeOwner, to) map { token("!") :: _ }
+        else
+          serializeOuterChain(from.maybeOwner, to)
 
     def serializeType(
         tpe: TypeRepr,
         binders: Set[LambdaType],
         path: Boolean,
         pathPrefix: Boolean): Option[List[TypeToken]] = tpe match
+
       case Tuple(elements) if elements.sizeIs > 1 =>
         val tuple = elements.foldRight(Option(List.empty[TypeToken])): (tpe, elements) =>
           serializeType(tpe, binders, path = false, pathPrefix = false) flatMap: tpe =>
             elements map: elements =>
-              if elements.isEmpty then tpe :+ token(")") else tpe ++ (tokens(",", " ") ++ elements)
+              if elements.isEmpty then tpe :+ `)` else tpe ++ (`,` ++ elements)
         tuple map: tuple =>
-          token("(") :: tuple
-      case NoPrefix() =>
-        Some(List.empty)
+          `(` :: tuple
+      case tpe: ByNameType =>
+        serializeType(tpe.underlying, binders, path, pathPrefix) map:
+          tokens("=>", " ") ++ _
       case tpe: TermRef if tpe.termSymbol.isPackageObject && tpe.qualifier =:= tpe.termSymbol.owner.typeRef =>
         serializeType(tpe.qualifier, binders, path, pathPrefix)
       case tpe: NamedType =>
+        val symbol = tpe.typeSymbol
         val termName =
           tpe match
-            case _: TypeRef if !pathPrefix && tpe.typeSymbol.isClassDef && tpe.typeSymbol.isModuleDef =>
-              Some(tpe.typeSymbol.companionModule.name)
+            case _: TypeRef if !pathPrefix && symbol.isClassDef && symbol.isModuleDef =>
+              Some(symbol.companionModule.name)
             case _: TermRef =>
               Some(tpe.name)
             case _ =>
@@ -135,34 +279,39 @@ object TypeToken:
         val reference =
           tpe.qualifier match
             case TermRef(NoPrefix(), "_root_") | TypeRef(NoPrefix(), "_root_") =>
-              Some(List(escape(tpe.name)))
-            case NoPrefix() | TermRef(_, _) | ThisType(_) | ParamRef(MethodType(_, _, _), _) =>
+              Some(List(escape(termName getOrElse tpe.name)))
+            case TermRef(_, _) | ThisType(_) | ParamRef(MethodType(_, _, _), _) =>
               serializeType(tpe.qualifier, binders, path = true, pathPrefix = true) map: prefix =>
                 if prefix.isEmpty then
                   List(escape(termName getOrElse tpe.name))
                 else
-                  prefix ++ List(token("."), escape(termName getOrElse tpe.name))
+                  prefix ++ List(`.`, escape(termName getOrElse tpe.name))
             case _ =>
               serializeType(tpe.qualifier, binders, path = true, pathPrefix = true) map: prefix =>
-                prefix ++ List(token("#"), escape(termName getOrElse tpe.name))
+                prefix ++ List(`#`, escape(termName getOrElse tpe.name))
         termName.fold(reference): _ =>
           if pathPrefix then reference else reference map { _ ++ tokens(".", "type") }
       case tpe: ThisType =>
         val symbol = tpe.tref.typeSymbol
         if symbol == defn.RootClass then
           Some(List.empty)
-        else if symbol.isPackageDef || symbol.isModuleDef then
-          serializeSymbol(symbol)
         else
-          serializeSymbol(symbol) map { _ ++ tokens(".", "this") }
+          val outerChain =
+            Option.ensure(from != defn.RootClass):
+              serializeOuterChain(from, symbol) map { _ ++ tokens(".", "this") }
+          val chain =
+            outerChain orElse:
+              val chain = serializeSymbol(symbol)
+              if symbol.isPackageDef || symbol.isModuleDef then chain else  chain map { _ ++ tokens(".", "this") }
+          if pathPrefix then chain else chain map { _ ++ tokens(".", "type") }
       case tpe: AppliedType =>
         val args = tpe.args.foldRight(Option(List.empty[TypeToken])): (tpe, args) =>
           serializeType(tpe, binders, path = false, pathPrefix = false) flatMap: tpe =>
             args map: args =>
-              if args.isEmpty then tpe else tpe ++ (tokens(",", " ") ++ args)
+              if args.isEmpty then tpe else tpe ++ (`,` ++ args)
         args flatMap: args =>
           serializeType(tpe.tycon, binders, path = true, pathPrefix = false) map:
-            _ ++ (token("[") :: args) :+ token("]")
+            _ ++ (`[` :: args) :+ `]`
       case ParamRef(binder: LambdaType, paramNum) =>
         Option.when(binders contains binder):
           token("!") :: escape(binder.paramNames(paramNum)) :: Nil
@@ -181,31 +330,33 @@ object TypeToken:
               token("def") :: token(" ") :: escape(tpe.name) :: _
           case _ =>
             serializeType(tpe.info, binders, path = false, pathPrefix = false) map:
-              token("val") :: token(" ") :: escape(tpe.name) :: token(":") :: token(" ") :: _
+              token("val") :: token(" ") :: escape(tpe.name) :: `:` ++ _
         serializeType(tpe.parent, binders, path = !nested, pathPrefix = false) flatMap: parent =>
           refinement map: refinement =>
             val refined =
               if nested then
-                parent.dropRight(2) ++ tokens(";", " ") ++ refinement ++ tokens(" ", "}")
+                parent.dropRight(2) ++ `;` ++ refinement ++ tokens(" ", "}")
               else
                 parent ++ tokens(" ", "{", " ") ++ refinement ++ tokens(" ", "}")
-            if path then (token("(") :: refined) :+ token(")") else refined
+            if path then (`(` :: refined) :+ `)` else refined
       case tpe: AndType =>
         serializeType(tpe.left, binders, path = false, pathPrefix = false) flatMap: left =>
           serializeType(tpe.right, binders, path = false, pathPrefix = false) map: right =>
             val leftTokens = tpe.left match
-              case _: OrType => (token("(") :: left) :+ token(")")
+              case _: OrType => (`(` :: left) :+ `)`
               case _ => left
             val rightTokens = tpe.right match
-              case _: OrType => (token("(") :: right) :+ token(")")
+              case _: OrType => (`(` :: right) :+ `)`
               case _ => right
-            val conjunction = leftTokens ++ tokens(" ", "&", " ") ++ rightTokens
-            if path then (token("(") :: conjunction) :+ token(")") else conjunction
+            val conjunction = leftTokens ++ `&` ++ rightTokens
+            if path then (`(` :: conjunction) :+ `)` else conjunction
       case tpe: OrType =>
         serializeType(tpe.left, binders, path = false, pathPrefix = false) flatMap: left =>
           serializeType(tpe.right, binders, path = false, pathPrefix = false) map: right =>
-            val disjunction = left ++ tokens(" ", "|", " ") ++ right
-            if path then (token("(") :: disjunction) :+ token(")") else disjunction
+            val disjunction = left ++ `|` ++ right
+            if path then (`(` :: disjunction) :+ `)` else disjunction
+      case tpe: TypeBounds =>
+        serializeTypeBounds(tpe, binders) map { token("?") :: _ }
       case ConstantType(BooleanConstant(value)) =>
         Some(tokens(value.toString, ".", "type"))
       case ConstantType(ByteConstant(value)) =>
@@ -256,16 +407,16 @@ object TypeToken:
       case tpe: ByNameType =>
         Option.ensure(!isMethodType):
           serializeType(tpe.underlying, binders, path = false, pathPrefix = false) map: tpe =>
-            tokens(":", " ") ++ tpe
+            `:` ++ tpe
 
       case tpe: MethodOrPoly =>
         val tpeSeparator = tpe.resType match
           case _: MethodOrPoly => List.empty
-          case _ => tokens(":", " ")
+          case _ => `:`
 
         val (paramSeparator, open, close) = tpe match
-          case _: MethodType => (tokens(":", " "), token("("), List(token(")")) ++ tpeSeparator)
-          case _: PolyType => (List.empty, token("["), List(token("]")) ++ tpeSeparator)
+          case _: MethodType => (`:`, `(`, `)`)
+          case _: PolyType => (List.empty, `[`, `]`)
 
         val paramTypes = tpe.paramTypes.foldRight(Option(List.empty[List[TypeToken]])): (tpe, paramTypes) =>
           val serializedType =
@@ -277,18 +428,18 @@ object TypeToken:
           (tpe.paramNames zip paramTypes).foldRight(Option(List.empty[TypeToken])):
             case ((name, tpe), params) => params map: params =>
               val param = escape(name) :: paramSeparator ++ tpe
-              if params.isEmpty then param else param ++ (tokens(",", " ") ++ params)
+              if params.isEmpty then param else param ++ (`,` ++ params)
 
         params flatMap: params =>
           serializePotentialMethodType(tpe.resType, binders + tpe, isMethodType = true) map: resType =>
-            open :: params ++ close ++ resType
+            open :: params ++ (close :: tpeSeparator ++ resType)
 
       case _ =>
         serializeType(tpe, binders, path = false, pathPrefix = false)
     end serializePotentialMethodType
 
     serializePotentialMethodType(tpe, Set.empty, isMethodType = false)
-  end fromType
+  end fromTypeImpl
 
   def deserialize(string: String): List[TypeToken] =
     val length = string.length
@@ -331,6 +482,10 @@ object TypeToken:
         buildToken()
         next()
         tokens ::= token("<:")
+      case '=' if hasNext && peak() == '>' =>
+        buildToken()
+        next()
+        tokens ::= token("=>")
       case '(' if hasNext && peak() == ')' =>
         buildToken()
         next()
@@ -349,10 +504,22 @@ object TypeToken:
     tokens.reverse
   end deserialize
 
-  def deserializeType(using Quotes)(tokens: String): Option[quotes.reflect.TypeRepr] =
-    toType(deserialize(tokens))
+  inline def deserializeType(using Quotes)(
+    inline `tokens | (tokens, from)`: String | (String, quotes.reflect.Symbol)): Option[quotes.reflect.TypeRepr] =
+    inline `tokens | (tokens, from)` match
+      case tokens: String => deserializeTypeImpl(tokens, quotes.reflect.defn.RootClass)
+      case (tokens: String, from: quotes.reflect.Symbol) => deserializeTypeImpl(tokens, from)
 
-  def toType(using Quotes)(tokens: List[TypeToken]): Option[quotes.reflect.TypeRepr] =
+  private def deserializeTypeImpl(using Quotes)(tokens: String, from: quotes.reflect.Symbol): Option[quotes.reflect.TypeRepr] =
+    toType(deserialize(tokens), from)
+
+  inline def toType(using Quotes)(
+    inline `tokens | (tokens, from)`: List[TypeToken] | (List[TypeToken], quotes.reflect.Symbol)): Option[quotes.reflect.TypeRepr] =
+    inline `tokens | (tokens, from)` match
+      case tokens: List[TypeToken] => toTypeImpl(tokens, quotes.reflect.defn.RootClass)
+      case (tokens: List[TypeToken], from: quotes.reflect.Symbol) => toTypeImpl(tokens, from)
+
+  private def toTypeImpl(using Quotes)(tokens: List[TypeToken], from: quotes.reflect.Symbol): Option[quotes.reflect.TypeRepr] =
     import quotes.reflect.*
 
     object Tuple extends TupleExtractor(quotes)
@@ -409,6 +576,18 @@ object TypeToken:
     def markPrefixPath(tokens: List[TypeToken]) = tokens match
       case token("." | "#") :: _ => prefixPathMarker :: tokens
       case _ => tokens
+
+    def deserializeOuterChain(from: Symbol, tokens: List[TypeToken]): Option[(Symbol, List[TypeToken])] =
+      Option.ensure(from.exists && from != defn.RootClass):
+        tokens match
+          case token("!") :: token(".") :: token("this") :: token(".") :: token("type") :: tail =>
+            Some(from, tail)
+          case token("!") :: token(".") :: token("this") :: tail =>
+            Some(from, tail)
+          case token("!") :: tail if from.maybeOwner.isClassDef && from.maybeOwner != defn.RootClass =>
+            deserializeOuterChain(from.maybeOwner, tail)
+          case _ =>
+            deserializeOuterChain(from.maybeOwner, tokens)
 
     def deserializeType(
         tokens: List[TypeToken],
@@ -508,13 +687,27 @@ object TypeToken:
               args flatMap: args =>
                 deserializeType(markPrefixPath(tail), Some(AppliedType(prefix, args)), typeParams, termParams, lookupParams = false)
 
+        case token("?") :: tokens =>
+          Option.ensure(prefix.isEmpty):
+            deserializeTypeBounds(tokens, termParams, typeParams)
+
+        case token("!") :: (token("!") | token(".")) :: _ =>
+          Option.ensure(prefix.isEmpty && from != defn.RootClass):
+            deserializeOuterChain(from, tokens) flatMap: (symbol, tokens) =>
+              deserializeType(markPrefixPath(tokens), Some(This(symbol).tpe), typeParams, termParams, lookupParams = false)
+
         case token("!") :: tokens =>
           Option.ensure(prefix.isEmpty):
             deserializeType(tokens, prefix, typeParams, termParams, lookupParams = true)
 
+        case token("=>") :: tokens =>
+          Option.ensure(prefix.isEmpty):
+            deserializeType(tokens, prefix, typeParams, termParams, lookupParams = false) map { ByNameType(_) }
+
         case head :: tokens =>
           val (isType, isThisType, isSingletonType, tail) = tokens match
             case Nil => (true, false, false, Nil)
+            case token(".") :: token("this") :: token(".") :: token("type") :: tail => (true, true, false, tail)
             case token(".") :: token("this") :: tail => (true, true, false, tail)
             case token(".") :: token("type") :: tail => (false, false, true, tail)
             case token(".") :: tail => (false, false, false, tail)
@@ -657,5 +850,5 @@ object TypeToken:
 
     Option.ensure(filtered.nonEmpty):
       deserializePotentialMethodType(filtered, Map.empty, Map.empty, isMethodType = false)
-  end toType
+  end toTypeImpl
 end TypeToken
