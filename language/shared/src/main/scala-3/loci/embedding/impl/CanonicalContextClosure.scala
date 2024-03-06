@@ -144,7 +144,8 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
                 stats.invoke(rhs) match
                   case stats: List[?] if stats.isEmpty => expr.invoke(rhs)
                   case _ => rhs
-              else rhs
+              else
+                rhs
 
             // check whether the expanding function is the outer-most in the surrounding val or def
             if contains.invoke(Position.ofMacroExpansion, sourcePos.invoke(term, context)) == true then
@@ -187,6 +188,5 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
   catch
     case NonFatal(e) if e.getClass.getCanonicalName != "scala.quoted.runtime.StopMacroExpansion" =>
 
-  result.asExpr match
-    case result: Expr[R] @unchecked => result
+  Block(terms, Typed(Ref(info.symbols.erased), TypeTree.of[R])).asExprOf[R]
 end inferrableCanonicalPlacementTypeContextClosure
