@@ -74,7 +74,6 @@ sealed trait PlacedCleanHigherKind5 extends PlacedCleanHigherKind4:
     PlacedClean[L, T4, T4, U4])
   : PlacedClean[L, T[T0, T1, T2, T3, T4], T_, T[U0, U1, U2, U3, U4]] = erased
 
-
 sealed trait PlacedCleanHigherKind6 extends PlacedCleanHigherKind5:
   given higherKind6[L, T[_, _, _, _, _, _], T_, T0, T1, T2, T3, T4, T5, U0, U1, U2, U3, U4, U5](using
     T[T0, T1, T2, T3, T4, T5] =:= T_,
@@ -112,16 +111,19 @@ sealed trait PlacedCleanHigherKind8 extends PlacedCleanHigherKind7:
   : PlacedClean[L, T[T0, T1, T2, T3, T4, T5, T6, T7], T_, T[U0, U1, U2, U3, U4, U5, U6, U7]] = erased
 
 sealed trait PlacedCleanSelectionByType extends PlacedCleanHigherKind8:
-  given selection[L, T, P]: PlacedClean[L, T from P, T from P, T] = erased
+  given selection[L, T, P](using scala.DummyImplicit):
+    PlacedClean[L, T from P, T from P, Unit] = erased
 
 sealed trait PlacedCleanSelectionByInstance extends PlacedCleanSelectionByType:
-  given selectionSingle[L, T, P]: PlacedClean[L, T fromSingle P, T fromSingle P, T] = erased
-  given selectionMultiple[L, T, P]: PlacedClean[L, T fromMultiple P, T fromMultiple P, T] = erased
+  given selectionSingle[L, T, P](using scala.DummyImplicit):
+    PlacedClean[L, T fromSingle P, T fromSingle P, Unit] = erased
+  given selectionMultiple[L, T, P](using scala.DummyImplicit):
+    PlacedClean[L, T fromMultiple P, T fromMultiple P, Unit] = erased
 
 sealed trait PlacedCleanRemotePeer extends PlacedCleanSelectionByInstance:
-  given remotePeer0[L, T, P, _on_[T, P] <: T on P](using util.NotGiven[L <:< P])
+  given remotePeer0[L, T, P, _on_[T, P] <: T on P](using scala.DummyImplicit)
     : PlacedClean[L, Placement.Context[P] ?=> (T _on_ P), Placement.Context[P] ?=> (T _on_ P), Unit] = erased
-  given remotePeer1[L, T, P, _on_[T, P] <: T on P](using util.NotGiven[L <:< P])
+  given remotePeer1[L, T, P, _on_[T, P] <: T on P](using scala.DummyImplicit)
     : PlacedClean[L, T _on_ P, T _on_ P, Unit] = erased
 
 sealed trait PlacedCleanLocalPeer extends PlacedCleanRemotePeer:
@@ -145,7 +147,10 @@ sealed trait PlacedCleanSubjective extends PlacedCleanLocalPeerLocal:
 sealed trait PlacedCleanAny extends PlacedCleanSubjective:
   given any[L]: PlacedClean[L, Any, Any, Any] = erased
 
-sealed trait PlacedCleanNothingSubjective extends PlacedCleanAny:
+sealed trait PlacedCleanNull extends PlacedCleanAny:
+  given `null`[L]: PlacedClean[L, Null, Null, Null] = erased
+
+sealed trait PlacedCleanNothingSubjective extends PlacedCleanNull:
   given nothing[L]: PlacedClean[L, Nothing, Nothing, Nothing] = erased
 
 sealed trait PlacedCleanAmbiguousResolutionBarrier extends PlacedCleanNothingSubjective:
@@ -180,9 +185,9 @@ object PlacedClean extends PlacedCleanAmbiguousResolutionBarrier:
           case '[ embedding.on[t `per` r, p] ] => unit
           case '[ language.on[t, p] ] => if TypeRepr.of[L] <:< TypeRepr.of[p] then transform(TypeRepr.of[t]) else unit
           case '[ embedding.on[t, p] ] => if TypeRepr.of[L] <:< TypeRepr.of[p] then transform(TypeRepr.of[t]) else unit
-          case '[ t `fromMultiple` p ] => transform(TypeRepr.of[t])
-          case '[ t `fromSingle` p ] => transform(TypeRepr.of[t])
-          case '[ t `from` p ] => transform(TypeRepr.of[t])
+          case '[ t `fromMultiple` p ] => unit
+          case '[ t `fromSingle` p ] => unit
+          case '[ t `from` p ] => unit
           case _ => super.transform(tpe)
 
     processor.transform(TypeRepr.of[T]).asType
