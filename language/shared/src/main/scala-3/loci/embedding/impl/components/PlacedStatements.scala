@@ -13,64 +13,67 @@ trait PlacedStatements:
   this: Component & Commons & ErrorReporter & Placements & Peers =>
   import quotes.reflect.*
 
-  private object PlacementSyntaxPrefix:
-    def unapply(term: Term): Option[(Option[ValDef], Term)] = term match
-      case Inlined(Some(call), List(), body)
+  private object PlacementCallBindingArtifact:
+    def unapply(term: Term): Option[(List[Definition], Term)] = term match
+      case Inlined(Some(call), bindings, body)
           if call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
-        body match
-          case PlacementSyntaxPrefix(prefix, body) => Some(prefix -> body)
-          case _ => Some(None -> body)
-      case Inlined(Some(call), List(prefix: ValDef), body)
-          if call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
-        body match
-          case PlacementSyntaxPrefix(_, body) => Some(Some(prefix) -> body)
-          case _ => Some(Some(prefix) -> body)
+        Some(bindings, body)
       case _ =>
         None
 
-  private object PlacementSyntaxBody:
-    def unapply(term: Term): Option[(ValDef, Term)] = term match
-      case outer @ Block(List(Inlined(_, List(), inner @ Block((evidence: ValDef) :: _, _))), erased: Typed)
-        if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
-           evidence.tpt.tpe <:< types.context &&
-           (erased.symbol == symbols.erased || erased.symbol == symbols.erasedArgs) =>
-        Some(evidence -> Block.copy(outer)(inner.statements.tail :+ inner.expr, erased))
+  private object PlacementCallContextEvidenceArtifact:
+    def unapply(term: Term): Option[(Definition, Term)] = term match
+      case Inlined(_, List(), block @ Block((evidence: ValDef) :: statements, expr))
+          if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) && evidence.tpt.tpe <:< types.context =>
+        if statements.nonEmpty then
+          Some(evidence, Block.copy(block)(statements, expr))
+        else
+          Some(evidence, expr)
       case _ =>
         None
 
-  private def tryBetaReduce(expr: Term) =
-    Term.betaReduce(expr) getOrElse expr
+  private object PlacementCallArtifact:
+    def unapply(term: Term): Option[(List[Definition], Term)] = term match
+      case PlacementCallBindingArtifact(bindings, expr) => Some(bindings, expr)
+      case PlacementCallContextEvidenceArtifact(binding, expr) => Some(List(binding), expr)
+      case _ => None
 
-  private def cleanPlacementExpression(placementInfo: PlacementInfo, term: Term): (Term, Option[Symbol]) =
-    val (cleanExpr, expressionOwner) = term match
-      case Apply(select @ Select(PlacementSyntaxPrefix(prefix, expr), names.apply), List(arg)) =>
-        tryBetaReduce(expr.select(select.symbol).appliedTo(arg)) match
-          case PlacementSyntaxBody(evidence, expr) => expr -> Some((prefix getOrElse evidence).symbol.owner)
-          case expr if prefix.isEmpty => cleanPlacementExpression(placementInfo, expr) match
-            case result @ (_, Some(_)) => result
-            case _ => term -> None
-          case expr => expr -> Some(prefix.get.symbol.owner)
-      case _ => tryBetaReduce(term) match
-        case PlacementSyntaxPrefix(prefix, expr) => expr match
-          case PlacementSyntaxBody(evidence, expr) => expr -> Some((prefix getOrElse evidence).symbol.owner)
-          case _ if prefix.isEmpty => cleanPlacementExpression(placementInfo, expr) match
-            case result @ (_, Some(_)) => result
-            case _ => term -> None
-          case _ => expr -> Some(prefix.get.symbol.owner)
-        case _ => term -> None
+  private object PlacementErasedArtifact:
+    def unapply(term: Term): Option[Term] = term match
+      case Block(List(statement @ Inlined(_, _, _)), erased: Typed)
+          if erased.symbol == symbols.erased || erased.symbol == symbols.erasedArgs =>
+        Some(statement)
+      case _ =>
+        None
 
-    def erasedContext = Typed(
+  private object PlacedExpresion:
+    def unapply(term: Term): Some[(List[Definition], Term)] = Term.tryBetaReduce(term) match
+      case PlacementErasedArtifact(PlacementCallArtifact(bindings, expr)) => Term.tryBetaReduce(expr) match
+        case PlacedExpresion(nestedBindings, expr) => Some((bindings ++ nestedBindings) -> expr)
+      case PlacementCallArtifact(bindings, expr) => Term.tryBetaReduce(expr) match
+        case PlacedExpresion(nestedBindings, expr) => Some((bindings ++ nestedBindings) -> expr)
+      case term @ Apply(select @ Select(PlacedExpresion(bindings, expr), names.apply), List(arg)) =>
+        Term.betaReduce(expr.select(select.symbol).appliedTo(arg)) match
+          case Some(PlacedExpresion(nestedBindings, expr)) => Some((bindings ++ nestedBindings) -> expr)
+          case _ => Some(List.empty -> term)
+      case expr =>
+        Some(List.empty -> expr)
+
+  private def bindingsForPlacedConstruct(bindings: List[Definition]) =
+    bindings exists: binding =>
+      val info = binding.symbol.info
+      !(info =:= TypeRepr.of[Nothing]) && info <:< types.contextResolutionWithFallback
+
+  extension (termModule: TermModule)
+    private inline def tryBetaReduce(expr: Term) =
+      Term.betaReduce(expr) getOrElse expr
+
+  private def cleanPlacementExpression(placementInfo: PlacementInfo, term: Term) =
+    val PlacedExpresion(bindings, expr) = term
+    val erasedContext = Typed(
       Ref(symbols.erased),
       TypeTree.of(using symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs).asType))
-
-    cleanExpr match
-      case Block(_, erased: Typed) if erased.expr.symbol == symbols.erased || erased.expr.symbol == symbols.erasedArgs =>
-        cleanExpr -> expressionOwner
-      case Block(stats, expr) =>
-        Block(stats :+ expr, erasedContext) -> expressionOwner
-      case expr =>
-        Block(List(expr), erasedContext) -> expressionOwner
-  end cleanPlacementExpression
+    bindings -> Block(List(expr), erasedContext)
 
   private def cleanPlacementExpressionOrClosure(placementInfo: PlacementInfo, expr: Term) =
     expr match
@@ -79,43 +82,44 @@ trait PlacedStatements:
            arg.tpt.tpe <:< types.context &&
            arg.symbol.isImplicit =>
         val Block(List(lambda: DefDef), closure) = block: @unchecked
-        val (body, expressionOwner) = cleanPlacementExpression(placementInfo, lambda.rhs.get)
-        Block.copy(block)(
-          List(DefDef.copy(lambda)(lambda.name, lambda.paramss, lambda.returnTpt, Some(body.changeOwner(lambda.symbol)))),
-          closure) -> expressionOwner.nonEmpty
+        val (bindings, body) = cleanPlacementExpression(placementInfo, lambda.rhs.get)
+        bindings ->
+          Block.copy(block)(
+            List(DefDef.copy(lambda)(lambda.name, lambda.paramss, lambda.returnTpt, Some(body.changeOwner(lambda.symbol)))),
+            closure)
       case _ =>
-        val (body, expressionOwner) = cleanPlacementExpression(placementInfo, expr)
-        expressionOwner.fold(body -> false): expressionOwner =>
+        val (bindings, body) = cleanPlacementExpression(placementInfo, expr)
+        bindings.headOption.fold(bindings -> body): binding =>
           val peer = placementInfo.peerType.asPackedValueType
           val placement = symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs).asPackedValueType
           val tpe = contextMethodType[Placement.Context[peer.Type], placement.Type]
           val block @ Block(List(lambda: DefDef), closure @ Closure(meth, _)) =
-            Lambda(expressionOwner, tpe, (symbol, _) => body.changeOwner(symbol)): @unchecked
-          Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(placementInfo.canonicalType))) -> true
+            Lambda(binding.symbol.owner, tpe, (symbol, _) => body.changeOwner(symbol)): @unchecked
+          bindings ->
+            Block.copy(block)(List(lambda), Closure.copy(closure)(meth, Some(placementInfo.canonicalType)))
 
   private object contextVariableCleaner extends SafeTreeMap(quotes):
+    private def fallbackIfContextType(term: Term) = term.tpe.asType match
+      case '[ Nothing ] | '[ Null ] => term
+      case '[ Placement.Context[p] ] => '{ Placement.Context.fallback[p] }.asTerm
+      case _ => term
     override def transformTerm(term: Term)(owner: Symbol) = term match
-      case Ident(_) =>
-        term.tpe.asType match
-          case '[ Nothing ] | '[ Null ] => term
-          case '[ Placement.Context[p] ] => '{ Placement.Context.fallback[p] }.asTerm
-          case _ => term
-      case _ =>
-        super.transformTerm(term)(owner)
+      case Ident(_) => fallbackIfContextType(term)
+      case _ if symbols.context.methodMember(term.symbol.name) contains term.symbol => fallbackIfContextType(term)
+      case _ => super.transformTerm(term)(owner)
 
-  private def cleanPlacementSyntax(placementInfo: PlacementInfo, rhs: Term)(owner: Symbol): (Term, Boolean) =
-    val (expr, placedExpressionSyntax) = cleanPlacementExpressionOrClosure(placementInfo, rhs)
-    contextVariableCleaner.transformTerm(expr)(owner) -> placedExpressionSyntax
+  private def cleanPlacementSyntax(placementInfo: PlacementInfo, rhs: Term)(owner: Symbol): (List[Definition], Term) =
+    val (bindings, expr) = cleanPlacementExpressionOrClosure(placementInfo, rhs)
+    bindings -> contextVariableCleaner.transformTerm(expr)(owner)
 
-  private def cleanPlacementSyntax(placementInfo: PlacementInfo, rhs: Option[Term])(owner: Symbol): Option[Term] =
-    rhs map: rhs =>
-      val (expr, _) = cleanPlacementSyntax(placementInfo, rhs)(owner)
-      expr
+  private def cleanPlacementSyntax(placementInfo: PlacementInfo, rhs: Option[Term])(owner: Symbol): (List[Definition], Option[Term]) =
+    rhs.fold(List.empty -> None): rhs =>
+      val (bindings, expr) = cleanPlacementSyntax(placementInfo, rhs)(owner)
+      bindings -> Some(expr)
 
   private def cleanSpuriousPlacementSyntax(rhs: Option[Term]): Option[Term] =
     rhs map:
-      case PlacementSyntaxPrefix(_, Inlined(_, List(), expr)) => expr
-      case PlacementSyntaxPrefix(_, expr) => expr
+      case PlacedExpresion(_, expr) => expr
       case expr => expr
 
   private def cleanSpuriousPlacementSyntax(stat: ValDef | DefDef): ValDef | DefDef =
@@ -148,18 +152,21 @@ trait PlacedStatements:
         s"but is $relation a peer in module ${fullName(peerType.typeSymbol.owner)}",
         stat.posInUserCode.startPosition)
 
-  private def checkPlacementType(stat: Statement, placementInfo: PlacementInfo, module: ClassDef): Unit =
+  private def checkPlacementType(stat: Statement, bindings: List[Definition], placementInfo: PlacementInfo, module: ClassDef): Unit =
     val (statement, subjectiveStatement) = stat match
       case _: ValDef | _: DefDef => ("Placed definition", "Subjective placed definition")
       case _ => ("Placed statement", "Subjective placed statement")
     checkPeerType(stat, placementInfo.peerType, module, statement, "placed on")
     placementInfo.modality.subjectivePeerType foreach { checkPeerType(stat, _, module, subjectiveStatement, "subjective to") }
 
-    val pos = stat match
-      case ValDef(_, Inferred(), _) | DefDef(_, _, Inferred(), _) => stat.posInUserCode.startPosition
-      case ValDef(_, tpt, _) => tpt.posInUserCode
-      case DefDef(_, _, tpt, _) => tpt.posInUserCode
-      case _ => stat.posInUserCode.startPosition
+    val (pos, inferred) = stat match
+      case ValDef(_, Inferred(), _) | DefDef(_, _, Inferred(), _) => (stat.posInUserCode.startPosition, true)
+      case ValDef(_, tpt, _) => (tpt.posInUserCode, false)
+      case DefDef(_, _, tpt, _) => (tpt.posInUserCode, false)
+      case _ => (stat.posInUserCode.startPosition, false)
+
+    if inferred && (bindings.isEmpty || bindingsForPlacedConstruct(bindings)) then
+      errorAndCancel(s"Placed expressions without type ascription must be enclosed in a placed block: on[${placementInfo.peerType.safeShow}]", pos)
 
     object singletonTypeChecker extends TypeMap(quotes):
       override def transform(tpe: TypeRepr) = tpe match
@@ -178,27 +185,29 @@ trait PlacedStatements:
     val body = module.body map:
       case stat @ ValDef(name, tpt, rhs) =>
         placementType(stat, tpt).fold(cleanSpuriousPlacementSyntax(stat)): placementInfo =>
-          checkPlacementType(stat, placementInfo, module)
-          ValDef.copy(stat)(name, tpt, cleanPlacementSyntax(placementInfo, rhs)(stat.symbol))
+          val (bindings, expr) = cleanPlacementSyntax(placementInfo, rhs)(stat.symbol)
+          checkPlacementType(stat, bindings, placementInfo, module)
+          ValDef.copy(stat)(name, tpt, expr)
 
       case stat @ DefDef(name, paramss, tpt, rhs) =>
         placementType(stat, tpt).fold(cleanSpuriousPlacementSyntax(stat)): placementInfo =>
-          checkPlacementType(stat, placementInfo, module)
+          val (bindings, expr) = cleanPlacementSyntax(placementInfo, rhs)(stat.symbol)
+          checkPlacementType(stat, bindings, placementInfo, module)
           if !placementInfo.modality.local then
             paramss collectFirst Function.unlift(_.params find { _.symbol.isImplicit }) foreach: param =>
               errorAndCancel("Non-local placed definitions cannot have context parameters.", param.posInUserCode)
-          DefDef.copy(stat)(name, paramss, tpt, cleanPlacementSyntax(placementInfo, rhs)(stat.symbol))
+          DefDef.copy(stat)(name, paramss, tpt, expr)
 
       case stat: Term =>
         PlacementInfo(stat.tpe).fold(stat): placementInfo =>
-          val (expr, placedExpressionSyntax) = cleanPlacementSyntax(placementInfo, stat)(module.symbol)
-          if !placedExpressionSyntax then
+          val (bindings, expr) = cleanPlacementSyntax(placementInfo, stat)(module.symbol)
+          if bindings.isEmpty || bindingsForPlacedConstruct(bindings) then
             errorAndCancel(s"Placed statements must be enclosed in a placed block: on[${placementInfo.peerType.safeShow}]", stat.posInUserCode.startPosition)
           if placementInfo.modality.subjective then
             errorAndCancel("Placed statements cannot be subjective.", stat.posInUserCode.startPosition)
           if placementInfo.modality.local then
             errorAndCancel("Placed statements cannot be local.", stat.posInUserCode.startPosition)
-          checkPlacementType(stat, placementInfo, module)
+          checkPlacementType(stat, bindings, placementInfo, module)
           expr
 
       case stat =>

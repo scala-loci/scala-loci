@@ -6,4 +6,8 @@ import scala.annotation.implicitNotFound
 object Placement {
   @implicitNotFound("Expression must be placed on a peer")
   sealed trait Context[P]
+
+  object Context {
+    type Resolution[P] = Context[P]
+  }
 }

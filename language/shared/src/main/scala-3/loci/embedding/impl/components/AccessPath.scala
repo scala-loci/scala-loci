@@ -24,11 +24,10 @@ trait AccessPath:
   end multitierOuterAccess
 
   def multitierAccessPath(path: Term, from: Symbol, peer: Symbol): Option[Term] = path match
-    case This(_) =>
-      if isMultitierModule(path.symbol) && from.hasAncestor(path.symbol) then
-        multitierOuterAccess(from, path.symbol, peer)
-      else
-        None
+    case Ident(_) if isMultitierModule(path.symbol) && from.hasAncestor(path.symbol.moduleClass) =>
+      multitierOuterAccess(from, path.symbol.moduleClass, peer)
+    case This(_) if isMultitierModule(path.symbol) && from.hasAncestor(path.symbol) =>
+      multitierOuterAccess(from, path.symbol, peer)
     case Select(qualifier, _) =>
       if isMultitierModule(path.symbol) &&
          !isMultitierNestedPath(qualifier.symbol) &&

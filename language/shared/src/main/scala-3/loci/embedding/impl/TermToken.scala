@@ -265,8 +265,10 @@ object TermToken:
               val flags = stat.symbol.flags
               !(flags is Flags.Param) && !(flags is Flags.ParamAccessor) && !(flags is Flags.FieldAccessor) &&
                 (!(flags is Flags.Synthetic) ||
-                  (!(stat.symbol.owner.flags is Flags.Module) || name != "apply" && name != "unapply" && name != "writeReplace") &&
-                  (!(stat.symbol.owner.flags is Flags.Case) || name != "copy" && name != "productElementName" && !name.matches("(_|copy\\$default\\$)[1-9][0-9]*")))
+                  (!(stat.symbol.owner.flags is Flags.Module) ||
+                    name != "apply" && name != "unapply" && name != "writeReplace") &&
+                  (!(stat.symbol.owner.flags is Flags.Case) ||
+                    name != "copy" && name != "productElementName" && !name.matches("(_|copy\\$default\\$)[1-9][0-9]*")))
             case stat @ ValDef(_, _, _) =>
               val flags = stat.symbol.flags
               !(flags is Flags.Param) && !(flags is Flags.ParamAccessor) && !(flags is Flags.FieldAccessor) &&

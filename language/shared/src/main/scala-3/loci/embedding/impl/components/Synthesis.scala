@@ -29,7 +29,8 @@ trait Synthesis:
   private val placedValuesSymbolCache = Synthesis.placedValuesSymbolCache match
     case cache: mutable.Map[(Symbol, Symbol), Symbol] @unchecked => cache
 
-  private def mangleSymbolName(symbol: Symbol) = f"loci$$${s"${implementationForm(symbol)} ${fullName(symbol)}".hashCode}%08x"
+  private def mangledSymbolName(symbol: Symbol) =
+    f"loci$$${s"${implementationForm(symbol)} ${fullName(symbol)}".hashCode}%08x"
 
   private def implementationForm(symbol: Symbol) =
     if symbol.flags is Flags.Module then "object"
@@ -183,7 +184,7 @@ trait Synthesis:
 
   def placedValuesSymbol(module: Symbol, peer: Symbol): Symbol = placedValuesSymbolCache.getOrElse((module, peer), {
     val name = fullName(module)
-    val mangledName = mangleSymbolName(module)
+    val mangledName = mangledSymbolName(module)
     val form = implementationForm(module)
     val separator = if module.isType && !module.isPackageDef && !module.isModuleDef then "#" else "."
     val parents =

@@ -28,6 +28,7 @@ trait Commons:
     val single = TypeRepr.of[language.Single[?]].typeSymbol
     val optional = TypeRepr.of[language.Optional[?]].typeSymbol
     val multiple = TypeRepr.of[language.Multiple[?]].typeSymbol
+    val context = TypeRepr.of[Placement.Context.type].typeSymbol
     val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
     val contextFunction1 = TypeRepr.of[ContextFunction1[?, ?]].typeSymbol
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
@@ -43,6 +44,7 @@ trait Commons:
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]]
     val remote = TypeRepr.of[language.Remote[?]]
     val context = TypeRepr.of[Placement.Context[?]]
+    val contextResolutionWithFallback = TypeRepr.of[Placement.Context.ResolutionWithFallback[?]]
     val conversion = TypeRepr.of[Conversion[?, ?]]
     val placedValues = TypeRepr.of[loci.runtime.PlacedValues]
     val system = TypeRepr.of[loci.runtime.System]
