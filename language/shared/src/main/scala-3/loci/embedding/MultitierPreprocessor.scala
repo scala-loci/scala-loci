@@ -79,6 +79,7 @@ object MultitierPreprocessor:
         val setMods = defTreeClass.getMethod("setMods", modifiersClass)
         val stats = blockClass.getMethod("stats")
         val apply = applyClass.getMethod("apply", treeClass, classOf[List[?]], sourceFileClass)
+        val fun = applyClass.getMethod("fun")
         val unforcedBody = templateClass.getMethod("unforcedBody")
         val unforcedRhs = valOrDefDefClass.getMethod("unforcedRhs")
         val tpt = valOrDefDefClass.getMethod("tpt")
@@ -238,11 +239,23 @@ object MultitierPreprocessor:
                 if defDefClass.isInstance(tree) then
                   mutateValOrDefRhs(defRhs, tree, TypedSplice(Ref(uninitialized)))
             else if maybePlacementTypeTree(tpt.invoke(tree)) then
-              def placedRhs = apply.invoke(null, TypedSplice(Ref(placed)), List(rhs), Position.ofMacroExpansion.sourceFile)
-              if valDefClass.isInstance(tree) then
-                mutateValOrDefRhs(valRhs, tree, placedRhs)
-              if defDefClass.isInstance(tree) then
-                mutateValOrDefRhs(defRhs, tree, placedRhs)
+              val rhsMutatedToPlacedConstruct =
+                if applyClass.isInstance(rhs) then
+                  val tree = fun.invoke(rhs)
+                  if typedSpliceClass.isInstance(tree) then
+                    splice.invoke(tree) match
+                      case Tree(tree) => tree.symbol == placed
+                      case _ => false
+                  else
+                    false
+                else
+                  false
+              if !rhsMutatedToPlacedConstruct then
+                def placedRhs = apply.invoke(null, TypedSplice(Ref(placed)), List(rhs), Position.ofMacroExpansion.sourceFile)
+                if valDefClass.isInstance(tree) then
+                  mutateValOrDefRhs(valRhs, tree, placedRhs)
+                if defDefClass.isInstance(tree) then
+                  mutateValOrDefRhs(defRhs, tree, placedRhs)
 
             if !mayHaveAnnotationSymbol(tree, compileTimeOnly) then
               setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(compileTimeOnlyAnnotation)))

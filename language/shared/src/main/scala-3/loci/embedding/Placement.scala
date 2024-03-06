@@ -17,29 +17,29 @@ object On:
     transparent inline def apply[T, U](
         inline v: Placement.Context[P] ?=> T)(
         using PlacedClean[P, T, T, U]): U on P =
-      ${ impl.inferrableCanonicalPlacementTypeContextClosure[U, U on P]('v) }
+      ${ impl.inferrableCanonicalPlacementTypeContextClosure[U, U on P]('{ v(using Placement.Context.fallback[P]) }) }
     transparent inline infix def local[T, U](
         inline v: Placement.Context[P] ?=> T)(
         using PlacedClean[P, T, T, U]): Local[U] on P =
-      ${ impl.inferrableCanonicalPlacementTypeContextClosure[U, Local[U] on P]('v) }
+      ${ impl.inferrableCanonicalPlacementTypeContextClosure[U, Local[U] on P]('{ v(using Placement.Context.fallback[P]) }) }
     transparent inline infix def sbj[R, T, U](
         inline v: Placement.Context[P] ?=> Remote[R] => T)(
         using PlacedClean[P, T, T, U]): U per R on P =
-      ${ impl.inferrableCanonicalPlacementTypeContextClosure[Remote[R] => U, U per R on P]('v) }
+      ${ impl.inferrableCanonicalPlacementTypeContextClosure[Remote[R] => U, U per R on P]('{ v(using Placement.Context.fallback[P]) }) }
 
   @experimental
   trait Placed:
-    transparent inline def apply[T, P](inline v: Placement.Context[P] ?=> T): T on P =
-      ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, T on P]('v) }
+    transparent inline def apply[T, P](using Placement.Context.ResolutionWithFallback[P])(inline v: Placement.Context[P] ?=> T): T on P =
+      ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, T on P]('{ v(using Placement.Context.fallback[P]) }) }
 
 @experimental
 trait On[P]:
   transparent inline def apply[T](inline v: Placement.Context[P] ?=> T): T on P =
-    ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, T on P]('v) }
+    ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, T on P]('{ v(using Placement.Context.fallback[P]) }) }
   transparent inline infix def local[T](inline v: Placement.Context[P] ?=> T): Local[T] on P =
-    ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, Local[T] on P]('v) }
+    ${ impl.inferrableCanonicalPlacementTypeContextClosure[T, Local[T] on P]('{ v(using Placement.Context.fallback[P]) }) }
   transparent inline infix def sbj[R, T](inline v: Placement.Context[P] ?=> Remote[R] => T): T per R on P =
-    ${ impl.inferrableCanonicalPlacementTypeContextClosure[Remote[R] => T, T per R on P]('v) }
+    ${ impl.inferrableCanonicalPlacementTypeContextClosure[Remote[R] => T, T per R on P]('{ v(using Placement.Context.fallback[P]) }) }
 
 trait Select[Command[_, _[_, _]]]:
   def apply[P, Q, _on_[T, P] <: T on P](r: Remote[P] _on_ Q): Command[P, fromSingle] = erased

@@ -16,33 +16,32 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
 
   object info extends Component.withQuotes(quotes), Commons, Placements
 
-  object NestedPlacementExpression:
-    def unapply(term: Term): Option[(ValDef, Tree, Term)] = term match
-      case Inlined(_, List(), Block(List(evidence: ValDef), Inlined(_, List(), Block(List(), expr @ Inlined(Some(call), _, _))))) =>
-        Some(evidence, call, expr)
-      case Inlined(_, List(), Block(List(evidence: ValDef), Inlined(_, List(), expr @ Inlined(Some(call), _, _)))) =>
-        Some(evidence, call, expr)
-      case Inlined(_, List(), Block(List(evidence: ValDef), Block(List(), expr @ Inlined(Some(call), _, _)))) =>
-        Some(evidence, call, expr)
-      case Inlined(_, List(), Block(List(evidence: ValDef), expr @ Inlined(Some(call), _, _))) =>
-        Some(evidence, call, expr)
-      case _ =>
-        None
-
-  object SyntheticContextParameter:
-    def unapply(term: Term): Option[(ValDef, Term)] = term match
-      case Inlined(_, List(), Block(List(evidence: ValDef), body)) =>
-        Some(evidence, body)
-      case _ =>
-        None
+//  object NestedPlacementExpression:
+//    def unapply(term: Term): Option[(ValDef, Tree, Term)] = term match
+//      case Inlined(_, List(), Block(List(evidence: ValDef), Inlined(_, List(), Block(List(), expr @ Inlined(Some(call), _, _))))) =>
+//        Some(evidence, call, expr)
+//      case Inlined(_, List(), Block(List(evidence: ValDef), Inlined(_, List(), expr @ Inlined(Some(call), _, _)))) =>
+//        Some(evidence, call, expr)
+//      case Inlined(_, List(), Block(List(evidence: ValDef), Block(List(), expr @ Inlined(Some(call), _, _)))) =>
+//        Some(evidence, call, expr)
+//      case Inlined(_, List(), Block(List(evidence: ValDef), expr @ Inlined(Some(call), _, _))) =>
+//        Some(evidence, call, expr)
+//      case _ =>
+//        None
+//
+//  object SyntheticContextParameter:
+//    def unapply(term: Term): Option[(ValDef, Term)] = term match
+//      case Inlined(_, List(), Block(List(evidence: ValDef), body)) =>
+//        Some(evidence, body)
+//      case _ =>
+//        None
 
   object PlacedType:
-    def unapply(tpe: TypeRepr): Option[(Type[?], Type[?])] =
-      tpe match
-        case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == symbols.`embedding.on` => Some(t.asType, p.asType)
-        case _ => tpe.asType match
-          case '[ t `on` p ] => Some(Type.of[t], Type.of[p])
-          case _ => None
+    def unapply(tpe: TypeRepr): Option[(Type[?], Type[?])] = tpe match
+      case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == symbols.`embedding.on` => Some(t.asType, p.asType)
+      case _ => tpe.asType match
+        case '[ t `on` p ] => Some(Type.of[t], Type.of[p])
+        case _ => None
 
   def namedOwner(symbol: Symbol) =
     symbol findAncestor { symbol => !symbol.isAnonymousFunction } getOrElse symbol
@@ -63,24 +62,28 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
 
   val terms = v.toList map { _.asTerm }
 
-  val result = terms match
-    case List(NestedPlacementExpression(evidence, call, expr))
-      if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
-         evidence.tpt.tpe <:< types.context &&
-         call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
-      expr
-    case _ =>
-      val tpe = canonical(clean(TypeRepr.of[R]))
-      Block(terms, Typed(Ref(info.symbols.erased), TypeTree.of(using tpe.asType)))
+//  val result = terms match
+//    case List(NestedPlacementExpression(evidence, call, expr))
+//      if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
+//         evidence.tpt.tpe <:< types.context &&
+//         call.symbol.hasAncestor(symbols.on, symbols.on.companionModule.moduleClass) =>
+//      expr
+//    case _ =>
+//      val tpe = canonical(clean(TypeRepr.of[R]))
+//      Block(terms, Typed(Ref(info.symbols.erased), TypeTree.of(using tpe.asType)))
+
+  val tpe = canonical(clean(TypeRepr.of[R]))
+  val result = Block(terms, Typed(Ref(info.symbols.erased), TypeTree.of(using tpe.asType)))
 
   val r = result.tpe
 
   // To make the context function type inferrable, we hack the current context and change its mode to `Pattern`
   // as this mode lets the context function type propagate without resolving the context argument:
-  // https://github.com/lampepfl/dotty/blob/3.0.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3483
-  // https://github.com/lampepfl/dotty/blob/3.1.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3547
-  // https://github.com/lampepfl/dotty/blob/3.2.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3687
-  // https://github.com/lampepfl/dotty/blob/3.3.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3790
+  // https://github.com/scala/scala3/blob/3.0.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3483
+  // https://github.com/scala/scala3/blob/3.1.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3547
+  // https://github.com/scala/scala3/blob/3.2.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3687
+  // https://github.com/scala/scala3/blob/3.3.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L3790
+  // https://github.com/scala/scala3/blob/3.4.0/compiler/src/dotty/tools/dotc/typer/Typer.scala#L4030
   //
   // This hack is without unwanted side effects since we ensure that the expanding function
   // is the outer-most in the surrounding val or def.
@@ -161,25 +164,25 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
 
                 case _ =>
             end if
-          else
-            // If the surrounding val or def has an explicit type annotation,
-            // the `MultitierPreprocessor` can inject a `placed` expression
-            // to improve type inference within the body
-            // (in particular discarding non-Unit values, i.e., insertion of Unit values).
-            // If the surrounding val or def is not placed,
-            // it will not have an `on` placement type and the peer type will be inferred as `Any`.
-            // In such case, we just expand to the unprocessed expression passed to the expanding function
-            // without any added context argument.
-            terms match
-              case List(SyntheticContextParameter(evidence, body))
-                if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
-                   evidence.tpt.tpe <:< types.context &&
-                   peer.typeSymbol == defn.AnyClass &&
-                   symbol.info.resultType.typeSymbol != symbols.`language.on` &&
-                   symbol.info.resultType.typeSymbol != symbols.`embedding.on` =>
-                body.asExpr match
-                  case result: Expr[R] @unchecked => return result
-              case _ =>
+//          else
+//            // If the surrounding val or def has an explicit type annotation,
+//            // the `MultitierPreprocessor` can inject a `placed` expression
+//            // to improve type inference within the body
+//            // (in particular discarding non-Unit values, i.e., insertion of Unit values).
+//            // If the surrounding val or def is not placed,
+//            // it will not have an `on` placement type and the peer type will be inferred as `Any`.
+//            // In such case, we just expand to the unprocessed expression passed to the expanding function
+//            // without any added context argument.
+//            terms match
+//              case List(SyntheticContextParameter(evidence, body))
+//                if !(evidence.tpt.tpe =:= TypeRepr.of[Nothing]) &&
+//                   evidence.tpt.tpe <:< types.context &&
+//                   peer.typeSymbol == defn.AnyClass &&
+//                   symbol.info.resultType.typeSymbol != symbols.`language.on` &&
+//                   symbol.info.resultType.typeSymbol != symbols.`embedding.on` =>
+//                body.asExpr match
+//                  case result: Expr[R] @unchecked => return result
+//              case _ =>
       case _ =>
   catch
     case NonFatal(e) if e.getClass.getCanonicalName != "scala.quoted.runtime.StopMacroExpansion" =>

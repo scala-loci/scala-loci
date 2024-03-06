@@ -117,9 +117,9 @@ object TypeToken:
         case tpe: ByNameType =>
           typeSignature(tpe.underlying)
         case tpe: TermRef =>
-          tpe.qualifier.resolvedFieldMemberType(tpe.name).fold(any)(typeSignature)
+          tpe.qualifier.resolvedFieldMemberType(tpe.name).fold(any) { typeSignature }
         case tpe: TypeRef =>
-          tpe.qualifier.resolvedTypeMemberType(tpe.name).fold(any)(typeSignature)
+          tpe.qualifier.resolvedTypeMemberType(tpe.name).fold(any) { typeSignature }
         case tpe: TypeBounds =>
           typeSignature(tpe.hi)
         case tpe: AndType =>

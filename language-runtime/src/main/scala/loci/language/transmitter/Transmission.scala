@@ -17,7 +17,7 @@ abstract class Transmission[V, R, +T, L, M] private[loci] {
 
 sealed trait TransmissionNothing {
   implicit def transmissionNothing[L, R, V, W, T, M](implicit
-    ev0: Placement.Context[L],
+    ev0: Placement.Context.Resolution[L],
     ev1: Multiplicity[L, R, V, W, M],
     ev2: W <:< (Nothing per _),
     ev3: T =:= Future[Nothing]): Transmission[V, R, T, L, M] = erased(ev0, ev1, ev2, ev3)
@@ -25,7 +25,7 @@ sealed trait TransmissionNothing {
 
 object Transmission extends TransmissionNothing {
   implicit def transmission[L, R, V, W, B, I, P, T, M, U, S <: Transmittables](implicit
-    ev0: Placement.Context[L],
+    ev0: Placement.Context.Resolution[L],
     ev1: Multiplicity[L, R, V, W, M],
     ev2: Subjectivity[W, B],
     ev3: Transmittable.Resolution[B, I, U, P, S],
