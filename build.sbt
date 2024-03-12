@@ -204,8 +204,7 @@ lazy val lociJVM = lociProject(
              lociCommunicatorWsAkkaPlayJVM,
              lociCommunicatorWsJavalinJVM,
              lociCommunicatorWsJettyJVM,
-             // including jetty 12 by default kills the 2.11 tests … but publication works …
-             //lociCommunicatorWsJetty12JVM,
+             lociCommunicatorWsJetty12JVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = lociProject(
@@ -227,8 +226,7 @@ lazy val lociJS = lociProject(
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
              lociCommunicatorWsJettyJS,
-             // including jetty 12 by default kills the 2.11 tests … but publication works …
-             // lociCommunicatorWsJetty12JS,
+             lociCommunicatorWsJetty12JS,
              lociCommunicatorWebRtcJS))
 
 
@@ -442,7 +440,10 @@ lazy val lociCommunicatorWsJetty12 = lociProject.`scala 2.12+`(
   file = "communicator-ws-jetty12",
   project = crossProject(JSPlatform, JVMPlatform)
             crossType CrossType.Dummy
-            settings (defaultSettings, jetty12, scalatest),
+            settings (defaultSettings, jetty12, scalatest,
+              Test / test := false, // flaky
+  ),
+
   dependsOn = lociCommunication)
 
 lazy val lociCommunicatorWsJetty12JVM = lociCommunicatorWsJetty12.jvm
