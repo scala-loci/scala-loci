@@ -26,6 +26,15 @@ jobs:
             scala: '2.13'
           - jvm: '11'
             scala: '3'
+        include:
+          - os: 'ubuntu-latest'
+            jvm: '21'
+            scala: '3'
+            platform: 'jvm'
+          - os: 'ubuntu-latest'
+            jvm: '21'
+            scala: '3'
+            platform: 'js'
 
     runs-on: ${{ matrix.os }}
 
