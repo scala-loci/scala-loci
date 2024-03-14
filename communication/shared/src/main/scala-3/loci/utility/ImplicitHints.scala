@@ -593,7 +593,7 @@ object implicitHints:
 
     val tpeOuter = tpe
 
-    val result = noReporting(List.empty) {
+    val result = noReporting(List.empty, useExploringContext = true) {
       import quotes.reflect.*
 
       val tpe = tpeOuter match

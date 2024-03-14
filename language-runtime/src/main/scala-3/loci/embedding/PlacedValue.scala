@@ -3,14 +3,16 @@ package embedding
 
 import loci.language.{on as _, *}
 
-abstract class PlacedValue[-P, +T] private[loci]()
+abstract class PlacedValue[-P, +T] private[loci]:
+  private[PlacedValue] type on = P @uncheckedVariance
 //  extends Dynamic:
 //  def selectDynamic(key: String): Unit = macro AccessorResolutionFailure.selectDynamic
 //  def updateDynamic(key: String)(value: Any): Unit = macro AccessorResolutionFailure.updateDynamic
 //  def applyDynamic(key: String)(args: Any*): Unit = macro AccessorResolutionFailure.applyDynamic
 //  def applyDynamicNamed(key: String)(args: Any*): Unit = macro AccessorResolutionFailure.applyDynamic
 
-object PlacedValue // extends transmitter.RemoteAccessor.Default
+object PlacedValue: // extends transmitter.RemoteAccessor.Default:
+  type Resolution[P, T] = PlacedValue[P, T] { type on = P }
 
 sealed trait Placed[-P, +T] extends PlacedValue[P, T]:
   def test: Int = 0

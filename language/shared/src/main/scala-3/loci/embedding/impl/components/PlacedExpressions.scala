@@ -59,7 +59,8 @@ trait PlacedExpressions:
 
   private def checkPlacementTypes(tpe: TypeRepr, pos: Position, message: String) =
     val symbol = tpe.typeSymbol
-    if symbol == symbols.`language.per` ||  symbol == symbols.`language.on` ||  symbol == symbols.`embedding.on` ||
+    if symbol == symbols.`language.per` || symbol == symbols.`language.on` ||
+       symbol == symbols.`embedding.on` || symbol == symbols.`embedding.of` ||
        symbol == symbols.subjective || symbol == symbols.`language.Local` ||
        !(tpe =:= TypeRepr.of[Nothing]) && (tpe <:< types.context || tpe <:< types.placedValue || tpe <:< types.subjective) then
       errorAndCancel(message, pos)
@@ -366,27 +367,85 @@ trait PlacedExpressions:
   private def checkPlacementTypesInArguments(paramss: List[ParamClause], owner: Symbol) =
     paramss foreach { _.params foreach { eraserCheckOnly.transformStatement(_)(owner) } }
 
-  private def checkPlacementTypesInResult(tpt: TypeTree, owner: Symbol) = tpt match
-    case Inferred() =>
-      val eraser = TypePlacementTypesEraser(tpt.posInUserCode, peerContext(owner), checkOnly = true)
-      PlacementInfo(tpt.tpe).fold(eraser.transform(tpt.tpe)) { placementInfo =>
-        eraser.transform(placementInfo.valueType)
-        eraser.transform(placementInfo.peerType)
-        placementInfo.modality.subjectivePeerType foreach eraser.transform
-      }
-    case Applied(on: TypeIdent, List(value, peer)) if on.symbol == symbols.`language.on` => value match
-      case Applied(per: TypeIdent, List(value, subjective)) if per.symbol == symbols.`language.per` =>
+  private def checkPlacementTypesInResult(tpt: TypeTree, owner: Symbol) =
+    def skipToCode(content: String, pos: Int): Int =
+      var level = 0
+      var i = pos
+      val length = content.length
+      while i < length do
+        if level == -1 then
+          if content(i) == '\r' || content(i) == '\n' then level = 0
+        else if i + 1 < length && content(i) == '/' && content(i + 1) == '*' then
+          level += 1
+        else if i + 1 < length && content(i) == '*' && content(i + 1) == '/' then
+          i += 1
+          if level > 0 then level -= 1
+        else if level == 0 then
+          if i + 1 < length && content(i) == '/' && content(i + 1) == '/' then level = -1
+          else if !Character.isWhitespace(content(i)) then return i
+        i += 1
+      i
+    end skipToCode
+
+    def notationWarning() =
+      PlacementInfo(tpt.tpe) foreach: placementInfo =>
+        report.warning(
+          s"Discouraged placement type notation. Expected type notation: ${placementInfo.showCanonical}" +
+          s"${System.lineSeparator}Placement types are imported by: import loci.language.*", tpt.posInUserCode)
+
+    def checkNotation(tree: Tree, infix: Boolean) = tree match
+      case _: TypeIdent =>
+        if infix then
+          tree.pos.sourceFile.content foreach: content =>
+            val pos = skipToCode(content, tree.pos.end)
+            if pos < content.length && content(pos) == '[' then
+              notationWarning()
+      case _ =>
+        notationWarning()
+
+    def checkValueType(value: TypeTree) = value match
+      case Applied(per @ (_: TypeIdent | _: TypeSelect), List(value, subjective)) if per.symbol == symbols.`language.per` =>
         eraserCheckOnly.transformTree(subjective)(owner)
         eraserCheckOnly.transformTree(value)(owner)
-        eraserCheckOnly.transformTree(peer)(owner)
-      case Applied(local: TypeIdent, List(value)) if local.symbol == symbols.`language.Local` =>
+        checkNotation(per, infix = true)
+      case Applied(local @ (_: TypeIdent | _: TypeSelect), List(value)) if local.symbol == symbols.`language.Local` =>
         eraserCheckOnly.transformTree(value)(owner)
-        eraserCheckOnly.transformTree(peer)(owner)
+        checkNotation(local, infix = false)
       case _ =>
         eraserCheckOnly.transformTree(value)(owner)
+
+    tpt match
+      case Inferred() =>
+        val eraser = TypePlacementTypesEraser(tpt.posInUserCode, peerContext(owner), checkOnly = true)
+        PlacementInfo(tpt.tpe).fold(eraser.transform(tpt.tpe)) { placementInfo =>
+          eraser.transform(placementInfo.valueType)
+          eraser.transform(placementInfo.peerType)
+          placementInfo.modality.subjectivePeerType foreach eraser.transform
+        }
+
+      case Applied(on @ (_: TypeIdent | _: TypeSelect), List(value: TypeTree, peer: TypeTree))
+          if on.symbol == symbols.`language.on` =>
         eraserCheckOnly.transformTree(peer)(owner)
-    case _ =>
-      eraserCheckOnly.transformTree(tpt)(owner)
+        checkNotation(on, infix = true)
+
+        if value.tpe <:< TypeRepr.of[Nothing] then
+          value match
+            case Applied(of, _) if of.symbol == symbols.`embedding.of` =>
+            case _ => errorAndCancel("Illegal use of Nothing for placed value.", value.posInUserCode)
+
+        value match
+          case Applied(of: Inferred, List(ofValue: TypeTree, ofPeer: TypeTree))
+              if of.symbol == symbols.`embedding.of` =>
+            eraserCheckOnly.transformTree(ofPeer)(owner)
+            checkValueType(ofValue)
+            if !(peer.tpe =:= ofPeer.tpe) then
+              errorAndCancel("Illegal use of Nothing for placed value.", value.posInUserCode)
+          case _ =>
+            checkValueType(value)
+
+      case _ =>
+        eraserCheckOnly.transformTree(tpt)(owner)
+  end checkPlacementTypesInResult
 
   def eraseMultitierConstructs(module: ClassDef): ClassDef =
     val body = module.body map:

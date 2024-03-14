@@ -2,7 +2,7 @@ package loci
 package language
 
 package object transmitter {
-  type from[+T, -R] = embedding.PlacedValue[T, R]
+  type from[T, R] = embedding.PlacedValue[T, R]
 
   type Gateway[R] = embedding.Gateway[R]
 
