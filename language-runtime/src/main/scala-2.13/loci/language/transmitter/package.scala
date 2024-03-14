@@ -4,7 +4,7 @@ package language
 import scala.annotation.showAsInfix
 
 package object transmitter {
-  @showAsInfix type from[+T, -R] = embedding.PlacedValue[T, R]
+  @showAsInfix type from[T, R] = embedding.PlacedValue[T, R]
 
   type Gateway[R] = embedding.Gateway[R]
 

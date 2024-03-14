@@ -54,10 +54,10 @@ trait Capture[P, placed[_, _]]:
   def capture(v: Any*): Block[P, placed] = erased
 
 trait Block[P, placed[_, _]]:
-  def apply[T, U, U_placed_P](v: Placement.Context[P] => T)(using
+  def apply[T, U, U_placed_P](v: Placement.Context[P] ?=> T)(using
     PlacedClean[P, T, T, U],
     CanonicalPlacedTypeAlias[U placed P, U_placed_P]): U_placed_P = erased
-  infix def sbj[R, T, U, U_per_R_placed_P](v: Placement.Context[P] => Remote[R] => T)(using
+  infix def sbj[R, T, U, U_per_R_placed_P](v: Placement.Context[P] ?=> Remote[R] => T)(using
     PlacedClean[P, T, T, U],
     CanonicalPlacedTypeAlias[U per R placed P, U_per_R_placed_P]): U_per_R_placed_P = erased
 

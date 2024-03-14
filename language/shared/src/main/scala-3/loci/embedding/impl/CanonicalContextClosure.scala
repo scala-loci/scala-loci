@@ -36,29 +36,31 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
 //      case _ =>
 //        None
 
-  object PlacedType:
-    def unapply(tpe: TypeRepr): Option[(Type[?], Type[?])] = tpe match
-      case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == symbols.`embedding.on` => Some(t.asType, p.asType)
-      case _ => tpe.asType match
-        case '[ t `on` p ] => Some(Type.of[t], Type.of[p])
-        case _ => None
-
   def namedOwner(symbol: Symbol) =
     symbol findAncestor { symbol => !symbol.isAnonymousFunction } getOrElse symbol
 
-  def clean(tpe: TypeRepr) = tpe match
-    case PlacedType('[ t ], '[ p ]) =>
-      val local = TypeRepr.of[t].typeSymbol == symbols.`language.Local`
-      PlacedClean.cleanType[p, t] match
-        case '[ u ] =>
-          val u = if local then symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
-          symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
-    case _ =>
-      tpe
+  def clean(tpe: TypeRepr) =
+    val placementType = tpe match
+      case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == symbols.`embedding.on` => Some(t, p)
+      case _ => tpe.asType match
+        case '[ t `on` p ] => Some(TypeRepr.of[t], TypeRepr.of[p])
+        case _ => None
+    placementType.fold(tpe): (t, p) =>
+      val local = t.typeSymbol == symbols.`language.Local`
+      (t.asType, p.asType) match
+        case ('[ t ], '[ p ]) =>
+          PlacedClean.cleanType[p, t] match
+            case '[ u ] =>
+              val u = if local then symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
+              symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
+            case _ =>
+              tpe
 
   def canonical(tpe: TypeRepr) =
     PlacementInfo(tpe).fold(tpe): placementInfo =>
-      symbols.`embedding.on`.typeRef.appliedTo(placementInfo.canonicalType.typeArgs)
+      val args @ List(value, peer) = placementInfo.canonicalType.typeArgs: @unchecked
+      val canonicalValue = if value <:< TypeRepr.of[Nothing] then symbols.`embedding.of`.typeRef.appliedTo(args) else value
+      symbols.`embedding.on`.typeRef.appliedTo(List(canonicalValue, peer))
 
   val terms = v.toList map { _.asTerm }
 

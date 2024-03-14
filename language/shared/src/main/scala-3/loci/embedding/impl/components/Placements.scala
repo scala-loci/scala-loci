@@ -25,27 +25,33 @@ trait Placements:
 
   object PlacementInfo:
     def apply(tpe: TypeRepr): Option[PlacementInfo] =
-      def modality(tpe: TypeRepr) = tpe match
+      def modality(tpe: TypeRepr, peer: TypeRepr, of: Boolean): PlacementInfo = tpe match
+        case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`embedding.of` && args.last =:= peer =>
+          val info = modality(args.head, peer, of = true)
+          if !of || !info.canonical then info else info.copy(canonical = false)
+        case Refinement(parent, "on", TypeBounds(lo, hi)) if lo =:= peer && hi =:= peer =>
+          val info = modality(parent, peer, of = true)
+          if !info.canonical then info else info.copy(canonical = false)
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.Local` =>
-          Some(PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Modality.Local))
+          PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Modality.Local)
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.per` =>
-          Some(PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Modality.Subjective(args.last)))
+          PlacementInfo(tpe, canonical = true, tpe, args.head, defn.NothingClass.typeRef, Modality.Subjective(args.last))
         case AppliedType(tycon, args) if tycon.typeSymbol == symbols.subjective =>
-          Some(PlacementInfo(tpe, canonical = false, symbols.`language.per`.typeRef.appliedTo(args.reverse), args.last, defn.NothingClass.typeRef, Modality.Subjective(args.head)))
+          PlacementInfo(tpe, canonical = false, symbols.`language.per`.typeRef.appliedTo(args.reverse), args.last, defn.NothingClass.typeRef, Modality.Subjective(args.head))
         case _ =>
-          None
+          PlacementInfo(tpe, canonical = true, tpe, tpe, defn.NothingClass.typeRef, Modality.None)
 
-      def placementInfo(tpe: TypeRepr) = tpe match
-        case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`language.on` =>
+      def placementInfo(tpe: TypeRepr): Option[PlacementInfo] = tpe match
+        case AppliedType(tycon, List(value, peer)) if tycon.typeSymbol == symbols.`language.on` =>
           Some:
-            modality(args.head).fold(PlacementInfo(tpe, canonical = true, tpe, args.head, args.last, Modality.None)): info =>
-              val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, args.last))
-              info.copy(tpe = tpe, canonicalType = canonicalType, peerType = args.last)
-        case AppliedType(tycon, args) if tycon.typeSymbol == symbols.`embedding.on` =>
+            val info = modality(value, peer, of = false)
+            val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, peer))
+            info.copy(tpe = tpe, canonicalType = canonicalType, peerType = peer)
+        case AppliedType(tycon, args @ List(value, peer)) if tycon.typeSymbol == symbols.`embedding.on` =>
           Some:
-            modality(args.head).fold(PlacementInfo(tpe, canonical = false, symbols.`language.on`.typeRef.appliedTo(args), args.head, args.last, Modality.None)): info =>
-              val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, args.last))
-              info.copy(tpe = tpe, canonical = false, canonicalType = canonicalType, peerType = args.last)
+            val info = modality(value, peer, of = false)
+            val canonicalType = symbols.`language.on`.typeRef.appliedTo(List(info.canonicalType, peer))
+            info.copy(tpe = tpe, canonical = false, canonicalType = canonicalType, peerType = peer)
         case AndType(AppliedType(tycon, args), right) if tycon.typeSymbol == symbols.placed && args.last =:= right =>
           PlacementInfo(symbols.`embedding.on`.typeRef.appliedTo(args.reverse))
         case _ =>

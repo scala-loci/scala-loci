@@ -120,7 +120,6 @@ trait PlacedStatements:
   private def cleanSpuriousPlacementSyntax(rhs: Option[Term]): Option[Term] =
     rhs map:
       case PlacedExpresion(_, expr) => expr
-      case expr => expr
 
   private def cleanSpuriousPlacementSyntax(stat: ValDef | DefDef): ValDef | DefDef =
     stat match
@@ -136,9 +135,11 @@ trait PlacedStatements:
         errorAndCancel(s"Placed type cannot be a context function type: ${placementInfo.valueType.safeShow}", pos)
       else if !placementInfo.canonical then
         val message = tpt match
-          case Inferred() => "Placement type could not be inferred. Explicit type ascription required"
-          case _ => "Invalid placement type. Placement types imported by loci.language.* required"
-        errorAndCancel(s"$message: ${placementInfo.showCanonical}", pos)
+          case Inferred() => "Placement type could not be inferred. Explicit type ascription required."
+          case _ => "Invalid placement type."
+        errorAndCancel(
+          s"$message Expected type: ${placementInfo.showCanonical}" +
+          s"${System.lineSeparator}Placement types are imported by: import loci.language.*", pos)
       placementInfo.canonical
 
   private def checkPeerType(stat: Statement, peerType: TypeRepr, module: ClassDef, statement: String, relation: String): Unit =

@@ -2,6 +2,7 @@ package loci
 package embedding
 
 import impl.SymbolMutator
+import utility.noReporting
 
 import java.lang.reflect.Field
 import java.util.IdentityHashMap
@@ -16,6 +17,9 @@ object MultitierPreprocessor:
   def preprocess(using Quotes): Expr[MultitierPreprocessor] =
     import quotes.reflect.*
 
+    val `language.on` = Symbol.requiredPackage("loci.language").typeMember("on")
+    val `embedding.on` = Symbol.requiredPackage("loci.embedding").typeMember("on")
+    val `embedding.of` = Symbol.requiredPackage("loci.embedding").typeMember("of")
     val multitier = Symbol.requiredClass("loci.language.multitier")
     val deferred = Symbol.requiredClass("loci.language.deferred")
     val placed = Symbol.requiredMethod("loci.language.placed.apply")
@@ -45,6 +49,9 @@ object MultitierPreprocessor:
         val symbolClass = Class.forName("dotty.tools.dotc.core.Symbols$Symbol")
         val symDenotationClass = Class.forName("dotty.tools.dotc.core.SymDenotations$SymDenotation")
         val annotationClass = Class.forName("dotty.tools.dotc.core.Annotations$Annotation")
+        val typeClass = Class.forName("dotty.tools.dotc.core.Types$Type")
+        val wildcardTypeClass = Class.forName("dotty.tools.dotc.core.Types$WildcardType$")
+        val typerClass = Class.forName("dotty.tools.dotc.typer.Typer")
         val completerClass = Class.forName("dotty.tools.dotc.typer.Namer$Completer")
         val sourceFileClass = Class.forName("dotty.tools.dotc.util.SourceFile")
         val sourcePositionClass = Class.forName("dotty.tools.dotc.util.SourcePosition")
@@ -65,12 +72,15 @@ object MultitierPreprocessor:
         val modifiersClass = Class.forName("dotty.tools.dotc.ast.untpd$Modifiers")
 
         val ctx = quotesImplClass.getMethod("ctx")
+        val typer = contextClass.getMethod("typer")
         val denot = symbolClass.getMethod("denot", contextClass)
         val infoOrCompleter = symDenotationClass.getMethod("infoOrCompleter")
         val annotations = symDenotationClass.getMethod("annotations", contextClass)
         val flagsUnsafe = symDenotationClass.getMethod("flagsUNSAFE")
         val resetFlag = symDenotationClass.getMethod("resetFlag", classOf[Long])
         val annotationSymbol = annotationClass.getMethod("symbol", contextClass)
+        val wildcardType = wildcardTypeClass.getField("MODULE$")
+        val typedType = typerClass.getMethod("typedType", treeClass, typeClass, classOf[Boolean], contextClass)
         val original = completerClass.getMethod("original")
         val contains = sourcePositionClass.getMethod("contains", sourcePositionClass)
         val sourcePos = positionedClass.getMethod("sourcePos", contextClass)
@@ -86,8 +96,13 @@ object MultitierPreprocessor:
         val valRhs = valDefClass.getDeclaredField("preRhs")
         val defRhs = defDefClass.getDeclaredField("preRhs")
         val rhs = typeDefClass.getMethod("rhs")
+        val appliedTypeTreeArgs = appliedTypeTreeClass.getDeclaredField("args")
+        val appliedTypeTree = appliedTypeTreeClass.getMethod("apply", treeClass, classOf[List[?]], sourceFileClass)
         val impl = moduleDefClass.getMethod("impl")
+        val infixLeft = infixOpClass.getDeclaredField("left")
+        val left = infixOpClass.getMethod("left")
         val op = infixOpClass.getMethod("op")
+        val right = infixOpClass.getMethod("right")
         val typedSplice = typedSpliceClass.getMethod("apply", treeClass, classOf[Boolean], contextClass)
         val splice = typedSpliceClass.getMethod("splice")
         val modFlags = modifiersClass.getMethod("flags")
@@ -95,6 +110,7 @@ object MultitierPreprocessor:
         val modWithAddedAnnotation = modifiersClass.getMethod("withAddedAnnotation", treeClass)
 
         val context = ctx.invoke(quotes)
+        val contextTyper = typer.invoke(context)
 
         object Symbol:
           def unapply(symbol: Any): Option[Symbol] = symbol match
@@ -105,6 +121,21 @@ object MultitierPreprocessor:
           def unapply(tree: Any): Option[Tree] = tree match
             case tree: Tree @unchecked if treeClass.isInstance(tree) => Some(tree)
             case _ => None
+
+        def tryTypingTypeTree(tree: TypeTree) =
+          noReporting(context)(null, useExploringContext = false): context =>
+            typedType.invoke(contextTyper, tree, wildcardType.get(null), false, context) match
+              case Tree(tree: TypeTree) => Some(tree)
+              case _ => None
+
+        def correctlyTyped(tpe: TypeRepr) = tpe match
+          case _: TermRef | _: TypeRef | _: ConstantType | _: SuperType | _: Refinement |
+               _: AppliedType | _: AnnotatedType | _: AndType | _: OrType | _: MatchType |
+               _: ByNameType | _: ParamRef | _: ThisType | _: RecursiveThis | _: RecursiveType |
+               _: MethodType | _: PolyType | _: TypeLambda | _: MatchCase | _: TypeBounds | _: NoPrefix =>
+            true
+          case _ =>
+            false
 
         def completerOriginalTree(symbol: Symbol) =
           val info = infoOrCompleter.invoke(denot.invoke(symbol, context))
@@ -155,9 +186,10 @@ object MultitierPreprocessor:
             case Tree(Apply(Select(New(TypeIdent(`name`) | TypeSelect(_, `name`)), _), _)) => true
             case _ => false
 
-        def isMultitierAnnottee(decl: Any) = hasAnnotation(decl):
-          case Symbol(symbol) => symbol == multitier
-          case tree => contains.invoke(sourcePos.invoke(tree, context), Position.ofMacroExpansion) == true
+        def isMultitierAnnottee(decl: Any) =
+          hasAnnotation(decl):
+            case Symbol(symbol) => symbol == multitier
+            case tree => contains.invoke(sourcePos.invoke(tree, context), Position.ofMacroExpansion) == true
 
         def flags(decl: Any) =
           val flags = decl match
@@ -167,12 +199,16 @@ object MultitierPreprocessor:
             case flags: Flags @unchecked if flagsClass.isInstance(flags) => flags
             case _ => Flags.EmptyFlags
 
-        def mutateValOrDefRhs(valOrDefRhs: Field, tree: Any, rhs: Any) =
+        def mutateField(field: Field, obj: Any, value: Any) =
           try
-            valOrDefRhs.setAccessible(true)
-            valOrDefRhs.set(tree, rhs)
+            field.setAccessible(true)
+            field.set(obj, value)
           catch
             case NonFatal(e) =>
+
+        def placementType(tpe: TypeRepr) =
+          correctlyTyped(tpe) && !(tpe =:= TypeRepr.of[Nothing]) &&
+          (tpe.typeSymbol == `language.on` || tpe.typeSymbol == `embedding.on`)
 
         def maybePlacementTypeConstructorTree(tree: Any) = tree match
           case Tree(
@@ -218,10 +254,10 @@ object MultitierPreprocessor:
             if multitierAnnottee && (flags(decl) is Flags.Module) && (flags(symbol) is Flags.Deferred) then
               resetFlag.invoke(denot.invoke(symbol, context), Flags.Deferred)
               if !mayHaveAnnotationSymbol(symbol, deferred) then
-                SymbolMutator.get.get.updateAnnotationWithTree(symbol, deferredAnnotation)
+                SymbolMutator.getOrErrorAndAbort.updateAnnotationWithTree(symbol, deferredAnnotation)
 
             if !mayHaveAnnotationSymbol(symbol, compileTimeOnly) then
-              SymbolMutator.get.get.updateAnnotationWithTree(symbol, compileTimeOnlyAnnotation)
+              SymbolMutator.getOrErrorAndAbort.updateAnnotationWithTree(symbol, compileTimeOnlyAnnotation)
 
           else if symbol.isClassDef && (isMultitierAnnottee(symbol) || (flags(symbol) is Flags.Module)) then
             processDeclarations(symbol)
@@ -229,16 +265,43 @@ object MultitierPreprocessor:
 
         def processTree(decl: Any, multitierAnnottee: Boolean, compileTimeOnlyAnnotation: Term, tree: Any): Unit =
           if valOrDefDefClass.isInstance(tree) then
+            val untypedTpt = tpt.invoke(tree)
+            val maybeTypedTpt = untypedTpt match
+              case Tree(tree: TypeTree) => tryTypingTypeTree(tree)
+              case _ => None
+            val typedTpt = maybeTypedTpt getOrElse Singleton(Literal(NullConstant()))
+
+            val hasPlacementType = placementType(typedTpt.tpe)
+
+            def of(args: List[Any]) =
+              appliedTypeTree.invoke(null, TypedSplice(TypeIdent(`embedding.of`)), args, Position.ofMacroExpansion.sourceFile)
+
+            def isNothing(tpe: TypeRepr): Boolean = tpe match
+              case _ if !correctlyTyped(tpe) || !(tpe <:< TypeRepr.of[Nothing]) => false
+              case AnnotatedType(underlying, _) => isNothing(underlying)
+              case AndType(left, right) => isNothing(left) && isNothing(right)
+              case Refinement(parent, name, _) => name != "on" && isNothing(parent)
+              case _ => tpe.typeSymbol != `embedding.of`
+
+            (untypedTpt, typedTpt.tpe) match
+              case (_, AppliedType(_, List(valueType, _)))
+                  if hasPlacementType && isNothing(valueType) && infixOpClass.isInstance(untypedTpt) =>
+                mutateField(infixLeft, untypedTpt, of(List(left.invoke(untypedTpt), right.invoke(untypedTpt))))
+              case (Tree(Applied(tpt, args @ List(_, _))), AppliedType(_, List(valueType, _)))
+                  if hasPlacementType && isNothing(valueType) =>
+                mutateField(appliedTypeTreeArgs, untypedTpt, of(args) :: args.tail)
+              case _ =>
+
             val rhs = unforcedRhs.invoke(tree)
             if isEmpty.invoke(rhs) == true then
               if multitierAnnottee && (flags(decl) is Flags.Module) then
                 if !mayHaveAnnotationSymbol(tree, deferred) then
                   setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(deferredAnnotation)))
                 if valDefClass.isInstance(tree) then
-                  mutateValOrDefRhs(valRhs, tree, TypedSplice(Ref(uninitialized)))
+                  mutateField(valRhs, tree, TypedSplice(Ref(uninitialized)))
                 if defDefClass.isInstance(tree) then
-                  mutateValOrDefRhs(defRhs, tree, TypedSplice(Ref(uninitialized)))
-            else if maybePlacementTypeTree(tpt.invoke(tree)) then
+                  mutateField(defRhs, tree, TypedSplice(Ref(uninitialized)))
+            else if hasPlacementType || maybePlacementTypeTree(untypedTpt) then
               val rhsMutatedToPlacedConstruct =
                 if applyClass.isInstance(rhs) then
                   val tree = fun.invoke(rhs)
@@ -253,9 +316,9 @@ object MultitierPreprocessor:
               if !rhsMutatedToPlacedConstruct then
                 def placedRhs = apply.invoke(null, TypedSplice(Ref(placed)), List(rhs), Position.ofMacroExpansion.sourceFile)
                 if valDefClass.isInstance(tree) then
-                  mutateValOrDefRhs(valRhs, tree, placedRhs)
+                  mutateField(valRhs, tree, placedRhs)
                 if defDefClass.isInstance(tree) then
-                  mutateValOrDefRhs(defRhs, tree, placedRhs)
+                  mutateField(defRhs, tree, placedRhs)
 
             if !mayHaveAnnotationSymbol(tree, compileTimeOnly) then
               setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(compileTimeOnlyAnnotation)))

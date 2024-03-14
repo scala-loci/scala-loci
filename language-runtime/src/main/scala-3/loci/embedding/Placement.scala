@@ -2,16 +2,18 @@ package loci
 package embedding
 
 import scala.annotation.{compileTimeOnly, implicitNotFound}
+import scala.annotation.unchecked.uncheckedVariance
 
+infix type of[T <: Nothing, P] = T { type on = P }
 infix type on[T, P] = Placed[P, T] & T
-infix type from[T, R] = PlacedValue[R, T]
+infix type from[T, R] = PlacedValue.Resolution[R, T]
 infix type fromSingle[T, P] = Placed.Selection.Single[P, T]
 infix type fromMultiple[T, P] = Placed.Selection.Multiple[P, T]
 
 object Placement:
   @implicitNotFound("Expression must be placed on a peer")
   sealed trait Context[+P]:
-    private type Peer = P
+    private[Context] type Peer = P @uncheckedVariance
 
   object Context:
     type Resolution[P] = Context[P] { type Peer = P }
