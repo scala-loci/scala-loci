@@ -1,11 +1,12 @@
 package loci
 package embedding
 
-import scala.annotation.{compileTimeOnly, implicitNotFound}
+import scala.annotation.{compileTimeOnly, implicitNotFound, nowarn}
 import scala.annotation.unchecked.uncheckedVariance
 
 infix type of[T <: Nothing, P] = T { type on = P }
-infix type on[T, P] = Placed[P, T] & T
+@nowarn // use `with` instead of `&` for better IDE compatibility
+infix type on[T, P] = Placed[P, T] with T
 infix type from[T, R] = PlacedValue.Resolution[R, T]
 infix type fromSingle[T, P] = Placed.Selection.Single[P, T]
 infix type fromMultiple[T, P] = Placed.Selection.Multiple[P, T]

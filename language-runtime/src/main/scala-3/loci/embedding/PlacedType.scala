@@ -144,7 +144,11 @@ sealed trait PlacedCleanSubjective extends PlacedCleanLocalPeerLocal:
   given subjective1[L, T, P, R, _on_[T, P] <: T on P]
     : PlacedClean[L, T per R _on_ P, T per R _on_ P, Unit] = erased
 
-sealed trait PlacedCleanAny extends PlacedCleanSubjective:
+sealed trait PlacedCleanOf extends PlacedCleanSubjective:
+  given of[L, T <: Nothing, P, U](using PlacedClean[L, T, T, U])
+    : PlacedClean[L, T of P, T of P, U] = erased
+
+sealed trait PlacedCleanAny extends PlacedCleanOf:
   given any[L]: PlacedClean[L, Any, Any, Any] = erased
 
 sealed trait PlacedCleanNull extends PlacedCleanAny:
@@ -168,6 +172,7 @@ object PlacedClean extends PlacedCleanAmbiguousResolutionBarrier:
   def cleanType[L: Type, T: Type](using Quotes) =
     import quotes.reflect.*
 
+    val of = Symbol.requiredPackage("loci.embedding").typeMember("of")
     val on = Symbol.requiredPackage("loci.embedding").typeMember("on")
     val local = Symbol.requiredPackage("loci.language").typeMember("Local")
     val unit = defn.UnitClass.typeRef
@@ -175,6 +180,8 @@ object PlacedClean extends PlacedCleanAmbiguousResolutionBarrier:
     object processor extends TypeMap(quotes):
       override def transform(tpe: TypeRepr) = tpe match
         case _ if tpe.typeSymbol.flags is Flags.Opaque => tpe
+        case Refinement(parent, name, _) if name == "on" && parent <:< TypeRepr.of[Nothing] => transform(parent)
+        case AppliedType(tycon, List(arg)) if tycon.typeSymbol == of => transform(arg)
         case AppliedType(tycon, List(arg)) if tycon.typeSymbol == local => transform(arg)
         case AppliedType(tycon, List(t, p)) if tycon.typeSymbol == on => t.asType match
           case '[ t `per` r ] => unit

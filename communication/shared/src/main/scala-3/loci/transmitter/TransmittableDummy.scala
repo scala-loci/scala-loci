@@ -57,10 +57,13 @@ trait TransmittableDummy:
           catch { case NonFatal(_) => None }
         })
 
-    '{
+    val Inlined(_, _, Block(List(resolutionFailure), _)) = '{
       @compileTimeOnly(${Expr(message)}) def resolutionFailure() = ()
-      resolutionFailure()
-      ${transmittableDummy.get}
-    }
+    }.asTerm: @unchecked
+
+    Block(
+        List(resolutionFailure, Ref(resolutionFailure.symbol).appliedToNone),
+        transmittableDummy.get.asTerm)
+      .asExprOf[TransmittableFallback]
   end resolutionFailureImpl
 end TransmittableDummy
