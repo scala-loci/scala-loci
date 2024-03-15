@@ -24,9 +24,13 @@ sealed trait MultiplicityTie {
   implicit def tie[L, R, T, M, N](implicit ev0: Tie[L, R, N], ev1: M =:= N): Multiplicity[L, R, T, T, M] = erased(ev0, ev1)
 }
 
-object Multiplicity extends MultiplicityTie {
-  implicit def single[L, R, T]: Multiplicity[L, R, Placed.Selected.Single[T], T, Tie.Single] = erased
-  implicit def multiple[L, R, T]: Multiplicity[L, R, Placed.Selected.Multiple[T], T, Tie.Multiple] = erased
+sealed trait MultiplicitySelection extends MultiplicityTie {
+  implicit def single[L, R, T, N](implicit ev: Tie[L, R, N]): Multiplicity[L, R, Placed.Selected.Single[T], T, Tie.Single] = erased(ev)
+  implicit def multiple[L, R, T, N](implicit ev: Tie[L, R, N]): Multiplicity[L, R, Placed.Selected.Multiple[T], T, Tie.Multiple] = erased(ev)
+}
+
+object Multiplicity extends MultiplicitySelection {
+  implicit def nothing[L, R, M, N](implicit ev0: Tie[L, R, N], ev1: M =:= N): Multiplicity[L, R, Nothing, Nothing, M] = erased(ev0, ev1)
 }
 
 

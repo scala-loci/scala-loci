@@ -30,10 +30,13 @@ object Serializable:
     val baseMessage = s"${TypeRepr.of[T].safeShow("Value")} is not serializable"
     val message = s"$baseMessage${utility.implicitHints.values(TypeRepr.of[Serializable[T]])}"
 
-    '{
+    val Inlined(_, _, Block(List(resolutionFailure), _)) = '{
       @compileTimeOnly(${Expr(message)}) def resolutionFailure() = ()
-      resolutionFailure()
-      dummy[T]
-    }.asExprOf[SerializableFallback]
+    }.asTerm: @unchecked
+
+    Block(
+        List(resolutionFailure, Ref(resolutionFailure.symbol).appliedToNone),
+        '{ dummy[T] }.asTerm)
+      .asExprOf[SerializableFallback]
   end resolutionFailureImpl
 end Serializable

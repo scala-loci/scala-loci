@@ -670,13 +670,13 @@ object reflectionExtensions:
 
       def show(tpe: TypeRepr) = showType(tpe)
 
-      private def showType(tpe: TypeRepr): String =
+      private def showType(tpe: TypeRepr, typeArgument: Boolean = false): String =
         try tpe.show(using printer)
         catch case NonFatal(_) =>
           try tpe match
             case AppliedType(tycon, args) =>
               val tyconName = showType(tycon)
-              val argsNames = args map showType
+              val argsNames = args map { showType(_, typeArgument = true) }
               if tyconName.isEmpty then ""
               else if argsNames contains "" then tyconName
               else s"$tyconName[${argsNames.mkString(", ")}]"
@@ -694,7 +694,7 @@ object reflectionExtensions:
               if annotationName.nonEmpty then s"$underlyingName @$annotationName"
               else underlyingName
             case MatchType(_, scrutinee, cases) =>
-              val casesNames = cases map showType
+              val casesNames = cases map { showType(_) }
               s"${showType(scrutinee)} match { ${casesNames.mkString(" ")} }"
             case MatchCase(pattern, rhs) =>
               s"case ${showType(pattern)} => ${showType(rhs)}"
@@ -729,7 +729,10 @@ object reflectionExtensions:
             case tpe: OrType =>
               showAndOrType(tpe, "|")
             case TypeBounds(low, hi) =>
-              s">: ${showType(low)} <: ${showType(hi)}"
+              if typeArgument then
+                s"? >: ${showType(low)} <: ${showType(hi)}"
+              else
+                s">: ${showType(low)} <: ${showType(hi)}"
             case ConstantType(constant) =>
               constant.value.toString
             case _ =>
