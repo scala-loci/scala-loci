@@ -17,10 +17,10 @@ trait AccessPath:
       if symbol == to then
         Some(path)
       else
-        val outerAccessor = placedValuesSymbol(symbol, defn.AnyClass).declaredFields find { _.isParamAccessor }
+        val outerAccessor = synthesizedPlacedValues(symbol, defn.AnyClass).symbol.declaredFields find { _.isParamAccessor }
         outerAccessor flatMap { outerAccessor => multitierOuterAccess(symbol.owner, path.select(outerAccessor)) }
 
-    multitierOuterAccess(from, This(placedValuesSymbol(from, peer)))
+    multitierOuterAccess(from, This(synthesizedPlacedValues(from, peer).symbol))
   end multitierOuterAccess
 
   def multitierAccessPath(path: Term, from: Symbol, peer: Symbol): Option[Term] = path match

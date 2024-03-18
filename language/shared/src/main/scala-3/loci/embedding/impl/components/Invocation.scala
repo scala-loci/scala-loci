@@ -67,7 +67,7 @@ trait Invocation:
           val definitions =
             if isMultitierModule(symbol) then
               PeerInfo.ofModule(symbol) map: peerInfo =>
-                placedValuesSymbol(symbol, peerInfo.peerType.typeSymbol) -> peerInfo.peerType
+                synthesizedPlacedValues(symbol, peerInfo.peerType.typeSymbol).symbol -> peerInfo.peerType
             else
               List.empty
 
