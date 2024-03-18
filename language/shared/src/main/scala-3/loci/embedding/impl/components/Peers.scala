@@ -45,7 +45,7 @@ trait Peers:
 
     @targetName("ofModuleSymbol")
     def ofModule(symbol: Symbol): List[PeerInfo] =
-      ofModule(This(symbol).tpe)
+      ofModule(ThisType(symbol))
 
     @targetName("ofModuleType")
     def ofModule(tpe: TypeRepr): List[PeerInfo] =

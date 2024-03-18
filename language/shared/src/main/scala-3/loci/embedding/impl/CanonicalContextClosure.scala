@@ -94,6 +94,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
     r match
       case AppliedType(fun, typeArgs @ List(_, peer)) if fun.typeSymbol == symbols.`embedding.on` =>
         val symbol = namedOwner(Symbol.spliceOwner.owner)
+
         if (symbol.isDefDef || symbol.isValDef) && !symbol.isLocalDummy && symbol.owner.isClassDef && isMultitierModule(symbol.owner) then
           val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
           val contextClass = Class.forName("dotty.tools.dotc.core.Contexts$Context")

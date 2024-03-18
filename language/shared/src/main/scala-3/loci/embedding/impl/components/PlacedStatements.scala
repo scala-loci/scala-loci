@@ -147,7 +147,7 @@ trait PlacedStatements:
       errorAndCancel(
         s"$statement must be $relation a peer type but is $relation ${peerType.safeShow}",
         stat.posInUserCode.startPosition)
-    if peerType.typeSymbol != defn.AnyClass && !(peerType =:= This(module.symbol).tpe.select(peerType.typeSymbol)) then
+    if peerType.typeSymbol != defn.AnyClass && !(peerType =:= ThisType(module.symbol).select(peerType.typeSymbol)) then
       errorAndCancel(
         s"$statement must be $relation a peer of module ${module.symbol.name} " +
         s"but is $relation peer ${peerType.safeShow}",
@@ -195,7 +195,7 @@ trait PlacedStatements:
           val (bindings, expr) = cleanPlacementSyntax(placementInfo, rhs)(stat.symbol)
           checkPlacementType(stat, bindings, placementInfo, module)
           if !placementInfo.modality.local then
-            paramss collectFirst Function.unlift(_.params find { _.symbol.isImplicit }) foreach: param =>
+            paramss collectFirst Function.unlift { _.params find { _.symbol.isImplicit } } foreach: param =>
               errorAndCancel("Non-local placed definitions cannot have context parameters.", param.posInUserCode)
           DefDef.copy(stat)(name, paramss, tpt, expr)
 

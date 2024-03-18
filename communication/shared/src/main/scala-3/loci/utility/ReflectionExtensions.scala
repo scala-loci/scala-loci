@@ -365,6 +365,9 @@ object reflectionExtensions:
               None
   end extension
 
+  extension (using Quotes)(thisTypeModule: quotes.reflect.ThisTypeModule)
+    def apply(symbol: quotes.reflect.Symbol) = quotes.reflect.This(symbol).tpe
+
   private object Substitutor:
     def substituteRefsInTerm(using Quotes)(
         substitutions: Map[quotes.reflect.Symbol, quotes.reflect.Symbol],
@@ -466,7 +469,7 @@ object reflectionExtensions:
           tpe
       case tpe: ThisType =>
         val tref = transform(tpe.tref)
-        if tref != tpe.tref then This(tref.typeSymbol).tpe else tpe
+        if tref != tpe.tref then ThisType(tref.typeSymbol) else tpe
       case SuperType(tpethis, tpesuper) =>
         val thistpe = transform(tpethis)
         val supertpe = transform(tpesuper)
