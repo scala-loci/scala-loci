@@ -191,7 +191,7 @@ trait Synthesis:
       val separator = if module.isType && !module.isPackageDef && !module.isModuleDef then "#" else "."
 
       def parentPlacedValues =
-        val tpe = This(module).tpe
+        val tpe = ThisType(module)
         module.typeRef.baseClasses.tail collect:
           case parent if isMultitierModule(parent) =>
             val symbol =

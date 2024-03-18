@@ -188,6 +188,7 @@ trait PlacedExpressions:
 
         super.transformTerm(term)(owner)
 
+      // keep direct placed values accesses through the intended language constructs that expect placed values
       // check arguments before applied function to improve error messages
       case term @ Apply(_, _) =>
         def clearTypeApplications(term: Term): Term = term match

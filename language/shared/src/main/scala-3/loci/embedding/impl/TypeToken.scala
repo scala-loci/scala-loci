@@ -694,7 +694,7 @@ object TypeToken:
         case token("!") :: (token("!") | token(".")) :: _ =>
           Option.ensure(prefix.isEmpty && from != defn.RootClass):
             deserializeOuterChain(from, tokens) flatMap: (symbol, tokens) =>
-              deserializeType(markPrefixPath(tokens), Some(This(symbol).tpe), typeParams, termParams, lookupParams = false)
+              deserializeType(markPrefixPath(tokens), Some(ThisType(symbol)), typeParams, termParams, lookupParams = false)
 
         case token("!") :: tokens =>
           Option.ensure(prefix.isEmpty):
@@ -749,7 +749,7 @@ object TypeToken:
 
             tpe flatMap: tpe =>
               val tokens = if isThisType || isSingletonType then markPrefixPath(tail) else tail
-              val prefix = if isThisType then This(tpe.typeSymbol).tpe else tpe
+              val prefix = if isThisType then ThisType(tpe.typeSymbol) else tpe
               deserializeType(tokens, Some(prefix), typeParams, termParams, lookupParams = false)
 
         case _ =>
