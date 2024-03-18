@@ -28,7 +28,7 @@ trait Peers:
         Right(PeerInfo(tpe, List.empty, List.empty))
       case tpe: TypeRef =>
         val symbol = tpe.typeSymbol
-        val position = symbol.pos getOrElse pos
+        val position = if symbol.flags is Flags.Synthetic then pos else symbol.pos getOrElse pos
         if tpe.typeSymbol.hasAnnotation(symbols.peer) then
           tpe.qualifier.memberType(symbol) match
             case TypeBounds(low: TypeRef, hi) =>

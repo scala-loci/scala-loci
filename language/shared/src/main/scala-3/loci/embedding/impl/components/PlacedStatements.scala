@@ -147,10 +147,10 @@ trait PlacedStatements:
       errorAndCancel(
         s"$statement must be $relation a peer type but is $relation ${peerType.safeShow}",
         stat.posInUserCode.startPosition)
-    if peerType.typeSymbol != defn.AnyClass && peerType.typeSymbol.owner != module.symbol then
+    if peerType.typeSymbol != defn.AnyClass && !(peerType =:= This(module.symbol).tpe.select(peerType.typeSymbol)) then
       errorAndCancel(
-        s"$statement must be $relation a peer of module ${fullName(module.symbol)} " +
-        s"but is $relation a peer in module ${fullName(peerType.typeSymbol.owner)}",
+        s"$statement must be $relation a peer of module ${module.symbol.name} " +
+        s"but is $relation peer ${peerType.safeShow}",
         stat.posInUserCode.startPosition)
 
   private def checkPlacementType(stat: Statement, bindings: List[Definition], placementInfo: PlacementInfo, module: ClassDef): Unit =

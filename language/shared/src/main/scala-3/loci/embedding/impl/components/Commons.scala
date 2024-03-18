@@ -87,6 +87,12 @@ trait Commons:
     def startPosition = if pos.startLine != pos.endLine then Position(pos.sourceFile, pos.start, pos.start) else pos
     def endPosition = if pos.startLine != pos.endLine then Position(pos.sourceFile, pos.end, pos.end) else pos
 
+  extension (tree: Term | TypeTree | TypeBoundsTree)
+    def tpe = tree match
+      case tree: Term => tree.tpe
+      case tree: TypeTree => tree.tpe
+      case tree: TypeBoundsTree => tree.tpe
+
   extension (symbol: Symbol)
     def findAncestor(predicate: Symbol => Boolean): Option[Symbol] =
       if symbol.exists then
