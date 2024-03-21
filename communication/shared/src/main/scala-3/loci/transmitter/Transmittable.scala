@@ -57,9 +57,10 @@ object Transmittable
       implicit context: Context.Receiving[Transmittables]): Proxy
 
 
-  transparent inline def apply[T](using resolution: Resolution[T, ?, ?, ?, ?]) = resolution.transmittable
 
-  transparent inline def Argument[T](using resolution: Resolution[T, ?, T, ?, ?]) = resolution.transmittable
+  transparent inline def apply[T](using inline resolution: Resolution[T, ?, ?, ?, ?]) = resolution.transmittable
+
+  transparent inline def Argument[T](using inline resolution: Resolution[T, ?, T, ?, ?]) = resolution.transmittable
 
 
   given nothing: IdenticallyTransmittable[Nothing] = IdenticallyTransmittable()

@@ -107,9 +107,19 @@ object TransmittableResolution:
 
                 transmittable.appliedToType(arg).appliedToNone
 
+              case Inlined(_, List(), tree) =>
+                transformTerm(tree)(owner)
+
               case _ =>
                 super.transformTerm(tree)(owner)
           end optimizer
+
+          class Substitutor(instantiations: collection.Map[ParamRef, TypeRepr]) extends TypeMap(quotes):
+            override def transform(tpe: TypeRepr) = tpe match
+              case tpe: ParamRef => instantiations.get(tpe) match
+                case Some(tpe) => transform(tpe)
+                case _ => super.transform(tpe)
+              case _ => super.transform(tpe)
 
           def typeParamInstantiations(expected: TypeRepr, actual: TypeRepr): Map[ParamRef, TypeRepr] =
             def stripRefinements(tpe: TypeRepr): TypeRepr = tpe match
@@ -157,10 +167,18 @@ object TransmittableResolution:
 
               case (expected: AppliedType, actual: AppliedType) =>
                 (expected.dealias, actual.dealias) match
-                  case (AppliedType(expectedFun, expectedArgs), AppliedType(actualFun, actualArgs))
-                      if expectedFun.typeSymbol == actualFun.typeSymbol &&
-                         expectedArgs.size == actualArgs.size =>
-                    (expectedArgs zip actualArgs flatMap typeParamInstantiations).toMap
+                  case (AppliedType(expectedFun, _), AppliedType(actualFun, _)) =>
+                    val instantiations = typeParamInstantiations(expectedFun, actualFun)
+                    val substitutor = Substitutor(instantiations)
+
+                    (substitutor.transform(expected).dealias, substitutor.transform(actual).dealias) match
+                      case (AppliedType(expectedFun, expectedArgs), AppliedType(actualFun, actualArgs))
+                          if expectedFun.typeSymbol == actualFun.typeSymbol &&
+                             expectedArgs.sizeIs == actualArgs.size =>
+                        instantiations ++ (expectedArgs zip actualArgs flatMap typeParamInstantiations).toMap
+                      case _=>
+                        Map.empty
+
                   case _=>
                     Map.empty
 
@@ -181,37 +199,32 @@ object TransmittableResolution:
           end typeParamInstantiations
 
           object typeParamInstantiator:
-            val instatiations = mutable.Map.empty[ParamRef, TypeRepr]
+            val instantiations = mutable.Map.empty[ParamRef, TypeRepr]
 
-            def updateInstatiations(update: Map[ParamRef, TypeRepr]) =
-              val newInstatiations = update -- instatiations.keys
-              if newInstatiations.nonEmpty then
-                instatiations ++= newInstatiations
+            val substitutor = Substitutor(instantiations)
+
+            def updateInstantiations(update: Map[ParamRef, TypeRepr]) =
+              val newInstantiations = update -- instantiations.keys
+              if newInstantiations.nonEmpty then
+                instantiations ++= newInstantiations
                 var updated = true
                 while updated do
                   updated = false
-                  instatiations mapValuesInPlace { (_, instatiation) =>
+                  instantiations mapValuesInPlace { (_, instatiation) =>
                     val newInstatiation = substitutor.transform(instatiation)
                     if newInstatiation != instatiation then updated = true
                     newInstatiation
                   }
 
-            object substitutor extends TypeMap(quotes):
-              override def transform(tpe: TypeRepr) = tpe match
-                case tpe: ParamRef => instatiations.get(tpe) match
-                  case Some(tpe) => transform(tpe)
-                  case _ => super.transform(tpe)
-                case _ => super.transform(tpe)
-
-            object instatiationsCollector extends SafeTreeMap(quotes):
+            object instantiationsCollector extends SafeTreeMap(quotes):
               override def transformTerm(tree: Term)(owner: Symbol) = tree match
                 case Apply(fun, args) =>
                   val transformedFun = transformTerm(fun)(owner)
 
                   transformedFun.tpe.widenTermRefByName match
-                    case MethodType(_, params, _) if args.size == params.size =>
+                    case MethodType(_, params, _) if args.sizeIs == params.size =>
                       val transformedArgs = params zip args map { (param, arg) =>
-                        updateInstatiations(typeParamInstantiations(param, arg.tpe.widenTermRefByName))
+                        updateInstantiations(typeParamInstantiations(param, arg.tpe.widenTermRefByName))
                         transformTerm(arg)(owner)
                       }
                       transformedFun.appliedToArgs(transformedArgs)
@@ -222,7 +235,7 @@ object TransmittableResolution:
                   val argsTypes = args map { _.tpe }
 
                   val argsTypesInstantiated = argsTypes map {
-                    case tpe: ParamRef => instatiations.getOrElse(tpe, tpe)
+                    case tpe: ParamRef => instantiations.getOrElse(tpe, tpe)
                     case tpe => tpe
                   }
 
@@ -233,16 +246,16 @@ object TransmittableResolution:
 
                 case _ =>
                   super.transformTerm(tree)(owner)
-            end instatiationsCollector
+            end instantiationsCollector
 
-            object instatiationsInserter extends SafeTreeMap(quotes):
+            object instantiationsInserter extends SafeTreeMap(quotes):
               override def transformTypeTree(tree: TypeTree)(owner: Symbol) =
                 val tpe = substitutor.transform(tree.tpe)
                 if tpe != tree.tpe then TypeTree.of(using tpe.asType) else tree
-            end instatiationsInserter
+            end instantiationsInserter
 
             def transformTerm(tree: Term)(owner: Symbol) =
-              instatiationsInserter.transformTerm(instatiationsCollector.transformTerm(tree)(owner))(owner)
+              instantiationsInserter.transformTerm(instantiationsCollector.transformTerm(tree)(owner))(owner)
           end typeParamInstantiator
 
           val optimized = optimizer.transformTerm(
@@ -264,7 +277,7 @@ object TransmittableResolution:
         Type.of[T] match
           case '[ Transmittable.Aux[b, i, r, p, t] ] =>
             Expr.summon[Transmittable.Resolution[b, i, r, p, t]] map { resolution =>
-              '{$resolution.transmittable}.asExprOf[T]
+              '{ $resolution.transmittable }.asExprOf[T]
             }
           case _ =>
             None
