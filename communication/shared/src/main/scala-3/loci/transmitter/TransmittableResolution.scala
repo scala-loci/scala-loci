@@ -18,7 +18,6 @@ object TransmittableResolution:
 
     optimizedTransmittableResolutionInProgress.withValue(true) {
       val resolutionDefault = TypeRepr.of[Transmittable.ResolutionDefault].typeSymbol
-      val resolutionAlternation = TypeRepr.of[Transmittable.ResolutionAlternation].typeSymbol
       val transmittable = TypeRepr.of[Transmittable.Any[?, ?, ?]].typeSymbol
       val identicallyTransmittable = TypeRepr.of[IdenticallyTransmittable[?]].typeSymbol
       val surrogateNothing = TypeRepr.of[Transmittable.SurrogateNothing].typeSymbol
@@ -34,16 +33,13 @@ object TransmittableResolution:
         case TypeBounds(low, hi) if hi.typeSymbol == defn.AnyClass => low
         case _ => tpe
 
-      def inferredOrWildcard(tpe: TypeRepr) =
-        if IsInferred(tpe) then tpe else TypeBounds.empty
-
       object approximator extends TypeMap(quotes):
         override def transform(tpe: TypeRepr) = tpe match
           case _ if tpe.typeSymbol == defn.AnyClass || tpe.typeSymbol == defn.NothingClass =>
             TypeBounds.empty
           case tpe: AppliedType =>
             val bounds = tpe.tycon.typeSymbol.declaredTypes collect { case symbol if symbol.isTypeParam => tpe.tycon.memberType(symbol) }
-            if tpe.args.size == bounds.size then
+            if tpe.args.sizeIs == bounds.size then
               val tycon = transform(tpe.tycon)
               val args = tpe.args zip bounds map {
                 case (tpe, TypeBounds(low, hi)) if tpe =:= low || tpe =:= hi => TypeBounds.empty
@@ -68,7 +64,7 @@ object TransmittableResolution:
 
       val resolutionType =
         val AppliedType(tycon, List(b, i, r, p, t)) = approximator.transform(TypeRepr.of[Transmittable.Resolution[B, I, R, P, T]]): @unchecked
-        surrogator.transform(tycon.appliedTo(List(TypeRepr.of[B], inferredOrWildcard(i), inferredOrWildcard(r), p, t)))
+        surrogator.transform(tycon.appliedTo(List(TypeRepr.of[B], i, r, p, t)))
 
       Implicits.search(resolutionType) match
         case result: ImplicitSearchSuccess =>
@@ -95,8 +91,7 @@ object TransmittableResolution:
               if tpe != tree.tpe then TypeTree.of(using tpe.asType) else tree
 
             override def transformTerm(tree: Term)(owner: Symbol) = tree match
-              case Apply(TypeApply(fun, _), List(_, _, arg))
-                  if fun.symbol.owner == resolutionDefault || fun.symbol.owner == resolutionAlternation =>
+              case Apply(TypeApply(fun, _), List(arg))  if fun.symbol.owner == resolutionDefault =>
                 val tpe = arg.tpe.widenTermRefByName
                 val args = transmittableParameters map { param =>
                   deskolemizerAndTransmittablesAliaser.transform(boundsAsAlias(tpe.resolvedMemberType(param) getOrElse TypeRepr.of[Any]))

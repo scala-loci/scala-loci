@@ -80,24 +80,14 @@ object Transmittable
     type Type = Transmittable.Aux[B, I, R, P, T]
     transparent inline def transmittable: Type = value
 
-  sealed trait ResolutionAlternation:
-    given resolutionAlternation[B, I, R](using
-      `IsInferred specificity dummy for I`: DummyImplicit,
-      `IsInferred specificity dummy for R`: DummyImplicit,
-      transmittable: Transmittable.Any[B, I, R])
-    : Resolution[B, I, R, transmittable.Proxy, transmittable.Transmittables] =
-      Resolution(transmittable)
-
-  sealed trait ResolutionDefault extends ResolutionAlternation:
+  sealed trait ResolutionDefault:
     given resolution[B, I, R](using
-      `IsInferred specificity dummy for I`: DummyImplicit,
-      `IsInferred specificity dummy for R`: DummyImplicit,
       transmittable: Transmittable.Any[B, I, R])
     : Resolution[B, I, R, transmittable.Proxy, transmittable.Transmittables] =
       Resolution(transmittable)
 
   object Resolution extends ResolutionDefault:
-    transparent inline given macroGenerated[B, I: IsInferred, R: IsInferred, P, T <: Transmittables](using
+    transparent inline given optimized[B, I, R, P, T <: Transmittables](using
       DummyImplicit.Resolvable)
     : Resolution[B, I, R, P, T] =
       ${ TransmittableResolution.optimizedTransmittableResolution[B, I, R, P, T] }
