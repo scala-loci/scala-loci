@@ -12,8 +12,13 @@ sealed trait SubjectivityDefault {
   implicit def default[T]: Subjectivity[Local[T], T] = erased
 }
 
-object Subjectivity extends SubjectivityDefault {
+sealed trait SubjectivitySubjective extends SubjectivityDefault {
   implicit def subjective[T, P]: Subjectivity[T per P, T] = erased
+}
+
+object Subjectivity extends SubjectivitySubjective {
+  implicit def nothingSubjective[P]: Subjectivity[Nothing per P, Nothing] = erased
+  implicit def nothing: Subjectivity[Nothing, Nothing] = erased
 }
 
 
