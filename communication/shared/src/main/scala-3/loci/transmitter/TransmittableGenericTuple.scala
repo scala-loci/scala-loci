@@ -43,8 +43,7 @@ object GenericTuple:
 
       val transmittable = resolution match
         case '{ Transmittable.Resolution[B, I, R, P, T]($transmittable) } => transmittable
-        case '{ Transmittable.Resolution.resolution[B, I, R](using $i, $b, $transmittable) } => transmittable
-        case '{ Transmittable.Resolution.resolutionAlternation[B, I, R](using $i, $b, $transmittable) } => transmittable
+        case '{ Transmittable.Resolution.resolution[B, I, R](using $transmittable) } => transmittable
 
       val expr = delegation.asTerm match
         case Inlined(_, List(), Inlined(_, List(), Inlined(_, List(), Block(_, expr)))) => expr
@@ -80,8 +79,7 @@ object GenericTuple:
 
       val transmittable = resolution match
         case '{ Transmittable.Resolution[B, I, R, P, T]($transmittable) } => transmittable
-        case '{ Transmittable.Resolution.resolution[B, I, R](using $i, $b, $transmittable) } => transmittable
-        case '{ Transmittable.Resolution.resolutionAlternation[B, I, R](using $i, $b, $transmittable) } => transmittable
+        case '{ Transmittable.Resolution.resolution[B, I, R](using $transmittable) } => transmittable
 
       val (provideTransformation, receiveTransformation) =
         makeTransformations[B *: EmptyTuple, I *: EmptyTuple, R *: EmptyTuple, Outer]
