@@ -33,11 +33,6 @@ object TermToken:
       case '\\' => "\\\\"
       case c => if c.isControl then f"\\u${c.toInt}%04x" else c.toString
 
-    object NestedTypeApplies:
-      def unapply(tree: Term): Some[Term] = tree match
-        case TypeApply(NestedTypeApplies(fun), _) => Some(fun)
-        case _ => Some(tree)
-
     def printSymbol(symbol: Symbol): Unit =
       val name = (if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol).name
       if symbol.isPackageObject then
@@ -47,18 +42,34 @@ object TermToken:
       else if symbol.maybeOwner.isClassDef && !symbol.maybeOwner.isPackageDef && !symbol.maybeOwner.isModuleDef then
         printSymbol(symbol.maybeOwner)
         builder += '#' ++= name
-      else
+      else if symbol.maybeOwner.exists then
         printSymbol(symbol.maybeOwner)
         builder += '.' ++= name
+      else if symbol.exists then
+        builder ++= name
 
     inline def printType(tpe: TypeRepr): Unit =
       builder ++= (TypeToken.typeSignature(tpe) flatMap { _.token }).mkString
 
     inline def printSingletonTypeTermRefOrElse(tree: Tree)(fallback: => Unit): Unit = tree match
       case tree: Term => tree.tpe match
-        case tpe: TermRef if tpe.typeSymbol.isModuleDef => printType(tpe)
-        case _ => fallback
-      case _ => fallback
+        case TermRef(qualifier, name) if qualifier.typeSymbol == defn.RootClass =>
+          builder ++= name
+        case TermRef(NoPrefix(), name) =>
+          builder ++= name
+        case TermRef(qualifier @ TermRef(_, _), name) =>
+          printType(qualifier)
+          builder += '.' ++= name
+        case TermRef(qualifier, name) if qualifier.typeSymbol.isModuleDef || qualifier.typeSymbol.isPackageDef =>
+          printType(qualifier)
+          builder += '.' ++= name
+        case TermRef(qualifier, name) =>
+          printType(qualifier)
+          builder += '#' ++= name
+        case _ =>
+          fallback
+      case _ =>
+        fallback
 
     inline def printTrees(trees: List[Tree], start: String, separator: String, end: String): Unit =
       builder ++= start
@@ -141,9 +152,8 @@ object TermToken:
             case stat: ValDef => !(stat.symbol.flags is Flags.Lazy) || !(stat.symbol.flags is Flags.Module)
             case _ => true
           printTrees(statements :+ expr, "{ ", "; ", " }")
-        case TypeApply(fun, args) =>
-          printNestedTree(fun)
-          printTrees(args, "[", ", ", "]")
+        case TypeApply(fun, _) =>
+          printTree(fun)
         case Select(qualifier @ Ident("_root_"), name) if !qualifier.symbol.maybeOwner.exists =>
           builder ++= name
         case Select(qualifier, name) =>
@@ -172,7 +182,7 @@ object TermToken:
         case Apply(fun @ Select(qualifier, "apply"), args) if qualifier.tpe.isContextFunctionType =>
           printNestedTree(fun)
           printTrees(args, "(using ", ", ", ")")
-        case Apply(NestedTypeApplies(fun), args) =>
+        case Apply(fun, args) =>
           val needParens = printingParentsOrAnnotationsNeedParens || args.nonEmpty || !printingParentsOrAnnotations
           printingParentsOrAnnotationsNeedParens = needParens
           printNestedTree(fun)

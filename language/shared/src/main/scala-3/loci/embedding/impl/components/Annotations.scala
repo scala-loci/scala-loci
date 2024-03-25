@@ -56,6 +56,12 @@ trait Annotations:
         symbols.compileTimeOnly,
         List(Literal(StringConstant(message))))
 
+  def compileTimeOnly(symbol: Symbol) =
+    symbol.getAnnotation(symbols.compileTimeOnly) match
+      case Some(Apply(_, List(Inlined(_, _, Literal(StringConstant(message)))))) => Some(message)
+      case Some(Apply(_, List(Literal(StringConstant(message))))) => Some(message)
+      case _ => None
+
   def canMakeTargetName = SymbolMutator.get.isDefined
 
   def tryMakeTargetName(symbol: Symbol, name: String) =
@@ -67,6 +73,7 @@ trait Annotations:
 
   def targetName(symbol: Symbol) =
     symbol.getAnnotation(symbols.targetName) match
+      case Some(Apply(_, List(Inlined(_, _, Literal(StringConstant(name)))))) => name
       case Some(Apply(_, List(Literal(StringConstant(name))))) => name
       case _ => symbol.name
 end Annotations
