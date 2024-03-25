@@ -5,6 +5,7 @@ package preprocessors
 
 import scala.reflect.ClassTag
 import scala.reflect.macros.blackbox
+import scala.util.control.NonFatal
 
 object SelectionTupling extends Preprocessor.Factory[SelectionTupling] {
   def apply[C <: blackbox.Context](c: C) = new SelectionTupling(c)
@@ -16,7 +17,7 @@ class SelectionTupling[C <: blackbox.Context](val c: C) extends Preprocessor[C] 
   def process(tree: Tree): Tree = {
     val multiargInfixDetection: Either[ClassTag[_], Array[Char]] =
       try Left(ClassTag(Class.forName("scala.reflect.internal.StdAttachments$MultiargInfixAttachment$")))
-      catch { case _: ClassNotFoundException => Right(c.enclosingPosition.source.content) }
+      catch { case NonFatal(_) => Right(c.enclosingPosition.source.content) }
 
     object transformer extends Transformer {
       override def transform(tree: Tree): Tree = tree match {

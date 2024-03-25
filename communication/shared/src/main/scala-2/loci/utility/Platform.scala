@@ -3,6 +3,7 @@ package utility
 
 import scala.reflect.NameTransformer
 import scala.reflect.macros.{TypecheckException, blackbox}
+import scala.util.control.NonFatal
 
 object platform {
   def annotation(c: blackbox.Context)(annottees: c.Tree*): c.Tree = {
@@ -184,7 +185,7 @@ object platform {
         try
           loci.platform.getClass.getMethod(expr.symbol.name.toString).invoke(loci.platform).asInstanceOf[Boolean]
         catch {
-          case _: NoSuchMethodException | _: IllegalArgumentException | _: ClassCastException =>
+          case NonFatal(_) =>
             c.abort(expr.pos, s"failed to read value: $expr")
         }
 

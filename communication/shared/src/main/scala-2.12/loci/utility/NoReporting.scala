@@ -2,6 +2,7 @@ package loci
 package utility
 
 import scala.reflect.macros.Universe
+import scala.util.control.NonFatal
 
 object noReporting {
   def apply[T](universe: Universe, default: T)(body: => T) = {
@@ -23,7 +24,7 @@ object noReporting {
       }
     }
     catch {
-      case _: ClassNotFoundException | _: NoSuchMethodException |  _: IllegalArgumentException =>
+      case NonFatal(_) =>
         None
     }
 
@@ -31,7 +32,7 @@ object noReporting {
       try body
       finally {
         try setRepoter.invoke(universe, reporter)
-        catch { case  _: IllegalArgumentException => }
+        catch { case NonFatal(_) => }
       }
     }
   }

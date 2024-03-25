@@ -179,21 +179,21 @@ object implicitHints {
         val symbolClass = Class.forName(s"scala.reflect.internal.Symbols$$Symbol")
         (symbolClass.getMethod("rawInfo"), symbolClass.getMethod("associatedFile"))
       }
-      catch { case _: ClassNotFoundException | _: NoSuchMethodException => (null, null) }
+      catch { case NonFatal(_) => (null, null) }
 
     def rawInfo(symbol: Symbol) =
       try rawInfoMethod.invoke(symbol) match {
         case tpe: Type => tpe
         case _ => NoType
       }
-      catch { case _: IllegalArgumentException => NoType }
+      catch { case NonFatal(_) => NoType }
 
     def associatedFile(symbol: Symbol) =
       try associatedFileMethod.invoke(symbol) match {
         case file: AbstractFile => file
         case _ => NoAbstractFile
       }
-      catch { case _: IllegalArgumentException => NoAbstractFile }
+      catch { case NonFatal(_) => NoAbstractFile }
 
     if (rawInfoMethod != null)
       queue.enqueue((c.mirror.RootClass, List.empty, 0))

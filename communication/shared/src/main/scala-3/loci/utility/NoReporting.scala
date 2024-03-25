@@ -4,6 +4,7 @@ package utility
 import java.io.{OutputStream, PrintStream}
 import java.util.Locale
 import scala.quoted.*
+import scala.util.control.NonFatal
 
 object noReporting:
   def apply[T](default: => T, useExploringContext: Boolean)(body: Quotes ?=> T)(using Quotes): T =
@@ -20,13 +21,13 @@ object noReporting:
               case quotes: Quotes => Some(quotes)
               case _ => None
             catch
-              case _: IllegalArgumentException =>
+              case NonFatal(_) =>
                 None
 
           quotes.fold(default) { body(using _) }
         })
     catch
-      case _: ClassNotFoundException | _: NoSuchMethodException |  _: IllegalArgumentException =>
+      case NonFatal(_) =>
         None
 
     invocation.fold(default) { apply(_)(default, useExploringContext)(_) }
@@ -56,7 +57,7 @@ object noReporting:
               wrapUpExplore.invoke(null, freshContext)
             }
 
-          catch case _: ClassNotFoundException | _: NoSuchMethodException | _: IllegalArgumentException =>
+          catch case NonFatal(_) =>
             val contextStateClass = Class.forName("dotty.tools.dotc.core.Contexts$ContextState")
             val contextPoolClass = Class.forName("dotty.tools.dotc.core.Contexts$ContextPool")
             val exploreContextPool = contextStateClass.getMethod("exploreContextPool")
@@ -88,13 +89,13 @@ object noReporting:
           setReporter.invoke(freshContext, originalReporter)
           disposeFreshContext(originalReporter)
         catch
-          case _: IllegalArgumentException =>
+          case NonFatal(_) =>
       }
 
       Some(freshContext, finalize)
 
     catch
-      case _: ClassNotFoundException | _: NoSuchMethodException | _: NoSuchFieldException | _: IllegalArgumentException =>
+      case NonFatal(_) =>
         None
 
     reset.fold(default) { (context, finalize) =>

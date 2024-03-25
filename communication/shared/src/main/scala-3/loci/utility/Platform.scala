@@ -4,6 +4,7 @@ package utility
 import utility.reflectionExtensions.*
 
 import scala.quoted.*
+import scala.util.control.NonFatal
 
 object platform:
   def apply[T: Type](cond: Expr[Boolean])(body: Expr[T])(using Quotes): Expr[Unit] =
@@ -104,7 +105,7 @@ object platform:
         try
           loci.platform.getClass.getMethod(expr.symbol.name).invoke(loci.platform).asInstanceOf[Boolean]
         catch
-          case _: NoSuchMethodException | _: IllegalArgumentException | _: ClassCastException =>
+          case NonFatal(_) =>
             report.errorAndAbort(s"failed to read value: ${expr.safeShow("")}", expr.pos)
 
       case _ if isStable(expr) =>

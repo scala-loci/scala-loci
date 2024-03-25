@@ -6,6 +6,7 @@ import scala.collection.mutable
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
 import scala.util.Properties
+import scala.util.control.NonFatal
 
 object Multitier {
   def compilationFailure(message: String): Unit = macro compilationFailureImpl
@@ -368,7 +369,7 @@ class Multitier(val c: blackbox.Context) {
       case pos: Position @unchecked => pos
       case _ => throw e
     }
-    catch { case _: NoSuchFieldException => throw e }
+    catch { case NonFatal(_) => throw e }
 
   private def improveMacroErrorReporting(annottee: Tree): PartialFunction[Throwable, Tree] = {
     case e: Throwable

@@ -41,7 +41,7 @@ object implicitHints:
          abstractFileClass.getMethod("path"),
          abstractFileClass.getMethod("underlyingSource")))
     catch
-      case _: ClassNotFoundException | _: NoSuchMethodException =>
+      case NonFatal(_) =>
         None
 
   private def mightBeScalaSource(using Quotes)(symbol: quotes.reflect.Symbol): Boolean =
@@ -96,7 +96,7 @@ object implicitHints:
         mightBeScalaSource(associatedFileMethod.invoke(symbol, quotes.getClass.getMethod("ctx").invoke(quotes)))
       }
     catch
-      case _: NoSuchMethodException | _: IllegalArgumentException =>
+      case NonFatal(_) =>
         true
   end mightBeScalaSource
 
@@ -117,7 +117,7 @@ object implicitHints:
          importClass,
          nameClass))
     catch
-      case _: ClassNotFoundException | _: NoSuchMethodException =>
+      case NonFatal(_) =>
         None
 
   private def importNames(using Quotes)(file: quotes.reflect.SourceFile) =
@@ -147,7 +147,7 @@ object implicitHints:
               importNames(insideImportScope = false)(tree) - "_" - ""
             }
           catch
-            case _: NoSuchMethodException | _: IllegalArgumentException =>
+            case NonFatal(_) =>
               Set.empty
 
         importNamesCache.put(file, names)
@@ -177,7 +177,7 @@ object implicitHints:
         typeSymbols(tpe)
 
       catch
-        case _: ClassNotFoundException | _: ClassCastException =>
+        case NonFatal(_) =>
           Set(tpe.typeSymbol)
 
     symbols flatMap { symbol =>
@@ -689,7 +689,7 @@ object implicitHints:
         case _ => defaultOnError
 
     catch
-      case _: ClassNotFoundException | _: NoSuchMethodException | _: IllegalArgumentException =>
+      case NonFatal(_) =>
         defaultOnError
 
   def extensions(using Quotes)(tpe: quotes.reflect.TypeRepr): String =
