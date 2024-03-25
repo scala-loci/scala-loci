@@ -1,6 +1,7 @@
 package loci
 package transmitter
 
+import utility.DummyImplicit
 import utility.reflectionExtensions.*
 
 import scala.annotation.compileTimeOnly
@@ -8,12 +9,24 @@ import scala.concurrent.Future
 import scala.util.control.NonFatal
 import scala.quoted.*
 
-trait TransmittableDummy:
+trait TransmittableDummyFallback:
+  this: Transmittable.Base =>
+
+  @compileTimeOnly("Value is not transmittable")
+  transparent inline given resolutionFailure[B, I, TransmittableFallback[_, _, _]](using
+      inline ev0: DummyImplicit.Unresolvable,
+      inline ev1: Transmittable.Any[B, I, B] =:= TransmittableFallback[B, I, B])
+    : TransmittableFallback[B, I, B] =
+      ${ Transmittable.resolutionFailureImpl[B, I, B, TransmittableFallback[B, I, B]] }
+end TransmittableDummyFallback
+
+trait TransmittableDummy extends TransmittableDummyFallback:
   this: Transmittable.Base =>
 
   @compileTimeOnly("Value is not transmittable")
   transparent inline given resolutionFailure[B, I, R, TransmittableFallback[_, _, _]](using
-      inline ev: Transmittable.Any[B, I, R] =:= TransmittableFallback[B, I, R])
+      inline ev0: DummyImplicit.Resolvable,
+      inline ev1: Transmittable.Any[B, I, R] =:= TransmittableFallback[B, I, R])
     : TransmittableFallback[B, I, R] =
       ${ Transmittable.resolutionFailureImpl[B, I, R, TransmittableFallback[B, I, R]] }
 
@@ -53,8 +66,8 @@ trait TransmittableDummy:
           '{ Transmittable.dummy[B, B, R, Future[B], Transmittables.None] },
           '{ Transmittable.dummy[B, I, R, Future[B], Transmittables.None] })
         collectFirst Function.unlift { expr =>
-          try Some(expr.asExprOf[TransmittableFallback])
-          catch { case NonFatal(_) => None }
+          val Inlined(_, _, dummy) = expr.asTerm: @unchecked
+          Option.when(dummy.tpe <:< TypeRepr.of[TransmittableFallback]) { dummy }
         })
 
     val Inlined(_, _, Block(List(resolutionFailure), _)) = '{
@@ -63,7 +76,7 @@ trait TransmittableDummy:
 
     Block(
         List(resolutionFailure, Ref(resolutionFailure.symbol).appliedToNone),
-        transmittableDummy.get.asTerm)
+        transmittableDummy.get)
       .asExprOf[TransmittableFallback]
   end resolutionFailureImpl
 end TransmittableDummy

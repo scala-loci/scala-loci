@@ -3,6 +3,8 @@ package embedding
 
 import loci.language.{on as _, *}
 
+import scala.annotation.unchecked.uncheckedVariance
+
 abstract class PlacedValue[-P, +T] private[loci]:
   private[PlacedValue] type on = P @uncheckedVariance
 //  extends Dynamic:

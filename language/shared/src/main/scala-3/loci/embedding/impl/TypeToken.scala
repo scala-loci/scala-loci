@@ -60,6 +60,7 @@ object TypeToken:
 
   def apply(tokens: List[String]): List[TypeToken] = tokens map escape
 
+  val ` ` = token(" ")
   val `.` = token(".")
   val `#` = token("#")
   val `(` = token("(")
@@ -68,6 +69,8 @@ object TypeToken:
   val `]` = token("]")
   val `{` = token("{")
   val `}` = token("}")
+  val `<` = token("<")
+  val `>` = token(">")
   val `:` = tokens(":", " ")
   val `,` = tokens(",", " ")
   val `;` = tokens(";", " ")
@@ -103,8 +106,10 @@ object TypeToken:
         List(escape(name))
       else if symbol.maybeOwner.isClassDef && !symbol.maybeOwner.isPackageDef && !symbol.maybeOwner.isModuleDef then
         symbolSignature(symbol.maybeOwner) ++ List(`#`, escape(name))
-      else
+      else if symbol.maybeOwner.exists then
         symbolSignature(symbol.maybeOwner) ++ List(`.`, escape(name))
+      else
+        List(escape(name))
 
     def typeSignature(tpe: TypeRepr): List[TypeToken] =
       underlying(tpe.dealiasNonOpaque) match
@@ -112,14 +117,32 @@ object TypeToken:
           symbolSignature(tpe.typeSymbol)
         case Tuple(elements) =>
           tuple(elements.size)
-        case tpe if tpe.typeSymbol.exists =>
-          symbolSignature(tpe.typeSymbol)
         case tpe: ByNameType =>
           typeSignature(tpe.underlying)
-        case tpe: TermRef =>
-          tpe.qualifier.resolvedFieldMemberType(tpe.name).fold(any) { typeSignature }
+        case tpe: TermRef if tpe.termSymbol.isPackageObject && tpe.qualifier =:= tpe.termSymbol.owner.typeRef =>
+          typeSignature(tpe.qualifier)
         case tpe: TypeRef =>
           tpe.qualifier.resolvedTypeMemberType(tpe.name).fold(any) { typeSignature }
+        case tpe: NamedType =>
+          val symbol = tpe.typeSymbol
+          if symbol.exists then
+            val prefix = typeSignature(tpe.qualifier)
+            val suffix = escape(if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule.name else tpe.name)
+            tpe.qualifier match
+              case _ if tpe.qualifier.typeSymbol == defn.RootClass =>
+                List(suffix)
+              case NoPrefix() =>
+                List(suffix)
+              case TermRef(_, _) =>
+                prefix ++ List(`.`, suffix)
+              case _ if tpe.qualifier.typeSymbol.isModuleDef || tpe.qualifier.typeSymbol.isPackageDef =>
+                prefix ++ List(`.`, suffix)
+              case _ =>
+                prefix ++ List(`#`, suffix)
+          else
+            any
+        case tpe if tpe.typeSymbol.exists =>
+          symbolSignature(tpe.typeSymbol)
         case tpe: TypeBounds =>
           typeSignature(tpe.hi)
         case tpe: AndType =>
@@ -225,6 +248,12 @@ object TypeToken:
 
     object Tuple extends TupleExtractor(quotes)
 
+    def globallyReachablePrefix(symbol: Symbol): Boolean =
+      symbol.exists &&
+        (symbol == defn.RootClass ||
+          (globallyReachablePrefix(symbol.maybeOwner) &&
+            (symbol.isModuleDef || symbol.isPackageDef)))
+
     def serializeSymbol(symbol: Symbol): Option[List[TypeToken]] =
       Option.ensure(symbol.exists):
         val name = (if symbol.isClassDef && symbol.isModuleDef then symbol.companionModule else symbol).name
@@ -297,7 +326,7 @@ object TypeToken:
           Some(List.empty)
         else
           val outerChain =
-            Option.ensure(from != defn.RootClass):
+            Option.ensure(from != defn.RootClass && !globallyReachablePrefix(symbol.maybeOwner)):
               serializeOuterChain(from, symbol) map { _ ++ tokens(".", "this") }
           val chain =
             outerChain orElse:
