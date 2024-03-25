@@ -80,7 +80,7 @@ object reflectionExtensions:
           case flags: Flags @unchecked if Flags.EmptyFlags.getClass.isInstance(flags) => allFlags ::= flags
           case _ =>
       catch
-        case _: ClassNotFoundException | _: NoSuchFieldException | _: NoSuchMethodException =>
+        case NonFatal(_) =>
 
       allFlags.foldLeft(EmptyFlags) { (result, flag) =>
         if (flags is flag) && !(other is flag) then result | flag else result
@@ -787,10 +787,10 @@ object reflectionExtensions:
                   None
             else
               None
-          catch { case _: IllegalArgumentException | _: ClassCastException => None }
+          catch case NonFatal(_) => None
         }
       catch
-        case _: ClassNotFoundException | _: NoSuchMethodException =>
+        case NonFatal(_) =>
           (quotes: Quotes, tpe: Any) => None
 
     def strip(using Quotes)(tpe: quotes.reflect.TypeRepr) =
@@ -820,10 +820,10 @@ object reflectionExtensions:
                   None
             else
               None
-          catch { case _: IllegalArgumentException | _: ClassCastException => None }
+          catch case NonFatal(_) => None
         }
       catch
-        case _: ClassNotFoundException | _: NoSuchMethodException =>
+        case NonFatal(_) =>
           (quotes: Quotes, tpe: Any, from: Any, to: Any) => None
 
     def substitute(using Quotes)(tpe: quotes.reflect.TypeRepr, from: quotes.reflect.ParamRef, to: quotes.reflect.TypeRepr) =
@@ -875,10 +875,10 @@ object reflectionExtensions:
                   None
             else
               None
-          catch { case _: IllegalArgumentException | _: ClassCastException => None }
+          catch case NonFatal(_) => None
         }
       catch
-        case _: ClassNotFoundException | _: NoSuchMethodException =>
+        case NonFatal(_) =>
           (quotes: Quotes, tpe: Any) => None
 
     def unapply(using Quotes)(tpe: quotes.reflect.TypeRepr) =

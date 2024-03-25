@@ -3,6 +3,7 @@ package embedding
 package impl
 
 import scala.quoted.*
+import scala.util.control.NonFatal
 
 class SymbolMutator private ():
   private val quotesImplClass = Class.forName("scala.quoted.runtime.impl.QuotesImpl")
@@ -97,7 +98,7 @@ class SymbolMutator private ():
 object SymbolMutator:
   private val instance =
     try Some(SymbolMutator())
-    catch case _: ClassNotFoundException | _ : NoSuchFieldException | _ : NoSuchMethodException => None
+    catch case NonFatal(_) => None
 
   def get: Option[SymbolMutator] = instance
 
