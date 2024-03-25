@@ -4,6 +4,7 @@ package impl
 
 import java.io.File
 import scala.quoted.*
+import scala.util.control.NonFatal
 
 object APIExtraction:
   def extractAPI(using Quotes)(module: quotes.reflect.ClassDef): Unit =
@@ -32,7 +33,7 @@ object APIExtraction:
 
       val incrementalCallbackClass =
         try Class.forName("dotty.tools.dotc.sbt.interfaces.IncrementalCallback")
-        catch case _: ClassNotFoundException => null
+        catch case NonFatal(_) => null
 
       val context = ctx.invoke(quotes)
       val sourceFile = source.invoke(context)
@@ -75,6 +76,6 @@ object APIExtraction:
           case _ =>
       end if
     catch
-      case _: ClassNotFoundException | _ : NoSuchMethodException =>
+      case NonFatal(_) =>
   end extractAPI
 end APIExtraction
