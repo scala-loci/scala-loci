@@ -20,6 +20,9 @@ trait Commons:
     val `language.on` = Symbol.requiredPackage("loci.language").typeMember("on")
     val `embedding.on` = Symbol.requiredPackage("loci.embedding").typeMember("on")
     val `embedding.of` = Symbol.requiredPackage("loci.embedding").typeMember("of")
+    val from = Symbol.requiredPackage("loci.embedding").typeMember("from")
+    val fromSingle = Symbol.requiredPackage("loci.embedding").typeMember("fromSingle")
+    val fromMultiple = Symbol.requiredPackage("loci.embedding").typeMember("fromMultiple")
     val on = TypeRepr.of[On[?]].typeSymbol
     val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
@@ -40,6 +43,11 @@ trait Commons:
     val asInstanceOf = '{ null.asInstanceOf }.asTerm.underlyingArgument.symbol
 
   object types:
+    val `language.on` = symbols.`language.on`.typeRef.appliedTo(List(TypeBounds.empty, TypeBounds.empty))
+    val `embedding.on` = symbols.`embedding.on`.typeRef.appliedTo(List(TypeBounds.empty, TypeBounds.empty))
+    val from = symbols.from.typeRef.appliedTo(List(TypeBounds.empty, TypeBounds.empty))
+    val fromSingle = symbols.fromSingle.typeRef.appliedTo(List(TypeBounds.empty, TypeBounds.empty))
+    val fromMultiple = symbols.fromMultiple.typeRef.appliedTo(List(TypeBounds.empty, TypeBounds.empty))
     val placedValue = TypeRepr.of[PlacedValue[?, ?]]
     val placed = TypeRepr.of[Placed[?, ?]]
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]]

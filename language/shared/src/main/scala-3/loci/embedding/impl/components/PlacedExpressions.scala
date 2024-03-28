@@ -57,6 +57,15 @@ trait PlacedExpressions:
     else
       None
 
+  private def selectionType(tpe: TypeRepr) = tpe match
+    case AppliedType(_, _) | Refinement(_, _, _) =>
+      !(tpe =:= TypeRepr.of[Nothing]) &&
+      !(tpe <:< types.`language.on`) &&
+      !(tpe <:< types.`embedding.on`) &&
+      (tpe <:< types.from || tpe <:< types.fromSingle || tpe <:< types.fromMultiple)
+    case _ =>
+      false
+
   private def checkPlacementTypes(tpe: TypeRepr, pos: Position, message: String) =
     val symbol = tpe.typeSymbol
     if symbol == symbols.`language.per` || symbol == symbols.`language.on` ||
@@ -65,7 +74,7 @@ trait PlacedExpressions:
        !(tpe =:= TypeRepr.of[Nothing]) && (tpe <:< types.context || tpe <:< types.placedValue || tpe <:< types.subjective) then
       errorAndCancel(message, pos)
 
-  private class TypePlacementTypesEraser(pos: Position, localPeer: Option[TypeRepr], checkOnly: Boolean) extends TypeMap(quotes):
+  private class TypePlacementTypesEraser(pos: Position, checkOnly: Boolean) extends TypeMap(quotes):
     override def transform(tpe: TypeRepr) =
       val erasedType =
         if !checkOnly then
@@ -74,11 +83,15 @@ trait PlacedExpressions:
               symbols.`embedding.on`.typeRef.appliedTo(args.reverse)
             case _ =>
               tpe
-          PlacementInfo(corrected).fold(super.transform(corrected)): placementInfo =>
-            if placementInfo.modality.subjective || !(localPeer forall { _ =:= placementInfo.peerType }) then
-              TypeRepr.of[Unit]
-            else
-              transform(placementInfo.valueType)
+
+          if selectionType(corrected) then
+            TypeRepr.of[Unit]
+          else
+            PlacementInfo(corrected).fold(super.transform(corrected)): placementInfo =>
+              if placementInfo.modality.subjective then
+                TypeRepr.of[Unit]
+              else
+                transform(placementInfo.valueType)
         else
           super.transform(tpe)
 
@@ -92,7 +105,7 @@ trait PlacedExpressions:
       if !canceled && termSymbol.exists && (isMultitierModule(termSymbol.owner) || !underExpansion(termSymbol)) then
         val widenedErasedType = erasedType.widen
         if widenedErasedType != erasedType && isMultitierModule(erasedType.termSymbol.owner) then
-          TypePlacementTypesEraser(pos, localPeer, checkOnly = true).transform(widenedErasedType)
+          TypePlacementTypesEraser(pos, checkOnly = true).transform(widenedErasedType)
 
       erasedType
   end TypePlacementTypesEraser
@@ -158,11 +171,11 @@ trait PlacedExpressions:
           stat.rhs map { rhs => transformTerm(rhs.changeOwner(symbol))(symbol) })
   end AdapatingDefinitionTypeCopier
 
-  private class ExpressionPlacementTypesEraser(checkOnly: Boolean, substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit)
+  private abstract class ExpressionPlacementTypesEraser(checkOnly: Boolean, substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit)
       extends AdapatingDefinitionTypeCopier(substitute, replace):
 
     def adaptedDefinitionType(stat: ValDef | DefDef) =
-      TypePlacementTypesEraser(stat.posInUserCode, peerContext(stat.symbol), checkOnly).transform(stat.symbol.info)
+      TypePlacementTypesEraser(stat.posInUserCode, checkOnly).transform(stat.symbol.info)
 
     override def transformTerm(term: Term)(owner: Symbol) = term match
       // erase placement lifting conversions
@@ -206,7 +219,7 @@ trait PlacedExpressions:
           case MethodType(_, paramTypes, _) =>
             paramTypes zip term.args map: (tpe, arg) =>
               if !(tpe =:= TypeRepr.of[Nothing]) && tpe <:< types.placedValue then
-                arg
+                super.transformTerm(arg)(owner)
               else
                 transformTerm(arg)(owner)
           case _ =>
@@ -237,7 +250,7 @@ trait PlacedExpressions:
 
       // check type of identifiers
       case Ident(_) | Select(_, _) if checkOnly =>
-        TypePlacementTypesEraser(term.posInUserCode, peerContext(owner), checkOnly = true).transform(term.tpe)
+        TypePlacementTypesEraser(term.posInUserCode, checkOnly = true).transform(term.tpe)
         super.transformTerm(term)(owner)
 
       // check that there are no remaining multitier terms
@@ -250,7 +263,7 @@ trait PlacedExpressions:
       // check inferred type trees and transform them to erase placement types (if possible)
       case Inferred() =>
         if !canceled then
-          val eraser = TypePlacementTypesEraser(tree.posInUserCode, peerContext(owner), checkOnly)
+          val eraser = TypePlacementTypesEraser(tree.posInUserCode, checkOnly)
           val tpe = eraser.transform(tree.tpe)
           if checkOnly || canceled || tpe == tree.tpe then tree else TypeTree.of(using tpe.asType)
         else
@@ -266,15 +279,25 @@ trait PlacedExpressions:
         checkPlacementTypes(tree.tpe, pos, "Illegal use of multitier construct.")
         val transformTree = super.transformTypeTree(tree)(owner)
         if !canceled then
-          TypePlacementTypesEraser(transformTree.posInUserCode, peerContext(owner), checkOnly = true).transform(transformTree.tpe)
+          TypePlacementTypesEraser(transformTree.posInUserCode, checkOnly = true).transform(transformTree.tpe)
         transformTree
   end ExpressionPlacementTypesEraser
+
+  private class ExpressionPlacementTypesEraserAndUnitCoercer(checkOnly: Boolean, substitute: (Symbol, Symbol) => Unit, replace: (Symbol, Symbol) => Unit)
+      extends ExpressionPlacementTypesEraser(checkOnly, substitute, replace):
+
+    override def transformTerm(term: Term)(owner: Symbol) = super.transformTerm(term)(owner) match
+      case term @ Block(stats, expr) =>
+        if !checkOnly && selectionType(expr.tpe) then Block(stats :+ expr, Literal(UnitConstant())) else term
+      case term =>
+        if !checkOnly && selectionType(term.tpe) then Block(List(term), Literal(UnitConstant())) else term
+  end ExpressionPlacementTypesEraserAndUnitCoercer
 
   private object typesInClosuresChecker extends TreeTraverser:
     override def traverseTree(tree: Tree)(owner: Symbol) = tree match
       case Lambda(_, _) =>
         val Block(_, Closure(_, tpe)) = tree: @unchecked
-        tpe foreach { TypePlacementTypesEraser(tree.posInUserCode, peerContext(owner), checkOnly = true).transform(_) }
+        tpe foreach { TypePlacementTypesEraser(tree.posInUserCode, checkOnly = true).transform(_) }
         super.traverseTree(tree)(owner)
       case _ =>
         super.traverseTree(tree)(owner)
@@ -353,12 +376,12 @@ trait PlacedExpressions:
     substituteReferences(term, substitutions, replacements, Set.empty)
   end substituteReferences
 
-  private val eraserCheckOnly = ExpressionPlacementTypesEraser(checkOnly = true, (_, _) => (), (_, _) => ())
+  private val eraserCheckOnly = ExpressionPlacementTypesEraserAndUnitCoercer(checkOnly = true, (_, _) => (), (_, _) => ())
 
   private def erasePlacementTypesFromBody(term: Term, owner: Symbol) =
     var substitutions = List.empty[(Symbol, Symbol)]
     var replacements = List.empty[(Symbol, Symbol)]
-    val eraser = ExpressionPlacementTypesEraser(checkOnly = false, substitutions ::= _ -> _, replacements ::= _ -> _)
+    val eraser = ExpressionPlacementTypesEraserAndUnitCoercer(checkOnly = false, substitutions ::= _ -> _, replacements ::= _ -> _)
     val expr = transformPlacedBody(term): (symbol, body, expr) =>
       val term = if canceled then body else eraseSubjectiveTypesInClosures(eraser.transformTerm(body)(symbol))
       if !canceled then typesInClosuresChecker.traverseTree(term)(owner)
@@ -417,7 +440,7 @@ trait PlacedExpressions:
 
     tpt match
       case Inferred() =>
-        val eraser = TypePlacementTypesEraser(tpt.posInUserCode, peerContext(owner), checkOnly = true)
+        val eraser = TypePlacementTypesEraser(tpt.posInUserCode, checkOnly = true)
         PlacementInfo(tpt.tpe).fold(eraser.transform(tpt.tpe)) { placementInfo =>
           eraser.transform(placementInfo.valueType)
           eraser.transform(placementInfo.peerType)

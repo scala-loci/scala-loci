@@ -49,7 +49,7 @@ def inferrableCanonicalPlacementTypeContextClosure[T: Type, R: Type](using Quote
       val local = t.typeSymbol == symbols.`language.Local`
       (t.asType, p.asType) match
         case ('[ t ], '[ p ]) =>
-          PlacedClean.cleanType[p, t] match
+          PlacedClean.cleanType[t] match
             case '[ u ] =>
               val u = if local then symbols.`language.Local`.typeRef.appliedTo(TypeRepr.of[u]) else TypeRepr.of[u]
               symbols.`embedding.on`.typeRef.appliedTo(List(u, TypeRepr.of[p]))
