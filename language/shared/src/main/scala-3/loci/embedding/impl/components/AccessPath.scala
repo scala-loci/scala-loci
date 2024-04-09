@@ -9,7 +9,7 @@ import scala.annotation.experimental
 
 @experimental
 trait AccessPath:
-  this: Component & Commons & Synthesis =>
+  this: Component & Commons & PlacedValueSynthesis =>
   import quotes.reflect.*
 
   private def multitierOuterAccess(from: Symbol, to: Symbol, peer: Symbol) =

@@ -9,8 +9,8 @@ import scala.annotation.experimental
 import scala.collection.mutable
 
 @experimental
-trait Splitting:
-  this: Component & Commons & Placements & Peers & PlacedTransformations & PlacedStatements & Synthesis =>
+trait PlacedValueSplitting:
+  this: Component & Commons & Placements & Peers & PlacedTransformations & PlacedStatements & PlacedValueSynthesis =>
   import quotes.reflect.*
 
   private def synthesizePlacedDefinition(impl: Symbol, original: Statement, module: Symbol, peer: Symbol): ValDef | DefDef =
@@ -144,5 +144,5 @@ trait Splitting:
 
     ClassDef.copy(module)(module.name, module.constructor, module.parents, module.self, body ++ placedBody)
   end split
-end Splitting
+end PlacedValueSplitting
 

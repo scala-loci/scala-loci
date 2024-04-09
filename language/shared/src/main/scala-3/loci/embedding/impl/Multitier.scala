@@ -23,9 +23,10 @@ object Multitier:
       PlacedTransformations,
       PlacedStatements,
       PlacedExpressions,
-      RemoteAccess,
-      Synthesis,
-      Splitting,
+      PlacedValueSynthesis,
+      RemoteAccessorSynthesis,
+      SynthesisInjection,
+      PlacedValueSplitting,
       Invocation
 
     tree match

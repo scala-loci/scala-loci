@@ -9,7 +9,7 @@ import scala.annotation.experimental
 import scala.util.control.NonFatal
 
 @experimental
-trait RemoteAccess:
+trait RemoteAccessorSynthesis:
   this: Component & Commons & Placements & Annotations =>
   import quotes.reflect.*
 
@@ -115,4 +115,4 @@ trait RemoteAccess:
   private def synthesizeAccessorsFromClass(name: String): List[Definition] =
     List.empty
   end synthesizeAccessorsFromClass
-end RemoteAccess
+end RemoteAccessorSynthesis

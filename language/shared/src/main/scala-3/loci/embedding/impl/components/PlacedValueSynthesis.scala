@@ -9,13 +9,13 @@ import scala.annotation.experimental
 import scala.collection.mutable
 import scala.util.control.NonFatal
 
-object Synthesis:
+object PlacedValueSynthesis:
   private val synthesizedDefinitionsCache = mutable.Map.empty[Any, Any]
   private val synthesizedStatementsCache = mutable.Map.empty[Any, Any]
   private val synthesizedPlacedValuesCache = mutable.Map.empty[Any, Any]
 
 @experimental
-trait Synthesis:
+trait PlacedValueSynthesis:
   this: Component & Commons & Annotations & Placements =>
   import quotes.reflect.*
 
@@ -23,11 +23,11 @@ trait Synthesis:
   case class SynthesizedDefinitions(original: Symbol, binding: Symbol, init: Option[Symbol], impls: List[Symbol])
   case class SynthesizedStatements(binding: Symbol, impls: List[Symbol])
 
-  private val synthesizedDefinitionsCache = Synthesis.synthesizedDefinitionsCache match
+  private val synthesizedDefinitionsCache = PlacedValueSynthesis.synthesizedDefinitionsCache match
     case cache: mutable.Map[Symbol, SynthesizedDefinitions] @unchecked => cache
-  private val synthesizedStatementsCache = Synthesis.synthesizedStatementsCache match
+  private val synthesizedStatementsCache = PlacedValueSynthesis.synthesizedStatementsCache match
     case cache: mutable.Map[(Symbol, Symbol, Int), Option[SynthesizedStatements]] @unchecked => cache
-  private val synthesizedPlacedValuesCache = Synthesis.synthesizedPlacedValuesCache match
+  private val synthesizedPlacedValuesCache = PlacedValueSynthesis.synthesizedPlacedValuesCache match
     case cache: mutable.Map[(Symbol, Symbol), SynthesizedPlacedValues] @unchecked => cache
 
   private def mangledSymbolName(symbol: Symbol) =
@@ -270,4 +270,4 @@ trait Synthesis:
 
       SynthesizedPlacedValues(symbol, parents)
     })
-end Synthesis
+end PlacedValueSynthesis

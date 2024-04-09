@@ -10,7 +10,7 @@ import scala.collection.mutable
 
 @experimental
 trait Invocation:
-  this: Component & Commons & ErrorReporter & Placements & Peers & AccessPath & Synthesis =>
+  this: Component & Commons & ErrorReporter & Placements & Peers & AccessPath & PlacedValueSynthesis =>
   import quotes.reflect.*
 
   private def accessPath(term: Select, module: Symbol, peer: Symbol): Option[Term] =
