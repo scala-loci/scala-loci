@@ -26,13 +26,13 @@ trait PlacedTransformations:
 
   private def processPlacedBody(term: Term, transform: Option[(Symbol, Term, Term) => (Term, Option[Term])]) =
     def dropLastExpr(block: Block) = block.statements match
-      case (term: Term) +: Nil => term
-      case statements :+ (term: Term) => Block.copy(block)(statements, term)
-      case statements => Block.copy(block)(statements, Literal(UnitConstant()))
+      case (term: Term) +: Nil => (term, false)
+      case statements :+ (term: Term) => (Block.copy(block)(statements, term), false)
+      case statements => (Block.copy(block)(statements, Literal(UnitConstant())), true)
 
-    def appendExpr(original: Block)(term: Term, expr: Term) = term match
+    def appendExpr(original: Block)(term: Term, expr: Term, dropCoercedUnit: Boolean) = term match
       case Lambda(_, _) => Block.copy(original)(List(term), expr)
-      case block @ Block(statements, Literal(UnitConstant())) => Block.copy(block)(statements, expr)
+      case block @ Block(statements, Literal(UnitConstant())) if dropCoercedUnit => Block.copy(block)(statements, expr)
       case block @ Block(statements, _) => Block.copy(block)(statements :+ block.expr, expr)
       case _ => Block.copy(original)(List(term), expr)
 
@@ -41,10 +41,10 @@ trait PlacedTransformations:
           if arg.symbol.isImplicit &&
              !(arg.symbol.info =:= TypeRepr.of[Nothing]) && arg.symbol.info <:< types.context &&
              erased.tpe.typeSymbol == symbols.`embedding.on` =>
-        val body = dropLastExpr(block)
+        val (body, unitCoersionInserted) = dropLastExpr(block)
         transform.fold(body): transform =>
           val (rhs, expr) = transform(lambda.symbol, body, erased)
-          Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(expr.fold(rhs) { appendExpr(block)(rhs, _) }))), closure)
+          Block.copy(term)(List(DefDef.copy(lambda)(name, args, tpt, Some(expr.fold(rhs) { appendExpr(block)(rhs, _, unitCoersionInserted) }))), closure)
       case _ =>
         errorAndCancel("Unexpected shape of placed expression.", term.posInUserCode)
         term

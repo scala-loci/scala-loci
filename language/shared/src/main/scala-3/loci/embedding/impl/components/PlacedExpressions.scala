@@ -204,17 +204,6 @@ trait PlacedExpressions:
       // keep direct placed values accesses through the intended language constructs that expect placed values
       // check arguments before applied function to improve error messages
       case term @ Apply(_, _) =>
-        def clearTypeApplications(term: Term): Term = term match
-          case Apply(fun, args) =>
-            Apply.copy(term)(clearTypeApplications(fun), args)
-          case TypeApply(fun, args) => fun.tpe.widenTermRefByName match
-            case tpe @ PolyType(_, paramTypes, _) if paramTypes.sizeIs == args.size =>
-              TypeApply.copy(term)(clearTypeApplications(fun), (0 until paramTypes.size map { i => TypeTree.of(using tpe.param(i).asType) }).toList)
-            case _ =>
-              TypeApply.copy(term)(clearTypeApplications(fun), args)
-          case _ =>
-            term
-
         val args = clearTypeApplications(term.fun).tpe match
           case MethodType(_, paramTypes, _) =>
             paramTypes zip term.args map: (tpe, arg) =>

@@ -38,14 +38,14 @@ trait Annotations:
 //        else
 //          symbolMutator.removeAnnotation(symbol, symbols.contextResultCount)
 
-//  def canSetContextResultCount = SymbolMutator.get.isDefined
-//
-//  def trySetContextResultCount(symbol: Symbol, count: Int) =
-//    SymbolMutator.get foreach: symbolMutator =>
-//      symbolMutator.updateAnnotation(
-//        symbol,
-//        symbols.contextResultCount,
-//        List(Literal(IntConstant(count))))
+  def canSetContextResultCount = SymbolMutator.get.isDefined
+
+  def trySetContextResultCount(symbol: Symbol, count: Int) =
+    SymbolMutator.get foreach: symbolMutator =>
+      symbolMutator.updateAnnotation(
+        symbol,
+        symbols.contextResultCount,
+        List(Literal(IntConstant(count))))
 
   def canMakeCompileTimeOnly = SymbolMutator.get.isDefined
 

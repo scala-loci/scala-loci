@@ -5,14 +5,27 @@ package components
 
 import utility.reflectionExtensions.*
 
+import scala.annotation.compileTimeOnly
 import scala.annotation.experimental
 import scala.reflect.TypeTest
 import scala.quoted.*
+
+object Commons:
+  @compileTimeOnly("Cannot be used at run time")
+  transparent inline private def ?[T]: T =
+    throw new NotImplementedError
+
+  extension (expr: Expr[?])(using Quotes) private def symbol =
+    import quotes.reflect.*
+    expr.asTerm.underlyingArgument.symbol
+end Commons
 
 @experimental
 trait Commons:
   this: Component =>
   import quotes.reflect.*
+
+  import Commons.*
 
   object symbols:
     val `language.Local` = Symbol.requiredPackage("loci.language").typeMember("Local")
@@ -25,23 +38,34 @@ trait Commons:
     val fromMultiple = Symbol.requiredPackage("loci.embedding").typeMember("fromMultiple")
     val `language.multitier` = TypeRepr.of[language.multitier].typeSymbol
     val `embedding.multitier` = TypeRepr.of[embedding.multitier].typeSymbol
-    val on = TypeRepr.of[On[?]].typeSymbol
+    val on = TypeRepr.of[embedding.On[?]].typeSymbol
+    val select = TypeRepr.of[embedding.Select[?]].typeSymbol
+    val run = TypeRepr.of[embedding.Run[?, ?]].typeSymbol
+    val capture = TypeRepr.of[embedding.Capture[?, ?, ?]].typeSymbol
+    val block = TypeRepr.of[embedding.Block[?, ?, ?]].typeSymbol
     val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
     val remote = TypeRepr.of[language.Remote[?]].typeSymbol
+    val remoteApply = '{ language.remote.apply }.symbol
+    val selectApplySingle = '{ ?[embedding.Select[?]].apply(?[language.Remote[?]]) }.symbol
+    val selectApplyMultiple = '{ ?[embedding.Select[?]].apply(?[language.Remote[?]], ?[language.Remote[?]]) }.symbol
+    val selectApplySeq = '{ ?[embedding.Select[?]].apply(?[Seq[language.Remote[?]]]) }.symbol
+    val callApply = '{ ?[embedding.Call[?, ?]].call(?) }.symbol
     val peer = TypeRepr.of[language.peer].typeSymbol
     val single = TypeRepr.of[language.Single[?]].typeSymbol
     val optional = TypeRepr.of[language.Optional[?]].typeSymbol
     val multiple = TypeRepr.of[language.Multiple[?]].typeSymbol
     val context = TypeRepr.of[Placement.Context.type].typeSymbol
+    val erased = '{ embedding.erased }.symbol
+    val erasedArgs = '{ embedding.erased(?) }.symbol
     val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
+    val function1Apply = '{ ?[Function1[?, ?]].apply(?) }.symbol
     val contextFunction1 = TypeRepr.of[ContextFunction1[?, ?]].typeSymbol
+    val contextFunction1Apply = '{ ?[ContextFunction1[?, ?]].apply(using ?) }.symbol
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
     val compileTimeOnly = TypeRepr.of[annotation.compileTimeOnly].typeSymbol
     val targetName = TypeRepr.of[annotation.targetName].typeSymbol
-    val erased = '{ embedding.erased }.asTerm.underlyingArgument.symbol
-    val erasedArgs = '{ embedding.erased(()) }.asTerm.underlyingArgument.symbol
-    val asInstanceOf = '{ null.asInstanceOf }.asTerm.underlyingArgument.symbol
+    val asInstanceOf = '{ ?.asInstanceOf }.symbol
 
   object types:
     val `language.on` = symbols.`language.on`.typeRef.appliedTo(List(TypeBounds.empty, TypeBounds.empty))
@@ -56,6 +80,7 @@ trait Commons:
     val context = TypeRepr.of[Placement.Context[?]]
     val contextResolutionWithFallback = TypeRepr.of[Placement.Context.ResolutionWithFallback[?]]
     val conversion = TypeRepr.of[Conversion[?, ?]]
+    val transmission = TypeRepr.of[language.transmitter.Transmission[?, ?, ?, ?, ?]]
     val placedValues = TypeRepr.of[loci.runtime.PlacedValues]
     val system = TypeRepr.of[loci.runtime.System]
 
@@ -146,7 +171,7 @@ trait Commons:
     summon[TypeTest[Tree, DefDef]].unapply(tree)
 
   def contextMethodType[T: Type, R: Type] =
-    val Inlined(_, _, Block(List(lambda), _)) = '{ (_: T) ?=> erased: R }.asTerm: @unchecked
+    val Inlined(_, _, Block(List(lambda), _)) = '{ (_: T) ?=> ?[R] }.asTerm: @unchecked
     val tpe @ MethodType(_, _, _) = lambda.symbol.info: @unchecked
     tpe
 
@@ -164,6 +189,17 @@ trait Commons:
     case This(_) | Ident(_) => true
     case Select(qualifier, _) => term.symbol.isStable && isStablePath(qualifier)
     case _ => false
+
+  def clearTypeApplications(term: Term): Term = term match
+    case Apply(fun, args) =>
+      Apply.copy(term)(clearTypeApplications(fun), args)
+    case TypeApply(fun, args) => fun.tpe.widenTermRefByName match
+      case tpe @ PolyType(_, paramTypes, _) if paramTypes.sizeIs == args.size =>
+        TypeApply.copy(term)(clearTypeApplications(fun), (paramTypes.indices map { i => TypeTree.of(using tpe.param(i).asType) }).toList)
+      case _ =>
+        TypeApply.copy(term)(clearTypeApplications(fun), args)
+    case _ =>
+      term
 
   def constructFullName(symbol: Symbol, name: Symbol => String, separator: Symbol => String, skip: Symbol => Boolean): String =
     def constructFullName(symbol: Symbol, suffix: String): String =

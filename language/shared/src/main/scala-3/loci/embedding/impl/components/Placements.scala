@@ -85,4 +85,50 @@ trait Placements:
       case _ =>
         None
   end PlacedStatement
+
+  object PlacedAccess:
+    def apply(term: Apply, arg: Term, typeApplies: List[TypeApply], apply: Apply, prefix: List[Term], transmission: Term, suffix: List[Term]) =
+      Apply.copy(apply)(construct(Apply.copy(term)(term.fun, List(arg)), typeApplies), prefix ++ (transmission :: suffix))
+
+    def unapply(term: Term) = term match
+      case apply @ Apply(fun, args) =>
+        val indices = clearTypeApplications(fun).tpe match
+          case tpe @ MethodType(_, paramTypes, _) if tpe.isImplicit  =>
+            paramTypes.zipWithIndex collect:
+              case (tpe, index) if !(tpe =:= TypeRepr.of[Nothing]) && tpe <:< types.transmission => index
+          case _ =>
+            List.empty
+        indices match
+          case List(index) =>
+            destruct(fun) match
+              case (term @ Apply(fun, List(arg)), typeApplies)
+                  if term.symbol.isImplicit || term.symbol.isExtensionMethod =>
+                clearTypeApplications(fun).tpe match
+                  case MethodType(_, List(paramType), _)
+                    if !(paramType =:= TypeRepr.of[Nothing]) &&
+                       !(paramType <:< types.`language.on`) &&
+                       !(paramType <:< types.`embedding.on`) &&
+                       (paramType <:< types.from || paramType <:< types.fromSingle || paramType <:< types.fromMultiple) =>
+                    val (prefix, suffix) = args.splitAt(index)
+                    Some(term, arg, typeApplies, apply, prefix, suffix.head, suffix.tail)
+                  case _ =>
+                    None
+              case _ =>
+                None
+          case _ =>
+            None
+      case _ =>
+        None
+
+    private def destruct(term: Term): (Term, List[TypeApply]) = term match
+      case typeApply @ TypeApply(fun, _) =>
+        val (expr, typeApplies) = destruct(fun)
+        (expr, typeApply :: typeApplies)
+      case _ =>
+        (term, List.empty)
+
+    private def construct(term: Term, typeApplies: List[TypeApply]): Term = typeApplies match
+      case typeApply :: typeApplies => TypeApply.copy(typeApply)(construct(term, typeApplies), typeApply.args)
+      case _ => term
+  end PlacedAccess
 end Placements

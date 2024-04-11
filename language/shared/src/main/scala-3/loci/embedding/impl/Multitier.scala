@@ -23,6 +23,7 @@ object Multitier:
       AccessPath,
       PlacedTransformations,
       PlacedStatements,
+      PlacedBlocks,
       PlacedExpressions,
       PlacedValueSynthesis,
       RemoteAccessorSynthesis,
@@ -34,6 +35,7 @@ object Multitier:
 
     val phases = List(
       normalizePlacedStatements,
+      liftRemoteBlocks,
       eraseMultitierConstructs,
       enterSynthesizedSymbols,
       split,
