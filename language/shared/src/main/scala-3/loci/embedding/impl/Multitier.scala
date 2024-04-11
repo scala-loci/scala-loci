@@ -3,6 +3,7 @@ package embedding
 package impl
 
 import components.*
+import utility.reflectionExtensions.*
 
 import scala.annotation.experimental
 import scala.quoted.*
@@ -29,26 +30,43 @@ object Multitier:
       PlacedValueSplitting,
       Invocation
 
+    import processor.*
+
+    val phases = List(
+      normalizePlacedStatements,
+      eraseMultitierConstructs,
+      enterSynthesizedSymbols,
+      split,
+      rewireInvocations)
+
+    object expansion extends SafeTreeMap(quotes):
+      override def transformStatement(stat: Statement)(owner: Symbol) = stat match
+        case stat: ClassDef if isMultitierModule(stat.symbol) =>
+          SymbolMutator.get foreach: symbolMutator =>
+            if stat.symbol.hasAnnotation(symbols.multitier) then
+              symbolMutator.updateAnnotationWithTree(stat.symbol, '{ new language.multitier(()) }.asTerm.underlyingArgument)
+
+          val processed = phases.foldLeft(stat): (stat, process) =>
+            if canceled then stat else process(stat)
+
+          APIExtraction.extractAPI(processed)
+          super.transformStatement(processed)(owner)
+
+        case stat =>
+          super.transformStatement(stat)(owner)
+    end expansion
+
     tree match
       case tree: ClassDef =>
-        val phases = List(
-          processor.normalizePlacedStatements,
-          processor.eraseMultitierConstructs,
-          processor.split,
-          processor.rewireInvocations)
-
-        val processed = phases.foldLeft(tree): (tree, process) =>
-          if processor.canceled then tree else process(tree)
-
-        processor.reportErrors()
-
-        APIExtraction.extractAPI(processed)
-
-        println(processed.show)
-
-        List(processed)
+        if !(tree.symbol.owner hasAncestor isMultitierModule) then
+          val processed @ ClassDef(_, _, _, _, _) = expansion.transformStatement(tree)(tree.symbol.owner): @unchecked
+          reportErrors()
+          List(processed)
+        else
+          List(tree)
 
       case _ =>
-        report.errorAndAbort("multitier annotation only applicable to classes, traits or objects")
+        report.error("@multitier annotation is only applicable to classes, traits or objects.")
+        List(tree)
   end annotation
 end Multitier

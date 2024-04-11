@@ -39,16 +39,9 @@ trait PlacedValueSynthesis:
     else "class"
 
   private def syntheticTrait(owner: Symbol, name: String, mangledName: String, parents: List[TypeRepr])(decls: Symbol => List[Symbol]) =
-    val symbol = owner.typeMember(name)
-    if !symbol.exists then
-      val symbol = owner.typeMember(mangledName)
-      if !symbol.exists then
-        val symbol = newClass(owner, if canMakeTargetName then name else mangledName, Flags.Synthetic | Flags.Trait, parents, decls, selfType = None)
-        tryMakeTargetName(symbol, mangledName)
-        symbol
-      else
-        symbol
-    else
+    owner.typeMember(name) orElse owner.typeMember(mangledName) orElse:
+      val symbol = newClass(owner, if canMakeTargetName then name else mangledName, Flags.Synthetic | Flags.Trait, parents, decls, selfType = None)
+      tryMakeTargetName(symbol, mangledName)
       symbol
 
   private def copyAnnotations(from: Symbol, to: Symbol, decrementContextResultCount: Boolean) =

@@ -33,7 +33,7 @@ class SymbolMutator private ():
   private val enterSymbol = classDenotationClass.getMethod("enter", symbolClass, scopeClass, contextClass)
   private val replaceSymbol = classDenotationClass.getMethod("replace", symbolClass, symbolClass, contextClass)
 //  private val deleteSymbol = classDenotationClass.getMethod("delete", symbolClass, contextClass)
-//  private val invalidateSymbolMemberCaches = classDenotationClass.getMethod("invalidateMemberCaches", contextClass)
+  private val invalidateSymbolMemberCaches = classDenotationClass.getMethod("invalidateMemberCaches", contextClass)
   private val emptyScope = emptyScopeClass.getField("MODULE$")
   private val annotationApply = annotationClass.getMethod("apply", typeClass, classOf[List[?]], classOf[Long], contextClass)
   private val annotationApplyWithTree = annotationClass.getMethod("apply", treeClass)
@@ -58,11 +58,11 @@ class SymbolMutator private ():
     if classDenotationClass.isInstance(denotation) then
       replaceSymbol.invoke(denotation, from, to, context)
 
-//  def invalidateMemberCaches(using Quotes)(symbol: quotes.reflect.Symbol): Unit =
-//    val context = ctx.invoke(quotes)
-//    val denotation = denot.invoke(symbol, context)
-//    if classDenotationClass.isInstance(denotation) then
-//      invalidateSymbolMemberCaches.invoke(denotation, context)
+  def invalidateMemberCaches(using Quotes)(symbol: quotes.reflect.Symbol): Unit =
+    val context = ctx.invoke(quotes)
+    val denotation = denot.invoke(symbol, context)
+    if classDenotationClass.isInstance(denotation) then
+      invalidateSymbolMemberCaches.invoke(denotation, context)
 
   def setFlag(using Quotes)(symbol: quotes.reflect.Symbol, flags: quotes.reflect.Flags) =
     flagSet.invoke(denot.invoke(symbol, ctx.invoke(quotes)), flags)
