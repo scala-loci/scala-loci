@@ -43,8 +43,13 @@ object Multitier:
       override def transformStatement(stat: Statement)(owner: Symbol) = stat match
         case stat: ClassDef if isMultitierModule(stat.symbol) =>
           SymbolMutator.get foreach: symbolMutator =>
-            if stat.symbol.hasAnnotation(symbols.multitier) then
-              symbolMutator.updateAnnotationWithTree(stat.symbol, '{ new language.multitier(()) }.asTerm.underlyingArgument)
+            val instantiation = New(TypeIdent(symbols.`embedding.multitier`))
+            val annotation =
+              multitierModuleArgument(stat.symbol) match
+                case Some(arg) => instantiation.select(symbols.`embedding.multitier`.declarations.last).appliedTo(arg)
+                case _ => instantiation.select(symbols.`embedding.multitier`.declarations.head).appliedToNone
+            symbolMutator.removeAnnotation(stat.symbol, symbols.`language.multitier`)
+            symbolMutator.updateAnnotationWithTree(stat.symbol, annotation)
 
           val processed = phases.foldLeft(stat): (stat, process) =>
             if canceled then stat else process(stat)

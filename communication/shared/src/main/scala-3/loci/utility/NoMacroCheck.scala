@@ -44,4 +44,5 @@ object noMacroCheck:
         catch
           case NonFatal(_) =>
     }
+  end apply
 end noMacroCheck

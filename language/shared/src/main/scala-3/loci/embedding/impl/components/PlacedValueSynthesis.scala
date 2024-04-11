@@ -38,9 +38,10 @@ trait PlacedValueSynthesis:
     else if symbol.flags is Flags.Trait then "trait"
     else "class"
 
-  private def syntheticTrait(owner: Symbol, name: String, mangledName: String, parents: List[TypeRepr])(decls: Symbol => List[Symbol]) =
+  private def syntheticTrait(owner: Symbol, name: String, mangledName: String, parents: List[TypeRepr], noInits: Boolean)(decls: Symbol => List[Symbol]) =
     owner.typeMember(name) orElse owner.typeMember(mangledName) orElse:
-      val symbol = newClass(owner, if canMakeTargetName then name else mangledName, Flags.Synthetic | Flags.Trait, parents, decls, selfType = None)
+      val flags = Flags.Synthetic | Flags.Trait | (if noInits then Flags.NoInits else Flags.EmptyFlags)
+      val symbol = newClass(owner, if canMakeTargetName then name else mangledName, flags, parents, decls, selfType = None)
       tryMakeTargetName(symbol, mangledName)
       symbol
 
@@ -202,7 +203,8 @@ trait PlacedValueSynthesis:
         module,
         if peer == defn.AnyClass then s"<placed values of $form $name>" else s"<placed values on $name$separator${peer.name}>",
         if peer == defn.AnyClass then mangledName else s"$mangledName$$${peer.name}",
-        parents): symbol =>
+        parents,
+        noInits = peer != defn.AnyClass): symbol =>
           synthesizedPlacedValuesCache += (module, peer) -> SynthesizedPlacedValues(symbol, parents)
 
           inline def collectDeclarations(impls: List[Symbol]) =

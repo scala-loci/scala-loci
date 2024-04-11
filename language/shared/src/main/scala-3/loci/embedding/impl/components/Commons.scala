@@ -23,11 +23,12 @@ trait Commons:
     val from = Symbol.requiredPackage("loci.embedding").typeMember("from")
     val fromSingle = Symbol.requiredPackage("loci.embedding").typeMember("fromSingle")
     val fromMultiple = Symbol.requiredPackage("loci.embedding").typeMember("fromMultiple")
+    val `language.multitier` = TypeRepr.of[language.multitier].typeSymbol
+    val `embedding.multitier` = TypeRepr.of[embedding.multitier].typeSymbol
     val on = TypeRepr.of[On[?]].typeSymbol
     val placed = TypeRepr.of[Placed[?, ?]].typeSymbol
     val subjective = TypeRepr.of[Placed.Subjective[?, ?]].typeSymbol
     val remote = TypeRepr.of[language.Remote[?]].typeSymbol
-    val multitier = TypeRepr.of[language.multitier].typeSymbol
     val peer = TypeRepr.of[language.peer].typeSymbol
     val single = TypeRepr.of[language.Single[?]].typeSymbol
     val optional = TypeRepr.of[language.Optional[?]].typeSymbol
@@ -149,8 +150,12 @@ trait Commons:
     val tpe @ MethodType(_, _, _) = lambda.symbol.info: @unchecked
     tpe
 
+  def multitierModuleArgument(symbol: Symbol): Option[Term] =
+    (symbol.getAnnotation(symbols.`language.multitier`) collect { case Apply(Apply(_, List(arg)), List(_)) => arg }) orElse
+    (symbol.getAnnotation(symbols.`embedding.multitier`) collect { case Apply(_, List(arg)) => arg })
+
   def isMultitierModule(symbol: Symbol): Boolean =
-    symbol.getAnnotation(symbols.multitier).isDefined
+    symbol.exists && (symbol.hasAnnotation(symbols.`language.multitier`) || symbol.hasAnnotation(symbols.`embedding.multitier`))
 
   def isMultitierNestedPath(symbol: Symbol): Boolean =
     symbol.exists && (isMultitierModule(symbol) || symbol.isModuleDef && isMultitierNestedPath(symbol.maybeOwner))

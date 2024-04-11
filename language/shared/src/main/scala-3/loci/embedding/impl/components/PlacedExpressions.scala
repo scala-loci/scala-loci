@@ -193,7 +193,7 @@ trait PlacedExpressions:
           errorAndCancel("Illegal subjective access.", term.posInUserCode)
 
         peerContext(owner) foreach: localPeer =>
-          if !(localPeer =:= placementInfo.peerType) then
+          if !(localPeer <:< placementInfo.peerType) then
             errorAndCancel(
               s"Access to value on peer ${placementInfo.peerType.safeShow(Printer.SafeTypeReprShortCode)} not allowed " +
               s"from peer ${localPeer.safeShow(Printer.SafeTypeReprShortCode)}",
