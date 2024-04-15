@@ -60,6 +60,8 @@ object TypeToken:
 
   def apply(tokens: List[String]): List[TypeToken] = tokens map escape
 
+  def number(number: Int): TypeToken = token(number.toString)
+
   val ` ` = token(" ")
   val `.` = token(".")
   val `#` = token("#")
@@ -282,7 +284,6 @@ object TypeToken:
         binders: Set[LambdaType],
         path: Boolean,
         pathPrefix: Boolean): Option[List[TypeToken]] = tpe match
-
       case Tuple(elements) if elements.sizeIs > 1 =>
         val tuple = elements.foldRight(Option(List.empty[TypeToken])): (tpe, elements) =>
           serializeType(tpe, binders, path = false, pathPrefix = false) flatMap: tpe =>

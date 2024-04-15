@@ -17,15 +17,18 @@ trait Peers:
     case Optional
     case Multiple
 
-  case class PeerInfo(peerType: TypeRepr, parents: List[TypeRepr], ties: List[(TypeRepr, Multiplicity)])
+  case class PeerInfo(peerType: TypeRepr, parents: List[TypeRepr], ties: List[(TypeRepr, Multiplicity)], pos: Position)
 
   object PeerInfo:
     def apply(tpe: TypeRepr): Option[PeerInfo] =
       check(tpe, Position.ofMacroExpansion).toOption
 
+    def apply(tpe: TypeRepr, pos: Position): Option[PeerInfo] =
+      check(tpe, pos).toOption
+
     def check(tpe: TypeRepr, pos: Position): Either[(String, Position), PeerInfo] = tpe match
       case tpe: TypeRef if tpe.typeSymbol == defn.AnyClass =>
-        Right(PeerInfo(tpe, List.empty, List.empty))
+        Right(PeerInfo(tpe, List.empty, List.empty, pos))
       case tpe: TypeRef =>
         val symbol = tpe.typeSymbol
         val position = if symbol.flags is Flags.Synthetic then pos else symbol.pos getOrElse pos
@@ -33,7 +36,7 @@ trait Peers:
           tpe.qualifier.memberType(symbol) match
             case TypeBounds(low: TypeRef, hi) =>
               if bottomType(low) then
-                parentsAndTies(hi, pos) map { (parents, ties) => PeerInfo(tpe, parents, ties) }
+                parentsAndTies(hi, pos) map { (parents, ties) => PeerInfo(tpe, parents, ties, pos) }
               else
                 Left(s"Lower type bound not allowed in peer specification: >: ${TypeBounds.lower(low).safeShow(Printer.SafeTypeReprShortCode)}", position)
             case tpe =>
@@ -50,7 +53,8 @@ trait Peers:
     @targetName("ofModuleType")
     def ofModule(tpe: TypeRepr): List[PeerInfo] =
       val symbol = tpe.typeSymbol orElse (tpe.baseClasses.headOption getOrElse Symbol.noSymbol)
-      PeerInfo(defn.AnyClass.typeRef, List.empty, List.empty) :: (symbol.typeMembers flatMap { symbol => PeerInfo(tpe.select(symbol)) })
+      PeerInfo(defn.AnyClass.typeRef, List.empty, List.empty, Position.ofMacroExpansion) ::
+      (symbol.typeMembers flatMap { symbol => PeerInfo(tpe.select(symbol), symbol.pos getOrElse Position.ofMacroExpansion) })
 
     private def parentsAndTies(tpe: TypeRepr, pos: Position): Either[(String, Position), (List[TypeRepr], List[(TypeRepr, Multiplicity)])] = tpe match
       case tpe: TypeRef =>

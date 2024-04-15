@@ -86,6 +86,16 @@ object Marshallable extends MarshallableResolution {
     def connected = false
   }
 
+  implicit object `null` extends Marshallable[Null, Null, Future[Null]] {
+    def marshal(value: Null, abstraction: AbstractionRef) =
+      MessageBuffer.empty
+    def unmarshal(value: MessageBuffer, abstraction: AbstractionRef) =
+      Success(null)
+    def unmarshal(value: Notice.Steady[Try[MessageBuffer]], abstraction: AbstractionRef) =
+      (value map { _ map { _ => null } }).toFutureFromTry
+    def connected = false
+  }
+
   implicit object nothing extends Marshallable[Nothing, Nothing, Future[Nothing]] {
     def nothing = throw new RemoteAccessException("Unexpected value of bottom type")
     def marshal(value: Nothing, abstraction: AbstractionRef) =

@@ -640,12 +640,25 @@ object reflectionExtensions:
     private val nil = TypeRepr.of[EmptyTuple].typeSymbol
     private val cons = TypeRepr.of[? *: ?].typeSymbol
 
+    @targetName("unapplyType")
     def apply(elements: List[TypeRepr]): TypeRepr =
       if elements.nonEmpty && elements.sizeIs < 23 then
         defn.TupleClass(elements.size).typeRef.appliedTo(elements)
       else
         elements.foldRight[TypeRepr](nil.typeRef): (tpe, tuple) =>
           cons.typeRef.appliedTo(List(tpe, tuple))
+
+    @targetName("unapplyTerm")
+    def apply(elements: List[Term]): Term =
+      if elements.nonEmpty && elements.sizeIs < 23 then
+        Select.unique(Ref(defn.TupleClass(elements.size).companionModule), "apply")
+          .appliedToTypes(elements map { _.tpe })
+          .appliedToArgs(elements)
+      else
+        Select.unique(
+          Select.unique(Ref(TypeRepr.of[scala.runtime.TupleXXL.type].termSymbol), "apply")
+            .appliedTo(Typed(Repeated(elements, TypeTree.of[Any]), TypeTree.of[`<repeated>`[Any]])),
+          "$asInstanceOf$").appliedToType(this(elements map { _.tpe }))
 
     @targetName("unapplyType")
     def unapply(tpe: TypeRepr): Option[List[TypeRepr]] = tpe match
@@ -659,8 +672,26 @@ object reflectionExtensions:
         None
 
     @targetName("unapplyTerm")
-    def unapply(tpe: Term): Option[List[Term]] =
-      ???
+    def unapply(term: Term): Option[List[Term]] = term match
+      case Apply(TypeApply(fun @ Select(Apply(_, List(element1)), _), _), List(element2))
+          if fun.symbol.owner == TypeRepr.of[ArrowAssoc].typeSymbol =>
+        Some(List(element1, element2))
+      case Apply(TypeApply(Select(qualifier, "apply"), _), elements)
+          if defn.isTupleClass(qualifier.symbol.companionClass) =>
+        Some(elements)
+      case Apply(TypeApply(Select(New(tpt), "<init>"), _), elements)
+          if defn.isTupleClass(tpt.tpe.typeSymbol) =>
+        Some(elements)
+      case Apply(Select(qualifier, "apply"), List(Typed(Repeated(elements, _), _)))
+          if qualifier.symbol == TypeRepr.of[scala.runtime.TupleXXL.type].termSymbol =>
+        Some(elements)
+      case TypeApply(Select(
+        Apply(Select(qualifier, "apply"), List(Typed(Repeated(elements, _), _))),
+        "asInstanceOf" | "$asInstanceOf$"), _)
+          if qualifier.symbol == TypeRepr.of[scala.runtime.TupleXXL.type].termSymbol =>
+        Some(elements)
+      case _ =>
+        None
   end TupleExtractor
 
   extension (using Quotes)(printerModule: quotes.reflect.PrinterModule)

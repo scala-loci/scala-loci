@@ -111,7 +111,7 @@ object GenericTuple:
             Tuples.fromIArray(IArray.tabulate[Object](${Expr(size)}) { i =>
               (context delegate value.productElement(i))(using Base(using null, ValueOf(i)))
             })
-        }.asInstanceOf[I]
+        }.$asInstanceOf$[I]
       }
 
       val receiveTransformation = '{
@@ -122,7 +122,7 @@ object GenericTuple:
             Tuples.fromIArray(IArray.tabulate[Object](${Expr(size)}) { i =>
               (context delegate value.productElement(i))(using Intermediate(using null, ValueOf(i)))
             })
-        }.asInstanceOf[R]
+        }.$asInstanceOf$[R]
       }
 
       (provideTransformation, receiveTransformation)
