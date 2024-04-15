@@ -86,6 +86,8 @@ trait Commons:
     val peerTieMultiple = '{ loci.runtime.Peer.Tie.Multiple }.symbol
     val moduleSignature = '{ loci.runtime.Module.Signature.apply(?[String]) }.symbol
     val moduleSignatureNested = '{ loci.runtime.Module.Signature.apply(?[loci.runtime.Module.Signature], ?[String]) }.symbol
+    val marshallableInfo = TypeRepr.of[loci.runtime.MarshallableInfo].typeSymbol
+    val placedValueInfo = TypeRepr.of[loci.runtime.PlacedValueInfo].typeSymbol
     val erased = '{ embedding.erased }.symbol
     val erasedArgs = '{ embedding.erased(?) }.symbol
     val function1 = TypeRepr.of[Function1[?, ?]].typeSymbol
