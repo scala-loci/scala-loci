@@ -264,7 +264,15 @@ object TransmittableResolution:
               Symbol.spliceOwner))(
             Symbol.spliceOwner)
 
-          optimized.asExpr match
+          val corrected =
+            optimized match
+              case Apply(TypeApply(resolution, args), List(arg))
+                  if resolution.symbol.owner == TypeRepr.of[Transmittable.Resolution[?, ?, ?, ?, ?]].typeSymbol =>
+                resolution.appliedToTypeTrees(TypeTree.of[B] :: args.tail).appliedTo(arg)
+              case _ =>
+                optimized
+
+          corrected.asExpr match
             case result: Expr[Transmittable.Resolution[B, I, R, P, T]] @unchecked => result
     }
   end optimizedTransmittableResolution
