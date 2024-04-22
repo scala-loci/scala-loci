@@ -21,6 +21,7 @@ object MultitierPreprocessor:
     val `embedding.on` = Symbol.requiredPackage("loci.embedding").typeMember("on")
     val `embedding.of` = Symbol.requiredPackage("loci.embedding").typeMember("of")
     val multitier = Symbol.requiredClass("loci.language.multitier")
+    val peer = Symbol.requiredClass("loci.language.peer")
     val deferred = Symbol.requiredClass("loci.language.deferred")
     val placed = Symbol.requiredMethod("loci.language.placed.apply")
     val compileTimeOnly = Symbol.requiredClass("scala.annotation.compileTimeOnly")
@@ -65,6 +66,8 @@ object MultitierPreprocessor:
         val valDefClass = Class.forName("dotty.tools.dotc.ast.Trees$ValDef")
         val defDefClass = Class.forName("dotty.tools.dotc.ast.Trees$DefDef")
         val typeDefClass = Class.forName("dotty.tools.dotc.ast.Trees$TypeDef")
+        val typeBoundsTreeClass = Class.forName("dotty.tools.dotc.ast.Trees$TypeBoundsTree")
+        val refinedTypeTreeClass = Class.forName("dotty.tools.dotc.ast.Trees$RefinedTypeTree")
         val appliedTypeTreeClass = Class.forName("dotty.tools.dotc.ast.Trees$AppliedTypeTree")
         val moduleDefClass = Class.forName("dotty.tools.dotc.ast.untpd$ModuleDef")
         val infixOpClass = Class.forName("dotty.tools.dotc.ast.untpd$InfixOp")
@@ -91,11 +94,16 @@ object MultitierPreprocessor:
         val apply = applyClass.getMethod("apply", treeClass, classOf[List[?]], sourceFileClass)
         val fun = applyClass.getMethod("fun")
         val unforcedBody = templateClass.getMethod("unforcedBody")
+        val valOrDefTpt = valOrDefDefClass.getMethod("tpt")
         val unforcedRhs = valOrDefDefClass.getMethod("unforcedRhs")
-        val tpt = valOrDefDefClass.getMethod("tpt")
         val valRhs = valDefClass.getDeclaredField("preRhs")
         val defRhs = defDefClass.getDeclaredField("preRhs")
         val rhs = typeDefClass.getMethod("rhs")
+        val lo = typeBoundsTreeClass.getMethod("lo")
+        val hi = typeBoundsTreeClass.getMethod("hi")
+        val alias = typeBoundsTreeClass.getMethod("alias")
+        val tpt = refinedTypeTreeClass.getDeclaredField("tpt")
+        val refinedTpt = refinedTypeTreeClass.getMethod("tpt")
         val appliedTypeTreeArgs = appliedTypeTreeClass.getDeclaredField("args")
         val appliedTypeTree = appliedTypeTreeClass.getMethod("apply", treeClass, classOf[List[?]], sourceFileClass)
         val impl = moduleDefClass.getMethod("impl")
@@ -176,20 +184,19 @@ object MultitierPreprocessor:
             case trees: List[?] => trees exists predicate
             case _=> false
 
-        def mayHaveAnnotationSymbol(decl: Any, annotationSymbol: Symbol) =
+        def hasAnnotationSymbol(decl: Any, annotationSymbol: Symbol) =
           val name = annotationSymbol.name
           hasAnnotation(decl):
-            case Symbol(symbol) => symbol == annotationSymbol
+            case Symbol(symbol) =>
+              symbol == annotationSymbol
             case tree if typedSpliceClass.isInstance(tree) => splice.invoke(tree) match
               case Tree(Apply(Select(New(tpt), _), _)) => tpt.symbol == annotationSymbol
               case _ => false
-            case Tree(Apply(Select(New(TypeIdent(`name`) | TypeSelect(_, `name`)), _), _)) => true
-            case _ => false
-
-        def isMultitierAnnottee(decl: Any) =
-          hasAnnotation(decl):
-            case Symbol(symbol) => symbol == multitier
-            case tree => contains.invoke(sourcePos.invoke(tree, context), Position.ofMacroExpansion) == true
+            case Tree(Apply(Select(New(tpt), _), _)) =>
+              tryTypingTypeTree(tpt) exists: tpt =>
+                correctlyTyped(tpt.tpe) && tpt.symbol == annotationSymbol
+            case _ =>
+              false
 
         def flags(decl: Any) =
           val flags = decl match
@@ -210,24 +217,6 @@ object MultitierPreprocessor:
           correctlyTyped(tpe) && !(tpe =:= TypeRepr.of[Nothing]) &&
           (tpe.typeSymbol == `language.on` || tpe.typeSymbol == `embedding.on`)
 
-        def maybePlacementTypeConstructorTree(tree: Any) = tree match
-          case Tree(
-              TypeIdent("on") |
-              TypeSelect(Ident("language"), "on") |
-              TypeSelect(Select(Ident("loci"), "language"), "on") |
-              TypeSelect(Select(Select(Ident("_root_"), "loci"), "language"), "on") |
-              TypeSelect(Ident("embedding"), "on") |
-              TypeSelect(Select(Ident("loci"), "embedding"), "on") |
-              TypeSelect(Select(Select(Ident("_root_"), "loci"), "embedding"), "on")) =>
-            true
-          case _ =>
-            false
-
-        def maybePlacementTypeTree(tree: Any) = tree match
-          case _ if infixOpClass.isInstance(tree) => maybePlacementTypeConstructorTree(op.invoke(tree))
-          case Tree(Applied(tpt, List(_, _))) => maybePlacementTypeConstructorTree(tpt)
-          case _ => false
-
         def TypedSplice(tree: Tree) =
           typedSplice.invoke(null, tree, false, context)
 
@@ -245,27 +234,28 @@ object MultitierPreprocessor:
         val processedDeclarations = IdentityHashMap[Any, Any]
 
         def processSymbol(decl: Any, multitierAnnottee: Boolean, compileTimeOnlyAnnotation: Term, symbol: Symbol): Unit =
-          if (symbol.isValDef || symbol.isDefDef) &&
+          if (symbol.isValDef || symbol.isDefDef || symbol.isTypeDef) &&
              !(flags(symbol) is Flags.Module) &&
+             !symbol.isClassDef &&
              !symbol.isClassConstructor then
             completerOriginalTree(symbol) foreach:
               processTree(decl, multitierAnnottee, compileTimeOnlyAnnotation, _)
 
             if multitierAnnottee && (flags(decl) is Flags.Module) && (flags(symbol) is Flags.Deferred) then
               resetFlag.invoke(denot.invoke(symbol, context), Flags.Deferred)
-              if !mayHaveAnnotationSymbol(symbol, deferred) then
+              if !hasAnnotationSymbol(symbol, deferred) then
                 SymbolMutator.getOrErrorAndAbort.updateAnnotationWithTree(symbol, deferredAnnotation)
 
-            if !mayHaveAnnotationSymbol(symbol, compileTimeOnly) then
+            if !hasAnnotationSymbol(symbol, compileTimeOnly) then
               SymbolMutator.getOrErrorAndAbort.updateAnnotationWithTree(symbol, compileTimeOnlyAnnotation)
 
-          else if symbol.isClassDef && (isMultitierAnnottee(symbol) || (flags(symbol) is Flags.Module)) then
+          else if symbol.isClassDef && (hasAnnotationSymbol(symbol, multitier) || (flags(symbol) is Flags.Module)) then
             processDeclarations(symbol)
         end processSymbol
 
         def processTree(decl: Any, multitierAnnottee: Boolean, compileTimeOnlyAnnotation: Term, tree: Any): Unit =
           if valOrDefDefClass.isInstance(tree) then
-            val untypedTpt = tpt.invoke(tree)
+            val untypedTpt = valOrDefTpt.invoke(tree)
             val maybeTypedTpt = untypedTpt match
               case Tree(tree: TypeTree) => tryTypingTypeTree(tree)
               case _ => None
@@ -279,7 +269,8 @@ object MultitierPreprocessor:
             def isNothing(tpe: TypeRepr): Boolean = tpe match
               case _ if !correctlyTyped(tpe) || !(tpe <:< TypeRepr.of[Nothing]) => false
               case AnnotatedType(underlying, _) => isNothing(underlying)
-              case AndType(left, right) => isNothing(left) && isNothing(right)
+              case AndType(left, right) => isNothing(left) || isNothing(right)
+              case OrType(left, right) => isNothing(left) && isNothing(right)
               case Refinement(parent, name, _) => name != "on" && isNothing(parent)
               case _ => tpe.typeSymbol != `embedding.of`
 
@@ -295,13 +286,13 @@ object MultitierPreprocessor:
             val rhs = unforcedRhs.invoke(tree)
             if isEmpty.invoke(rhs) == true then
               if multitierAnnottee && (flags(decl) is Flags.Module) then
-                if !mayHaveAnnotationSymbol(tree, deferred) then
+                if !hasAnnotationSymbol(tree, deferred) then
                   setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(deferredAnnotation)))
                 if valDefClass.isInstance(tree) then
                   mutateField(valRhs, tree, TypedSplice(Ref(uninitialized)))
                 if defDefClass.isInstance(tree) then
                   mutateField(defRhs, tree, TypedSplice(Ref(uninitialized)))
-            else if hasPlacementType || maybePlacementTypeTree(untypedTpt) then
+            else if hasPlacementType then
               val rhsMutatedToPlacedConstruct =
                 if applyClass.isInstance(rhs) then
                   val tree = fun.invoke(rhs)
@@ -320,13 +311,28 @@ object MultitierPreprocessor:
                 if defDefClass.isInstance(tree) then
                   mutateField(defRhs, tree, placedRhs)
 
-            if !mayHaveAnnotationSymbol(tree, compileTimeOnly) then
+            if !hasAnnotationSymbol(tree, compileTimeOnly) then
               setMods.invoke(tree, modWithAddedAnnotation.invoke(rawMods.invoke(tree), TypedSplice(compileTimeOnlyAnnotation)))
+
+          else if typeDefClass.isInstance(tree) &&
+                  typeBoundsTreeClass.isInstance(rhs.invoke(tree)) &&
+                  hasAnnotationSymbol(tree, peer) then
+            def adaptRefinement(tree: Any): Unit =
+              if refinedTypeTreeClass.isInstance(tree) then
+                val tptTree = refinedTpt.invoke(tree)
+                if isEmpty.invoke(tptTree) == true then
+                  mutateField(tpt, tree, TypedSplice(TypeTree.of[Any]))
+                else
+                  adaptRefinement(tptTree)
+            val rhsTree = rhs.invoke(tree)
+            adaptRefinement(lo.invoke(rhsTree))
+            adaptRefinement(hi.invoke(rhsTree))
+            adaptRefinement(alias.invoke(rhsTree))
 
           else if moduleDefClass.isInstance(tree) ||
                   (typeDefClass.isInstance(tree) &&
                    templateClass.isInstance(rhs.invoke(tree)) &&
-                   isMultitierAnnottee(tree)) then
+                   hasAnnotationSymbol(tree, multitier)) then
             processDeclarations(tree)
         end processTree
 
@@ -334,9 +340,9 @@ object MultitierPreprocessor:
           if !(processedDeclarations containsKey decl) then
             processedDeclarations.put(decl, decl)
 
-            val multitierAnnottee = isMultitierAnnottee(decl)
+            val multitierAnnottee = hasAnnotationSymbol(decl, multitier)
             val compileTimeOnlyAnnotation =
-              if mayHaveAnnotationSymbol(decl, multitier) then
+              if hasAnnotationSymbol(decl, multitier) then
                 placedValueCompileTimeOnlyAnnotation
               else
                 objectMemberCompileTimeOnlyAnnotation
@@ -347,7 +353,7 @@ object MultitierPreprocessor:
         end processDeclarations
 
         declarations(owner) foreach: decl =>
-          if isMultitierAnnottee(decl) then
+          if hasAnnotationSymbol(decl, multitier) then
             processDeclarations(decl)
 
       catch
