@@ -41,6 +41,7 @@ trait Commons:
     val result = TypeRepr.of[transmitter.Transmittable.Any[?, ?, ?]].typeSymbol.typeMember("Result")
     val proxy = TypeRepr.of[transmitter.Transmittable.Any[?, ?, ?]].typeSymbol.typeMember("Proxy")
     val transmittables = TypeRepr.of[transmitter.Transmittable.Any[?, ?, ?]].typeSymbol.typeMember("Transmittables")
+    val `type` = TypeRepr.of[transmitter.Transmittable.Resolution[?, ?, ?, ?, ?]].typeSymbol.typeMember("Type")
     val `language.multitier` = TypeRepr.of[language.multitier].typeSymbol
     val `embedding.multitier` = TypeRepr.of[embedding.multitier].typeSymbol
     val on = TypeRepr.of[embedding.On[?]].typeSymbol
@@ -98,6 +99,7 @@ trait Commons:
     val map = TypeRepr.of[Map[?, ?]].typeSymbol
     val future = TypeRepr.of[concurrent.Future[?]].typeSymbol
     val contextResultCount = TypeRepr.of[annotation.internal.ContextResultCount].typeSymbol
+    val threadUnsafe = TypeRepr.of[annotation.threadUnsafe].typeSymbol
     val compileTimeOnly = TypeRepr.of[annotation.compileTimeOnly].typeSymbol
     val targetName = TypeRepr.of[annotation.targetName].typeSymbol
     val asInstanceOf = '{ ?.asInstanceOf }.symbol

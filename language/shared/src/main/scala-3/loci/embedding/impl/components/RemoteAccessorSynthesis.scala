@@ -93,16 +93,18 @@ trait RemoteAccessorSynthesis:
   private object TransmittableTypes:
     def apply(transmittable: TypeRepr): TransmittableTypes =
       val resultType = transmittable.resultType
-      val typeArgs =
+      val tpe =
         if resultType derivesFrom symbols.transmittable then
-          resultType.baseType(symbols.transmittable).typeArgs
+          resultType.select(symbols.`type`).dealias
         else
-          List(symbols.base, symbols.intermediate, symbols.result, symbols.proxy, symbols.transmittables) map: member =>
-            resultType.resolvedMemberType(member) getOrElse TypeRepr.of[Any] match
-              case TypeBounds(low, hi) if low =:= hi => low
-              case TypeBounds(low, hi) if low.typeSymbol == defn.NothingClass => hi
-              case TypeBounds(low, hi) if hi.typeSymbol == defn.AnyClass => low
-              case tpe => tpe
+          resultType
+      val typeArgs =
+        List(symbols.base, symbols.intermediate, symbols.result, symbols.proxy, symbols.transmittables) map: member =>
+          tpe.resolvedMemberType(member) getOrElse TypeRepr.of[Any] match
+            case TypeBounds(low, hi) if low =:= hi => low
+            case TypeBounds(low, hi) if low.typeSymbol == defn.NothingClass => hi
+            case TypeBounds(low, hi) if hi.typeSymbol == defn.AnyClass => low
+            case tpe => tpe
       val List(base, intermediate, result, proxy, transmittables) = typeArgs: @unchecked
       TransmittableTypes(base, intermediate, result, proxy, transmittables)
 
@@ -491,6 +493,7 @@ trait RemoteAccessorSynthesis:
                pos,
                accessorSignature(name, params, placementInfo.valueType),
                stat.symbol.info.withResultType(placementInfo.valueType))
+          end value
 
           def insertedIntoNonEmptyListBefore[T](list: List[T], element: T, before: List[T]): List[T] =
             if list eq before then element :: list else list.head :: insertedIntoNonEmptyListBefore(list.tail, element, before)
@@ -549,16 +552,53 @@ trait RemoteAccessorSynthesis:
         else
           errorAndCancel(s"Illegal transmittable for type ${transmittable.types.base.safeShow(Printer.SafeTypeReprShortCode)} referring to local variable.", pos)
 
+    val inheritedValues =
+      if !canceled then
+        val overridden = mutable.Set.empty[Symbol]
+
+        val placed =
+          module.typeRef.baseClasses.tail.reverseIterator flatMap: parent =>
+            if isMultitierModule(parent) then synthesizeAccessors(parent).placed else SeqMap.empty
+        .toMap
+
+        module.typeRef.baseClasses.tail flatMap: parent =>
+          parent.declarations flatMap: decl =>
+            if (decl.isMethod || decl.isField) &&
+               !(decl.flags is Flags.Synthetic) &&
+               !(decl.flags is Flags.Private) &&
+               !(overridden contains decl) then
+              val tpe = ThisType(module).memberType(decl)
+              PlacementInfo(tpe.resultType) flatMap: placementInfo =>
+                if !placementInfo.modality.local then
+                  overridden ++= decl.allOverriddenSymbols
+                  Option.unless(placed contains decl):
+                    val name = targetName(decl)
+                    val params = decl.paramSymss collect:
+                      case params if params.isEmpty || params.head.isTerm => params map { _.info }
+                    (Some(decl),
+                     decl.pos getOrElse Position.ofMacroExpansion,
+                     accessorSignature(name, params, placementInfo.valueType),
+                     tpe.withResultType(placementInfo.valueType))
+                else
+                  None
+            else
+              None
+      else
+        List.empty
+
     val marshallableTypeMap = MutableCachedTypeSeqMap[Symbol]
 
     if !canceled then
+      val definedOrOverriddenMarshallables = mutable.Set.empty[String]
       module.typeRef.baseClasses.tail foreach: parent =>
         if isMultitierModule(parent) then
           synthesizeAccessors(parent).marshalling.iterator foreach: (symbol, _) =>
-            val tpe = ThisType(module).memberType(symbol)
-            val types = MarshallableTypes(tpe)
-            if marshallableTypeMap.lookupType(types.base).isEmpty then
-              marshallableTypeMap.addNewTypeEntry(types.base, symbol)
+            if !(definedOrOverriddenMarshallables contains symbol.name) then
+              definedOrOverriddenMarshallables += symbol.name
+              val tpe = ThisType(module).memberType(symbol)
+              val types = MarshallableTypes(tpe)
+              if marshallableTypeMap.lookupType(types.base).isEmpty then
+                marshallableTypeMap.addNewTypeEntry(types.base, symbol)
 
     val serializableTypeMap = MutableCachedTypeSeqMap[Term]
 
@@ -616,7 +656,7 @@ trait RemoteAccessorSynthesis:
       case Result(base: TypeRepr, result: TypeRepr) extends RequiredMarshallable(Some(result), None)
       case Proxy(base: TypeRepr, proxy: TypeRepr) extends RequiredMarshallable(None, Some(proxy))
 
-    def generateMarshallable(required: RequiredMarshallable, allowAbstract: Boolean) =
+    def generateMarshallable(required: RequiredMarshallable, allowSkippingAbstract: Boolean): Either[String, () => Either[String, Option[Symbol]]] =
       val requiredTypes = TransmittableTypes(
         required.base,
         TypeBounds.empty,
@@ -630,40 +670,65 @@ trait RemoteAccessorSynthesis:
         name
 
       def generateMarshallable(transmittable: Transmittable, rhs: Option[Term]) =
-        val info = symbols.marshallable.typeRef.appliedTo(transmittable.types.asMarshallableTypes.typeList)
-        val flags = Flags.Lazy | (if rhs.isEmpty then Flags.Deferred else Flags.EmptyFlags)
-        val symbol = newVal(module, generateMarshallableName(), info, flags, Symbol.noSymbol)
-        val marshallable = ValDef(symbol, rhs map { _.changeOwner(symbol) })
+        if transmittable.signature != abstractSignature || !allowSkippingAbstract then
+          val info = symbols.marshallable.typeRef.appliedTo(transmittable.types.asMarshallableTypes.typeList)
+          val flags = Flags.Lazy | (if rhs.isEmpty then Flags.Deferred else Flags.EmptyFlags)
+          val symbol = newVal(module, generateMarshallableName(), info, flags, Symbol.noSymbol)
+          trySetThreadUnsafe(symbol)
+          val marshallable = ValDef(symbol, rhs map { _.changeOwner(symbol) })
 
-        transmittable.marshallable = Some(marshallable)
+          transmittable.marshallable = Some(marshallable)
 
-        val argsHead = Literal(StringConstant(transmittable.signature))
-        val argsTail = transmittable.types.asMarshallableTypes.typeList.foldRight[Option[List[Term]]](Some(List.empty)):
-          case (tpe, Some(types)) => TypeToken.serializeType(tpe, module) map { value => Literal(StringConstant(value)) :: types }
-          case _ => None
+          inline def serializeTypeAndSanityCheck(tpe: TypeRepr, from: Symbol) =
+            TypeToken.serializeType(tpe, from) filter:
+              TypeToken.deserializeType(_, from) exists { _ =:= tpe }
 
-        argsTail match
-          case Some(argsTail) =>
-            SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.marshallableInfo, argsHead :: argsTail)
-            Right(symbol)
-          case _ =>
-            Either.cond(
-              (module hasAncestor { symbol => symbol.isMethod || symbol.isField }) || transmittable.signature != abstractSignature,
-              symbol,
-              s"Failed to serialize type for ${transmittable.types.showMore}.")
+          val argsHead = Literal(StringConstant(transmittable.signature))
+          val argsTail = transmittable.types.asMarshallableTypes.typeList.foldRight[Option[List[Term]]](Some(List.empty)):
+            case (tpe, Some(types)) => serializeTypeAndSanityCheck(tpe, module) map { value => Literal(StringConstant(value)) :: types }
+            case _ =>
+              None
+
+          argsTail match
+            case Some(argsTail) =>
+              SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.marshallableInfo, argsHead :: argsTail)
+
+              println("!!!! " + transmittable.signature)
+              println("  !! " + marshallable.show)
+
+              Right(Some(symbol))
+            case _ =>
+              Either.cond(
+                (module hasAncestor { symbol => symbol.isMethod || symbol.isField }) || transmittable.signature != abstractSignature,
+                Some(symbol),
+                s"Failed to serialize type for ${transmittable.types.showMore}.")
+        else
+          Right(None)
       end generateMarshallable
 
+      def conformsToMarshallable(types: MarshallableTypes) =
+        required.base =:= types.base &&
+        (required.maybeResult forall { _ =:= types.result }) &&
+        (required.maybeProxy forall { _ =:= types.proxy })
+
       def conformsToPredefinedMarshallable(base: TypeRepr) =
-        required.base =:= base &&
-        (required.maybeResult forall { _ =:= base }) &&
-        (required.maybeProxy forall { _ =:= symbols.future.typeRef.appliedTo(base) })
+        conformsToMarshallable(MarshallableTypes(base, base, symbols.future.typeRef.appliedTo(base)))
+
+      def checkTransmittableConformation[T](transmittable: Transmittable)(body: => Either[String, T]) =
+        if conformsToMarshallable(transmittable.types.asMarshallableTypes) then
+          body
+        else
+          val message = s"${transmittable.types.base.safeShow(Printer.SafeTypeReprShortCode)} is not transmittable"
+          Left:
+            if required.maybeProxy.nonEmpty then s"$message. Found ${transmittable.types.showMore}, required ${requiredTypes.showMore}."
+            else s"$message. Found ${transmittable.types.show}, required ${requiredTypes.show}."
 
       if conformsToPredefinedMarshallable(TypeRepr.of[Unit]) then
-        Right(() => Right(symbols.marshallableUnit))
+        Right(() => Right(Some(symbols.marshallableUnit)))
       else if conformsToPredefinedMarshallable(TypeRepr.of[Null]) then
-        Right(() => Right(symbols.marshallableNull))
+        Right(() => Right(Some(symbols.marshallableNull)))
       else if conformsToPredefinedMarshallable(TypeRepr.of[Nothing]) then
-        Right(() => Right(symbols.marshallableNothing))
+        Right(() => Right(Some(symbols.marshallableNothing)))
       else
         val initialResolutionFailure =
           if accessorGeneration == Forced && transmittableTypeMap.lookupType(required.base).isEmpty then
@@ -676,14 +741,10 @@ trait RemoteAccessorSynthesis:
 
         transmittableTypeMap.lookupType(required.base) match
           case Some(transmittable) =>
-            val conforms =
-              (required.maybeResult forall { _ =:= transmittable.types.result }) &&
-              (required.maybeProxy forall { _ =:= transmittable.types.proxy })
-
-            if conforms then
+            checkTransmittableConformation(transmittable):
               transmittable.marshallable match
                 case Some(marshallable) =>
-                  Right(() => Right(marshallable.symbol))
+                  Right(() => Right(Some(marshallable.symbol)))
 
                 case _ =>
                   val marshallable =
@@ -691,31 +752,22 @@ trait RemoteAccessorSynthesis:
                       val types = MarshallableTypes(marshallable.info)
                       val signature = marshallableSignature(marshallable)
                       val conforms =
-                        types.result =:= transmittable.types.result &&
-                        types.proxy =:= transmittable.types.proxy &&
+                        conformsToMarshallable(types) &&
                         (accessorGeneration != Forced || signature == transmittable.signature && signature != unknownSignature)
-                      Option.when(conforms) { Right(() => Right(marshallable)) }
+                      Option.when(conforms) { Right(() => Right(Some(marshallable))) }
 
                   marshallable getOrElse:
                     Resolution.Result(transmittable.tree).asTransmittable(allowResolutionFailureForTypeParameters) flatMap: resolved =>
                       transmittable.signature = resolved.signature
                       marshallableConstruction(transmittable) map: rhs =>
                         () => generateMarshallable(transmittable, rhs)
-            else
-              val message =
-                if required.maybeProxy.nonEmpty then s"${incoherenceMessage(required.base)}. Found ${transmittable.types.showMore}, required ${requiredTypes.showMore}."
-                else s"${incoherenceMessage(required.base)}. Found ${transmittable.types.show}, required ${requiredTypes.show}."
-              Left(message)
 
           case _ =>
             val marshallable =
               if initialResolutionFailure.isEmpty then
                 marshallableTypeMap.lookupType(required.base) flatMap: marshallable =>
                   val types = MarshallableTypes(marshallable.info)
-                  val conforms =
-                    (required.maybeResult forall { _ =:= types.result }) &&
-                    (required.maybeProxy forall { _ =:= types.proxy })
-                  Option.when(conforms) { Right(() => Right(marshallable)) }
+                  Option.when(conformsToMarshallable(types)) { Right(() => Right(Some(marshallable))) }
               else
                 None
 
@@ -723,15 +775,14 @@ trait RemoteAccessorSynthesis:
               val result =
                 initialResolutionFailure map { Left(_) } getOrElse:
                   Resolution.resolveTransmittable(requiredTypes.base, allowResolutionFailureForTypeParameters) flatMap: transmittable =>
-                    marshallableConstruction(transmittable) map: rhs =>
-                      () =>
-                        transmittableTypeMap.addNewTypeEntry(transmittable.types.base, transmittable)
-                        generateMarshallable(transmittable, rhs)
+                    checkTransmittableConformation(transmittable):
+                      marshallableConstruction(transmittable) map: rhs =>
+                        () =>
+                          transmittableTypeMap.addNewTypeEntry(transmittable.types.base, transmittable)
+                          generateMarshallable(transmittable, rhs)
 
-              if result.isLeft && allowAbstract then
-                Right: () =>
-                  val transmittable = Transmittable(Literal(NullConstant()), requiredTypes, abstractSignature)
-                  transmittableTypeMap.addNewTypeEntry(requiredTypes.base, transmittable)
+              if result.isLeft && allowSkippingAbstract then
+                Right(() => Right(None))
                   generateMarshallable(transmittable, None)
               else
                 result
@@ -748,7 +799,7 @@ trait RemoteAccessorSynthesis:
       case _ =>
         List.empty
 
-    val allowAbstract = accessorGeneration == Deferred || accessorGeneration == Preferred
+    val allowSkippingAbstract = accessorGeneration == Deferred || accessorGeneration == Preferred
 
     var placedIndex = 0
     var anonymousPlacedIndex = 0
@@ -758,11 +809,14 @@ trait RemoteAccessorSynthesis:
 
       if !canceled && (valueAccessed || accessorGeneration != Deferred) then
         val arguments = argumentTypes(tpe)
-        val argumentType = if arguments.nonEmpty then Tuple(arguments) else TypeRepr.of[Unit]
+        val argumentType =
+          if arguments.isEmpty then TypeRepr.of[Unit]
+          else if arguments.sizeIs == 1 then arguments.head
+          else Tuple(arguments)
         val resultType = tpe.resultType
 
         def marshallable(tpe: TypeRepr, required: TypeRepr => RequiredMarshallable) =
-          generateMarshallable(required(tpe), allowAbstract && !valueAccessed)
+          generateMarshallable(required(tpe), allowSkippingAbstract && !valueAccessed)
 
         val marshallables =
           marshallable(argumentType, tpe => RequiredMarshallable.Result(tpe, tpe)) flatMap: generateArgumentMarshallable =>
@@ -771,7 +825,9 @@ trait RemoteAccessorSynthesis:
               val resultMarshallable = generateResultMarshallable()
               argumentMarshallable flatMap: argumentMarshallable =>
                 resultMarshallable map: resultMarshallable =>
-                  (argumentMarshallable, resultMarshallable)
+                  argumentMarshallable flatMap: argumentMarshallable =>
+                    resultMarshallable map: resultMarshallable =>
+                      (argumentMarshallable, resultMarshallable)
 
         marshallables match
           case Left(message) =>
@@ -779,7 +835,10 @@ trait RemoteAccessorSynthesis:
               errorAndCancel(message, pos)
             None
 
-          case Right(argumentMarshallable, resultMarshallable) =>
+          case Right(None) =>
+            None
+
+          case Right(Some(argumentMarshallable, resultMarshallable)) =>
             val argumentTypes = MarshallableTypes(argumentMarshallable.info)
             val resultTypes = MarshallableTypes(resultMarshallable.info)
 
@@ -802,7 +861,8 @@ trait RemoteAccessorSynthesis:
 
             val argsHead = Literal(StringConstant(signature))
             val argsTail = List(argumentMarshallable.name, resultMarshallable.name) map: arg =>
-              Literal(StringConstant(arg.stripPrefix("$loci$marshalling$").replace('$', ':')))
+              val name = arg.stripPrefix("$loci$marshalling$").replace('$', ':')
+              Literal(StringConstant(if name.length != arg.length then name else s"<$name>"))
 
             SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.placedValueInfo, argsHead :: argsTail)
 
