@@ -35,25 +35,18 @@ def taskSequence(tasks: TaskKey[_]*) =
 
 
 val macroparadise = Seq(
-  scalacOptions ++= {
-    if (`is 2.13+`(scalaVersion.value) && !`is 3+`(scalaVersion.value))
-      Seq("-Ymacro-annotations")
-    else
-      Seq.empty
-  },
-  libraryDependencies ++= {
-    if (`is 2.13+`(scalaVersion.value))
-      Seq.empty
-    else
-      Seq(compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch))
-  })
+  scalacOptions ++=
+    (only { version => `is 2.13+`(version) && !`is 3+`(version) } orEmpty Def.setting {
+      "-Ymacro-annotations"
+    }).value,
+  libraryDependencies ++=
+    (only !(`is 2.13+`) orEmpty Def.setting {
+      compilerPlugin("org.scalamacros" % "paradise" % "2.1.1" cross CrossVersion.patch)
+    }).value)
 
-val macrodeclaration = libraryDependencies ++= {
-  if (`is 3+`(scalaVersion.value))
-    Seq.empty
-  else
-    Seq(scalaOrganization.value % "scala-reflect" % scalaVersion.value % CompileInternal)
-}
+val macrodeclaration = libraryDependencies ++= (only !(`is 3+`) orEmpty Def.setting {
+  scalaOrganization.value % "scala-reflect" % scalaVersion.value % CompileInternal
+}).value
 
 val jsweakreferences = libraryDependencies +=
   "org.scala-js" %%% "scalajs-weakreferences" % "1.0.0" cross CrossVersion.for3Use2_13
@@ -71,12 +64,9 @@ val scalatest = libraryDependencies +=
 val scribe = libraryDependencies +=
   "com.outr" %%% "scribe" % "3.10.7"
 
-val retypecheck = libraryDependencies ++= {
-  if (`is 3+`(scalaVersion.value))
-    Seq.empty
-  else
-    Seq("io.github.scala-loci" %% "retypecheck" % "0.10.0")
-}
+val retypecheck = libraryDependencies ++= (only !(`is 3+`) orEmpty Def.setting {
+  "io.github.scala-loci" %% "retypecheck" % "0.10.0"
+}).value
 
 // 0.33.0 is the last one supporting Scala 2.11-2.13
 val rescala = libraryDependencies +=
@@ -86,51 +76,51 @@ val upickle = libraryDependencies +=
   "com.lihaoyi" %%% "upickle" % "2.0.0"
 
 val circe = Seq(
-  libraryDependencies ++= {
-    if (`is 2.12+`(scalaVersion.value))
-      Seq(
-        "io.circe" %%% "circe-core" % "0.14.1",
-        "io.circe" %%% "circe-parser" % "0.14.1")
-    else
-      Seq.empty
-  },
+  libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
+    Seq(
+      "io.circe" %%% "circe-core" % "0.14.1",
+      "io.circe" %%% "circe-parser" % "0.14.1")
+  }).value,
   compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
   publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value))
 
 val jsoniter = Seq(
-  libraryDependencies ++= {
-    if (`is 2.12+`(scalaVersion.value))
-      Seq("com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.13.22")
-    else
-      Seq.empty
-  },
+  libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
+    "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.13.22"
+  }).value,
   compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
   publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value))
 
-val akkaHttp = libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-http" % "10.1.15" % TestInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % TestInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided cross CrossVersion.for3Use2_13)
+val akkaHttp = libraryDependencies ++= { (only.jvm orPlatformCompileTimeStubs Def.setting {
+  Seq(
+    "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-http" % "10.1.15" % TestInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-stream" % "2.5.32" % TestInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-http" % "[10.0,11.0)" % Provided cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-stream" % "[2.4,3.0)" % Provided cross CrossVersion.for3Use2_13)
+}).value }
 
-val play = libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-http" % "10.1.15" % TestInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.akka" %% "akka-stream" % "2.5.32" % TestInternal cross CrossVersion.for3Use2_13,
-  "com.typesafe.play" %% "play" % "2.7.9" % CompileInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
-  "com.typesafe.play" %% "play" % "2.7.9" % TestInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
-  "com.typesafe.play" %% "play" % "[2.5,2.9)" % Provided cross CrossVersion.for3Use2_13 withIsTransitive false)
+val play = libraryDependencies ++= (only.jvm orPlatformCompileTimeStubs Def.setting {
+  Seq(
+    "com.typesafe.akka" %% "akka-http" % "10.1.15" % CompileInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-stream" % "2.5.32" % CompileInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-http" % "10.1.15" % TestInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.akka" %% "akka-stream" % "2.5.32" % TestInternal cross CrossVersion.for3Use2_13,
+    "com.typesafe.play" %% "play" % "2.7.9" % CompileInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
+    "com.typesafe.play" %% "play" % "2.7.9" % TestInternal cross CrossVersion.for3Use2_13 withIsTransitive false,
+    "com.typesafe.play" %% "play" % "[2.5,2.9)" % Provided cross CrossVersion.for3Use2_13 withIsTransitive false)
+}).value
 
-val scalajsDom = libraryDependencies +=
+val scalajsDom = libraryDependencies ++= (only.js orPlatformCompileTimeStubs Def.setting {
   "org.scala-js" % "scalajs-dom" % "2.8.0" cross ScalaJSCrossVersion.binary
+}).value
 
-val javalin = libraryDependencies +=
+val javalin = libraryDependencies ++= (only.jvm orPlatformCompileTimeStubs Def.setting {
   "io.javalin" % "javalin" % "4.6.8"
+}).value
 
-val jetty = libraryDependencies ++= {
+val jetty = libraryDependencies ++= (only.jvm orPlatformCompileTimeStubs Def.setting {
   val jettyVersion = "9.4.53.v20231009"
   Seq(
     "org.eclipse.jetty.websocket" % "websocket-server" % jettyVersion,
@@ -138,25 +128,21 @@ val jetty = libraryDependencies ++= {
     "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion,
     // "com.outr"  %% "scribe-slf4j"  % "3.10.7" % TestInternal
     "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
-}
+}).value
 
 val jetty12 = Seq(
-  libraryDependencies ++= {
-    if (`is 2.12+`(scalaVersion.value)) {
-      val jettyVersion = "12.0.5"
-      Seq(
-        "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
-        "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
-        "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
-        // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
-        "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
-    }
-    else Seq.empty
-  },
+  libraryDependencies ++= (only.jvm (`is 2.12+`) orPlatformCompileTimeStubs Def.setting {
+    val jettyVersion = "12.0.5"
+    Seq(
+      "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
+      "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
+      "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
+      // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
+      "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
+  }).value,
   compile / skip := (compile / skip).value || !`is 2.12+`(scalaVersion.value),
   publish / skip := (publish / skip).value || !`is 2.12+`(scalaVersion.value),
-  Test / test := (if (`is 2.12+`(scalaVersion.value)) {(Test / test).value} else {})
-)
+  Test / test := (if (`is 2.12+`(scalaVersion.value)) (Test / test).value else { }))
 
 
 lazy val loci = lociProject(
