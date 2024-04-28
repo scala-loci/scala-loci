@@ -257,7 +257,7 @@ object MultitierPreprocessor:
           if valOrDefDefClass.isInstance(tree) then
             val untypedTpt = valOrDefTpt.invoke(tree)
             val maybeTypedTpt = untypedTpt match
-              case Tree(tree: TypeTree) => tryTypingTypeTree(tree)
+              case tree: TypeTree @unchecked => tryTypingTypeTree(tree)
               case _ => None
             val typedTpt = maybeTypedTpt getOrElse Singleton(Literal(NullConstant()))
 

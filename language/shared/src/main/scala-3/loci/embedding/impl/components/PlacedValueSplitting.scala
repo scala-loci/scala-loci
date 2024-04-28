@@ -46,44 +46,25 @@ trait PlacedValueSplitting:
         self + (symbol -> (stats.toList ++ self.getOrElse(symbol, List.empty)))
 
     val placedBodies = module.body.foldLeft(Map.empty[Symbol, List[Statement]]):
-      case (bodies, stat @ (_: ValDef | _: DefDef)) if (stat.symbol.isField || stat.symbol.isMethod) && !stat.symbol.isModuleDef =>
-        val peer = PlacementInfo(stat.symbol.info.widenTermRefByName.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
-        val definitions = synthesizedDefinitions(stat.symbol)
+      case (bodies, stat @ (_: ValDef | _: DefDef)) =>
+        synthesizedDefinitions(stat.symbol).fold(bodies): definitions =>
+          val peer = PlacementInfo(stat.symbol.info.widenTermRefByName.resultType).fold(defn.AnyClass) { _.peerType.typeSymbol }
 
-        val bodiesWithBinding = definitions match
-          case SynthesizedDefinitions(_, binding, None, _) =>
-            bodies.prepended(binding.owner)(synthesizePlacedDefinition(binding, stat, module.symbol, peer))
-          case SynthesizedDefinitions(_, binding, Some(init), _) =>
-            bodies.prepended(binding.owner)(ValDef(binding, Some(Ref(init).appliedToNone)))
-              .prepended(init.owner)(synthesizePlacedDefinition(init, stat, module.symbol, peer))
-          case _ =>
-            bodies
+          val bodiesWithBinding = definitions match
+            case SynthesizedDefinitions(_, binding, None, _) =>
+              bodies.prepended(binding.owner)(synthesizePlacedDefinition(binding, stat, module.symbol, peer))
+            case SynthesizedDefinitions(_, binding, Some(init), _) =>
+              bodies.prepended(binding.owner)(ValDef(binding, Some(Ref(init).appliedToNone)))
+                .prepended(init.owner)(synthesizePlacedDefinition(init, stat, module.symbol, peer))
+            case _ =>
+              bodies
 
-        definitions.impls.foldLeft(bodiesWithBinding): (bodies, impl) =>
-          bodies.prepended(impl.owner)(synthesizePlacedDefinition(impl, stat, module.symbol, peer))
+          definitions.impls.foldLeft(bodiesWithBinding): (bodies, impl) =>
+            bodies.prepended(impl.owner)(synthesizePlacedDefinition(impl, stat, module.symbol, peer))
 
-      case (bodies, term: ClassDef) if term.symbol.isModuleDef =>
-        val placedValues = synthesizedPlacedValues(term.symbol, defn.AnyClass).symbol
-        val nestedModule = synthesizedDefinitions(term.symbol)
-        val parents = List[TypeTree | Term](
-          TypeTree.of[Object],
-          New(TypeIdent(placedValues)).select(placedValues.primaryConstructor).appliedTo(This(nestedModule.binding.owner)))
-        def bodySymbols(symbol: Symbol): List[Symbol] =
-          if parents exists { _.tpe <:< types.placedValues } then
-            List(newMethod(symbol, names.systemCreate, ByNameType(types.system), Flags.Protected, Symbol.noSymbol))
-          else
-            List.empty
-
-        val symbol = newClass(nestedModule.binding, names.anon, Flags.Final | Flags.NoInits | Flags.Synthetic, parents map { _.tpe }, bodySymbols, selfType = None)
-
-        val body = symbol.declarations collect:
-          case symbol if !symbol.isClassConstructor =>
-            DefDef(symbol, _ => Some(Select.unique(This(nestedModule.binding.owner), names.system)))
-
-        val classDef = ClassDef(symbol, parents, body)
-        val instantiation = Typed(New(TypeIdent(symbol)).select(symbol.primaryConstructor).appliedToNone, TypeIdent(placedValues))
-
-        bodies.prepended(nestedModule.binding.owner)(ValDef(nestedModule.binding, Some(Block(List(classDef), instantiation))))
+      case (bodies, stat: ClassDef) =>
+        synthesizedDefinitions(stat.symbol).fold(bodies): nestedModule =>
+          bodies.prepended(nestedModule.binding.owner)(ValDef(nestedModule.binding, None))
 
       case (bodies, term: Term) =>
         val placementInfo = PlacementInfo(term.tpe.resultType)

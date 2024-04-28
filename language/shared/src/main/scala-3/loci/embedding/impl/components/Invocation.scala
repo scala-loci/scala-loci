@@ -55,6 +55,17 @@ trait Invocation:
             case term @ Select(_, _) =>
               accessPath(term, module, peerType.typeSymbol) getOrElse { super.transformTerm(term)(owner) }
 
+            case term @ Ident(_) =>
+              val reference =
+                if term.symbol.owner.isClassDef && term.symbol.owner.isModuleDef then
+                  Some(Ref(term.symbol.owner.companionModule).select(term.symbol))
+                else if term.symbol.owner.isClassDef && (module hasAncestor term.symbol.owner) then
+                  Some(This(term.symbol.owner).select(term.symbol))
+                else
+                  None
+
+              reference flatMap { accessPath(_, module, peerType.typeSymbol) } getOrElse { super.transformTerm(term)(owner) }
+
             case _ =>
               super.transformTerm(term)(owner)
       end transformTerm

@@ -5,7 +5,7 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(RetentionPolicy.RUNTIME)
 public @interface MarshallableInfo {
-  int signature();
+  String signature();
   String base();
   String result();
   String proxy();

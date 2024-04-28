@@ -12,6 +12,7 @@ import scala.annotation.experimental
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.immutable.SeqMap
 import scala.collection.mutable
+import scala.math.Ordering
 import scala.util.control.NonFatal
 
 object RemoteAccessorSynthesis:
@@ -28,6 +29,7 @@ trait RemoteAccessorSynthesis:
     identifier: (Symbol, Option[ValDef]),
     signature: (Symbol, Option[ValDef]),
     peers: SeqMap[Symbol, (Symbol, Option[ValDef], Symbol, Option[DefDef])],
+    overridden: List[(Symbol, Option[ValDef])],
     marshalling: CachedTypeSeqMap[(Symbol, Option[ValDef])],
     placed: SeqMap[Symbol | Int, (Symbol, Option[ValDef])])
 
@@ -41,8 +43,11 @@ trait RemoteAccessorSynthesis:
   def synthesizeModuleSignature(module: Symbol) = synthesizedModuleSignatureCache.getOrElseUpdate(module, {
     val hasMultitierParent = module.typeRef.baseClasses.tail exists isMultitierModule
     val flags = Flags.Lazy | (if hasMultitierParent then Flags.Override else Flags.EmptyFlags)
-    (newVal(module, "$loci$mod", TypeRepr.of[String], flags, Symbol.noSymbol),
-     newVal(module, "$loci$sig", types.moduleSignature, flags, Symbol.noSymbol))
+    val identifier = newVal(module, "$loci$mod", TypeRepr.of[String], flags, Symbol.noSymbol)
+    val signature = newVal(module, "$loci$sig", types.moduleSignature, flags, Symbol.noSymbol)
+    SymbolMutator.getOrErrorAndAbort.enter(module, identifier)
+    SymbolMutator.getOrErrorAndAbort.enter(module, signature)
+    (identifier, signature)
   })
 
   def synthesizePeerSignature(module: Symbol, peer: Symbol) = synthesizedPeerSignatureCache.getOrElseUpdate((module, peer), {
@@ -50,8 +55,11 @@ trait RemoteAccessorSynthesis:
     val isOverriddingPeer = module.typeRef.baseClasses.tail exists { overridden contains _ }
     val overridingFlags = if isOverriddingPeer then Flags.Override else Flags.EmptyFlags
     val info = ByNameType(symbols.map.typeRef.appliedTo(List(types.peerSignature, types.peerTie)))
-    (newVal(module, s"$$loci$$peer$$sig$$${peer.name}", types.peerSignature, Flags.Lazy | overridingFlags, Symbol.noSymbol),
-     newMethod(module, s"$$loci$$peer$$ties$$${peer.name}", info, overridingFlags, Symbol.noSymbol))
+    val signature = newVal(module, s"$$loci$$peer$$sig$$${peer.name}", types.peerSignature, Flags.Lazy | overridingFlags, Symbol.noSymbol)
+    val ties = newMethod(module, s"$$loci$$peer$$ties$$${peer.name}", info, overridingFlags, Symbol.noSymbol)
+    SymbolMutator.getOrErrorAndAbort.enter(module, signature)
+    SymbolMutator.getOrErrorAndAbort.enter(module, ties)
+    (signature, ties)
   })
 
   private def encodeName(name: String) = name flatMap:
@@ -116,11 +124,20 @@ trait RemoteAccessorSynthesis:
       val List(base, result, proxy) = marshallable.resultType.baseType(symbols.marshallable).typeArgs: @unchecked
       MarshallableTypes(base, result, proxy)
 
-  private class Transmittable(val tree: Term, val types: TransmittableTypes, var signature: String, var marshallable: Option[ValDef])
+  private class Transmittable(val tree: Term, val types: TransmittableTypes, var signature: String, var marshallable: Option[(Marshallable, ValDef)])
 
   private object Transmittable:
-    def apply(tree: Term, types: TransmittableTypes, signature: String): Transmittable = new Transmittable(tree, types, signature, None)
-    def apply(tree: Term): Transmittable = new Transmittable(tree, TransmittableTypes(tree.tpe), transmittableSignature(tree), None)
+    def apply(tree: Term, types: TransmittableTypes, signature: String): Transmittable =
+      new Transmittable(tree, types, signature, None)
+    def apply(tree: Term): Transmittable =
+      new Transmittable(tree, TransmittableTypes(tree.tpe), transmittableSignature(tree), None)
+
+  private case class Marshallable(symbol: Symbol, types: MarshallableTypes, signature: String)
+
+  private object Marshallable:
+    def apply(symbol: Symbol, module: Symbol): Marshallable =
+      val signature = marshallableInfo(symbol).fold(unknownSignature) { (signature, _, _, _) => signature }
+      new Marshallable(symbol, MarshallableTypes(ThisType(module).select(symbol)), signature)
 
   sealed class CachedTypeSeqMap[+T]:
     protected val map: mutable.Map[TypeRepr, T] @uncheckedVariance = mutable.Map.empty
@@ -182,9 +199,25 @@ trait RemoteAccessorSynthesis:
     TermToken.serializeTerm(term).toOption.fold(unknownSignature): term =>
       f"${term.hashCode}%08x"
 
-  private def marshallableSignature(symbol: Symbol) =
-    // TODO implement
-    unknownSignature
+  private object AnnotationString:
+    inline def unapply(term: Term) = term match
+      case Inlined(_, _, Literal(StringConstant(value))) => Some(value)
+      case Literal(StringConstant(value)) => Some(value)
+      case _ => None
+
+  private def marshallableInfo(symbol: Symbol) =
+    symbol.getAnnotation(symbols.marshallableInfo) match
+      case Some(Apply(_, List(AnnotationString(signature), AnnotationString(base), AnnotationString(result), AnnotationString(proxy)))) =>
+        Some(signature, base, result, proxy)
+      case _ =>
+        None
+
+  private def placedInfo(symbol: Symbol) =
+    symbol.getAnnotation(symbols.placedValueInfo) match
+      case Some(Apply(_, List(AnnotationString(signature), AnnotationString(arguments), AnnotationString(result)))) =>
+        Some(signature, arguments, result)
+      case _ =>
+        None
 
   private object PlacedBlock:
     def unapply(term: Term) = term match
@@ -216,9 +249,12 @@ trait RemoteAccessorSynthesis:
 
     object Result:
       def apply(tree: Term) =
+        extension (self: String) def withPeriod =
+          val trimmed = self.trim
+          if trimmed.nonEmpty && trimmed.last == '.' then trimmed else trimmed + '.'
         resolutionFailureCollector.foldTree(None, tree)(Symbol.noSymbol) match
-          case Some(message, false) => Failure(message)
-          case Some(message, true) => FailureOnTypeParameter(message, tree)
+          case Some(message, false) => Failure(message.withPeriod)
+          case Some(message, true) => FailureOnTypeParameter(message.withPeriod, tree)
           case _ => Success(tree)
 
       extension (self: Result)
@@ -286,7 +322,7 @@ trait RemoteAccessorSynthesis:
     def signature(peerType: TypeRepr, pos: Position) =
       peerType.pathTerm match
         case Some(term) if isMultitierModule(term.symbol) =>
-          val(symbol, _) = synthesizePeerSignature(term.symbol, peerType.typeSymbol)
+          val(symbol, _) = synthesizePeerSignature(peerType.typeSymbol.owner, peerType.typeSymbol)
           Some(term.select(symbol))
         case _ =>
           errorAndCancel(s"Invalid prefix for peer type: ${peerType.safeShow(Printer.SafeTypeReprCode)}", pos)
@@ -358,6 +394,26 @@ trait RemoteAccessorSynthesis:
      peerSignatures.to(SeqMap))
   end signatures
 
+  private def synthesizeAllPlacedAccessors(module: Symbol, includeFirst: Boolean): Map[Int | Symbol, Symbol] =
+    val baseClasses = module.typeRef.baseClasses
+    val placedTail = baseClasses.tail.reverseIterator flatMap: base =>
+      if isMultitierModule(base) then
+        synthesizeAccessors(base).placed.iterator flatMap:
+          case (_: Int, _) => None
+          case (original, (placed, _)) => Some(original -> placed)
+      else
+        Iterator.empty
+    val placedHead =
+      if includeFirst && isMultitierModule(baseClasses.head) then
+        synthesizeAccessors(baseClasses.head).placed.iterator map:
+          case (original, (placed, _)) => original -> placed
+      else
+        Iterator.empty
+    (placedTail ++ placedHead).toMap
+
+  def synthesizeAllPlacedAccessors(module: Symbol): Map[Int | Symbol, Symbol] =
+    synthesizeAllPlacedAccessors(module, includeFirst = true)
+
   def synthesizeAccessors(module: Symbol): Accessors = synthesizedAccessorsCache.getOrElseUpdate(module, {
     val tree =
       try module.tree
@@ -403,10 +459,67 @@ trait RemoteAccessorSynthesis:
           defaultAccessorGeneration
     end accessorGeneration
 
+    def accessorGenerationFailureMessageProlog(symbolForName: Option[Symbol], symbolForParent: Option[Symbol], noninheritedPosition: Option[Position]) =
+      val message = "Failed to generate accessor for"
+
+      def signature(symbol: Symbol) =
+        val result =
+          val tpe = symbol.info.resultType
+          PlacementInfo(tpe).fold(tpe.safeShow(Printer.SafeTypeReprShortCode)) { _.showCanonical }
+        val args =
+          symbol.paramSymss map: params =>
+            val args = params map: param =>
+              param.info match
+                case TypeBounds(low, hi) if low.typeSymbol == defn.NothingClass && hi.typeSymbol == defn.AnyClass => param.name
+                case TypeBounds(low, hi) if low.typeSymbol == defn.NothingClass => s"${param.name} <: ${hi.safeShow(Printer.SafeTypeReprShortCode)}"
+                case TypeBounds(low, hi) if hi.typeSymbol == defn.AnyClass => s"${param.name} >: ${low.safeShow(Printer.SafeTypeReprShortCode)}"
+                case TypeBounds(low, hi) => s"${param.name} >: ${low.safeShow(Printer.SafeTypeReprShortCode)} <: ${hi.safeShow(Printer.SafeTypeReprShortCode)}"
+                case tpe => s"${param.name}: ${tpe.safeShow(Printer.SafeTypeReprShortCode)}"
+            if params.isEmpty || params.head.isTerm then s"(${args.mkString(", ")})" else s"[${args.mkString(", ")}]"
+        s"${args.mkString}: $result"
+
+      val name = symbolForName match
+        case Some(symbol) =>
+          if symbol.name startsWith "$loci$anon$" then "remote block"
+          else if symbol.isClassDef && symbol.isModuleDef then s"placed value ${symbol.companionModule.name}"
+          else if symbol.isMethod then s"placed value ${symbol.name}${signature(symbol)}"
+          else s"placed value ${symbol.name}"
+        case _ =>
+          "remote block"
+
+      noninheritedPosition match
+        case Some(pos) =>
+          (s"$message $name", pos)
+        case _ =>
+          val parent =
+            symbolForParent flatMap: symbol =>
+              val parent = tree.parents find: parent =>
+                parent.symbol == symbol.maybeOwner
+              parent orElse:
+                tree.parents find: parent =>
+                  (parent.symbol.fieldMembers contains symbol) ||
+                  (parent.symbol.methodMembers contains symbol) ||
+                  (parent.symbol.typeMembers contains symbol)
+          parent.fold(s"$message inherited $name", tree.posInUserCode.startPosition): parent =>
+            symbolForParent match
+              case Some(symbol) if parent.symbol == symbol.maybeOwner =>
+                (s"$message $name, inherited from ${parent.symbol.name}", parent.posInUserCode)
+              case Some(symbol) if symbol.maybeOwner.exists && symbol.maybeOwner.maybeOwner == module.maybeOwner =>
+                (s"$message $name, defined in ${symbol.maybeOwner.name}, inherited through ${parent.symbol.name}", parent.posInUserCode)
+              case Some(symbol) if symbol.maybeOwner.exists =>
+                (s"$message $name, defined in ${fullName(symbol.maybeOwner)}, inherited through ${parent.symbol.name}", parent.posInUserCode)
+              case _ =>
+                (s"$message $name, inherited through ${parent.symbol.name}", parent.posInUserCode)
+    end accessorGenerationFailureMessageProlog
+
+    def marshallingIdentifier(name: String) =
+      val identifier = name.stripPrefix("$loci$marshalling$").replace('$', ':')
+      if identifier.length != name.length then identifier else s"<$identifier>"
+
     def isLocalVariable(symbol: Symbol) =
       symbol hasAncestor module
 
-    type AccessCollection = (List[TypeToken], Int, List[(Option[Symbol], Position, String, TypeRepr)], List[(Term, Position)], Set[Symbol], Option[Position])
+    type AccessCollection = (List[TypeToken], Int, List[(Option[Symbol], String, TypeRepr, () => (String, Position))], List[(Term, Position)], Set[Symbol], Option[Position])
 
     object accessCollector extends TreeAccumulator[AccessCollection]:
       def foldTree(accesses: AccessCollection, tree: Tree)(owner: Symbol) =
@@ -424,7 +537,8 @@ trait RemoteAccessorSynthesis:
             val params = captures map { capture => PlacementInfo(capture).fold(capture) { _.valueType } }
             val signature = accessorSignature(indexing ++ List(TypeToken.number(index), TypeToken.`>`), List(params), value)
             val tpe = MethodType(captures.indices.toList map { index => s"arg$index" })(_ => params, _ => value)
-            foldOverTree((indexing, index + 1, (None, position, signature, tpe) :: values, transmittables, accessed, pos), tree)(owner)
+            val prolog = () => accessorGenerationFailureMessageProlog(symbolForName = None, symbolForParent = None, noninheritedPosition = Some(position))
+            foldOverTree((indexing, index + 1, (None, signature, tpe, prolog) :: values, transmittables, accessed, pos), tree)(owner)
 
           case PlacedAccess(_, PlacedValueReference(value, _), _, _, _, _, _) if value.symbol.exists =>
             foldOverTree((indexing, index, values, transmittables, accessed + value.symbol, pos), tree)(owner)
@@ -453,7 +567,7 @@ trait RemoteAccessorSynthesis:
             foldOverTree((indexing, index, values, transmittables, accessed, pos), tree)(owner)
     end accessCollector
 
-    def collectAccesses(indexing: String | Int, tree: Tree, values: List[(Option[Symbol], Position, String, TypeRepr)], transmittables: List[(Term, Position)], accessed: Set[Symbol]) =
+    def collectAccesses(indexing: String | Int, tree: Tree, values: List[(Option[Symbol], String, TypeRepr, () => (String, Position))], transmittables: List[(Term, Position)], accessed: Set[Symbol]) =
       val init = indexing match
         case index: Int => (TypeToken.`<` :: signaturePrefix ++ List(TypeToken.` `, TypeToken("nested"), TypeToken.` `), index)
         case name: String => (List(TypeToken(name), TypeToken.`<`, TypeToken("nested"), TypeToken.` `), 0)
@@ -462,7 +576,7 @@ trait RemoteAccessorSynthesis:
       (index, collectedValues, collectedTransmittables, collectedAccesses)
 
     val (_, values, transmittables, accessed) =
-      tree.body.foldLeft(0, List.empty[(Option[Symbol], Position, String, TypeRepr)], List.empty[(Term, Position)], Set.empty[Symbol]):
+      tree.body.foldLeft(0, List.empty[(Option[Symbol], String, TypeRepr, () => (String, Position))], List.empty[(Term, Position)], Set.empty[Symbol]):
         case ((index, values, transmittables, accessed), stat @ (_: ValDef | _: DefDef))
             if (stat.symbol.isField || stat.symbol.isMethod) && !stat.symbol.isModuleDef =>
           val (tpt, rhs) = stat match
@@ -478,21 +592,25 @@ trait RemoteAccessorSynthesis:
               val params = stat.symbol.paramSymss collect:
                 case params if params.isEmpty || params.head.isTerm => params map { _.info }
 
-              inline def posWithoutBody = rhs map: rhs =>
-                val start = rhs.posInUserCode.start
-                val offset = stat.pos.sourceFile.content.fold(0): content =>
-                  (content.substring(0, start).reverseIterator takeWhile { c => c.isWhitespace || c == '=' }).size
-                Position(stat.pos.sourceFile, stat.posInUserCode.start, start - offset)
+              val prolog = () =>
+                inline def posWithoutBody = rhs map: rhs =>
+                  val start = rhs.posInUserCode.start
+                  val offset = stat.pos.sourceFile.content.fold(0): content =>
+                    (content.substring(0, start).reverseIterator takeWhile { c => c.isWhitespace || c == '=' }).size
+                  Position(stat.pos.sourceFile, stat.posInUserCode.start, start - offset)
 
-              val pos =
-                stat.symbol.pos orElse
-                posWithoutBody getOrElse
-                Position(stat.pos.sourceFile, stat.posInUserCode.start, tpt.posInUserCode.end)
+                val pos =
+                  stat.symbol.pos orElse
+                  posWithoutBody getOrElse
+                  Position(stat.pos.sourceFile, stat.posInUserCode.start, tpt.posInUserCode.end)
+
+                accessorGenerationFailureMessageProlog(symbolForName = Some(stat.symbol), symbolForParent = Some(stat.symbol), noninheritedPosition = Some(pos))
+              end prolog
 
               (Some(stat.symbol),
-               pos,
                accessorSignature(name, params, placementInfo.valueType),
-               stat.symbol.info.withResultType(placementInfo.valueType))
+               stat.symbol.info.withResultType(placementInfo.valueType),
+               prolog)
           end value
 
           def insertedIntoNonEmptyListBefore[T](list: List[T], element: T, before: List[T]): List[T] =
@@ -552,33 +670,31 @@ trait RemoteAccessorSynthesis:
         else
           errorAndCancel(s"Illegal transmittable for type ${transmittable.types.base.safeShow(Printer.SafeTypeReprShortCode)} referring to local variable.", pos)
 
+    val inheritedPlacedAccessors =
+      synthesizeAllPlacedAccessors(module, includeFirst = false)
+
+    SymbolMutator.getOrErrorAndAbort.invalidateMemberCaches(module)
+
     val inheritedValues =
       if !canceled then
         val overridden = mutable.Set.empty[Symbol]
-
-        val placed =
-          module.typeRef.baseClasses.tail.reverseIterator flatMap: parent =>
-            if isMultitierModule(parent) then synthesizeAccessors(parent).placed else SeqMap.empty
-        .toMap
-
         module.typeRef.baseClasses.tail flatMap: parent =>
           parent.declarations flatMap: decl =>
             if (decl.isMethod || decl.isField) &&
-               !(decl.flags is Flags.Synthetic) &&
-               !(decl.flags is Flags.Private) &&
+               (!(decl.flags is Flags.Synthetic) || (decl.name startsWith "$loci$anon$")) &&
                !(overridden contains decl) then
               val tpe = ThisType(module).memberType(decl)
               PlacementInfo(tpe.resultType) flatMap: placementInfo =>
                 if !placementInfo.modality.local then
                   overridden ++= decl.allOverriddenSymbols
-                  Option.unless(placed contains decl):
+                  Option.when(accessorGeneration == Forced || !(inheritedPlacedAccessors contains decl)):
                     val name = targetName(decl)
                     val params = decl.paramSymss collect:
                       case params if params.isEmpty || params.head.isTerm => params map { _.info }
                     (Some(decl),
-                     decl.pos getOrElse Position.ofMacroExpansion,
                      accessorSignature(name, params, placementInfo.valueType),
-                     tpe.withResultType(placementInfo.valueType))
+                     tpe.withResultType(placementInfo.valueType),
+                     () => accessorGenerationFailureMessageProlog(symbolForName = Some(decl), symbolForParent = Some(decl), noninheritedPosition = None))
                 else
                   None
             else
@@ -586,19 +702,30 @@ trait RemoteAccessorSynthesis:
       else
         List.empty
 
-    val marshallableTypeMap = MutableCachedTypeSeqMap[Symbol]
+    val inheritedMarshallables = MutableCachedTypeSeqMap[mutable.SortedSet[Marshallable]]
 
     if !canceled then
+      given Ordering[Marshallable] = (marshallable0, marshallable1) =>
+        (marshallable0.signature, marshallable1.signature) match
+          case (`abstractSignature`, signature1) if signature1 != abstractSignature => 1
+          case (signature0, `abstractSignature`) if signature0 != abstractSignature => -1
+          case (`unknownSignature`, signature1) if signature1 != unknownSignature => 1
+          case (signature0, `unknownSignature`) if signature0 != unknownSignature => -1
+          case (signature0, signature1) => signature0 compare signature1 match
+            case 0 => marshallable0.symbol.name compare marshallable1.symbol.name
+            case result => result
+
       val definedOrOverriddenMarshallables = mutable.Set.empty[String]
       module.typeRef.baseClasses.tail foreach: parent =>
         if isMultitierModule(parent) then
-          synthesizeAccessors(parent).marshalling.iterator foreach: (symbol, _) =>
+          val accessors = synthesizeAccessors(parent)
+          accessors.overridden.iterator ++ accessors.marshalling.iterator foreach: (symbol, _) =>
             if !(definedOrOverriddenMarshallables contains symbol.name) then
               definedOrOverriddenMarshallables += symbol.name
-              val tpe = ThisType(module).memberType(symbol)
-              val types = MarshallableTypes(tpe)
-              if marshallableTypeMap.lookupType(types.base).isEmpty then
-                marshallableTypeMap.addNewTypeEntry(types.base, symbol)
+              val marshallable = Marshallable(symbol, module)
+              inheritedMarshallables.lookupType(marshallable.types.base) match
+                case Some(marshallables) => marshallables += marshallable
+                case _ => inheritedMarshallables.addNewTypeEntry(marshallable.types.base, mutable.SortedSet(marshallable))
 
     val serializableTypeMap = MutableCachedTypeSeqMap[Term]
 
@@ -643,10 +770,44 @@ trait RemoteAccessorSynthesis:
 
         contextBuilder(transmittable.types) flatMap: builder =>
           resolveSerializable(transmittable.types.intermediate) map: serializer =>
-            Some(Ref(symbols.marshallableResolution).appliedToTypes(transmittable.types.typeList).appliedTo(transmittable.tree, serializer, builder))
+            Some:
+              Ref(types.marshallable.typeSymbol.companionModule)
+                .select(symbols.marshallableResolution)
+                .appliedToTypes(transmittable.types.typeList)
+                .appliedTo(transmittable.tree, serializer, builder)
       else
         Right(None)
     end marshallableConstruction
+
+    def marshallable(signature: String, types: MarshallableTypes, rhs: Option[Term], flags: Flags, generateName: () => String) =
+      inline def serializeTypeAndSanityCheck(tpe: TypeRepr, from: Symbol) =
+        TypeToken.serializeType(tpe, from) filter:
+          TypeToken.deserializeType(_, from) exists { _ =:= tpe }
+
+      val argsHead = Literal(StringConstant(signature))
+      val argsTail = types.typeList.foldRight[Option[List[Term]]](Some(List.empty)):
+        case (tpe, Some(types)) => serializeTypeAndSanityCheck(tpe, module) map { value => Literal(StringConstant(value)) :: types }
+        case _ => None
+
+      if argsTail.nonEmpty || (module hasAncestor { symbol => symbol.isMethod || symbol.isField }) || signature != abstractSignature then
+        val symbol = newVal(
+          module,
+          generateName(),
+          symbols.marshallable.typeRef.appliedTo(types.typeList),
+          flags | Flags.Lazy | Flags.Protected | (if rhs.isEmpty then Flags.Deferred else Flags.EmptyFlags),
+          Symbol.noSymbol)
+        trySetThreadUnsafe(symbol)
+        SymbolMutator.getOrErrorAndAbort.enter(module, symbol)
+        argsTail foreach: argsTail =>
+          SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.marshallableInfo, argsHead :: argsTail)
+        Right(Marshallable(symbol, types, signature), ValDef(symbol, rhs map { _.changeOwner(symbol) }))
+      else
+        Left(s"Failed to serialize type for ${TransmittableTypes(types.base, TypeBounds.empty, types.result, types.proxy, TypeBounds.empty).showMore}.")
+    end marshallable
+
+    val marshallableUnit = Marshallable(symbols.marshallableUnit, symbols.marshallableUnit.owner)
+    val marshallableNull = Marshallable(symbols.marshallableNull, symbols.marshallableNull.owner)
+    val marshallableNothing = Marshallable(symbols.marshallableNothing, symbols.marshallableNothing.owner)
 
     var marshallableIndex = 0
 
@@ -654,9 +815,9 @@ trait RemoteAccessorSynthesis:
       def base: TypeRepr
       case Base(base: TypeRepr) extends RequiredMarshallable(None, None)
       case Result(base: TypeRepr, result: TypeRepr) extends RequiredMarshallable(Some(result), None)
-      case Proxy(base: TypeRepr, proxy: TypeRepr) extends RequiredMarshallable(None, Some(proxy))
+      case Proxy(base: TypeRepr, result: TypeRepr, proxy: TypeRepr) extends RequiredMarshallable(Some(result), Some(proxy))
 
-    def generateMarshallable(required: RequiredMarshallable, allowSkippingAbstract: Boolean): Either[String, () => Either[String, Option[Symbol]]] =
+    def generateMarshallable(required: RequiredMarshallable, allowSkippingAbstract: Boolean, name: Option[String]): Either[String, () => Either[String, Option[Marshallable]]] =
       val requiredTypes = TransmittableTypes(
         required.base,
         TypeBounds.empty,
@@ -665,46 +826,18 @@ trait RemoteAccessorSynthesis:
         TypeBounds.empty)
 
       def generateMarshallableName() =
-        val name = s"$$loci$$marshalling$$$mangledName$$$marshallableIndex"
-        marshallableIndex += 1
-        name
+        name getOrElse:
+          val name = s"$$loci$$marshalling$$$mangledName$$$marshallableIndex"
+          marshallableIndex += 1
+          name
 
       def generateMarshallable(transmittable: Transmittable, rhs: Option[Term]) =
         if transmittable.signature != abstractSignature || !allowSkippingAbstract then
-          val info = symbols.marshallable.typeRef.appliedTo(transmittable.types.asMarshallableTypes.typeList)
-          val flags = Flags.Lazy | (if rhs.isEmpty then Flags.Deferred else Flags.EmptyFlags)
-          val symbol = newVal(module, generateMarshallableName(), info, flags, Symbol.noSymbol)
-          trySetThreadUnsafe(symbol)
-          val marshallable = ValDef(symbol, rhs map { _.changeOwner(symbol) })
-
-          transmittable.marshallable = Some(marshallable)
-
-          inline def serializeTypeAndSanityCheck(tpe: TypeRepr, from: Symbol) =
-            TypeToken.serializeType(tpe, from) filter:
-              TypeToken.deserializeType(_, from) exists { _ =:= tpe }
-
-          val argsHead = Literal(StringConstant(transmittable.signature))
-          val argsTail = transmittable.types.asMarshallableTypes.typeList.foldRight[Option[List[Term]]](Some(List.empty)):
-            case (tpe, Some(types)) => serializeTypeAndSanityCheck(tpe, module) map { value => Literal(StringConstant(value)) :: types }
-            case _ =>
-              None
-
-          argsTail match
-            case Some(argsTail) =>
-              SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.marshallableInfo, argsHead :: argsTail)
-
-              println("!!!! " + transmittable.signature)
-              println("  !! " + marshallable.show)
-
-              Right(Some(symbol))
-            case _ =>
-              Either.cond(
-                (module hasAncestor { symbol => symbol.isMethod || symbol.isField }) || transmittable.signature != abstractSignature,
-                Some(symbol),
-                s"Failed to serialize type for ${transmittable.types.showMore}.")
+          marshallable(transmittable.signature, transmittable.types.asMarshallableTypes, rhs, Flags.EmptyFlags, generateMarshallableName) map: (marshallable, definition) =>
+            transmittable.marshallable = Some(marshallable, definition)
+            Some(marshallable)
         else
           Right(None)
-      end generateMarshallable
 
       def conformsToMarshallable(types: MarshallableTypes) =
         required.base =:= types.base &&
@@ -724,11 +857,11 @@ trait RemoteAccessorSynthesis:
             else s"$message. Found ${transmittable.types.show}, required ${requiredTypes.show}."
 
       if conformsToPredefinedMarshallable(TypeRepr.of[Unit]) then
-        Right(() => Right(Some(symbols.marshallableUnit)))
+        Right(() => Right(Some(marshallableUnit)))
       else if conformsToPredefinedMarshallable(TypeRepr.of[Null]) then
-        Right(() => Right(Some(symbols.marshallableNull)))
+        Right(() => Right(Some(marshallableNull)))
       else if conformsToPredefinedMarshallable(TypeRepr.of[Nothing]) then
-        Right(() => Right(Some(symbols.marshallableNothing)))
+        Right(() => Right(Some(marshallableNothing)))
       else
         val initialResolutionFailure =
           if accessorGeneration == Forced && transmittableTypeMap.lookupType(required.base).isEmpty then
@@ -743,31 +876,37 @@ trait RemoteAccessorSynthesis:
           case Some(transmittable) =>
             checkTransmittableConformation(transmittable):
               transmittable.marshallable match
-                case Some(marshallable) =>
-                  Right(() => Right(Some(marshallable.symbol)))
+                case Some(marshallable, _) =>
+                  Right(() => Right(Some(marshallable)))
 
                 case _ =>
                   val marshallable =
-                    marshallableTypeMap.lookupType(required.base) flatMap: marshallable =>
-                      val types = MarshallableTypes(marshallable.info)
-                      val signature = marshallableSignature(marshallable)
-                      val conforms =
-                        conformsToMarshallable(types) &&
-                        (accessorGeneration != Forced || signature == transmittable.signature && signature != unknownSignature)
-                      Option.when(conforms) { Right(() => Right(Some(marshallable))) }
+                    inheritedMarshallables.lookupType(required.base) flatMap: marshallables =>
+                      val marshallable = marshallables.head
+                      Option.unless(name contains marshallable.symbol.name):
+                        val conforms =
+                          conformsToMarshallable(marshallable.types) &&
+                          (accessorGeneration != Forced || marshallable.signature == transmittable.signature && marshallable.signature != unknownSignature)
+                        Option.when(conforms) { Right(() => Right(Some(marshallable))) }
 
-                  marshallable getOrElse:
+                  marshallable.flatten getOrElse:
                     Resolution.Result(transmittable.tree).asTransmittable(allowResolutionFailureForTypeParameters) flatMap: resolved =>
-                      transmittable.signature = resolved.signature
-                      marshallableConstruction(transmittable) map: rhs =>
-                        () => generateMarshallable(transmittable, rhs)
+                      if marshallable.isEmpty && resolved.signature == abstractSignature then
+                        Right(() => Right(None))
+                      else
+                        transmittable.signature = resolved.signature
+                        marshallableConstruction(transmittable) map: rhs =>
+                          () => generateMarshallable(transmittable, rhs)
 
           case _ =>
             val marshallable =
               if initialResolutionFailure.isEmpty then
-                marshallableTypeMap.lookupType(required.base) flatMap: marshallable =>
-                  val types = MarshallableTypes(marshallable.info)
-                  Option.when(conformsToMarshallable(types)) { Right(() => Right(Some(marshallable))) }
+                inheritedMarshallables.lookupType(required.base) flatMap: marshallables =>
+                  val marshallable = marshallables.head
+                  val conforms =
+                    !(name contains marshallable.symbol.name) &&
+                    conformsToMarshallable(marshallable.types)
+                  Option.when(conforms) { Right(() => Right(Some(marshallable))) }
               else
                 None
 
@@ -783,7 +922,6 @@ trait RemoteAccessorSynthesis:
 
               if result.isLeft && allowSkippingAbstract then
                 Right(() => Right(None))
-                  generateMarshallable(transmittable, None)
               else
                 result
     end generateMarshallable
@@ -804,8 +942,9 @@ trait RemoteAccessorSynthesis:
     var placedIndex = 0
     var anonymousPlacedIndex = 0
 
-    val accessors = values.reverseIterator flatMap: (original, pos, signature, tpe) =>
+    val accessors = values.reverseIterator ++ inheritedValues flatMap: (original, signature, tpe, position) =>
       val valueAccessed = original forall { accessed contains _ }
+      val valuePrivate = original forall { _.flags is Flags.Private }
 
       if !canceled && (valueAccessed || accessorGeneration != Deferred) then
         val arguments = argumentTypes(tpe)
@@ -815,12 +954,12 @@ trait RemoteAccessorSynthesis:
           else Tuple(arguments)
         val resultType = tpe.resultType
 
-        def marshallable(tpe: TypeRepr, required: TypeRepr => RequiredMarshallable) =
-          generateMarshallable(required(tpe), allowSkippingAbstract && !valueAccessed)
+        def marshallable(required: RequiredMarshallable) =
+          generateMarshallable(required, (allowSkippingAbstract || valuePrivate) && !valueAccessed, name = None)
 
         val marshallables =
-          marshallable(argumentType, tpe => RequiredMarshallable.Result(tpe, tpe)) flatMap: generateArgumentMarshallable =>
-            marshallable(resultType, tpe => RequiredMarshallable.Base(tpe)) flatMap: generateResultMarshallable =>
+          marshallable(RequiredMarshallable.Result(argumentType, argumentType)) flatMap: generateArgumentMarshallable =>
+            marshallable(RequiredMarshallable.Base(resultType)) flatMap: generateResultMarshallable =>
               val argumentMarshallable = generateArgumentMarshallable()
               val resultMarshallable = generateResultMarshallable()
               argumentMarshallable flatMap: argumentMarshallable =>
@@ -832,58 +971,126 @@ trait RemoteAccessorSynthesis:
         marshallables match
           case Left(message) =>
             if valueAccessed || accessorGeneration != Preferred then
-              errorAndCancel(message, pos)
+              val (prolog, pos) = position()
+              errorAndCancel(s"$prolog: $message", pos)
             None
 
           case Right(None) =>
             None
 
           case Right(Some(argumentMarshallable, resultMarshallable)) =>
-            val argumentTypes = MarshallableTypes(argumentMarshallable.info)
-            val resultTypes = MarshallableTypes(resultMarshallable.info)
+            val argumentIdentifier = marshallingIdentifier(argumentMarshallable.symbol.name)
+            val resultIdentifier = marshallingIdentifier(resultMarshallable.symbol.name)
 
-            val name = s"$$loci$$placed$$$mangledName$$$placedIndex"
-            placedIndex += 1
+            val inheritedPlacedWithIdenticalMarshallables =
+              original exists: original =>
+                Iterator(original) ++ original.allOverriddenSymbols collectFirst Function.unlift(inheritedPlacedAccessors.get) exists:
+                  placedInfo(_) exists: (_, arguments, result) =>
+                    arguments == argumentIdentifier && result == resultIdentifier
 
-            val signatureConstruction =
-              Ref(symbols.valueSignature).appliedTo(
-                Literal(StringConstant(signature)),
-                Ref(identifierSymbol),
-                Ref(signatureSymbol).select(symbols.valueSignaturePath))
+            Option.unless(inheritedPlacedWithIdenticalMarshallables):
+              val name = s"$$loci$$placed$$$mangledName$$$placedIndex"
+              placedIndex += 1
 
-            val info = symbols.placedValue.typeRef.appliedTo(List(argumentTypes.base, argumentTypes.result, resultTypes.base, resultTypes.proxy))
-            val symbol = newVal(module, name, info, Flags.Final, Symbol.noSymbol)
-            val rhs = New(TypeIdent(symbols.placedValue)).select(symbols.placedValue.primaryConstructor).appliedToTypes(info.typeArgs).appliedTo(
-              signatureConstruction,
-              Literal(BooleanConstant(original exists { _.isStable })),
-              Ref(argumentMarshallable),
-              Ref(resultMarshallable))
+              val signatureConstruction =
+                Ref(symbols.valueSignature).appliedTo(
+                  Literal(StringConstant(signature)),
+                  Ref(identifierSymbol),
+                  Ref(signatureSymbol).select(symbols.valueSignaturePath))
 
-            val argsHead = Literal(StringConstant(signature))
-            val argsTail = List(argumentMarshallable.name, resultMarshallable.name) map: arg =>
-              val name = arg.stripPrefix("$loci$marshalling$").replace('$', ':')
-              Literal(StringConstant(if name.length != arg.length then name else s"<$name>"))
+              val info = symbols.placedValue.typeRef.appliedTo(
+                List(
+                  argumentMarshallable.types.base,
+                  argumentMarshallable.types.result,
+                  resultMarshallable.types.base,
+                  resultMarshallable.types.proxy))
+              val symbol = newVal(module, name, info, Flags.Final | Flags.Protected, Symbol.noSymbol)
+              SymbolMutator.getOrErrorAndAbort.enter(module, symbol)
 
-            SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.placedValueInfo, argsHead :: argsTail)
+              inline def reference(symbol: Symbol) =
+                if symbol.owner == types.marshallable.typeSymbol.companionModule.moduleClass then
+                  Ref(symbol)
+                else
+                  This(module).select(symbol)
 
-            val key = original getOrElse:
-              val key = anonymousPlacedIndex
-              anonymousPlacedIndex += 1
-              key
+              val rhs = New(TypeIdent(symbols.placedValue)).select(symbols.placedValue.primaryConstructor).appliedToTypes(info.typeArgs).appliedTo(
+                signatureConstruction,
+                Literal(BooleanConstant(original exists { _.isStable })),
+                reference(argumentMarshallable.symbol),
+                reference(resultMarshallable.symbol))
 
-            Some(key -> (symbol, Some(ValDef(symbol, Some(rhs)))))
+              val argsHead = Literal(StringConstant(signature))
+              val argsTail = List(argumentIdentifier, resultIdentifier) map { identifier => Literal(StringConstant(identifier)) }
+
+              SymbolMutator.getOrErrorAndAbort.updateAnnotation(symbol, symbols.placedValueInfo, argsHead :: argsTail)
+
+              val key = original getOrElse:
+                val key = anonymousPlacedIndex
+                anonymousPlacedIndex += 1
+                key
+
+              key -> (symbol, Some(ValDef(symbol, Some(rhs))))
       else
         None
     end accessors
 
     val placed = accessors.to(SeqMap)
 
-    val marshalling =
-      transmittableTypeMap flatMapValues: transmittable =>
-        transmittable.marshallable map: marshallable =>
-          (marshallable.symbol, Some(marshallable))
+    val overridingMarshallables = mutable.ListBuffer.empty[(Symbol, Option[ValDef])]
 
-    Accessors(identifier, signature, peers, marshalling, placed)
+    if accessorGeneration == Required || accessorGeneration == Forced then
+      def messageProlog(marshallable: Symbol) =
+        val name = marshallingIdentifier(marshallable.name)
+        val symbol = inheritedPlacedAccessors.iterator collectFirst Function.unlift:
+          case (_: Int, _) =>
+            None
+          case (symbol: Symbol @unchecked, placed) =>
+            placedInfo(placed) flatMap: (_, arguments, result) =>
+              Option.when(arguments == name || result == name) { symbol }
+        accessorGenerationFailureMessageProlog(symbolForName = symbol, symbolForParent = Some(marshallable), noninheritedPosition = None)
+
+      inheritedMarshallables.iterator foreach:
+        _ foreach:
+          case Marshallable(symbol, types, signature) =>
+            if signature == abstractSignature then
+              val resolvedMarshallable = generateMarshallable(
+                RequiredMarshallable.Proxy(types.base, types.result, types.proxy),
+                allowSkippingAbstract = false,
+                Some(symbol.name)) flatMap { _() }
+              resolvedMarshallable match
+                case Left(message) =>
+                  val (prolog, pos) = messageProlog(symbol)
+                  errorAndCancel(s"$prolog: $message", pos)
+                case Right(None) =>
+                case Right(Some(resolvedMarshallable)) =>
+                  if resolvedMarshallable.symbol.name == symbol.name then
+                    val definition = transmittableTypeMap.lookupType(types.base) flatMap:
+                      _.marshallable map { (_, definition) => definition }
+                    overridingMarshallables += resolvedMarshallable.symbol -> definition
+                  else
+                    val generatedMarshallable = marshallable(
+                      resolvedMarshallable.signature,
+                      resolvedMarshallable.types,
+                      Some(This(module).select(resolvedMarshallable.symbol)),
+                      Flags.Override,
+                      () => symbol.name)
+                    generatedMarshallable match
+                      case Left(message) =>
+                        val (prolog, pos) = messageProlog(symbol)
+                        errorAndCancel(s"$prolog: $message", pos)
+                      case Right(_, generatedMarshallable) =>
+                        overridingMarshallables += generatedMarshallable.symbol -> Some(generatedMarshallable)
+
+    val overriding = overridingMarshallables.result()
+
+    val marshalling =
+      val marshallables = (overriding.iterator map { (symbol, _) => symbol }).toSet
+      transmittableTypeMap flatMapValues: transmittable =>
+        transmittable.marshallable flatMap: (_, marshallable) =>
+          Option.unless(marshallables contains marshallable.symbol):
+            (marshallable.symbol, Some(marshallable))
+
+    Accessors(identifier, signature, peers, overriding, marshalling, placed)
   end synthesizeAccessorsFromTree
 
   private def synthesizeAccessorsFromClass(module: Symbol, name: String): Accessors =
@@ -893,6 +1100,7 @@ trait RemoteAccessorSynthesis:
       identifier,
       signature,
       peers,
+      List.empty,
       CachedTypeSeqMap[(Symbol, Option[ValDef])],
       SeqMap.empty[Symbol | Int, (Symbol, Option[ValDef])])
   end synthesizeAccessorsFromClass

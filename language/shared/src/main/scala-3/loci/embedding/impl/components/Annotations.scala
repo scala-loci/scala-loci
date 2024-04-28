@@ -10,11 +10,6 @@ trait Annotations:
   this: Component & Commons =>
   import quotes.reflect.*
 
-  def contextResultCount(symbol: Symbol) =
-    symbol.getAnnotation(symbols.contextResultCount) match
-      case Some(Apply(_, List(Literal(IntConstant(count))))) => count
-      case _ => 0
-
 //  def canIncrementContextResultCount = SymbolMutator.get.isDefined
 //
 //  def tryIncrementContextResultCount(symbol: Symbol) =
@@ -46,6 +41,21 @@ trait Annotations:
         symbol,
         symbols.contextResultCount,
         List(Literal(IntConstant(count))))
+
+  def contextResultCount(symbol: Symbol) =
+    symbol.getAnnotation(symbols.contextResultCount) match
+      case Some(Apply(_, List(Inlined(_, _, Literal(IntConstant(count)))))) => count
+      case Some(Apply(_, List(Literal(IntConstant(count))))) => count
+      case _ => 0
+
+  def canSetThreadUnsafe = SymbolMutator.get.isDefined
+
+  def trySetThreadUnsafe(symbol: Symbol) =
+    SymbolMutator.get foreach: symbolMutator =>
+      symbolMutator.updateAnnotation(symbol, symbols.threadUnsafe, List.empty)
+
+  def isThreadUnsafe(symbol: Symbol) =
+    symbol.hasAnnotation(symbols.threadUnsafe)
 
   def canMakeCompileTimeOnly = SymbolMutator.get.isDefined
 

@@ -53,8 +53,13 @@ trait Peers:
     @targetName("ofModuleType")
     def ofModule(tpe: TypeRepr): List[PeerInfo] =
       val symbol = tpe.typeSymbol orElse (tpe.baseClasses.headOption getOrElse Symbol.noSymbol)
-      PeerInfo(defn.AnyClass.typeRef, List.empty, List.empty, Position.ofMacroExpansion) ::
-      (symbol.typeMembers flatMap { symbol => PeerInfo(tpe.select(symbol), symbol.pos getOrElse Position.ofMacroExpansion) })
+      val peers =
+        symbol.typeMembers flatMap: symbol =>
+          if !(symbol.flags is Flags.Synthetic) then
+           PeerInfo(tpe.select(symbol), symbol.pos getOrElse Position.ofMacroExpansion)
+          else
+            None
+      PeerInfo(defn.AnyClass.typeRef, List.empty, List.empty, Position.ofMacroExpansion) :: peers
 
     private def parentsAndTies(tpe: TypeRepr, pos: Position): Either[(String, Position), (List[TypeRepr], List[(TypeRepr, Multiplicity)])] = tpe match
       case tpe: TypeRef =>

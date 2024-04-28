@@ -17,7 +17,8 @@ trait AccessPath:
       if symbol == to then
         Some(path)
       else
-        val outerAccessor = synthesizedPlacedValues(symbol, defn.AnyClass).symbol.declaredFields find { _.isParamAccessor }
+        val outerAccessor = synthesizedPlacedValues(symbol, defn.AnyClass).symbol.fieldMembers find: member =>
+          member.isParamAccessor && member.info.typeSymbol == synthesizedPlacedValues(symbol.owner, defn.AnyClass).symbol
         outerAccessor flatMap { outerAccessor => multitierOuterAccess(symbol.owner, path.select(outerAccessor)) }
 
     multitierOuterAccess(from, This(synthesizedPlacedValues(from, peer).symbol))
@@ -36,7 +37,8 @@ trait AccessPath:
          from.hasAncestor(path.symbol.moduleClass) then
         multitierOuterAccess(from, path.symbol.moduleClass, peer)
       else if isMultitierNestedPath(qualifier.symbol) then
-        multitierAccessPath(qualifier, from, peer) map { _.select(synthesizedDefinitions(path.symbol).binding) }
+        synthesizedDefinitions(path.symbol) flatMap: nestedModule =>
+          multitierAccessPath(qualifier, from, peer) map { _.select(nestedModule.binding) }
       else
         None
     case _ =>
