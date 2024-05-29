@@ -32,7 +32,7 @@ class Projection(platform: Regex, scalaVersionCheck: String => Boolean) {
     else if (platform.findAllIn(unmanagedBase.value.getPath).nonEmpty)
       make(initialize.value, cbf)
     else
-      make(initialize.value, cbf) map { _.withConfigurations(Some("compile-internal")) }
+      make(initialize.value, cbf) map { _.withConfigurations(Some("provided")) }
   }
 }
 
