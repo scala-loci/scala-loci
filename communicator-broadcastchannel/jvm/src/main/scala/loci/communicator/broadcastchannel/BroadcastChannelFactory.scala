@@ -2,14 +2,9 @@ package loci
 package communicator
 package broadcastchannel
 
-private object BroadcastChannelSetupParser
-    extends ConnectionSetupParser
-    with SimpleConnectionSetupProperties {
-  val self: BroadcastChannel.type = unavailable
+import scala.annotation.compileTimeOnly
 
-  def properties = unavailable
-}
-
+@compileTimeOnly("BroadcastChannel communicator only available in JS")
 trait BroadcastChannelSetupFactory extends ConnectionSetupFactory.Implementation[BroadcastChannel] {
   val self: BroadcastChannel.type = unavailable
 

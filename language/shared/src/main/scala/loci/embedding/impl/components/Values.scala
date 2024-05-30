@@ -105,7 +105,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
         val system = q"${Flag.SYNTHETIC} protected def $$loci$$sys$$create: ${types.system} = ${peer.name}.this.$$loci$$sys"
         val instance = q"new ..$bases { $system }"
-        val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos)
+        val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos, emptyParamterList = false)
 
         PlacedValuePeerImpl(tree.symbol, value, peer.symbol, Modality.None)
       }
@@ -184,8 +184,8 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
 
       val system = q"${Flag.SYNTHETIC} protected def $$loci$$sys$$create: ${types.system} = ${names.placedValues(module.symbol)}.this.$$loci$$sys"
       val instance = q"new $multitierType { $system }"
-      val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos)
-      val application = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierType = $multitierName()" }
+      val value = extractValue(multitierName, NoType, multitierType, instance, tree.pos, emptyParamterList = false)
+      val application = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierType = $multitierName" }
       val reference = atPos(tree.pos) { q"$mods val ${tree.name}: $multitierName.type = $multitierName" }
 
       val definition = rename(
@@ -392,9 +392,9 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
               else
                 q"null.asInstanceOf[$multitierType]" -> Seq.empty
 
-            val value = extractValue(multitierName, NoType, multitierType, init, tree.pos)
+            val value = extractValue(multitierName, NoType, multitierType, init, tree.pos, emptyParamterList = false)
             val application = tree map { (mods, name, _, _) =>
-              (liftMods(tree.symbol, mods), name, multitierType, q"$multitierName()")
+              (liftMods(tree.symbol, mods), name, multitierType, q"$multitierName")
             }
 
             Seq(
@@ -425,7 +425,7 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       val erasure = eraseValue(exprName, tpe, tpt, tree.pos)
       val application = apply(q"$exprName()")
       val values = ((tree -> peer) +: specialized) map { case (tree, peer) =>
-        val value = extractValue(exprName, tpe, tpt, tree, pos)
+        val value = extractValue(exprName, tpe, tpt, tree, pos, emptyParamterList = true)
         PlacedValuePeerImpl(symbol, value, peer, modality)
       }
 
@@ -1196,8 +1196,13 @@ class Values[C <: blackbox.Context](val engine: Engine[C]) extends Component[C] 
       (mods, name, tpt orElse TypeTree(tpe), rhs)
     }
 
-  private def extractValue(name: TermName, tpe: Type, tpt: Tree, rhs: Tree, pos: Position) =
-    atPos(pos) { q"${Flag.SYNTHETIC} protected[this] def $name(): ${createTypeTree(tpt orElse TypeTree(tpe))} = $rhs" }
+  private def extractValue(name: TermName, tpe: Type, tpt: Tree, rhs: Tree, pos: Position, emptyParamterList: Boolean) =
+    atPos(pos) {
+      if (emptyParamterList)
+        q"${Flag.SYNTHETIC} protected[this] def $name(): ${createTypeTree(tpt orElse TypeTree(tpe))} = $rhs"
+      else
+        q"${Flag.SYNTHETIC} protected[this] def $name: ${createTypeTree(tpt orElse TypeTree(tpe))} = $rhs"
+    }
 
   private def eraseValue(name: TermName, tpe: Type, tpt: Tree, pos: Position) = {
     val tree = createTypeTree(tpt orElse TypeTree(tpe))

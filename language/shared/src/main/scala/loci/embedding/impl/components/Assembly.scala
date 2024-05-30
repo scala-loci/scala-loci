@@ -129,7 +129,7 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
       val parents = overriddenBases ++ inheritedBases :+ tq"${names.placedValues(module.symbol)}"
       val peerImpl =
         q"""${Flag.SYNTHETIC} trait $name extends ..$parents {
-          this: $selfType =>
+          ${name.toTermName}: $selfType =>
           ..$placedValues
         }"""
 
@@ -275,13 +275,26 @@ class Assembly[C <: blackbox.Context](val engine: Engine[C]) extends Component[C
     }
 
     // add assembled results to records
-    Assembly((castsInserter transform tree: @unchecked) match { case tree: ImplDef => tree }) :: records
+    Assembly((castsInserterAndPlacedReferenceRewriter transform tree: @unchecked) match { case tree: ImplDef => tree }) :: records
   }
 
-  private object castsInserter extends Transformer {
+  private object castsInserterAndPlacedReferenceRewriter extends Transformer {
+    private val peerNames = (modulePeers map { case Peer(_, name, _, _) => name }).toSet
+
     override def transform(tree: Tree): Tree = tree match {
       case q"$recv[$tpt]($arg)" if recv.symbol == symbols.cast =>
         atPos(tree.pos) { q"$arg.asRemote[$tpt]" }
+
+      case Select(This(tpname), name: TermName)
+        if tree.symbol.isTerm &&
+           !tree.symbol.isParameter &&
+           !tree.symbol.asTerm.isParamAccessor &&
+           tree.symbol.owner == module.classSymbol =>
+        if (peerNames contains tpname)
+          Select(Ident(tpname.toTermName), name)
+        else
+          tree
+
       case _ =>
         super.transform(tree)
     }

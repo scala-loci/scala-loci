@@ -289,12 +289,11 @@ object implicitHints {
     !(symbol.name.toString contains '$') &&
     !(symbol.name.decodedName.toString endsWith "_=") &&
     (symbol :: symbol.overrides forall { symbol =>
-      !(Seq(
-        definitions.AnyClass,
-        definitions.AnyValClass,
-        definitions.AnyRefClass,
-        definitions.ProductClass,
-        definitions.ObjectClass) contains symbol.owner)
+      symbol.owner != definitions.AnyClass &&
+      symbol.owner != definitions.AnyValClass &&
+      symbol.owner != definitions.AnyRefClass &&
+      symbol.owner != definitions.ProductClass &&
+      symbol.owner != definitions.ObjectClass
     })
   }
 

@@ -806,14 +806,14 @@ class RemoteAccess[C <: blackbox.Context](val engine: Engine[C]) extends Compone
                             throw new ${types.remoteAccessException}(${trees.illegalSubjectiveAccess})"""
 
                         if (symbol.isStable)
-                          q"$$loci$$sys.subjectiveValue(${symbol.name}, $remote)"
+                          q"$$loci$$sys.subjectiveValue(this.${symbol.name}, $remote)"
                         else
-                          q"${symbol.name}(...$arguments)($remote)"
+                          q"this.${symbol.name}(...$arguments)($remote)"
                       }
                       getOrElse c.abort(pos,
                         s"Subjective definition may not refer to peer of another module: $subjective"))
                   } getOrElse {
-                    q"${symbol.name}(...$arguments)"
+                    q"this.${symbol.name}(...$arguments)"
                   })
 
                 val marshalling =

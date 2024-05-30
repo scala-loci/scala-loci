@@ -8,9 +8,10 @@ case object Connect extends Method
 case object Content extends Method
 
 object Method {
-  implicit val method = messaging.Message.Method[Method](
-    Connect -> "Loci/Connect",
-    Content -> "Loci/Content")
+  implicit val method: messaging.Message.Method[Method] =
+    messaging.Message.Method[Method](
+      Connect -> "Loci/Connect",
+      Content -> "Loci/Content")
 }
 
 object AcceptMessage {

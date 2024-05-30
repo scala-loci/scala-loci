@@ -397,28 +397,30 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
     }""" should compile
   }
 
-  it should "typecheck early initializers" in {
-    """@multitier trait mod extends TopModule {
+  it should "correctly compile early initializers" in {
+    @multitier trait mod extends TopModule {
       class C[T](v: T) { def z = top; type X = Int }
 
+      @compatibility.nowarn("msg=early initializers")
       def a = new { val x = 1 } with C[Int](0) { self: C[Int] =>
         type Y = Int
         trait T { type U }
         def u(x: Int)(y: Int) = x + y
-      }: @compatibility.nowarn("msg=early initializers")
+      }
 
       trait U { def z = top; type X = Int }
 
+      @compatibility.nowarn("msg=early initializers")
       def b = new { val x = 1 } with U { self: U =>
         type Y = Int
         trait T { type U }
         def u(x: Int)(y: Int) = x + y
-      }: @compatibility.nowarn("msg=early initializers")
+      }
 
       (new C("")).staticAssertType[C[String]]
       a.staticAssertType[C[Int] { val x: Int; type Y = Int; type T <: { type U }; def u(x: Int)(y: Int): Int}]
       b.staticAssertType[U { val x: Int; type Y = Int; type T <: { type U }; def u(x: Int)(y: Int): Int}]
-    }""" should compile
+    }
   }
 
   it should "correctly compile by-name arguments with default values and implicit arguments" in {
