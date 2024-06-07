@@ -11,10 +11,10 @@ import scala.concurrent.duration._
 class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Akka WebSocket Registry"
 
-  val port = 45848
+  val port = 45851
 
   it should "handle binding and lookup correctly" in {
-    for (_ <- 1 to 50) {
+    for (_ <- 1 to 100) {
       val listener = WS(port)
       val connector = WS(s"ws://localhost:$port")
 
@@ -27,7 +27,7 @@ class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging
   }
 
   it should "handle subjective binding and lookup correctly" in {
-    for (_ <- 1 to 50) {
+    for (_ <- 1 to 100) {
       val listener = WS(port)
       val connector = WS(s"ws://localhost:$port")
 

@@ -212,7 +212,7 @@ class MacroExpansionSpec extends AnyFlatSpec with Matchers with NoLogging {
   def emptySystem(peer: runtime.PlacedValues) = new runtime.System(
     peer,
     None,
-    false,
+    separateMainThread = false,
     Map.empty,
     contexts.Immediate.global,
     new runtime.RemoteConnections(

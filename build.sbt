@@ -12,16 +12,27 @@ ThisBuild / licenses += "Apache-2.0" -> url("https://www.apache.org/licenses/LIC
 
 ThisBuild / scalacOptions ++= {
   if (`is 3+`(scalaVersion.value))
-    Seq("-feature", "-deprecation", "-unchecked")
+    Seq("-java-output-version", "8", "-feature", "-deprecation", "-unchecked")
+  else if (`is 2.13+`(scalaVersion.value))
+    Seq("-java-output-version", "8", "-feature", "-deprecation", "-unchecked", "-language:higherKinds", "-Xlint:-pattern-shadow,_")
+  else if (`is 2.12+`(scalaVersion.value))
+    Seq("-java-output-version", "8", "-feature", "-deprecation", "-unchecked", "-language:higherKinds", "-Xlint")
   else
-    Seq("-feature", "-deprecation", "-unchecked", "-Xlint", "-language:higherKinds")
+    Seq("-feature", "-deprecation", "-unchecked", "-language:higherKinds", "-Xlint")
 }
 
-ThisBuild / crossScalaVersions := Seq("2.11.12", "2.12.18", "2.13.12", "3.3.1")
+val `scala 2.11 mode`  = Option(System.getenv("SCALA_VERSION")) exists { _ startsWith "2.11" }
+
+ThisBuild / crossScalaVersions := {
+  if (`scala 2.11 mode`)
+    Seq("2.11.12")
+  else
+    Seq("2.12.19", "2.13.14", "3.3.3")
+}
 
 ThisBuild / scalaVersion := {
   val versions = (ThisBuild / crossScalaVersions).value
-  val version = Option(System.getenv("SCALA_VERSION")) getOrElse versions(versions.size - 2)
+  val version = Option(System.getenv("SCALA_VERSION")) getOrElse versions(math.max(versions.size - 2, 0))
   versions.reverse find { _ startsWith version } getOrElse versions.last
 }
 
@@ -58,36 +69,45 @@ val jsjavasecurerandom = libraryDependencies +=
   "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross CrossVersion.for3Use2_13
 
 val scalatest = libraryDependencies +=
-  "org.scalatest" %%% "scalatest" % "3.2.17" % TestInternal
+  "org.scalatest" %%% "scalatest" % "3.2.18" % TestInternal
 
-// 3.10.7 is the latest version to support scalajs 1.12
-val scribe = libraryDependencies +=
-  "com.outr" %%% "scribe" % "3.10.7"
+val scribe = libraryDependencies ++=
+  (only (`is 2.12+`) orEmpty Def.setting {
+    "com.outr" %%% "scribe" % "3.15.0"
+  }).value ++
+  (only !(`is 2.12+`) orEmpty Def.setting {
+    "com.outr" %%% "scribe" % "3.10.7"
+  }).value
 
 val retypecheck = libraryDependencies ++= (only !(`is 3+`) orEmpty Def.setting {
   "io.github.scala-loci" %% "retypecheck" % "0.10.0"
 }).value
 
-// 0.33.0 is the last one supporting Scala 2.11-2.13
-val rescala = libraryDependencies +=
-  "de.tu-darmstadt.stg" %%% "rescala" % "0.33.0"
-
-val upickle = libraryDependencies +=
-  "com.lihaoyi" %%% "upickle" % "2.0.0"
-
-val circe = Seq(
-  libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
-    Seq(
-      "io.circe" %%% "circe-core" % "0.14.1",
-      "io.circe" %%% "circe-parser" % "0.14.1")
+val rescala = libraryDependencies ++=
+  (only (`is 3+`) orEmpty Def.setting {
+    "de.tu-darmstadt.stg" %%% "rescala" % "0.35.1"
+  }).value ++
+  (only !(`is 3+`) orEmpty Def.setting {
+    "de.tu-darmstadt.stg" %%% "rescala" % "0.33.1"
   }).value
-)
 
-val jsoniter = Seq(
-  libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
-    "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.13.22"
+val upickle = libraryDependencies ++=
+  (only (`is 2.12+`) orEmpty Def.setting {
+    "com.lihaoyi" %%% "upickle" % "3.3.1"
+  }).value ++
+  (only !(`is 2.12+`) orEmpty Def.setting {
+    "com.lihaoyi" %%% "upickle" % "2.0.0"
   }).value
-)
+
+val circe = libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
+  Seq(
+    "io.circe" %%% "circe-core" % "0.14.7",
+    "io.circe" %%% "circe-parser" % "0.14.7")
+}).value
+
+val jsoniter = libraryDependencies ++= (only (`is 2.12+`) orEmpty Def.setting {
+  "com.github.plokhotnyuk.jsoniter-scala" %%% "jsoniter-scala-core" % "2.30.1"
+}).value
 
 val akkaHttp = libraryDependencies ++= { (only.jvm orPlatformCompileTimeStubs Def.setting {
   Seq(
@@ -115,30 +135,17 @@ val scalajsDom = libraryDependencies ++= (only.js orPlatformCompileTimeStubs Def
 }).value
 
 val javalin = libraryDependencies ++= (only.jvm orPlatformCompileTimeStubs Def.setting {
-  "io.javalin" % "javalin" % "4.6.8"
+  "io.javalin" % "javalin" % "6.1.6"
 }).value
 
-val jetty = libraryDependencies ++= (only.jvm orPlatformCompileTimeStubs Def.setting {
-  val jettyVersion = "9.4.53.v20231009"
+val jetty = libraryDependencies ++= (only.jvm (`is 2.12+`) orPlatformCompileTimeStubs Def.setting {
+  val jettyVersion = "12.0.10"
   Seq(
-    "org.eclipse.jetty.websocket" % "websocket-server" % jettyVersion,
-    "org.eclipse.jetty.websocket" % "websocket-client" % jettyVersion,
-    "org.eclipse.jetty.websocket" % "websocket-api" % jettyVersion,
-    // "com.outr"  %% "scribe-slf4j"  % "3.10.7" % TestInternal
-    "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
+    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
+    "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
+    "org.slf4j" % "slf4j-nop" % "2.0.13" % TestInternal)
 }).value
-
-val jetty12 = Seq(
-  libraryDependencies ++= (only.jvm (`is 2.12+`) orPlatformCompileTimeStubs Def.setting {
-    val jettyVersion = "12.0.5"
-    Seq(
-      "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-server" % jettyVersion,
-      "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-client" % jettyVersion,
-      "org.eclipse.jetty.websocket" % "jetty-websocket-jetty-api" % jettyVersion,
-      // "com.outr"  %% "scribe-slf4j2"  % "3.10.7" % TestInternal
-      "org.slf4j" % "slf4j-nop" % "2.0.11" % TestInternal)
-  }).value
-)
 
 
 lazy val loci = lociProject(
@@ -173,7 +180,6 @@ lazy val lociJVM = lociProject(
              lociCommunicatorWsAkkaPlayJVM,
              lociCommunicatorWsJavalinJVM,
              lociCommunicatorWsJettyJVM,
-             lociCommunicatorWsJetty12JVM,
              lociCommunicatorWebRtcJVM))
 
 lazy val lociJS = lociProject(
@@ -193,7 +199,6 @@ lazy val lociJS = lociProject(
              lociCommunicatorWsAkkaPlayJS,
              lociCommunicatorWsJavalinJS,
              lociCommunicatorWsJettyJS,
-             lociCommunicatorWsJetty12JS,
              lociCommunicatorWebRtcJS))
 
 
@@ -386,30 +391,18 @@ lazy val lociCommunicatorWsAkkaPlayJVM = lociCommunicatorWsAkkaPlay.jvm
 lazy val lociCommunicatorWsAkkaPlayJS = lociCommunicatorWsAkkaPlay.js
 
 
-lazy val lociCommunicatorWsJetty = lociProject(
+lazy val lociCommunicatorWsJetty = lociProject.`scala 2.12+`(
   name = "Jetty WebSocket communicator",
   file = "communicator-ws-jetty",
   project = crossProject(JSPlatform, JVMPlatform)
     crossType CrossType.Dummy
-    settings (jetty, scalatest),
+    settings (jetty, scalatest,
+      Test / test := false, // flaky tests
+    ),
   dependsOn = lociCommunication)
 
 lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm
 lazy val lociCommunicatorWsJettyJS = lociCommunicatorWsJetty.js
-
-
-lazy val lociCommunicatorWsJetty12 = lociProject.`scala 2.12+`(
-  name = "Jetty 12 WebSocket communicator",
-  file = "communicator-ws-jetty12",
-  project = crossProject(JSPlatform, JVMPlatform)
-            crossType CrossType.Dummy
-            settings (jetty12, scalatest,
-              Test / test := false, // flaky tests
-            ),
-  dependsOn = lociCommunication)
-
-lazy val lociCommunicatorWsJetty12JVM = lociCommunicatorWsJetty12.jvm
-lazy val lociCommunicatorWsJetty12JS = lociCommunicatorWsJetty12.js
 
 
 lazy val lociCommunicatorWsJavalin = lociProject(

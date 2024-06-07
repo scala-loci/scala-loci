@@ -55,7 +55,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
           }
 
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Client {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, None, separateMainThread = false, ties, context, connections, connected, connecting)
           }
           instance.$loci$sys.start()
           instance
@@ -84,7 +84,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
             ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client0"))
 
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Server {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, None, separateMainThread = false, ties, context, connections, connected, connecting)
           }
           instance.$loci$sys.start()
           instance
@@ -112,7 +112,7 @@ class RuntimeSpec extends AnyFlatSpec with Matchers with NoLogging {
             ChannelMessage(ChannelMessage.Type.Update, "dummyChannel", None, MessageBuffer encodeString "hello from client1"))
 
           val instance = new ServerClientApp.$loci$peer$loci$runtime$ServerClientApp$Server {
-            protected def $loci$sys$create = new System(this, None, false, ties, context, connections, connected, connecting)
+            protected def $loci$sys$create = new System(this, None, separateMainThread = false, ties, context, connections, connected, connecting)
           }
           instance.$loci$sys.start()
           instance
