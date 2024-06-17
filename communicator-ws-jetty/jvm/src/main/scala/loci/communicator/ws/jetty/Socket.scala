@@ -6,7 +6,7 @@ import org.eclipse.jetty.websocket.api.{Callback, Session}
 import org.eclipse.jetty.websocket.api.Session.Listener
 
 import java.nio.ByteBuffer
-import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
+import java.util.concurrent.{Executors, RejectedExecutionException, ScheduledFuture, ThreadFactory, TimeUnit}
 import scala.util.{Failure, Success}
 
 private class Socket[P <: WS: WSProtocolFactory](
@@ -38,11 +38,17 @@ private class Socket[P <: WS: WSProtocolFactory](
     if (timeoutTask != null)
       timeoutTask.cancel(true)
 
-    timeoutTask = executor.schedule(new Runnable {
-      def run(): Unit = Socket.this synchronized {
-        getSession.close()
+    timeoutTask =
+      try
+        executor.schedule(new Runnable {
+          def run(): Unit = Socket.this synchronized {
+            getSession.close()
+          }
+        }, timeout, TimeUnit.MILLISECONDS)
+      catch {
+        case _: RejectedExecutionException if executor.isShutdown =>
+          null
       }
-    }, timeout, TimeUnit.MILLISECONDS)
   }
 
   resetTimeout()
@@ -51,11 +57,17 @@ private class Socket[P <: WS: WSProtocolFactory](
     synchronized {
       super.onWebSocketOpen(session)
 
-      heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
-        def run(): Unit = Socket.this synchronized {
-          getSession.sendText(heartbeat, Callback.NOOP)
+      heartbeatTask =
+        try
+          executor.scheduleWithFixedDelay(new Runnable {
+            def run(): Unit = Socket.this synchronized {
+              getSession.sendText(heartbeat, Callback.NOOP)
+            }
+          }, delay, delay, TimeUnit.MILLISECONDS)
+        catch {
+          case _: RejectedExecutionException if executor.isShutdown =>
+            null
         }
-      }, delay, delay, TimeUnit.MILLISECONDS)
     }
 
     connectionEstablished(Success(this))
@@ -84,10 +96,13 @@ private class Socket[P <: WS: WSProtocolFactory](
   override def onWebSocketClose(statusCode: Int, reason: String): Unit = {
     synchronized {
       super.onWebSocketClose(statusCode, reason)
-      heartbeatTask.cancel(true)
-      timeoutTask.cancel(true)
+      if (heartbeatTask != null)
+        heartbeatTask.cancel(true)
+      if (timeoutTask != null)
+        timeoutTask.cancel(true)
     }
 
+    executor.shutdown()
     doClosed.trySet()
   }
 
@@ -117,6 +132,7 @@ private class Socket[P <: WS: WSProtocolFactory](
         session.close()
     }
 
+    executor.shutdown()
     doClosed.trySet()
   }
 }

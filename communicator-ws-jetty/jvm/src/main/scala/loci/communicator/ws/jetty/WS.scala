@@ -43,6 +43,11 @@ object WS extends WSSetupFactory {
   object Secure {
     def unapply(ws: Secure) = Some((ws.path, ws.host, ws.port))
 
+    def apply(context: WebSocketUpgradeHandler, pathspec: String): Listener[WS] =
+      new WSListener[WS.Secure](context, pathspec, Properties())
+    def apply(context: WebSocketUpgradeHandler, pathspec: String, properties: Properties): Listener[WS] =
+      new WSListener[WS.Secure](context, pathspec, properties)
+
     def apply(url: String): Connector[WS.Secure] =
       new WSConnector[WS.Secure](url, Properties())
     def apply(url: String, properties: Properties): Connector[WS.Secure] =

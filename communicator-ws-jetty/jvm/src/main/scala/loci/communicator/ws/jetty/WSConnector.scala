@@ -5,6 +5,7 @@ package ws.jetty
 import org.eclipse.jetty.websocket.client.WebSocketClient
 
 import java.net.URI
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 private class WSConnector[P <: WS : WSProtocolFactory](
@@ -24,10 +25,17 @@ private class WSConnector[P <: WS : WSProtocolFactory](
       case Success(ws) =>
         val socket = new Socket(ws, properties)(connectionEstablished.trySet(_), connectionEstablished.trySet(_))
 
-        val client = new WebSocketClient()
-        client.start()
-        client.connect(socket, uri)
-        socket.doClosed.notice foreach { _ => client.stop() }
+        try {
+          val client = new WebSocketClient()
+          socket.doClosed.notice foreach { _ => client.stop() }
+
+          client.start()
+          client.connect(socket, uri)
+        }
+        catch {
+          case NonFatal(e) =>
+            connectionEstablished.trySet(Failure(e))
+        }
     }
   }
 }

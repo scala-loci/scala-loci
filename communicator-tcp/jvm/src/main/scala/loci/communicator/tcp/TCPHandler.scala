@@ -4,7 +4,7 @@ package tcp
 
 import java.io.{BufferedInputStream, BufferedOutputStream, IOException}
 import java.net.{Socket, SocketException}
-import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
+import java.util.concurrent.{Executors, RejectedExecutionException, ScheduledFuture, ThreadFactory, TimeUnit}
 
 import scala.collection.mutable
 
@@ -110,6 +110,7 @@ private object TCPHandler {
           }
         }
 
+        executor.shutdown()
         doClosed.trySet()
       }
     }
@@ -118,16 +119,22 @@ private object TCPHandler {
 
     socket.setSoTimeout(timeout)
 
-    heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
-      def run() = connection synchronized {
-        if (isOpen)
-          try {
-            outputStream.write(heartbeat)
-            outputStream.flush()
+    heartbeatTask =
+      try
+        executor.scheduleWithFixedDelay(new Runnable {
+          def run() = connection synchronized {
+            if (isOpen)
+              try {
+                outputStream.write(heartbeat)
+                outputStream.flush()
+              }
+              catch { case _: IOException => connection.close() }
           }
-          catch { case _: IOException => connection.close() }
+        }, delay, delay, TimeUnit.MILLISECONDS)
+      catch {
+        case _: RejectedExecutionException if executor.isShutdown =>
+          null
       }
-    }, delay, delay, TimeUnit.MILLISECONDS)
 
 
     connectionEstablished(connection)

@@ -2,7 +2,7 @@ package loci
 package communicator
 package ws.javalin
 
-import java.util.concurrent.{Executors, ScheduledFuture, ThreadFactory, TimeUnit}
+import java.util.concurrent.{Executors, RejectedExecutionException, ScheduledFuture, ThreadFactory, TimeUnit}
 
 import io.javalin.websocket._
 
@@ -83,35 +83,50 @@ private object WSHandler {
             def close() = {
               synchronized {
                 if (open) {
-                  heartbeatTask.cancel(true)
-                  timeoutTask.cancel(true)
+                  if (heartbeatTask != null)
+                    heartbeatTask.cancel(true)
+                  if (timeoutTask != null)
+                    timeoutTask.cancel(true)
                   ctx.session.close()
 
                   isOpen = false
                 }
               }
 
+              executor.shutdown()
               doClosed.trySet()
             }
           }
 
           // heartbeat
 
-          heartbeatTask = executor.scheduleWithFixedDelay(new Runnable {
-            def run() = connection synchronized {
-              ctx.send(heartbeat)
+          heartbeatTask =
+            try
+              executor.scheduleWithFixedDelay(new Runnable {
+                def run() = connection synchronized {
+                  ctx.send(heartbeat)
+                }
+              }, delay, delay, TimeUnit.MILLISECONDS)
+            catch {
+              case _: RejectedExecutionException if executor.isShutdown =>
+                null
             }
-          }, delay, delay, TimeUnit.MILLISECONDS)
 
           def resetTimeout(): Unit = synchronized {
             if (timeoutTask != null)
               timeoutTask.cancel(true)
 
-            timeoutTask = executor.schedule(new Runnable {
-              def run() = connection synchronized {
-                connection.close()
-              }
-            }, timeout, TimeUnit.MILLISECONDS)
+              timeoutTask =
+                try
+                  executor.schedule(new Runnable {
+                    def run() = connection synchronized {
+                      connection.close()
+                    }
+                  }, timeout, TimeUnit.MILLISECONDS)
+                catch {
+                  case _: RejectedExecutionException if executor.isShutdown =>
+                    null
+                }
           }
 
           connectionAttribute(ctx, connection, doReceive, resetTimeout _)

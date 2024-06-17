@@ -8,7 +8,7 @@ import io.javalin.Javalin
 import io.javalin.websocket.{WsContext, WsConfig}
 
 import scala.concurrent.duration._
-import scala.util.{Success, Try}
+import scala.util.Try
 
 trait WS
     extends Protocol
@@ -35,15 +35,15 @@ object WS extends WSSetupFactory {
 
   def apply(javalin: Javalin, path: String, properties: Properties): Listener[WS] =
     new Listener[WS] { self =>
-      protected def startListening(connectionEstablished: Connected[WS]): Try[Listening] = {
+      protected def startListening(connectionEstablished: Connected[WS]): Try[Listening] = Try {
         javalin.ws(path, new Consumer[WsConfig] {
           override def accept(ws: WsConfig): Unit =
             WSHandler.handleConnection(ws, path, properties, self, connectionEstablished.fire)
         })
 
-        Success(new Listening {
+        new Listening {
           def stopListening(): Unit = ()
-        })
+        }
       }
     }
 }
