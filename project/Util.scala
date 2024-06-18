@@ -11,6 +11,17 @@ object LociUtil extends AutoPlugin {
     val CompileInternal = sbt.librarymanagement.Configurations.CompileInternal
 
 
+    val jvmVersion =
+      try {
+        val version = sys.props("java.specification.version")
+        if (version != null) Some((version.trim takeWhile Character.isDigit).toInt) else None
+      }
+      catch {
+        case _: NumberFormatException =>
+          None
+      }
+
+
     def `is 2.x`(scalaVersion: String) =
       CrossVersion.partialVersion(scalaVersion) exists { case (m, n) => m == 2 }
 

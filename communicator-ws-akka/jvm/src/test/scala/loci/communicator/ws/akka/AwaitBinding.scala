@@ -12,7 +12,7 @@ object awaitBinding {
       case _ => None
     }
 
-    binding.fold(throw new NoSuchElementException("listener has no binding")) {
+    binding exists {
       Await.ready(_, atMost).value.get.isSuccess
     }
   }

@@ -6,8 +6,11 @@ import communicator.ws.jetty._
 import org.eclipse.jetty.server.handler.ContextHandler
 import org.eclipse.jetty.server.{Server, ServerConnector}
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
+
+import scala.util.{Success, Try}
 
 class JettyWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Jetty WebSocket Registry"
@@ -15,22 +18,34 @@ class JettyWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLoggin
   val port = 45852
 
   def run(test: RegistryTests.Test) = {
-    val server = new Server()
+    var server: Server = null
 
-    val connector = new ServerConnector(server)
-    connector.setPort(port)
-    server.addConnector(connector)
+    def setup = {
+      if (server != null)
+        server.stop()
 
-    val context = new ContextHandler()
-    server.setHandler(context)
+      server = new Server()
 
-    val webSocketHandler = WebSocketUpgradeHandler.from(server, context)
-    context.setHandler(webSocketHandler)
+      val connector = new ServerConnector(server)
+      connector.setPort(port)
+      server.addConnector(connector)
 
-    test(WS(webSocketHandler, "/registry/*"), WS(s"ws://localhost:$port/registry/"),
-      { server.start(); true },
-      true,
-      server.stop())
+      val context = new ContextHandler()
+      server.setHandler(context)
+
+      val webSocketHandler = WebSocketUpgradeHandler.from(server, context)
+      context.setHandler(webSocketHandler)
+
+      Try {
+        server.start()
+        webSocketHandler
+      }
+    }
+
+    test(
+      setup map { WS(_, "/registry/*") },
+      Success(WS(s"ws://localhost:$port/registry/")),
+      Try { server.stop() })
   }
 
   it should "handle binding and lookup correctly" in {

@@ -396,9 +396,7 @@ lazy val lociCommunicatorWsJetty = lociProject.`scala 2.12+`(
   file = "communicator-ws-jetty",
   project = crossProject(JSPlatform, JVMPlatform)
     crossType CrossType.Dummy
-    settings (jetty, scalatest,
-      Test / test := false, // flaky tests
-    ),
+    settings (jetty, scalatest, Test / test := { if (jvmVersion forall { _ >= 17 }) (Test / test).value }),
   dependsOn = lociCommunication)
 
 lazy val lociCommunicatorWsJettyJVM = lociCommunicatorWsJetty.jvm

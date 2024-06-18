@@ -7,6 +7,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
 
 import scala.concurrent.duration._
+import scala.util.Success
 
 class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging {
   behavior of "Akka WebSocket Registry"
@@ -18,11 +19,15 @@ class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging
       val listener = WS(port)
       val connector = WS(s"ws://localhost:$port")
 
+      def setup = {
+        awaitBinding(listener, 1.minute)
+        Success(listener)
+      }
+
       RegistryTests.`handle binding and lookup correctly`(
-        listener,
-        connector,
-        setupListener = awaitBinding(listener, 1.minute),
-        cleanup = awaitTermination(1.minute))
+        setup,
+        Success(connector),
+        awaitTermination(1.minute))
     }
   }
 
@@ -31,11 +36,15 @@ class AkkaWebSocketRegistrySpec extends AnyFlatSpec with Matchers with NoLogging
       val listener = WS(port)
       val connector = WS(s"ws://localhost:$port")
 
+      def setup = {
+        awaitBinding(listener, 1.minute)
+        Success(listener)
+      }
+
       RegistryTests.`handle subjective binding and lookup correctly`(
-        listener,
-        connector,
-        setupListener = awaitBinding(listener, 1.minute),
-        cleanup = awaitTermination(1.minute))
+        setup,
+        Success(connector),
+        awaitTermination(1.minute))
     }
   }
 }
